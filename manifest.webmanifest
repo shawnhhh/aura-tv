@@ -1,0 +1,24 @@
+{
+  "name": "HERRIN",
+  "short_name": "HERRIN",
+  "description": "以电影为中心的沉浸式电视界面原型",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#050609",
+  "theme_color": "#050609",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
