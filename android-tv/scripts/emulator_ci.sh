@@ -6,10 +6,9 @@ mkdir -p build/emulator-evidence
 collect() {
     code=$?
     trap - EXIT
-    if [[ -n "${collector_pid:-}" ]]; then kill "$collector_pid" 2>/dev/null || true; wait "$collector_pid" 2>/dev/null || true; fi
     adb logcat -d > build/emulator-evidence/logcat.txt 2>&1 || true
     adb shell dumpsys activity activities > build/emulator-evidence/activities-final.txt 2>&1 || true
-    adb pull /sdcard/Android/data/tv.herrin.app/files/test-evidence build/emulator-evidence/ >/dev/null 2>&1 || true
+    adb pull /data/local/tmp/herrin-test-evidence build/emulator-evidence/test-evidence || true
     adb exec-out screencap -p > build/emulator-evidence/final.png || true
     adb shell uiautomator dump /sdcard/herrin-final.xml || true
     adb pull /sdcard/herrin-final.xml build/emulator-evidence/final.xml >/dev/null 2>&1 || true
@@ -30,12 +29,6 @@ PY
 trap collect EXIT
 gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/build.log
 bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
-# AGP removes app external files during uninstall. Copy them while instrumentation is alive.
-(
-    for ((i=0; i<180; i++)); do
-        adb pull /sdcard/Android/data/tv.herrin.app/files/test-evidence build/emulator-evidence/ >/dev/null 2>&1 || true
-        sleep 2
-    done
-) &
-collector_pid=$!
+# Shell-owned evidence survives the package uninstall performed by AGP.
+adb shell rm -rf /data/local/tmp/herrin-test-evidence
 gradle :app:connectedDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log

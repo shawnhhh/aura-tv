@@ -17,10 +17,8 @@ class HerrinSplashTest {
     @get:Rule val compose = createComposeRule()
     private fun screenshot(name: String) {
         val i = InstrumentationRegistry.getInstrumentation()
-        val f = File(i.targetContext.getExternalFilesDir(null), "test-evidence").apply { mkdirs() }
-        i.uiAutomation.takeScreenshot()?.let { b ->
-            File(f, "$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            b.recycle()
+        i.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence && screencap -p /data/local/tmp/herrin-test-evidence/$name.png").use { descriptor ->
+            java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
         }
     }
     @Test fun lettersCollapseToHThenHomeCallback() {

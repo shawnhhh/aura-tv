@@ -60,12 +60,16 @@ class HerrinUiSmokeTest {
     }
     private fun capture(label: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "test-evidence").apply { mkdirs() }
-        instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
-            File(dir, "$label.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            bitmap.recycle()
+        fun shell(command: String) {
+            instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
         }
-        File(dir, "$label-semantics.txt").writeText(compose.onRoot().printToString())
+        val dir = "/data/local/tmp/herrin-test-evidence"
+        shell("mkdir -p $dir")
+        shell("screencap -p $dir/$label.png")
+        val tree = compose.onRoot().printToString().replace("'", "'\\''")
+        shell("printf '%s' '$tree' > $dir/$label-semantics.txt")
     }
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")
@@ -119,6 +123,10 @@ class HerrinUiSmokeTest {
         compose.onNodeWithText("搜索结果 · 1").assertExists()
         capture("search")
         focus("card-orbit"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        // Wait for the Activity to finish the IME/window transition before asserting lazy detail content.
+        compose.waitUntil(5000) {
+            runCatching { compose.onNodeWithText("演示选集").assertExists() }.isSuccess
+        }
         compose.onNodeWithText("演示选集").assertExists()
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("card-orbit").assertIsFocused()
