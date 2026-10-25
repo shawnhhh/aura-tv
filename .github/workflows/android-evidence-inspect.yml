@@ -1,0 +1,21 @@
+name: HERRIN Inspect Retained Emulator Evidence
+on:
+  push:
+    branches: ['feat/herrin-android-tv-m1']
+    paths: ['.github/workflows/android-evidence-inspect.yml', '.github/scripts/inspect_evidence.py']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          github-token: ${{ github.token }}
+          run-id: 40194484911
+          path: evidence
+      - run: python3 .github/scripts/inspect_evidence.py
