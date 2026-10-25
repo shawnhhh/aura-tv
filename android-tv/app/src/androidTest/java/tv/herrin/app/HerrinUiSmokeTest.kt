@@ -1,6 +1,5 @@
 package tv.herrin.app
 
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -19,7 +18,9 @@ class HerrinUiSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     @Before fun skipSplash() {
-        compose.onNodeWithText("跳过 · 确定").performClick()
+        val skip = compose.onNodeWithText("跳过 · 确定")
+        if (skip.fetchSemanticsNodes().isNotEmpty()) skip.performClick()
+        compose.waitUntil(10000) { compose.onNodeWithText("HERRIN").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
     }
 
