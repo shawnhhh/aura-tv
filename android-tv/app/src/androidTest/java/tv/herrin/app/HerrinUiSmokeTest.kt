@@ -17,10 +17,11 @@ import org.junit.runner.RunWith
 class HerrinUiSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
-    @Before fun skipSplash() {
-        val skip = compose.onNodeWithText("跳过 · 确定")
-        if (skip.fetchSemanticsNodes().isNotEmpty()) skip.performClick()
-        compose.waitUntil(10000) { compose.onNodeWithText("HERRIN").fetchSemanticsNodes().isNotEmpty() }
+    @Before fun awaitHome() {
+        // Do not rely on internal Compose semantics APIs; allow splash to complete naturally.
+        compose.waitUntil(10000) {
+            runCatching { compose.onNodeWithText("影片详情").assertExists() }.isSuccess
+        }
         compose.waitForIdle()
     }
 
