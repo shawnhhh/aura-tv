@@ -17,8 +17,10 @@ class HerrinSplashTest {
     @get:Rule val compose = createComposeRule()
     private fun screenshot(name: String) {
         val i = InstrumentationRegistry.getInstrumentation()
-        i.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence && screencap -p /data/local/tmp/herrin-test-evidence/$name.png").use { descriptor ->
-            java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+        for (command in listOf("mkdir -p /data/local/tmp/herrin-test-evidence", "screencap -p /data/local/tmp/herrin-test-evidence/$name.png")) {
+            i.uiAutomation.executeShellCommand(command).use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
         }
     }
     @Test fun lettersCollapseToHThenHomeCallback() {

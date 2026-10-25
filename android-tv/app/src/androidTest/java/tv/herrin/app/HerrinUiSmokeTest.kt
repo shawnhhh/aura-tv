@@ -68,8 +68,12 @@ class HerrinUiSmokeTest {
         val dir = "/data/local/tmp/herrin-test-evidence"
         shell("mkdir -p $dir")
         shell("screencap -p $dir/$label.png")
-        val tree = compose.onRoot().printToString().replace("'", "'\\''")
-        shell("printf '%s' '$tree' > $dir/$label-semantics.txt")
+        val tree = compose.onRoot().printToString()
+        val encoded = android.util.Base64.encodeToString(tree.toByteArray(), android.util.Base64.NO_WRAP)
+        val chunks = encoded.chunked(2800)
+        chunks.forEachIndexed { index, chunk ->
+            android.util.Log.i("HerrinEvidence", "TREE $label $index/${chunks.size} $chunk")
+        }
     }
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")

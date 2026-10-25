@@ -225,7 +225,15 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
     Column(modifier.width(204.dp).graphicsLayer { scaleX = scale; scaleY = scale }
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .border(if (focused) 3.dp else 1.dp, if (focused) Color.White else Color(0x554C5668), RoundedCornerShape(10.dp))
-        .clip(RoundedCornerShape(10.dp)).background(Color(0xFF151A22)).clickable(onClick = onClick)) {
+        .clip(RoundedCornerShape(10.dp)).background(Color(0xFF151A22))
+        .onPreviewKeyEvent { event ->
+            // TV IMEs may consume the initial confirm down event while leaving text input.
+            // Activate on confirm release whenever this poster owns focus, including that transition.
+            if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                if (event.type == KeyEventType.KeyUp) onClick()
+                true
+            } else false
+        }.clickable(onClick = onClick)) {
         Image(painterResource(film.artwork), film.title, Modifier.fillMaxWidth().height(90.dp), contentScale = ContentScale.Crop)
         Text(film.title, Modifier.padding(9.dp), fontSize = 14.sp)
     }

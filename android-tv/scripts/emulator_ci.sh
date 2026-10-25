@@ -19,7 +19,7 @@ import base64
 from pathlib import Path
 for name in ['home.png', 'test-evidence/splash-HERRIN.png', 'test-evidence/splash-H.png', 'test-evidence/search.png', 'test-evidence/detail.png', 'test-evidence/favorites-persisted.png', 'test-evidence/remote-focused-poster.png']:
     p = Path('build/emulator-evidence') / name
-    if p.exists():
+    if p.is_file():
         print('HERRIN_PNG ' + name + ' ' + base64.b64encode(p.read_bytes()).decode())
 for p in Path('build/emulator-evidence/test-evidence').glob('FAIL-*-semantics.txt'):
     print('HERRIN_FAILURE_TREE', p.name, p.read_text()[:30000])
@@ -28,6 +28,7 @@ PY
 }
 trap collect EXIT
 gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/build.log
+adb logcat -G 16M || true
 bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
 # Shell-owned evidence survives the package uninstall performed by AGP.
 adb shell rm -rf /data/local/tmp/herrin-test-evidence
