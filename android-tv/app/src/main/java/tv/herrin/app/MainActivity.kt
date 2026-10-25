@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -128,17 +129,17 @@ private fun Herrin() {
                         Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Row(Modifier.background(Color(0xCC13161C), RoundedCornerShape(40.dp)).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             listOf("首页", "电影", "剧集", "动漫", "直播", "我的").forEach { cat ->
-                                TvButton(cat, Modifier.focusRequester(requester("nav-$cat")), reduceMotion, category == cat && !isSearch,
+                                TvButton(cat, Modifier.testTag("nav-$cat").focusRequester(requester("nav-$cat")), reduceMotion, category == cat && !isSearch,
                                     onFocus = { focusId = "nav-$cat" }) { category = cat; screen = "browse" }
                             }
                         }
-                        TvButton("搜索", Modifier.focusRequester(requester("search")), reduceMotion, onFocus = { focusId = "search" }) { screen = "search" }
-                        TvButton("设置", Modifier.focusRequester(requester("settings")), reduceMotion, onFocus = { focusId = "settings" }) { screen = "settings" }
+                        TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, onFocus = { focusId = "search" }) { screen = "search" }
+                        TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion, onFocus = { focusId = "settings" }) { screen = "settings" }
                     }
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
                         Text("搜索 · 离线演示片库", fontSize = 24.sp)
-                        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input").fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
                         // An on-screen keyboard also permits search without a hardware keyboard or IME.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -154,10 +155,10 @@ private fun Herrin() {
                         Text("${film.subtitle}    ·    ${film.year}    ·    ${film.category}", fontSize = 13.sp)
                         Text(film.synopsis, Modifier.widthIn(max = 470.dp).padding(vertical = 6.dp), fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, color = Color(0xFFCFD1D7))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton("▶ 播放演示", reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.focusRequester(requester("play"))) {
+                            TvButton("▶ 播放演示", reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
                                 returnScreen = "browse"; episode = 1; screen = "player"
                             }
-                            TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.focusRequester(requester("details"))) { details(film) }
+                            TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.testTag("details").focusRequester(requester("details"))) { details(film) }
                         }
                         Spacer(Modifier.height(20.dp))
                     }
@@ -166,7 +167,7 @@ private fun Herrin() {
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         items(filtered, key = { it.id }) { item ->
-                            Poster(item, Modifier.focusRequester(requester("card-${item.id}")), reduceMotion,
+                            Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
                                 onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
                         }
                     }
@@ -174,7 +175,7 @@ private fun Herrin() {
             }
             "detail", "player", "settings" -> {
                 LazyColumn(Modifier.fillMaxSize().background(Color(0xAA080B10)), contentPadding = PaddingValues(48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    item { TvButton("‹ 返回", Modifier.focusRequester(requester("screen-first")), reduceMotion) { back() } }
+                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     if (screen == "settings") {
                         item { Text("设置", fontSize = 36.sp) }
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
@@ -227,7 +228,7 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
 }
 
 @Composable
-private fun Splash(reduced: Boolean, done: () -> Unit) {
+internal fun Splash(reduced: Boolean, done: () -> Unit) {
     var phase by remember { mutableIntStateOf(0) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(reduced) {

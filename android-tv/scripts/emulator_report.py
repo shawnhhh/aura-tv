@@ -1,0 +1,27 @@
+"""Summarize actual JUnit results, process status and fatal logs; never infer UI passes from build success."""
+import json
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+out = Path('build/emulator-evidence')
+tests = []
+for path in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml'):
+    for case in ET.parse(path).getroot().iter('testcase'):
+        error = case.find('failure')
+        if error is None:
+            error = case.find('error')
+        tests.append({'class': case.get('classname'), 'test': case.get('name'),
+                      'status': 'failed' if error is not None else 'skipped' if case.find('skipped') is not None else 'passed',
+                      'failure': error.get('message', '') if error is not None else None})
+log = (out / 'logcat.txt').read_text(errors='replace')
+summary = {'exit_code': int(sys.argv[1]), 'device': 'Android TV API 30 x86 / tv_1080p',
+           'instrumentation': tests, 'fatal_exception_present': 'FATAL EXCEPTION' in log,
+           'physical_TCL_tested': False}
+(out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',
+         '| Instrumentation test | Result |', '| --- | --- |']
+lines += [f"| {t['test']} | {t['status']} |" for t in tests]
+lines += ['', 'ADB smoke: see adb-smoke.log and launch.txt. Startup frames are real emulator screenshots.',
+          'Physical TCL remote, TV IME variants, 4K overscan and real streaming remain unverified.']
+(out / 'REPORT.md').write_text('\n'.join(lines) + '\n')
+print(json.dumps(summary, ensure_ascii=False))

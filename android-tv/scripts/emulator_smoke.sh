@@ -20,6 +20,10 @@ dump_ui() {
     adb shell uiautomator dump /sdcard/herrin-ui.xml > "$evidence/${label}-dump.log" 2>&1
     adb exec-out cat /sdcard/herrin-ui.xml > "$evidence/${label}.xml"
 }
+adb shell dumpsys activity activities > "$evidence/foreground.txt"
+if ! grep -q "mResumedActivity.*tv.herrin.app/.MainActivity" "$evidence/foreground.txt"; then
+    echo "FAIL: HERRIN MainActivity is not resumed"; exit 1
+fi
 dump_ui home
 if ! grep -q 'HERRIN' "$evidence/home.xml"; then
     echo "FAIL: HERRIN not visible in emulator UI hierarchy"
