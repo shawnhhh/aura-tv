@@ -6,6 +6,7 @@ mkdir -p build/emulator-evidence
 collect() {
     code=$?
     trap - EXIT
+    if [[ -n "${collector_pid:-}" ]]; then kill "$collector_pid" 2>/dev/null || true; wait "$collector_pid" 2>/dev/null || true; fi
     adb logcat -d > build/emulator-evidence/logcat.txt 2>&1 || true
     adb shell dumpsys activity activities > build/emulator-evidence/activities-final.txt 2>&1 || true
     adb pull /sdcard/Android/data/tv.herrin.app/files/test-evidence build/emulator-evidence/ >/dev/null 2>&1 || true
@@ -17,14 +18,24 @@ collect() {
     python3 - <<'PY'
 import base64
 from pathlib import Path
-for name in ['home.png', 'test-evidence/splash-HERRIN.png', 'test-evidence/splash-H.png']:
+for name in ['home.png', 'test-evidence/splash-HERRIN.png', 'test-evidence/splash-H.png', 'test-evidence/search.png', 'test-evidence/detail.png', 'test-evidence/favorites-persisted.png', 'test-evidence/remote-focused-poster.png']:
     p = Path('build/emulator-evidence') / name
     if p.exists():
         print('HERRIN_PNG ' + name + ' ' + base64.b64encode(p.read_bytes()).decode())
+for p in Path('build/emulator-evidence/test-evidence').glob('FAIL-*-semantics.txt'):
+    print('HERRIN_FAILURE_TREE', p.name, p.read_text()[:30000])
 PY
     exit "$code"
 }
 trap collect EXIT
 gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/build.log
 bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
+# AGP removes app external files during uninstall. Copy them while instrumentation is alive.
+(
+    for ((i=0; i<180; i++)); do
+        adb pull /sdcard/Android/data/tv.herrin.app/files/test-evidence build/emulator-evidence/ >/dev/null 2>&1 || true
+        sleep 2
+    done
+) &
+collector_pid=$!
 gradle :app:connectedDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log

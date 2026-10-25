@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +45,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) { Herrin() }
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Surface(Modifier.fillMaxSize(), color = Color(0xFF080B10)) { Herrin() }
+            }
         }
     }
 }
@@ -68,6 +71,7 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
 @Composable
 private fun Herrin() {
     val context = LocalContext.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val prefs = remember { Preferences(context) }
     val catalog: CatalogSource = remember { DemoCatalog() }
     val films = remember { catalog.titles() }
@@ -168,7 +172,7 @@ private fun Herrin() {
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         items(filtered, key = { it.id }) { item ->
                             Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
+                                onFocus = { keyboard?.hide(); filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
                         }
                     }
                 }

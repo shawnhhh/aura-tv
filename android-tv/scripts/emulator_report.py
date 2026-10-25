@@ -12,7 +12,7 @@ for path in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml'):
             error = case.find('error')
         tests.append({'class': case.get('classname'), 'test': case.get('name'),
                       'status': 'failed' if error is not None else 'skipped' if case.find('skipped') is not None else 'passed',
-                      'failure': error.get('message', '') if error is not None else None})
+                      'failure': (error.get('message') or (error.text or '')[:2500]) if error is not None else None})
 log = (out / 'logcat.txt').read_text(errors='replace')
 summary = {'exit_code': int(sys.argv[1]), 'device': 'Android TV API 30 x86 / tv_1080p',
            'instrumentation': tests, 'fatal_exception_present': 'FATAL EXCEPTION' in log,

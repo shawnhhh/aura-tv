@@ -1,5 +1,9 @@
 package tv.herrin.app
 
+import android.os.Build
+import android.view.WindowInsets
+import androidx.compose.ui.graphics.toPixelMap
+import org.junit.Assert.assertTrue
 import android.graphics.Bitmap
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
@@ -39,6 +43,10 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.waitForIdle()
         compose.onNodeWithTag(tag).assertIsFocused()
+        // IME dismissal is asynchronous outside Compose; a focused result must become actionable.
+        if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
+            !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
+        }
     }
     private fun key(code: Int) {
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(code)
@@ -61,6 +69,13 @@ class HerrinUiSmokeTest {
     }
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")
+        val pixels = compose.onNodeWithText("HERRIN").captureToImage().toPixelMap()
+        var brightPixels = 0
+        for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+            val c = pixels[x, y]
+            if (c.red > 0.7f && c.green > 0.7f && c.blue > 0.7f) brightPixels++
+        }
+        assertTrue("Brand text must contrast with the dark hero", brightPixels > 30)
         key(KeyEvent.KEYCODE_DPAD_RIGHT)
         compose.onNodeWithTag("nav-电影").assertIsFocused()
         capture("remote-focused-movies")

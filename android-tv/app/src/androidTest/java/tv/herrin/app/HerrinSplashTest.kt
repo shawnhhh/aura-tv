@@ -1,5 +1,8 @@
 package tv.herrin.app
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.darkColorScheme
 import android.graphics.Bitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -23,7 +26,7 @@ class HerrinSplashTest {
     @Test fun lettersCollapseToHThenHomeCallback() {
         compose.mainClock.autoAdvance = false
         var completed = false
-        compose.setContent { Splash(false) { completed = true } }
+        compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(false) { completed = true } } } }
         compose.onNodeWithText("H").assertIsDisplayed()
         compose.onNodeWithText("E").assertIsDisplayed()
         compose.onAllNodesWithText("R").assertCountEquals(2)
@@ -42,13 +45,13 @@ class HerrinSplashTest {
     @Test fun skipCompletesImmediately() {
         compose.mainClock.autoAdvance = false
         var completed = false
-        compose.setContent { Splash(false) { completed = true } }
+        compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(false) { completed = true } } } }
         compose.onNodeWithText("跳过 · 确定").performClick()
         compose.runOnIdle { assertTrue(completed) }
     }
     @Test fun reducedMotionCompletesWithoutWaitingForAnimation() {
         var completed = false
-        compose.setContent { Splash(true) { completed = true } }
+        compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(true) { completed = true } } } }
         compose.runOnIdle { assertTrue(completed) }
     }
 }
