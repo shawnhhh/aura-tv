@@ -40,11 +40,7 @@ jobs:
           emulator-boot-timeout: 900
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: |
-            cd android-tv
-            gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
-            bash scripts/emulator_smoke.sh
-            gradle :app:connectedDebugAndroidTest --stacktrace
+          script: bash android-tv/scripts/emulator_ci.sh
       - name: Collect emulator screenshots and UI test reports
         if: always()
         uses: actions/upload-artifact@v4
