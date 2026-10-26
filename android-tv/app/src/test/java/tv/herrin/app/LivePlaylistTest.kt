@@ -31,8 +31,13 @@ class LivePlaylistTest {
             AuthorizedLivePlaylist.decode("#EXTM3U\n#EXTINF:-1,频道\nfile:///storage/stream.m3u8")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            AuthorizedLivePlaylist.decode("#EXTM3U\n#EXTINF:-1,频道\nhttps://safe.example.org/1\n" +
-                "#EXTINF:-1,频道2\nhttps://safe.example.org/2\n".repeat(251))
+            val oversized = buildString {
+                append("#EXTM3U\n")
+                repeat(251) { index ->
+                    append("#EXTINF:-1,频道$index\nhttps://safe.example.org/$index\n")
+                }
+            }
+            AuthorizedLivePlaylist.decode(oversized)
         }
     }
 }
