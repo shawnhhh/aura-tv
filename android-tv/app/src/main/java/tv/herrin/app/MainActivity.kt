@@ -241,7 +241,7 @@ private fun Herrin() {
                             fontSize = 14.sp, lineHeight = 22.sp, maxLines = 2,
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton("▶ 播放演示", reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
+                            TvButton("▶ 播放演示", selected = true, reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
                                 returnScreen = "browse"; episode = 1; screen = "player"
                             }
                             TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.testTag("details").focusRequester(requester("details"))) { details(film) }
@@ -296,7 +296,7 @@ private fun Herrin() {
                             item { TvButton("返回详情", reduced = reduceMotion) { screen = "detail" } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                TvButton("▶ 播放演示", reduced = reduceMotion) { screen = "player" }
+                                TvButton("▶ 播放演示", selected = true, reduced = reduceMotion) { screen = "player" }
                                 TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) { prefs.toggle(film.id); favorites = prefs.ids() }
                             } }
                             item { Text("演示选集", fontSize = 20.sp) }
