@@ -167,13 +167,18 @@ private fun Herrin() {
     // Hiding an IME window alone does not release the TV IME's served input connection.
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
     LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
-        if ((screen == "search" && !searchInputFocused && focusId.startsWith("card-")) ||
-            (screen == "settings" && !configInputFocused)) {
+        val leavingSearchEditor = screen == "search" && !searchInputFocused &&
+            focusId.startsWith("card-")
+        val leavingSettingsEditor = screen == "settings" && !configInputFocused
+        if (leavingSearchEditor || leavingSettingsEditor) {
             keyboard?.hide()
             withFrameNanos { }
             inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
-            inputMethod.restartInput(view)
-            RemoteTrace.event("IME handoff acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
+            // Restarting the input connection while a TV settings button has focus
+            // reopens some television IMEs and swallows its first D-pad CENTER key.
+            // The search result path needs restartInput for its older IME handoff fix.
+            if (leavingSearchEditor) inputMethod.restartInput(view)
+            RemoteTrace.event("IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
         }
     }
     fun back() {
@@ -383,7 +388,8 @@ private fun Herrin() {
                             Modifier.fillMaxWidth().testTag("config-media-url").onFocusChanged { configInputFocused = it.isFocused },
                             label = { Text("有权播放的 HTTPS 测试流（可留空）") },
                             singleLine = true) }
-                        item { TvButton("保存媒体配置", reduced = reduceMotion) {
+                        item { TvButton("保存媒体配置", reduced = reduceMotion,
+                            onFocus = { focusId = "settings-save"; keyboard?.hide() }) {
                             val catalogLink = configUrlDraft.trim()
                             val mediaLink = mediaUrlDraft.trim()
                             if ((catalogLink.isNotEmpty() && AuthorizedUrls.https(catalogLink) == null) ||
@@ -397,7 +403,8 @@ private fun Herrin() {
                                 configStatus = "配置已保存；测试流只会在手动进入演示播放页时使用"
                             }
                         } }
-                        item { TvButton("重新同步目录", reduced = reduceMotion) { catalogRefresh++ } }
+                        item { TvButton("重新同步目录", reduced = reduceMotion,
+                            onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
                         item { Text(providerStatus, fontSize = 15.sp, color = Color(0xFFCFD7E4)) }
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("请仅填写你有权使用的目录和媒体地址。此应用不会自动获取第三方影视片源；网络失败时仍可使用离线演示内容。", lineHeight = 22.sp) }
