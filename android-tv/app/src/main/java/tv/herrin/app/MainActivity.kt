@@ -287,6 +287,8 @@ private fun Herrin() {
     var pendingToolbarFocus by rememberSaveable { mutableStateOf<String?>(null) }
     var returnScreen by rememberSaveable { mutableStateOf("browse") }
     var query by rememberSaveable { mutableStateOf("") }
+    var searchCategory by rememberSaveable { mutableStateOf("全部") }
+    var searchNewestFirst by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
     var activeLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
@@ -399,9 +401,9 @@ private fun Herrin() {
             }
             "browse", "search" -> {
                 val isSearch = screen == "search"
-                val filtered = if (isSearch) films.filter {
-                    it.title.contains(query.trim(), ignoreCase = true) || it.subtitle.contains(query.trim(), ignoreCase = true)
-                } else films.filter {
+                val filtered = if (isSearch) SearchDiscovery.results(
+                    films, query, searchCategory, searchNewestFirst
+                ) else films.filter {
                     category == "首页" || it.category == category || category == "我的" && it.id in favorites
                 }
                 // History drives the first shelf only for films with actual saved playback.
@@ -429,9 +431,27 @@ private fun Herrin() {
                     }
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
-                        Text("搜索 · 离线演示片库", fontSize = 24.sp)
+                        Text(if (providerFilms == null) "搜索 · 离线演示片库" else "搜索 · 当前授权目录", fontSize = 24.sp)
                         OutlinedTextField(query, { query = it }, Modifier.testTag("search-input").onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event("INPUT focus=${it.isFocused}") }.fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SearchDiscovery.categories.forEach { option ->
+                                TvButton(option,
+                                    modifier = Modifier.testTag("search-filter-$option")
+                                        .focusRequester(requester("search-filter-$option")),
+                                    selected = searchCategory == option, reduced = reduceMotion, quiet = true,
+                                    onFocus = { focusId = "search-filter-$option" }
+                                ) { searchCategory = option }
+                            }
+                            TvButton(if (searchNewestFirst) "排序：最新优先" else "排序：目录顺序",
+                                modifier = Modifier.testTag("search-sort").focusRequester(requester("search-sort")),
+                                selected = searchNewestFirst, reduced = reduceMotion, quiet = true,
+                                onFocus = { focusId = "search-sort" }
+                            ) { searchNewestFirst = !searchNewestFirst }
+                        }
+                        Text("当前筛选：$searchCategory · ${filtered.size} 个结果",
+                            modifier = Modifier.testTag("search-filter-status"),
+                            fontSize = 12.sp, color = Color(0xFFC4CDDC))
                         // An on-screen keyboard also permits search without a hardware keyboard or IME.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("轨道", "潮汐", "群山", "星夜", "清空").forEach { word ->

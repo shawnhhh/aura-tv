@@ -312,4 +312,20 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("live-save").assertIsDisplayed()
         capture("settings-authorized-live")
     }
+
+    @Test fun searchCategoryAndSortAreOperableByRemoteWithoutNetwork() {
+        focus("search")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("search-filter-动漫")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("search-filter-status").assertTextContains("动漫 · 2 个结果")
+        compose.onNodeWithTag("card-night").assertExists()
+        focus("search-sort")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithText("排序：最新优先").assertExists()
+        focus("search-filter-全部")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("search-filter-status").assertTextContains("全部 · 6 个结果")
+        capture("search-filter-sort")
+    }
 }
