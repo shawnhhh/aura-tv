@@ -10,11 +10,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -38,8 +41,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -68,6 +73,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         enableEdgeToEdge()
+        preferSmoothTvUi()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF080B10), contentColor = MaterialTheme.colorScheme.onBackground) { Herrin() }
@@ -81,14 +87,22 @@ class MainActivity : ComponentActivity() {
 private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
                      selected: Boolean = false, quiet: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.055f else 1f, tween(if (reduced) 0 else 160), label = "focus")
     val shape = RoundedCornerShape(24.dp)
-    Box(modifier.graphicsLayer { scaleX = scale; scaleY = scale }
+    // Focus must react on the very first D-pad frame. A selected episode/line is a
+    // persistent value, not a second white focus pill left behind by navigation.
+    val fill = when {
+        focused -> Color.White
+        selected -> Color(0xFF344B68)
+        quiet -> Color.Transparent
+        else -> Color(0x99343840)
+    }
+    Box(modifier
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
-        .border(if (focused) 2.dp else 0.dp, if (focused) Color.White else Color.Transparent, shape)
-        .clip(shape).background(if (focused || selected) Color.White else if (quiet) Color.Transparent else Color(0x99343840))
+        .border(if (focused) 2.dp else if (selected) 1.dp else 0.dp,
+            if (focused) Color.White else if (selected) Color(0xFF7C9BBC) else Color.Transparent, shape)
+        .clip(shape).background(fill)
         .clickable(onClick = onClick).padding(horizontal = if (quiet) 13.dp else 16.dp, vertical = if (quiet) 8.dp else 11.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = if (focused || selected) Color(0xFF111318) else Color.White, fontSize = 14.sp)
+        Text(label, color = if (focused) Color(0xFF111318) else Color.White, fontSize = 14.sp)
     }
 }
 
@@ -219,16 +233,20 @@ private fun Herrin() {
         }
     }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
-        FilmArtwork(film, Modifier.fillMaxSize())
-        // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-            0.0f to Color(0xF905080D), 0.32f to Color(0xD9060A11),
-            0.66f to Color(0x4B060911), 1.0f to Color(0x13060911)
-        )))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-            0.0f to Color(0x8A05070B), 0.18f to Color.Transparent,
-            0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
-        )))
+        // Defer decoding and drawing the large hero until after splash: loading the
+        // artwork underneath an opaque splash causes avoidable startup frame stalls.
+        if (!splash) {
+            FilmArtwork(film, Modifier.fillMaxSize())
+            // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+                0.0f to Color(0xF905080D), 0.32f to Color(0xD9060A11),
+                0.66f to Color(0x4B060911), 1.0f to Color(0x13060911)
+            )))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                0.0f to Color(0x8A05070B), 0.18f to Color.Transparent,
+                0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
+            )))
+        }
         if (splash) {
             Splash(reduceMotion) { splash = false }
         } else when (screen) {
@@ -444,12 +462,13 @@ private fun Herrin() {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (film.playbackEpisodes.isEmpty()) {
                                     (1..film.episodes).forEach { n ->
-                                        TvButton("第 $n 集", reduced = reduceMotion,
+                                        TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n"), reduced = reduceMotion,
                                             selected = episode == n) { episode = n }
                                     }
                                 } else {
                                     film.playbackEpisodes.forEach { entry ->
                                         TvButton("第 ${entry.number} 集 · ${entry.title}",
+                                            modifier = Modifier.testTag("episode-${entry.number}"),
                                             reduced = reduceMotion, selected = episode == entry.number) {
                                             episode = entry.number
                                             line = entry.lines.first().id
@@ -460,11 +479,12 @@ private fun Herrin() {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (currentLines.isEmpty()) {
                                     listOf("演示线路 A", "演示线路 B").forEach { name ->
-                                        TvButton(name, reduced = reduceMotion, selected = line == name) { line = name }
+                                        TvButton(name, modifier = Modifier.testTag("line-$name"),
+                                            reduced = reduceMotion, selected = line == name) { line = name }
                                     }
                                 } else {
                                     currentLines.forEach { option ->
-                                        TvButton(option.title, reduced = reduceMotion,
+                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}"), reduced = reduceMotion,
                                             selected = line == option.id) { line = option.id }
                                     }
                                 }
@@ -527,27 +547,42 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
 
 @Composable
 internal fun Splash(reduced: Boolean, done: () -> Unit) {
-    var phase by remember { mutableIntStateOf(0) }
+    val collapse = remember { Animatable(0f) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(reduced) {
         focus.requestFocus()
         if (reduced) { done(); return@LaunchedEffect }
-        delay(500)
-        repeat(5) { phase++; delay(330) }
+        delay(450)
+        collapse.animateTo(5f, tween(durationMillis = 1800, easing = LinearEasing))
         delay(650)
         done()
     }
-    Box(Modifier.fillMaxSize().background(Color(0xFF080B10)), contentAlignment = Alignment.Center) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            "HERRIN".forEachIndexed { index, c ->
-                val visible = index == 0 || index < 6 - phase
-                val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(250), label = "letter")
-                val width by animateFloatAsState(if (visible) 48f else 0f, tween(300), label = "collapse")
-                Box(Modifier.width(width.dp).alpha(alpha), contentAlignment = Alignment.Center) {
-                    Text(c.toString(), fontSize = 56.sp, fontWeight = FontWeight.Bold)
-                }
+    val collapsed by remember { derivedStateOf { collapse.value >= 5f } }
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080B10))
+        .testTag("splash").focusRequester(focus)
+        .onPreviewKeyEvent { event ->
+            val code = event.nativeKeyEvent.keyCode
+            if (event.type == KeyEventType.KeyDown &&
+                (code == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                    code == android.view.KeyEvent.KEYCODE_ENTER ||
+                    code == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                done()
+                true
+            } else false
+        }.focusable(), contentAlignment = Alignment.Center) {
+        // One GPU-layer-only collapse animation; no per-letter width animation or
+        // repeated Row remeasurement. H travels to the true screen center.
+        val cell = minOf(94.dp, (maxWidth - 80.dp) / 6)
+        val stepPx = with(LocalDensity.current) { cell.toPx() }
+        "HERRIN".forEachIndexed { index, letter ->
+            if (index == 0 || !collapsed) {
+                Text(letter.toString(), modifier = Modifier.width(cell).graphicsLayer {
+                    val progress = collapse.value
+                    translationX = (index - (5f - progress) / 2f) * stepPx
+                    alpha = if (index == 0) 1f else (6f - index - progress).coerceIn(0f, 1f)
+                }, textAlign = TextAlign.Center, fontSize = (cell.value * 0.91f).sp,
+                    fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }
-        TvButton("跳过 · 确定", Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).focusRequester(focus), reduced) { done() }
     }
 }

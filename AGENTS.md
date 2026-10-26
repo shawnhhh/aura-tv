@@ -1,7 +1,7 @@
 # HERRIN — repository instructions for Codex
 
 ## Product and scope
-- Product name: **HERRIN** (all caps). App icon is a minimalist white **H** on charcoal/near-black. Design language is restrained **Apple TV+ inspired**, not a Netflix clone (no red N / Netflix marks).
+- In-app brand and startup logo: **HERRIN** (all caps); Android TV launcher display label: **Herrin** (title case). App icon is a minimalist white **H** on charcoal/near-black. Design language is restrained **Apple TV+ inspired**, not a Netflix clone (no red N / Netflix marks).
 - Target: **TCL T7L Ultra**, Android TV-compatible 16:9 landscape display and D-pad remote.
 - The current site at the repository root (index.html, icon.svg, manifest.webmanifest, apple-touch-icon.png) is an approved interactive design reference. **Do not break, replace, or move the GitHub Pages site.** It is not the Android implementation.
 - Develop a real native Android TV project under **android-tv/**. Avoid wrapping the site inside WebView.
@@ -17,7 +17,7 @@
 
 ## Android engineering
 - Prefer Kotlin + modern native Android TV UI (Compose for TV / compatible Compose Material), Media3 later. Choose versions supported by the selected Gradle/AGP and Android SDK.
-- Use a separate package/applicationId, e.g. `tv.herrin.app`; clearly label it HERRIN in the launcher; include Android TV leanback manifest launcher, banner, and proper app icons.
+- Use a separate package/applicationId, e.g. `tv.herrin.app`; label it Herrin in the launcher; include Android TV leanback manifest launcher, banner, and proper app icons.
 - Architect UI / data / player with explicit interfaces so a real catalog and playback source can replace the M1 demo data.
 - M1 should be a functional Android TV shell, **not** a claim of connected video playback. Demo play UI is acceptable if clearly labeled.
 - Examine https://github.com/FongMi/TV for later integration: its `app/src/main` is shared logic and `app/src/leanback` is TV UI; its build may require non-repository `lib-*.aar` files. Do not misrepresent its build as reproducible if files are missing. Decide whether to migrate the shell or create an integration adapter, and document the tradeoff.

@@ -133,6 +133,26 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("card-tide").assertIsFocused()
         capture("detail-back-focus")
     }
+    @Test fun selectedEpisodeAndLineAreNotSecondWhiteFocusPills() {
+        focus("card-tide")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        // Episode 1 and line A are selected; focus moves elsewhere without selection.
+        focus("episode-4")
+        fun bodyColor(tag: String): androidx.compose.ui.graphics.Color {
+            val bitmap = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
+            return bitmap[bitmap.width / 2, bitmap.height / 4]
+        }
+        val selectedEpisode = bodyColor("episode-1")
+        val focusedEpisode = bodyColor("episode-4")
+        assertTrue("Selection must remain tinted instead of white", selectedEpisode.red < 0.65f)
+        assertTrue("Only keyboard focus is white", focusedEpisode.red > 0.85f)
+        focus("line-演示线路 B")
+        val selectedLine = bodyColor("line-演示线路 A")
+        val focusedLine = bodyColor("line-演示线路 B")
+        assertTrue("Old selected line must not stay white", selectedLine.red < 0.65f)
+        assertTrue("New focus must be white", focusedLine.red > 0.85f)
+        capture("detail-unique-focus")
+    }
     @Test fun offlineSearchTextEmptyAndRemoteResult() {
         focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("search-input").performTextInput("not-a-film")
