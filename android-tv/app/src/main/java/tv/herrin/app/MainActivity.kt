@@ -235,7 +235,7 @@ private fun Herrin() {
                         Text(film.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
                             color = Color(0xFFE4E7EF))
                         Spacer(Modifier.height(12.dp))
-                        Text("${film.year}   ·   ${film.category}   ·   HERRIN 4K DEMO",
+                        Text("${film.year}   ·   ${film.category}   ·   ORIGINAL UI DEMO",
                             fontSize = 13.sp, color = Color(0xFFF3F5F8))
                         Text(film.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 10.dp),
                             fontSize = 14.sp, lineHeight = 22.sp, maxLines = 2,
