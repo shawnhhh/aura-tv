@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -218,12 +219,33 @@ private fun Herrin() {
     val demoCatalog: CatalogSource = remember { DemoCatalog() }
     val demoFilms = remember { demoCatalog.titles() }
     val providerRepo = remember(context) { RemoteCatalogRepository(context) }
+    val liveRepo = remember { RemoteLivePlaylistRepository() }
+    var liveChannels by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
+    var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
+    var liveRefresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(liveRefresh) {
+        liveChannels = emptyList()
+        val endpoint = prefs.livePlaylistUrl
+        if (endpoint.isBlank()) {
+            liveStatus = "请在设置中配置自己的授权 HTTPS M3U 直播列表"
+        } else {
+            liveStatus = "正在加载授权直播列表…"
+            when (val loaded = liveRepo.load(endpoint)) {
+                is LivePlaylistResult.Ready -> {
+                    liveChannels = loaded.channels
+                    liveStatus = "已加载 ${loaded.channels.size} 个授权直播频道"
+                }
+                is LivePlaylistResult.Error -> liveStatus = loaded.reason
+            }
+        }
+    }
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
     var savedProfiles by remember { mutableStateOf(profileStore.list()) }
     var activeProfileId by remember { mutableStateOf(profileStore.activeId()) }
     var sourceNameDraft by rememberSaveable { mutableStateOf("") }
     var configUrlDraft by rememberSaveable { mutableStateOf(prefs.catalogUrl) }
+    var liveUrlDraft by rememberSaveable { mutableStateOf(prefs.livePlaylistUrl) }
     var importProfilesDraft by rememberSaveable { mutableStateOf("") }
     var pendingDeleteSourceId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(pendingDeleteSourceId) {
@@ -267,6 +289,8 @@ private fun Herrin() {
     var query by rememberSaveable { mutableStateOf("") }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
+    var activeLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
+    var activeLiveIndex by remember { mutableIntStateOf(-1) }
     val catalogScope = prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
     var favorites by remember(catalogScope) { mutableStateOf(prefs.idsFor(catalogScope)) }
     var reduced by remember { mutableStateOf(prefs.reducedMotion) }
@@ -309,6 +333,7 @@ private fun Herrin() {
     fun back() {
         when (screen) {
             "player" -> screen = "detail"
+            "live-player" -> { focusId = "live-$activeLiveIndex"; screen = "browse" }
             "detail" -> screen = returnScreen
             "search", "settings" -> {
                 val target = if (screen == "settings") "settings" else "search"
@@ -361,6 +386,17 @@ private fun Herrin() {
         if (splash) {
             Splash(reduceMotion) { splash = false }
         } else when (screen) {
+            "live-player" -> {
+                val selected = activeLiveChannel
+                if (selected != null) {
+                    AuthorizedPlaybackPanel(
+                        media = PlaybackMedia(selected.url),
+                        onBack = { focusId = "live-$activeLiveIndex"; screen = "browse" }
+                    )
+                } else {
+                    Text("当前未选中直播频道", Modifier.padding(50.dp))
+                }
+            }
             "browse", "search" -> {
                 val isSearch = screen == "search"
                 val filtered = if (isSearch) films.filter {
@@ -440,7 +476,34 @@ private fun Herrin() {
                             color = Color(0xFFB6BBC5))
                     }
                     Spacer(Modifier.height(6.dp))
-                    if (category == "直播" && !isSearch) Text("直播尚未接入 · M2 将支持用户配置的合法直播源", Modifier.padding(24.dp))
+                    if (category == "直播" && !isSearch) {
+                        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Text(liveStatus, Modifier.testTag("live-status"), color = Color(0xFFCFD7E4))
+                            if (liveChannels.isEmpty()) {
+                                TvButton("设置授权直播列表", modifier = Modifier.testTag("live-config"),
+                                    reduced = reduceMotion, onFocus = { focusId = "live-config" }) {
+                                    screen = "settings"
+                                }
+                            } else {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    contentPadding = PaddingValues(10.dp)) {
+                                    itemsIndexed(liveChannels, key = { _, item -> item.url }) { index, channel ->
+                                        TvButton(
+                                            if (channel.group.isBlank()) channel.name else "${channel.group} · ${channel.name}",
+                                            modifier = Modifier.testTag("live-$index")
+                                                .focusRequester(requester("live-$index")),
+                                            reduced = reduceMotion,
+                                            onFocus = { focusId = "live-$index" }
+                                        ) {
+                                            activeLiveChannel = channel
+                                            activeLiveIndex = index
+                                            screen = "live-player"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         items(railFilms, key = { it.id }) { item ->
@@ -550,6 +613,24 @@ private fun Herrin() {
                             Modifier.fillMaxWidth().testTag("config-media-url").onFocusChanged { configInputFocused = it.isFocused },
                             label = { Text("有权播放的 HTTPS 测试流（可留空）") },
                             singleLine = true) }
+                        item { Text("授权 IPTV 直播", fontSize = 21.sp) }
+                        item { OutlinedTextField(liveUrlDraft, { liveUrlDraft = it },
+                            Modifier.fillMaxWidth().testTag("config-live-url")
+                                .onFocusChanged { configInputFocused = it.isFocused },
+                            label = { Text("自己的 HTTPS M3U 直播列表地址（可留空）") },
+                            singleLine = true) }
+                        item { TvButton("保存直播列表", modifier = Modifier.testTag("live-save"),
+                            reduced = reduceMotion, onFocus = { focusId = "live-save"; keyboard?.hide() }) {
+                            val typed = liveUrlDraft.trim()
+                            if (typed.isNotEmpty() && AuthorizedUrls.https(typed) == null) {
+                                configStatus = "直播列表保存失败：必须是合法 HTTPS 地址"
+                            } else {
+                                prefs.livePlaylistUrl = typed
+                                liveChannels = emptyList()
+                                liveRefresh++
+                                configStatus = "直播列表配置已保存；只读取你主动提供的频道"
+                            }
+                        } }
                         item { TvButton("保存媒体配置", reduced = reduceMotion,
                             onFocus = { focusId = "settings-save"; keyboard?.hide() }) {
                             val catalogLink = configUrlDraft.trim()

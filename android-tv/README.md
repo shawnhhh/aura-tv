@@ -73,3 +73,7 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M2.7 播放异常恢复
 
 授权媒体加载时显示缓冲状态；失败后提示可读原因并提供遥控器可聚焦的「重试播放」，请求超时有界，更新同一地址的请求头会重建播放器。详见 [M2.7 文档](docs/M2_7_PLAYBACK_RELIABILITY.md)。
+
+## M2.8 合法授权直播
+
+设置中可填写自己的 HTTPS IPTV M3U 列表，直播 Tab 展示频道与分组，遥控器选择后由 Media3 播放；解析器拒绝 HTTP 链接与 HLS 分片清单误导入，不附带频道源。详见 [M2.8 文档](docs/M2_8_AUTHORIZED_LIVE.md)。

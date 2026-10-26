@@ -293,4 +293,17 @@ class HerrinUiSmokeTest {
         compose.onNodeWithText("目录 JSON 已复制到剪贴板；如地址包含访问令牌，请勿公开分享").assertIsDisplayed()
         capture("settings-source-backup")
     }
+
+    @Test fun liveTabExplainsAuthorizedPlaylistAndSettingsProvideItsUrl() {
+        focus("nav-直播")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("live-status").assertExists()
+        compose.onNodeWithTag("live-config").assertExists()
+        key(KeyEvent.KEYCODE_BACK)
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("config-live-url").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("live-save").performScrollTo().assertIsDisplayed()
+        capture("settings-authorized-live")
+    }
 }

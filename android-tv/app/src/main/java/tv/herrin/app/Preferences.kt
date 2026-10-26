@@ -33,6 +33,10 @@ class Preferences(context: Context) : FavoritesStore {
     var testMediaUrl: String
         get() = prefs.getString("test_media_url", "") ?: ""
         set(value) { prefs.edit().putString("test_media_url", value).apply() }
+    /** Explicit user-supplied HTTPS IPTV M3U; never discovered or bundled. */
+    var livePlaylistUrl: String
+        get() = prefs.getString("live_playlist_url", "") ?: ""
+        set(value) { prefs.edit().putString("live_playlist_url", value).apply() }
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
