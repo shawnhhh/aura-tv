@@ -99,9 +99,39 @@ private fun Herrin() {
     val view = LocalView.current
     val inputMethod = remember(context) { context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager }
     var searchInputFocused by remember { mutableStateOf(false) }
+    var configInputFocused by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
-    val catalog: CatalogSource = remember { DemoCatalog() }
-    val films = remember { catalog.titles() }
+    val demoCatalog: CatalogSource = remember { DemoCatalog() }
+    val demoFilms = remember { demoCatalog.titles() }
+    val providerRepo = remember(context) { RemoteCatalogRepository(context) }
+    var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
+    var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
+    var configUrlDraft by rememberSaveable { mutableStateOf(prefs.catalogUrl) }
+    var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
+    var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
+    var catalogRefresh by remember { mutableIntStateOf(0) }
+    val films = providerFilms ?: demoFilms
+    LaunchedEffect(catalogRefresh) {
+        val endpoint = prefs.catalogUrl
+        if (endpoint.isBlank()) {
+            providerFilms = null
+            providerStatus = "当前使用离线演示目录"
+        } else {
+            providerStatus = "正在同步授权目录…"
+            when (val result = providerRepo.load(endpoint)) {
+                is CatalogLoadResult.Ready -> {
+                    providerFilms = result.catalog.films
+                    providerStatus = if (result.catalog.fromCache)
+                        "离线缓存目录 · ${result.catalog.films.size} 部"
+                        else "已更新授权目录 · ${result.catalog.films.size} 部"
+                }
+                is CatalogLoadResult.Error -> {
+                    providerFilms = null
+                    providerStatus = result.reason
+                }
+            }
+        }
+    }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
     var filmId by rememberSaveable { mutableStateOf(films.first().id) }
@@ -123,8 +153,9 @@ private fun Herrin() {
     fun details(f: Film) { RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen"); filmId = f.id; episode = 1; returnScreen = screen; screen = "detail" }
     // Hiding an IME window alone does not release the TV IME's served input connection.
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
-    LaunchedEffect(screen, focusId, searchInputFocused) {
-        if (screen == "search" && !searchInputFocused && focusId.startsWith("card-")) {
+    LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
+        if ((screen == "search" && !searchInputFocused && focusId.startsWith("card-")) ||
+            (screen == "settings" && !configInputFocused)) {
             keyboard?.hide()
             withFrameNanos { }
             inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
@@ -159,7 +190,7 @@ private fun Herrin() {
                 else -> "screen-first"
             }
             // A lazy search result attaches after its parent. Its item effect restores focus below.
-            if (screen == "search" && id.startsWith("card-") && catalog.search(query).any { "card-${it.id}" == id })
+            if (screen == "search" && id.startsWith("card-") && films.any { (it.title.contains(query.trim(), ignoreCase = true) || it.subtitle.contains(query.trim(), ignoreCase = true)) && "card-${it.id}" == id })
                 return@LaunchedEffect
             runCatching { requester(id).requestFocus() }.onSuccess {
                 pendingToolbarFocus = null
@@ -170,7 +201,7 @@ private fun Herrin() {
         }
     }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
-        Image(painterResource(film.artwork), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        FilmArtwork(film, Modifier.fillMaxSize())
         // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
             0.0f to Color(0xF905080D), 0.32f to Color(0xD9060A11),
@@ -185,7 +216,9 @@ private fun Herrin() {
         } else when (screen) {
             "browse", "search" -> {
                 val isSearch = screen == "search"
-                val filtered = if (isSearch) catalog.search(query) else films.filter {
+                val filtered = if (isSearch) films.filter {
+                    it.title.contains(query.trim(), ignoreCase = true) || it.subtitle.contains(query.trim(), ignoreCase = true)
+                } else films.filter {
                     category == "首页" || it.category == category || category == "我的" && it.id in favorites
                 }
                 // List states live outside screen composition and survive opening details.
@@ -226,7 +259,7 @@ private fun Herrin() {
                         Spacer(Modifier.weight(1f))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(Modifier.width(18.dp).height(2.dp).background(Color.White))
-                            Text("HERRIN  ·  ORIGINAL PREMIERE", fontSize = 12.sp, letterSpacing = 2.sp,
+                            Text(if (providerFilms == null) "HERRIN  ·  ORIGINAL PREMIERE" else "HERRIN  ·  USER CATALOG", fontSize = 12.sp, letterSpacing = 2.sp,
                                 fontWeight = FontWeight.Medium, color = Color(0xFFE5EAF2))
                         }
                         Spacer(Modifier.height(11.dp))
@@ -235,7 +268,7 @@ private fun Herrin() {
                         Text(film.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
                             color = Color(0xFFE4E7EF))
                         Spacer(Modifier.height(12.dp))
-                        Text("${film.year}   ·   ${film.category}   ·   ORIGINAL UI DEMO",
+                        Text("${film.year}   ·   ${film.category}   ·   ${if (providerFilms == null) "ORIGINAL UI DEMO" else "USER-SUPPLIED CATALOG"}",
                             fontSize = 13.sp, color = Color(0xFFF3F5F8))
                         Text(film.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 6.dp),
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
@@ -293,12 +326,43 @@ private fun Herrin() {
                 }
             }
             "detail", "player", "settings" -> {
-                LazyColumn(Modifier.fillMaxSize().background(Color(0xAA080B10)), contentPadding = PaddingValues(48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                val testMedia = if (screen == "player") AuthorizedUrls.https(prefs.testMediaUrl) else null
+                if (testMedia != null) {
+                    AuthorizedPlaybackPanel(PlaybackMedia(testMedia)) { screen = "detail" }
+                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize().background(Color(0xAA080B10)), contentPadding = PaddingValues(48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     if (screen == "settings") {
                         item { Text("设置", fontSize = 36.sp) }
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
-                        item { Text("HERRIN 0.1.0 · M1 原生 Android TV 演示\n所有片名与画面为原创虚构示例。收藏仅保存在本机。\n影视接口、直播源及 FongMi 播放内核尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("M2 · 授权目录与播放器", fontSize = 22.sp) }
+                        item { OutlinedTextField(configUrlDraft, { configUrlDraft = it },
+                            Modifier.fillMaxWidth().testTag("config-catalog-url").onFocusChanged { configInputFocused = it.isFocused },
+                            label = { Text("获授权的 HTTPS 目录 JSON 地址（可留空）") },
+                            singleLine = true) }
+                        item { OutlinedTextField(mediaUrlDraft, { mediaUrlDraft = it },
+                            Modifier.fillMaxWidth().testTag("config-media-url").onFocusChanged { configInputFocused = it.isFocused },
+                            label = { Text("有权播放的 HTTPS 测试流（可留空）") },
+                            singleLine = true) }
+                        item { TvButton("保存媒体配置", reduced = reduceMotion) {
+                            val catalogLink = configUrlDraft.trim()
+                            val mediaLink = mediaUrlDraft.trim()
+                            if ((catalogLink.isNotEmpty() && AuthorizedUrls.https(catalogLink) == null) ||
+                                (mediaLink.isNotEmpty() && AuthorizedUrls.https(mediaLink) == null)) {
+                                configStatus = "保存失败：链接必须是合法 HTTPS 地址"
+                            } else {
+                                prefs.catalogUrl = catalogLink
+                                prefs.testMediaUrl = mediaLink
+                                providerFilms = null
+                                catalogRefresh++
+                                configStatus = "配置已保存；测试流只会在手动进入演示播放页时使用"
+                            }
+                        } }
+                        item { TvButton("重新同步目录", reduced = reduceMotion) { catalogRefresh++ } }
+                        item { Text(providerStatus, fontSize = 15.sp, color = Color(0xFFCFD7E4)) }
+                        item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
+                        item { Text("请仅填写你有权使用的目录和媒体地址。此应用不会自动获取第三方影视片源；网络失败时仍可使用离线演示内容。", lineHeight = 22.sp) }
+
+                        item { Text("HERRIN M2 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示。收藏仅保存在本机。\n可从用户提供的 HTTPS 地址读取影片元数据、加载海报与播放测试流；没有内置未授权片源。\nFongMi 接口与直播功能尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }
@@ -355,7 +419,7 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
             false
         }
         .clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
-        Image(painterResource(film.artwork), film.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        FilmArtwork(film, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
             0.0f to Color.Transparent, 0.45f to Color(0x1C06090E), 1f to Color(0xE9000409)
         )))
