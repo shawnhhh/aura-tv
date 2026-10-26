@@ -272,6 +272,24 @@ private fun Herrin() {
                                 progress = if (!isSearch && category == "首页") 0.34f else null)
                         }
                     }
+                    if (!isSearch && category == "首页") {
+                        Spacer(Modifier.height(11.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("热门推荐", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text("HERRIN PICKS", fontSize = 11.sp, letterSpacing = 1.6.sp, color = Color(0xFFB6BBC5))
+                        }
+                        Spacer(Modifier.height(5.dp))
+                        LazyRow(state = railStates.getValue("recommend"), contentPadding = PaddingValues(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(films.asReversed(), key = { it.id }) { item ->
+                                Poster(item, Modifier.testTag("recommend-${item.id}")
+                                    .focusRequester(requester("recommend-${item.id}")), reduceMotion,
+                                    onFocus = { filmId = item.id; focusId = "recommend-${item.id}" },
+                                    onClick = { details(item) })
+                            }
+                        }
+                    }
                 }
             }
             "detail", "player", "settings" -> {
@@ -316,12 +334,12 @@ private fun Herrin() {
 }
 
 @Composable
-private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: () -> Unit, onClick: () -> Unit, progress: Float? = null) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.075f else 1f,
         tween(if (reduced) 0 else 190), label = "poster")
     val shape = RoundedCornerShape(13.dp)
-    Box(modifier.width(238.dp).height(146.dp)
+    Box(modifier.width(217.dp).height(116.dp)
         .graphicsLayer { scaleX = scale; scaleY = scale }
         .onFocusChanged {
             focused = it.isFocused
@@ -341,11 +359,18 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
             0.0f to Color.Transparent, 0.45f to Color(0x1C06090E), 1f to Color(0xE9000409)
         )))
-        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 13.dp, vertical = 12.dp)) {
-            Text(film.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(film.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 color = Color.White, maxLines = 1)
             Text("${film.year}   ·   ${film.category}", fontSize = 10.sp,
                 letterSpacing = 1.sp, color = Color(0xFFD3D8E1))
+        }
+        if (progress != null) {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)
+                .background(Color(0xCC495160))) {
+                Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight()
+                    .background(Color(0xFFDCE8FF)))
+            }
         }
         if (focused) {
             Text("H", Modifier.align(Alignment.TopEnd)
