@@ -13,6 +13,9 @@ class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
     val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val cueTexts = java.util.concurrent.CopyOnWriteArrayList<String>()
+    // Retain a short history: the final empty cue event on ENDED must not erase
+    // evidence that Media3 really decoded a WebVTT caption earlier in the clip.
+    val cueHistory = java.util.concurrent.CopyOnWriteArrayList<String>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -32,8 +35,11 @@ class PlaybackTestActivity : ComponentActivity() {
                             override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
                                 cueTexts.clear()
                                 cueTexts.addAll(cueGroup.cues.mapNotNull { cue -> cue.text?.toString() })
-                                if (cueTexts.isNotEmpty()) android.util.Log.i("HerrinCaptions",
-                                    "decodedWebVttCues=" + cueTexts.toList())
+                                if (cueTexts.isNotEmpty()) {
+                                    cueHistory.addAll(cueTexts)
+                                    android.util.Log.i("HerrinCaptions",
+                                        "decodedWebVttCues=" + cueTexts.toList())
+                                }
                             }
                         })
                     },
