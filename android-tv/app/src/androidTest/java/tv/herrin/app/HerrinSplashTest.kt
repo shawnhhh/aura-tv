@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import android.graphics.Bitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.input.key.Key
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import org.junit.Assert.*
@@ -35,8 +36,8 @@ class HerrinSplashTest {
         screenshot("splash-HERRIN")
         compose.mainClock.advanceTimeBy(2600)
         compose.onNodeWithText("H").assertIsDisplayed()
-        compose.onNodeWithText("E").assertIsNotDisplayed()
-        compose.onNodeWithText("N").assertIsNotDisplayed()
+        compose.onNodeWithText("E").assertDoesNotExist()
+        compose.onNodeWithText("N").assertDoesNotExist()
         assertFalse(completed)
         screenshot("splash-H")
         compose.mainClock.advanceTimeBy(1000)
@@ -46,7 +47,8 @@ class HerrinSplashTest {
         compose.mainClock.autoAdvance = false
         var completed = false
         compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(false) { completed = true } } } }
-        compose.onNodeWithText("跳过 · 确定").performClick()
+        compose.onNodeWithText("跳过 · 确定").assertDoesNotExist()
+        compose.onNodeWithTag("splash").performKeyInput { keyDown(Key.Enter); keyUp(Key.Enter) }
         compose.runOnIdle { assertTrue(completed) }
     }
     @Test fun reducedMotionCompletesWithoutWaitingForAnimation() {
