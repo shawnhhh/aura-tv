@@ -26,8 +26,14 @@ jobs:
           gradle-version: '8.9'
       - name: Generate original synthetic decoder fixture
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          # GitHub-hosted runners normally include ffmpeg/ffprobe. A needless apt
+          # update can stall on package mirrors before Android tests even start.
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            timeout 120s sudo apt-get update -qq
+            timeout 120s sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version
+          ffprobe -version
           mkdir -p android-tv/app/src/androidTest/assets
           ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=24' -f lavfi -i 'sine=frequency=440:sample_rate=48000' -f lavfi -i 'sine=frequency=660:sample_rate=48000' -t 6 -map 0:v:0 -map 1:a:0 -map 2:a:0 -c:v libx264 -threads 1 -pix_fmt yuv420p -profile:v baseline -c:a aac -metadata:s:a:0 language=eng -metadata:s:a:1 language=zho -movflags +faststart android-tv/app/src/androidTest/assets/synthetic.mp4
           ffprobe -v error -show_streams android-tv/app/src/androidTest/assets/synthetic.mp4
