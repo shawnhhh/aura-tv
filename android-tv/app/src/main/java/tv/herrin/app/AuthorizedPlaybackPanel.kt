@@ -70,15 +70,18 @@ fun AuthorizedPlaybackPanel(
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var errorMessage by remember(media.uri) { mutableStateOf<String?>(null) }
-    var uiEpoch by remember(media.uri) { mutableIntStateOf(0) }
-    var shownPosition by remember(media.uri) { mutableLongStateOf(0L) }
-    var shownDuration by remember(media.uri) { mutableLongStateOf(0L) }
+    var errorMessage by remember(media.uri, media.headers, media.subtitles) { mutableStateOf<String?>(null) }
+    var playbackState by remember(media.uri, media.headers, media.subtitles) { mutableIntStateOf(Player.STATE_IDLE) }
+    var uiEpoch by remember(media.uri, media.headers, media.subtitles) { mutableIntStateOf(0) }
+    var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
+    var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     val initialControl = remember { FocusRequester() }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
-    val player = remember(media.uri, media.subtitles) {
+    val player = remember(media.uri, media.headers, media.subtitles) {
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(false)
+            .setConnectTimeoutMs(12_000)
+            .setReadTimeoutMs(12_000)
             .setDefaultRequestProperties(media.headers)
         val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
         ExoPlayer.Builder(context).setMediaSourceFactory(factory).build().apply {
@@ -90,8 +93,12 @@ fun AuthorizedPlaybackPanel(
                 override fun onTracksChanged(tracks: Tracks) { uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { uiEpoch++ }
+                override fun onPlaybackStateChanged(state: Int) {
+                    playbackState = state
+                    uiEpoch++
+                }
                 override fun onPlayerError(error: PlaybackException) {
-                    errorMessage = "媒体播放失败：${error.errorCodeName}"
+                    errorMessage = playbackErrorMessage(error.errorCodeName)
                 }
             })
             val item = MediaItem.Builder().setUri(media.uri).apply {
@@ -125,6 +132,13 @@ fun AuthorizedPlaybackPanel(
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
         latestProgressCallback(player.currentPosition.coerceAtLeast(0L), duration,
             player.playbackState == Player.STATE_ENDED)
+    }
+    fun retryPlayback() {
+        val resumePosition = player.currentPosition.coerceAtLeast(0L)
+        errorMessage = null
+        player.prepare()
+        if (resumePosition > 0L) player.seekTo(resumePosition)
+        player.play()
     }
     LaunchedEffect(player) {
         var tick = 0
@@ -220,7 +234,16 @@ fun AuthorizedPlaybackPanel(
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Button(onClick = { requestBack("visible-button") }) { Text("返回详情") }
             Text("仅播放你有权使用的媒体 · 播放源按所选影片/线路确定", color = Color.White)
-            if (errorMessage != null) Text(errorMessage!!, color = Color(0xFFFFD0D0))
+            if (errorMessage != null) {
+                Text(errorMessage!!, color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
+                Button(onClick = { retryPlayback() },
+                    modifier = Modifier.testTag("player-retry")) { Text("重试播放") }
+            } else if (playbackState == Player.STATE_BUFFERING) {
+                Text("正在缓冲授权媒体…", color = Color(0xFFCFD7E4),
+                    modifier = Modifier.testTag("player-buffering"))
+            } else if (playbackState == Player.STATE_ENDED) {
+                Text("播放结束 · 可返回详情选择其他集数", color = Color(0xFFCFD7E4))
+            }
         }
         // One visible, original HERRIN transport surface; no competing native overlay.
         val _observeTrackChanges = uiEpoch

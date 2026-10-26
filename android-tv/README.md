@@ -69,3 +69,7 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M2.6 目录编辑与备份
 
 已保存目录可改名、更换 HTTPS 地址、双确认删除；目录列表可以用户主动复制 JSON 备份或从 JSON 合并导入（校验失败整个导入回滚，现有目录不覆盖）。详见 [M2.6 文档](docs/M2_6_SOURCE_EDIT_BACKUP.md) 和 [完整功能路线图](docs/PRODUCT_ROADMAP.md)。
+
+## M2.7 播放异常恢复
+
+授权媒体加载时显示缓冲状态；失败后提示可读原因并提供遥控器可聚焦的「重试播放」，请求超时有界，更新同一地址的请求头会重建播放器。详见 [M2.7 文档](docs/M2_7_PLAYBACK_RELIABILITY.md)。
