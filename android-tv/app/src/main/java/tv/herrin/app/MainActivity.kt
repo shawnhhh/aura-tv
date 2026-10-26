@@ -230,7 +230,10 @@ private fun Herrin() {
         }
     }
     val liveRepo = remember { RemoteLivePlaylistRepository() }
+    val liveFavorites = remember(context) { LiveFavorites(context) }
     var liveChannels by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
+    var showFavoriteChannelsOnly by rememberSaveable { mutableStateOf(false) }
+    var liveFavoriteEpoch by remember { mutableIntStateOf(0) }
     var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
     var liveRefresh by remember { mutableIntStateOf(0) }
     LaunchedEffect(liveRefresh) {
@@ -527,19 +530,46 @@ private fun Herrin() {
                                     screen = "settings"
                                 }
                             } else {
+                                TvButton(if (showFavoriteChannelsOnly) "全部频道" else "★ 只看收藏",
+                                    modifier = Modifier.testTag("live-favorites-filter"),
+                                    reduced = reduceMotion, selected = showFavoriteChannelsOnly
+                                ) { showFavoriteChannelsOnly = !showFavoriteChannelsOnly }
+                                val visibleChannels = remember(
+                                    liveChannels, showFavoriteChannelsOnly, prefs.livePlaylistUrl, liveFavoriteEpoch
+                                ) {
+                                    if (showFavoriteChannelsOnly) liveChannels.filter {
+                                        liveFavorites.contains(prefs.livePlaylistUrl, it.url)
+                                    } else liveChannels
+                                }
+                                if (visibleChannels.isEmpty()) {
+                                    Text("暂无收藏频道，切换「全部频道」后可以添加收藏",
+                                        color = Color(0xFFCFD7E4))
+                                }
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     contentPadding = PaddingValues(10.dp)) {
-                                    itemsIndexed(liveChannels, key = { _, item -> item.url }) { index, channel ->
-                                        TvButton(
-                                            if (channel.group.isBlank()) channel.name else "${channel.group} · ${channel.name}",
-                                            modifier = Modifier.testTag("live-$index")
-                                                .focusRequester(requester("live-$index")),
-                                            reduced = reduceMotion,
-                                            onFocus = { focusId = "live-$index" }
-                                        ) {
-                                            activeLiveChannel = channel
-                                            activeLiveIndex = index
-                                            screen = "live-player"
+                                    itemsIndexed(visibleChannels, key = { _, item -> item.url }) { index, channel ->
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
+                                            TvButton(
+                                                if (channel.group.isBlank()) channel.name else "${channel.group} · ${channel.name}",
+                                                modifier = Modifier.testTag("live-$index")
+                                                    .focusRequester(requester("live-$index")),
+                                                reduced = reduceMotion,
+                                                onFocus = { focusId = "live-$index" }
+                                            ) {
+                                                activeLiveChannel = channel
+                                                activeLiveIndex = index
+                                                screen = "live-player"
+                                            }
+                                            TvButton(
+                                                if (liveFavorites.contains(prefs.livePlaylistUrl, channel.url))
+                                                    "★ 已收藏" else "☆ 收藏",
+                                                modifier = Modifier.testTag("live-favorite-$index"),
+                                                reduced = reduceMotion, quiet = true
+                                            ) {
+                                                liveFavorites.toggle(prefs.livePlaylistUrl, channel.url)
+                                                liveFavoriteEpoch++
+                                            }
                                         }
                                     }
                                 }
