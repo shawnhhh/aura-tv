@@ -47,7 +47,7 @@ class HerrinUiSmokeTest {
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
-        if (tag.startsWith("card-")) {
+        if (tag.startsWith("card-") || tag == "screen-first") {
             val inputMethod = compose.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             compose.waitUntil(5000) { !inputMethod.isAcceptingText }
         }
@@ -199,8 +199,11 @@ class HerrinUiSmokeTest {
         compose.waitForIdle()
         compose.onNodeWithTag("config-media-url").performScrollTo().assertTextContains("https://media.example.org/authorized.mp4")
         // Leave the restored editor before Back, just as a remote user moves to a control.
-        compose.onNodeWithTag("screen-first").performScrollTo()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("screen-first"))
         focus("screen-first")
+        // Insets report hidden at animation start. Await the separate IME window's idle
+        // transition, otherwise it can consume Back DOWN while only UP reaches the app.
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("settings").assertIsFocused()
     }
