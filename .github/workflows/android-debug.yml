@@ -1,0 +1,50 @@
+name: HERRIN Android Debug
+on:
+  push:
+    branches: ['feat/herrin-android-tv-m1']
+    paths: ['android-tv/**', '.github/workflows/android-debug.yml']
+  pull_request:
+    paths: ['android-tv/**', '.github/workflows/android-debug.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-tv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Offline structural checks
+        run: python3 scripts/check_static.py
+      - name: Install Android SDK
+        run: |
+          sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          test -x "$sdk_manager"
+          "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Test, lint and assemble Debug APK
+        run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-debug-apk
+          path: android-tv/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HERRIN-test-reports
+          path: |
+            android-tv/app/build/reports/
+          if-no-files-found: ignore
