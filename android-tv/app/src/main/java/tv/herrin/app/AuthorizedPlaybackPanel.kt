@@ -96,11 +96,15 @@ fun AuthorizedPlaybackPanel(
             })
             val item = MediaItem.Builder().setUri(media.uri).apply {
                 if (media.subtitles.isNotEmpty()) {
-                    setSubtitleConfigurations(media.subtitles.map { subtitle ->
+                    setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
                         MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
                             .setMimeType(MimeTypes.TEXT_VTT)
                             .setLanguage(subtitle.language)
                             .setLabel(subtitle.title)
+                            // With lazy sidecar subtitle loading a late track choice can
+                            // miss a short HLS clip entirely. Start one explicitly
+                            // configured subtitle by default; users can turn it off.
+                            .setSelectionFlags(if (index == 0) C.SELECTION_FLAG_DEFAULT else 0)
                             .build()
                     })
                 }
@@ -149,11 +153,16 @@ fun AuthorizedPlaybackPanel(
             player.release()
         }
     }
-    BackHandler { onBack() }
+    fun requestBack(source: String) {
+        android.util.Log.i("HerrinPlayerBack",
+            "source=$source focus=${context.javaClass.simpleName} released=${player.isReleased}")
+        onBack()
+    }
+    BackHandler { requestBack("dispatcher") }
     Box(Modifier.fillMaxSize().background(Color.Black).onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
-            if (key.action == KeyEvent.ACTION_UP) onBack()
+            if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
             true
         } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
@@ -179,7 +188,7 @@ fun AuthorizedPlaybackPanel(
                 // HERRIN treats Back as leaving playback, independent of controller visibility.
                 override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                     if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                        if (event.action == KeyEvent.ACTION_UP) onBack()
+                        if (event.action == KeyEvent.ACTION_UP) requestBack("native-player-view")
                         return true
                     }
                     if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
@@ -209,7 +218,7 @@ fun AuthorizedPlaybackPanel(
         )
         Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Button(onClick = onBack) { Text("返回详情") }
+            Button(onClick = { requestBack("visible-button") }) { Text("返回详情") }
             Text("仅播放你有权使用的媒体 · 播放源按所选影片/线路确定", color = Color.White)
             if (errorMessage != null) Text(errorMessage!!, color = Color(0xFFFFD0D0))
         }
