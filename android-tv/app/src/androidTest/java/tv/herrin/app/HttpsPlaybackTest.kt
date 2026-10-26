@@ -117,18 +117,34 @@ class HttpsPlaybackTest {
                         Thread.sleep(70)
                     }
                     assertTrue("HTTPS WebVTT track must become available and selected", selected)
-                    val captionDeadline = System.currentTimeMillis() + 8000L
+                    // Track discovery can complete near the end of this short 6-second
+                    // synthetic fixture. Rewind the real decoder after enabling text
+                    // to guarantee that the entire WebVTT cue window is exercised.
+                    scenario.onActivity {
+                        it.player.pause()
+                        it.player.seekTo(0L)
+                        it.player.play()
+                    }
+                    val captionDeadline = System.currentTimeMillis() + 9000L
                     var decodedCues = false
+                    var finalPosition = -1L
+                    var finalState = -1
+                    var observedCues = emptyList<String>()
                     while (System.currentTimeMillis() < captionDeadline) {
                         scenario.onActivity {
-                            decodedCues = it.cueTexts.any { text ->
+                            observedCues = it.cueTexts.toList()
+                            decodedCues = observedCues.any { text ->
                                 text.contains("HERRIN original subtitle testing only")
                             }
+                            finalPosition = it.player.currentPosition
+                            finalState = it.player.playbackState
                         }
                         if (decodedCues) break
                         Thread.sleep(70)
                     }
-                    assertTrue("Media3 must fetch and decode actual HTTPS WebVTT cues", decodedCues)
+                    assertTrue("Media3 must fetch and decode HTTPS WebVTT cues: position=" +
+                        finalPosition + " state=" + finalState + " cues=" + observedCues +
+                        " requests=" + server.requestCount, decodedCues)
                 }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PAUSE)
                 scenario.onActivity { assertFalse(it.player.playWhenReady) }
