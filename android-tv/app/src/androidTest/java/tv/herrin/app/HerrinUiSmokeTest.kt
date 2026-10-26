@@ -47,6 +47,10 @@ class HerrinUiSmokeTest {
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
+        if (tag.startsWith("card-")) {
+            val inputMethod = compose.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            compose.waitUntil(5000) { !inputMethod.isAcceptingText }
+        }
     }
     private fun key(code: Int) {
         RemoteTrace.event("TEST inject code=$code windowFocus=${compose.activity.hasWindowFocus()}")
@@ -130,12 +134,16 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("search-input").performTextReplacement("  last ORBIT  ")
         compose.onNodeWithText("搜索结果 · 1").assertExists()
         capture("search")
-        focus("card-orbit"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("card-orbit")
+        capture("search-result-focused")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
         // Wait for the Activity to finish the IME/window transition before asserting lazy detail content.
         compose.waitUntil(5000) {
             runCatching { compose.onNodeWithText("演示选集").assertExists() }.isSuccess
         }
         compose.onNodeWithText("演示选集").assertExists()
+        compose.onNodeWithText("演示选集").assertIsDisplayed()
+        capture("search-detail")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("card-orbit").assertIsFocused()
         activate("潮汐")

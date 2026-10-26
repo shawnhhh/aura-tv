@@ -1,6 +1,9 @@
 package tv.herrin.app
 
 import android.os.Bundle
+import android.util.Log
+import android.view.inputmethod.InputMethodManager
+import android.content.Context
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -33,6 +36,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,9 +46,11 @@ import kotlinx.coroutines.delay
 
 /** Enabled explicitly by adb setprop log.tag.HerrinRemote DEBUG in diagnostics. */
 internal object RemoteTrace {
+    private const val TAG = "HerrinRemote"
     fun event(message: String) {
-        if (android.util.Log.isLoggable("HerrinRemote", android.util.Log.DEBUG))
-            android.util.Log.d("HerrinRemote", message)
+        if (Log.isLoggable(TAG, Log.DEBUG)) {
+            Log.d(TAG, message)
+        }
     }
 }
 
@@ -86,6 +92,9 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
 private fun Herrin() {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val view = LocalView.current
+    val inputMethod = remember(context) { context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager }
+    var searchInputFocused by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
     val catalog: CatalogSource = remember { DemoCatalog() }
     val films = remember { catalog.titles() }
@@ -107,6 +116,18 @@ private fun Herrin() {
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
     fun details(f: Film) { RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen"); filmId = f.id; episode = 1; returnScreen = screen; screen = "detail" }
+    // Hiding an IME window alone does not release the TV IME's served input connection.
+    // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
+    LaunchedEffect(screen, focusId, searchInputFocused) {
+        if (screen == "search" && !searchInputFocused && focusId.startsWith("card-")) {
+            keyboard?.hide()
+            withFrameNanos { }
+            inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
+            inputMethod.restartInput(view)
+            view.requestFocus()
+            RemoteTrace.event("IME handoff acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
+        }
+    }
     fun back() {
         when (screen) {
             "player" -> screen = "detail"
@@ -158,7 +179,7 @@ private fun Herrin() {
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
                         Text("搜索 · 离线演示片库", fontSize = 24.sp)
-                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input").onFocusChanged { RemoteTrace.event("INPUT focus=${it.isFocused}") }.fillMaxWidth().padding(vertical = 8.dp),
+                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input").onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event("INPUT focus=${it.isFocused}") }.fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
                         // An on-screen keyboard also permits search without a hardware keyboard or IME.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -187,7 +208,7 @@ private fun Herrin() {
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         items(filtered, key = { it.id }) { item ->
                             Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
-                                onFocus = { keyboard?.hide(); filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
+                                onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
                         }
                     }
                 }
@@ -242,13 +263,9 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
         .border(if (focused) 3.dp else 1.dp, if (focused) Color.White else Color(0x554C5668), RoundedCornerShape(10.dp))
         .clip(RoundedCornerShape(10.dp)).background(Color(0xFF151A22))
         .onPreviewKeyEvent { event ->
+            // Diagnostic observer only; foundation clickable owns the entire press/release sequence.
             RemoteTrace.event("POSTER ${film.id} key=${event.nativeKeyEvent.keyCode} type=${event.type} focus=$focused")
-            // TV IMEs may consume the initial confirm down event while leaving text input.
-            // Activate on confirm release whenever this poster owns focus, including that transition.
-            if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
-                if (event.type == KeyEventType.KeyUp) { RemoteTrace.event("POSTER ${film.id} CLICK preview"); onClick() }
-                true
-            } else false
+            false
         }.clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
         Image(painterResource(film.artwork), film.title, Modifier.fillMaxWidth().height(90.dp), contentScale = ContentScale.Crop)
         Text(film.title, Modifier.padding(9.dp), fontSize = 14.sp)

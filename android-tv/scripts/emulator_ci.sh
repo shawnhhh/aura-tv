@@ -19,7 +19,7 @@ collect() {
     python3 - <<'PY'
 import base64
 from pathlib import Path
-for name in ['home.png', 'test-evidence/splash-HERRIN.png', 'test-evidence/splash-H.png', 'test-evidence/search.png', 'test-evidence/detail.png', 'test-evidence/favorites-persisted.png', 'test-evidence/remote-focused-poster.png']:
+for name in ['home.png', 'test-evidence/splash-HERRIN.png', 'test-evidence/splash-H.png', 'test-evidence/search.png', 'test-evidence/detail.png', 'test-evidence/search-detail.png', 'test-evidence/favorites-persisted.png', 'test-evidence/remote-focused-poster.png']:
     p = Path('build/emulator-evidence') / name
     if p.is_file():
         print('HERRIN_PNG ' + name + ' ' + base64.b64encode(p.read_bytes()).decode())
@@ -35,4 +35,4 @@ adb shell setprop log.tag.HerrinRemote DEBUG
 bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
 # Shell-owned evidence survives the package uninstall performed by AGP.
 adb shell rm -rf /data/local/tmp/herrin-test-evidence
-gradle :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=tv.herrin.app.HerrinUiSmokeTest#offlineSearchTextEmptyAndRemoteResult --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log
+gradle :app:connectedDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log
