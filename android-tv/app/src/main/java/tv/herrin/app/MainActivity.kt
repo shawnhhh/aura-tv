@@ -12,6 +12,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -88,8 +90,16 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
                      selected: Boolean = false, quiet: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(24.dp)
-    // Focus must react on the very first D-pad frame. A selected episode/line is a
-    // persistent value, not a second white focus pill left behind by navigation.
+    // Native focus switches immediately. Only the *visual transform* animates,
+    // using an interruptible spring in a GPU layer (no relayout or D-pad delay).
+    val focusedScale = if (quiet) 1.028f else 1.042f
+    val scale by animateFloatAsState(
+        targetValue = if (focused && !reduced) focusedScale else 1f,
+        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.87f, stiffness = 1100f),
+        label = "tv-pill-focus-scale"
+    )
+    val liftPx = with(LocalDensity.current) { 2.dp.toPx() }
+    // A selected episode/line is persistent state, not a second white focus pill.
     val fill = when {
         focused -> Color.White
         selected -> Color(0xFF344B68)
@@ -97,6 +107,11 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
         else -> Color(0x99343840)
     }
     Box(modifier
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+            translationY = -liftPx * ((scale - 1f) / (focusedScale - 1f)).coerceIn(0f, 1f)
+        }
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .border(if (focused) 2.dp else if (selected) 1.dp else 0.dp,
             if (focused) Color.White else if (selected) Color(0xFF7C9BBC) else Color.Transparent, shape)
