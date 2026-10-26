@@ -10,11 +10,28 @@ android {
         applicationId = "tv.herrin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.2.3-alpha"
+        versionCode = 2
+        versionName = "0.3.1-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
+    // Optional stable self-distribution signature. Never commit keys or passwords.
+    // Missing values produce normal debug builds; the release workflow refuses
+    // to upload unsigned APKs.
+    val releaseStorePath = System.getenv("HERRIN_RELEASE_KEYSTORE_PATH")
+    val releaseStorePassword = System.getenv("HERRIN_RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("HERRIN_RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("HERRIN_RELEASE_KEY_PASSWORD")
+    if (listOf(releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+            .all { !it.isNullOrBlank() }) {
+        signingConfigs.create("herrinRelease") {
+            storeFile = file(releaseStorePath!!)
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
+        }
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("herrinRelease")
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

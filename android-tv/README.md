@@ -85,3 +85,7 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M3.0 设备诊断与缓存维护
 
 设置中可查看系统实际输出刷新率和 HERRIN 高刷请求值（不冒充渲染帧率）、复制隐私友好的诊断摘要，以及二次确认清理海报缓存。详见 [M3.0 文档](docs/M3_0_SETTINGS_DIAGNOSTICS.md)。
+
+## M3.1 稳定签名与安装更新
+
+提供独立手动签名工作流（仅审核后 master 可运行），用 GitHub Secrets 保护发行密钥并校验 APK 签名；调试版保持无密钥构建。第一次稳定签名需用户自己生成并安全保管密钥，暂不能宣称可无损覆盖旧的临时 debug 签名。详见 [M3.1 文档](docs/M3_1_SIGNED_RELEASE.md)。
