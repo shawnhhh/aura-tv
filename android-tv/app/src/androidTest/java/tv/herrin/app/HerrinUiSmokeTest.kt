@@ -227,29 +227,32 @@ class HerrinUiSmokeTest {
     }
     @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
         focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("config-media-url").performScrollTo().performTextReplacement("http://invalid.example/test.mp4")
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
+        compose.onNodeWithTag("config-media-url").performTextReplacement("http://invalid.example/test.mp4")
         key(KeyEvent.KEYCODE_BACK) // dismiss IME
         // Android TV may still route CENTER to the closing IME window for a few frames.
         // Await the real OS window hand-off, then inject an actual D-pad CENTER (no performClick).
         InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
-        compose.onNodeWithText("保存媒体配置").performScrollTo()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
         activate("保存媒体配置")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存失败：链接必须是合法 HTTPS 地址"))
         compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").assertIsDisplayed()
-        compose.onNodeWithTag("config-media-url").performScrollTo().performTextReplacement("https://media.example.org/authorized.mp4")
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
+        compose.onNodeWithTag("config-media-url").performTextReplacement("https://media.example.org/authorized.mp4")
         key(KeyEvent.KEYCODE_BACK)
         InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
-        compose.onNodeWithText("保存媒体配置").performScrollTo()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
         activate("保存媒体配置")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("配置已保存；测试流只会在手动进入演示播放页时使用"))
         compose.onNodeWithText("配置已保存；测试流只会在手动进入演示播放页时使用").assertIsDisplayed()
-        compose.onNodeWithText("重新同步目录").performScrollTo()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("重新同步目录"))
         activate("重新同步目录")
         compose.onNodeWithText("当前使用离线演示目录").assertExists()
         capture("media-settings-saved")
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
-        compose.onNodeWithTag("config-media-url").performScrollTo().assertTextContains("https://media.example.org/authorized.mp4")
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
+        compose.onNodeWithTag("config-media-url").assertTextContains("https://media.example.org/authorized.mp4")
         // Leave the restored editor before Back, just as a remote user moves to a control.
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("screen-first"))
         focus("screen-first")
@@ -277,7 +280,8 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("source-demo").assertIsDisplayed()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-catalog-url"))
         compose.onNodeWithTag("config-catalog-url").assertIsDisplayed()
-        compose.onNodeWithText("保存媒体配置").assertExists()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
+        compose.onNodeWithText("保存媒体配置").assertIsDisplayed()
         capture("settings-source-picker")
     }
 
@@ -318,14 +322,14 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         focus("search-filter-动漫")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("search-filter-status").assertTextContains("动漫 · 2 个结果")
+        compose.onNodeWithTag("search-filter-status").assertTextContains("动漫 · 2 个结果", substring = true)
         compose.onNodeWithTag("card-night").assertExists()
         focus("search-sort")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("排序：最新优先").assertExists()
         focus("search-filter-全部")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("search-filter-status").assertTextContains("全部 · 6 个结果")
+        compose.onNodeWithTag("search-filter-status").assertTextContains("全部 · 6 个结果", substring = true)
         capture("search-filter-sort")
     }
 
@@ -334,8 +338,24 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("diagnostic-refresh"))
         activate("查看设备状态")
-        compose.onNodeWithTag("device-status").assertTextContains("提示值不等于实际帧率")
-        compose.onNodeWithTag("poster-cache-clear").assertExists()
+        compose.onNodeWithTag("device-status").assertTextContains("提示值不等于实际帧率", substring = true)
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("poster-cache-clear"))
+        compose.onNodeWithTag("poster-cache-clear").assertIsDisplayed()
         capture("settings-refresh-diagnostics")
+    }
+
+    @Test fun liveGuideIsOptionalAndConfiguredViaRemoteSettings() {
+        focus("nav-直播")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("live-epg-status").assertTextContains("未配置 XMLTV", substring = true)
+        key(KeyEvent.KEYCODE_BACK)
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        val settings = compose.onNodeWithTag("settings-list")
+        settings.performScrollToNode(hasTestTag("config-epg-url"))
+        compose.onNodeWithTag("config-epg-url").assertIsDisplayed()
+        settings.performScrollToNode(hasTestTag("epg-save"))
+        compose.onNodeWithTag("epg-save").assertIsDisplayed()
+        capture("settings-xmltv-guide")
     }
 }

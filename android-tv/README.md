@@ -93,3 +93,7 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M3.2 直播频道收藏
 
 已配置授权 M3U 时，可通过遥控器单独收藏频道，并切换「只看收藏」筛选；仅在本机存储哈希标识，按播放列表地址隔离，不保存明文频道链接。详见 [M3.2 文档](docs/M3_2_LIVE_FAVORITES.md)。
+
+## M3.3 可选 XMLTV 节目单
+
+可另填自己的 HTTPS XMLTV 节目单，按 IPTV 的 tvg-id 匹配频道并展示「正在播出」；支持时区，使用有界且禁用外部实体的 XML 解析器，节目单故障不影响直播播放。详见 [M3.3 文档](docs/M3_3_XMLTV_EPG.md)。

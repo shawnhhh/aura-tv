@@ -230,12 +230,33 @@ private fun Herrin() {
         }
     }
     val liveRepo = remember { RemoteLivePlaylistRepository() }
+    val epgRepo = remember { RemoteLiveEpgRepository() }
     val liveFavorites = remember(context) { LiveFavorites(context) }
     var liveChannels by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
     var showFavoriteChannelsOnly by rememberSaveable { mutableStateOf(false) }
     var liveFavoriteEpoch by remember { mutableIntStateOf(0) }
     var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
+    var epgProgrammes by remember { mutableStateOf<List<LiveProgramme>>(emptyList()) }
+    var epgStatus by remember { mutableStateOf("未配置 XMLTV 节目单") }
+    var epgRefresh by remember { mutableIntStateOf(0) }
+    var liveClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var liveRefresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(epgRefresh) {
+        epgProgrammes = emptyList()
+        val endpoint = prefs.liveEpgUrl
+        if (endpoint.isBlank()) {
+            epgStatus = "未配置 XMLTV 节目单"
+        } else {
+            epgStatus = "正在读取授权节目单…"
+            when (val loaded = epgRepo.load(endpoint)) {
+                is LiveEpgResult.Ready -> {
+                    epgProgrammes = loaded.programmes
+                    epgStatus = "已读取 ${loaded.programmes.size} 条节目安排"
+                }
+                is LiveEpgResult.Error -> epgStatus = loaded.reason
+            }
+        }
+    }
     LaunchedEffect(liveRefresh) {
         liveChannels = emptyList()
         val endpoint = prefs.livePlaylistUrl
@@ -259,6 +280,7 @@ private fun Herrin() {
     var sourceNameDraft by rememberSaveable { mutableStateOf("") }
     var configUrlDraft by rememberSaveable { mutableStateOf(prefs.catalogUrl) }
     var liveUrlDraft by rememberSaveable { mutableStateOf(prefs.livePlaylistUrl) }
+    var epgUrlDraft by rememberSaveable { mutableStateOf(prefs.liveEpgUrl) }
     var importProfilesDraft by rememberSaveable { mutableStateOf("") }
     var pendingDeleteSourceId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(pendingDeleteSourceId) {
@@ -307,6 +329,14 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    LaunchedEffect(category, screen) {
+        if (category == "直播" && screen == "browse") {
+            while (true) {
+                liveClock = System.currentTimeMillis()
+                delay(60_000)
+            }
+        }
+    }
     var filmId by rememberSaveable { mutableStateOf(films.first().id) }
     var focusId by rememberSaveable { mutableStateOf("nav-首页") }
     var pendingToolbarFocus by rememberSaveable { mutableStateOf<String?>(null) }
@@ -522,8 +552,15 @@ private fun Herrin() {
                     }
                     Spacer(Modifier.height(6.dp))
                     if (category == "直播" && !isSearch) {
+                        val currentGuide = remember(epgProgrammes, liveClock) {
+                            epgProgrammes.asSequence()
+                                .filter { liveClock >= it.startMs && liveClock < it.stopMs }
+                                .associateBy { it.channelId }
+                        }
                         Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                             Text(liveStatus, Modifier.testTag("live-status"), color = Color(0xFFCFD7E4))
+                            Text(epgStatus, Modifier.testTag("live-epg-status"),
+                                color = Color(0xFFADBBD0), fontSize = 12.sp)
                             if (liveChannels.isEmpty()) {
                                 TvButton("设置授权直播列表", modifier = Modifier.testTag("live-config"),
                                     reduced = reduceMotion, onFocus = { focusId = "live-config" }) {
@@ -548,10 +585,15 @@ private fun Herrin() {
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     contentPadding = PaddingValues(10.dp)) {
                                     itemsIndexed(visibleChannels, key = { _, item -> item.url }) { index, channel ->
+                                        val nowProgramme = currentGuide[channel.tvgId.ifBlank { channel.name }]
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             verticalAlignment = Alignment.CenterVertically) {
                                             TvButton(
-                                                if (channel.group.isBlank()) channel.name else "${channel.group} · ${channel.name}",
+                                                buildString {
+                                                    if (channel.group.isNotBlank()) append("${channel.group} · ")
+                                                    append(channel.name)
+                                                    if (nowProgramme != null) append("  ·  正在播出：${nowProgramme.title}")
+                                                },
                                                 modifier = Modifier.testTag("live-$index")
                                                     .focusRequester(requester("live-$index")),
                                                 reduced = reduceMotion,
@@ -701,6 +743,22 @@ private fun Herrin() {
                                 liveChannels = emptyList()
                                 liveRefresh++
                                 configStatus = "直播列表配置已保存；只读取你主动提供的频道"
+                            }
+                        } }
+                        item { OutlinedTextField(epgUrlDraft, { epgUrlDraft = it },
+                            Modifier.fillMaxWidth().testTag("config-epg-url")
+                                .onFocusChanged { configInputFocused = it.isFocused },
+                            label = { Text("可选 HTTPS XMLTV 节目单地址") }, singleLine = true) }
+                        item { TvButton("保存 XMLTV 节目单", modifier = Modifier.testTag("epg-save"),
+                            reduced = reduceMotion, onFocus = { focusId = "epg-save"; keyboard?.hide() }) {
+                            val typed = epgUrlDraft.trim()
+                            if (typed.isNotBlank() && AuthorizedUrls.https(typed) == null) {
+                                configStatus = "节目单保存失败：必须是合法 HTTPS 地址"
+                            } else {
+                                prefs.liveEpgUrl = typed
+                                epgProgrammes = emptyList()
+                                epgRefresh++
+                                configStatus = "节目单配置已保存；只读取你主动提供的 XMLTV"
                             }
                         } }
                         item { TvButton("保存媒体配置", reduced = reduceMotion,
