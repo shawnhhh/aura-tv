@@ -77,3 +77,7 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M2.8 合法授权直播
 
 设置中可填写自己的 HTTPS IPTV M3U 列表，直播 Tab 展示频道与分组，遥控器选择后由 Media3 播放；解析器拒绝 HTTP 链接与 HLS 分片清单误导入，不附带频道源。详见 [M2.8 文档](docs/M2_8_AUTHORIZED_LIVE.md)。
+
+## M2.9 搜索与筛选
+
+本地搜索增加电影／剧集／动漫类别筛选、结果计数和最新年份优先排序，全程遥控器可操作，不向外部发送搜索词。详见 [M2.9 文档](docs/M2_9_DISCOVERY_FILTERS.md)。
