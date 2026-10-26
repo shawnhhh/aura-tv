@@ -43,3 +43,10 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M2 Alpha 新增内容
 
 用户可在 **设置** 中填写获授权的 HTTPS 目录 JSON 和独立的测试媒体地址。云端编译与离线自动测试可验证目录解析、设置 UI 和播放器集成，但**没有已授权测试流时不能宣称实播通过**。详见 [M2 目录与播放适配文档](docs/M2_PROVIDER_PLAYER.md)。
+
+
+## M2.2 — 每集授权线路与续播
+- 在用户提供的授权目录 JSON 中配置 `playback.episodes[].lines[]`，即可为不同影片集数指定各自的 HTTPS 播放地址；不会从影视站抓取或猜测线路。
+- 原有 `episodes` 数字目录继续兼容，未配置播放线路仍显示演示占位。
+- 续播记录保存在本机并按目录地址、影片、集数和线路隔离；不会保存媒体 URL 或授权凭据。
+- Android TV 模拟器自动测试通过临时的、只供测试使用的 HTTPS 服务，验证 FFmpeg 原创 MP4 与 HLS 的真正网络解码出帧。具体 JSON 示例与适用范围见 [M2.2 文档](docs/M2_2_EPISODES_RESUME.md)。

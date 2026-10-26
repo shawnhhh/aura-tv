@@ -101,6 +101,7 @@ private fun Herrin() {
     var searchInputFocused by remember { mutableStateOf(false) }
     var configInputFocused by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
+    val watchHistory = remember(context) { PlaybackHistory(context) }
     val demoCatalog: CatalogSource = remember { DemoCatalog() }
     val demoFilms = remember { demoCatalog.titles() }
     val providerRepo = remember(context) { RemoteCatalogRepository(context) }
@@ -148,19 +149,36 @@ private fun Herrin() {
     var splash by rememberSaveable { mutableStateOf(true) }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val film = films.firstOrNull { it.id == filmId } ?: films.first()
+    val catalogScope = prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
+    val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
+    val currentLines = currentEpisode?.lines.orEmpty()
+    val resume = watchHistory.load(catalogScope, film.id, episode,
+        if (currentLines.isEmpty()) "independent-test" else line)
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
-    fun details(f: Film) { RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen"); filmId = f.id; episode = 1; returnScreen = screen; screen = "detail" }
+    fun details(f: Film) {
+        RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen")
+        filmId = f.id
+        episode = f.playbackEpisodes.firstOrNull()?.number ?: 1
+        line = f.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
+        returnScreen = screen
+        screen = "detail"
+    }
     // Hiding an IME window alone does not release the TV IME's served input connection.
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
     LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
-        if ((screen == "search" && !searchInputFocused && focusId.startsWith("card-")) ||
-            (screen == "settings" && !configInputFocused)) {
+        val leavingSearchEditor = screen == "search" && !searchInputFocused &&
+            focusId.startsWith("card-")
+        val leavingSettingsEditor = screen == "settings" && !configInputFocused
+        if (leavingSearchEditor || leavingSettingsEditor) {
             keyboard?.hide()
             withFrameNanos { }
             inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
-            inputMethod.restartInput(view)
-            RemoteTrace.event("IME handoff acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
+            // Restarting the input connection while a TV settings button has focus
+            // reopens some television IMEs and swallows its first D-pad CENTER key.
+            // The search result path needs restartInput for its older IME handoff fix.
+            if (leavingSearchEditor) inputMethod.restartInput(view)
+            RemoteTrace.event("IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
         }
     }
     fun back() {
@@ -221,7 +239,11 @@ private fun Herrin() {
                 } else films.filter {
                     category == "首页" || it.category == category || category == "我的" && it.id in favorites
                 }
-                // List states live outside screen composition and survive opening details.
+                // History drives the first shelf only for films with actual saved playback.
+                // On a fresh installation the same rail shows browseable demo suggestions.
+                val watched = if (!isSearch && category == "首页") watchHistory.recent(catalogScope, filtered)
+                    else emptyList()
+                val railFilms = if (watched.isNotEmpty()) watched else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
                 Column(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -275,7 +297,10 @@ private fun Herrin() {
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton("▶ 播放演示", selected = true, reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
-                                returnScreen = "browse"; episode = 1; screen = "player"
+                                returnScreen = "browse"
+                                episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
+                                line = film.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
+                                screen = "player"
                             }
                             TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.testTag("details").focusRequester(requester("details"))) { details(film) }
                         }
@@ -292,7 +317,7 @@ private fun Herrin() {
                     if (category == "直播" && !isSearch) Text("直播尚未接入 · M2 将支持用户配置的合法直播源", Modifier.padding(24.dp))
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        items(filtered, key = { it.id }) { item ->
+                        items(railFilms, key = { it.id }) { item ->
                             // Runs after this lazy item's focus target is attached, including Back from detail.
                             LaunchedEffect(item.id) {
                                 if (isSearch && focusId == "card-${item.id}") {
@@ -302,7 +327,13 @@ private fun Herrin() {
                             }
                             Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
                                 onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) },
-                                progress = if (!isSearch && category == "首页") 0.34f else null)
+                                progress = if (!isSearch && category == "首页") {
+                                    item.playbackEpisodes.asSequence().flatMap { part ->
+                                        part.lines.asSequence().mapNotNull { option ->
+                                            watchHistory.load(catalogScope, item.id, part.number, option.id)
+                                        }
+                                    }.maxByOrNull { it.updatedAtMs }?.fraction
+                                } else null)
                         }
                     }
                     if (!isSearch && category == "首页") {
@@ -326,9 +357,23 @@ private fun Herrin() {
                 }
             }
             "detail", "player", "settings" -> {
+                val licensed = if (screen == "player" && film.playbackEpisodes.isNotEmpty())
+                    LicensedPlaybackResolver.resolve(film, episode, line) else null
+                val licensedMedia = (licensed as? PlaybackResult.Ready)?.media
                 val testMedia = if (screen == "player") AuthorizedUrls.https(prefs.testMediaUrl) else null
-                if (testMedia != null) {
-                    AuthorizedPlaybackPanel(PlaybackMedia(testMedia)) { screen = "detail" }
+                val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
+                if (chosenMedia != null) {
+                    val historyLine = if (licensedMedia != null) line else "independent-test"
+                    val previous = watchHistory.load(catalogScope, film.id, episode, historyLine)
+                    AuthorizedPlaybackPanel(
+                        media = chosenMedia,
+                        startPositionMs = previous?.positionMs ?: 0L,
+                        onPlaybackProgress = { position, duration, finished ->
+                            watchHistory.update(catalogScope, film.id, episode, historyLine,
+                                position, duration, finished)
+                        },
+                        onBack = { screen = "detail" }
+                    )
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize().background(Color(0xAA080B10)), contentPadding = PaddingValues(48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     if (screen == "settings") {
@@ -343,7 +388,8 @@ private fun Herrin() {
                             Modifier.fillMaxWidth().testTag("config-media-url").onFocusChanged { configInputFocused = it.isFocused },
                             label = { Text("有权播放的 HTTPS 测试流（可留空）") },
                             singleLine = true) }
-                        item { TvButton("保存媒体配置", reduced = reduceMotion) {
+                        item { TvButton("保存媒体配置", reduced = reduceMotion,
+                            onFocus = { focusId = "settings-save"; keyboard?.hide() }) {
                             val catalogLink = configUrlDraft.trim()
                             val mediaLink = mediaUrlDraft.trim()
                             if ((catalogLink.isNotEmpty() && AuthorizedUrls.https(catalogLink) == null) ||
@@ -357,12 +403,13 @@ private fun Herrin() {
                                 configStatus = "配置已保存；测试流只会在手动进入演示播放页时使用"
                             }
                         } }
-                        item { TvButton("重新同步目录", reduced = reduceMotion) { catalogRefresh++ } }
+                        item { TvButton("重新同步目录", reduced = reduceMotion,
+                            onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
                         item { Text(providerStatus, fontSize = 15.sp, color = Color(0xFFCFD7E4)) }
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("请仅填写你有权使用的目录和媒体地址。此应用不会自动获取第三方影视片源；网络失败时仍可使用离线演示内容。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M2 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示。收藏仅保存在本机。\n可从用户提供的 HTTPS 地址读取影片元数据、加载海报与播放测试流；没有内置未授权片源。\nFongMi 接口与直播功能尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M2.2 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示。收藏仅保存在本机。\n可从用户提供的 HTTPS 地址读取影片元数据、加载海报与播放测试流；没有内置未授权片源。\nFongMi 接口与直播功能尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }
@@ -379,15 +426,48 @@ private fun Herrin() {
                             item { TvButton("返回详情", reduced = reduceMotion) { screen = "detail" } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                TvButton("▶ 播放演示", selected = true, reduced = reduceMotion) { screen = "player" }
+                                TvButton(if (film.playbackEpisodes.isEmpty()) "▶ 播放演示" else "▶ 播放授权片源",
+                                    selected = true, reduced = reduceMotion) { screen = "player" }
                                 TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) { prefs.toggle(film.id); favorites = prefs.ids() }
                             } }
-                            item { Text("演示选集", fontSize = 20.sp) }
+                            if (resume != null) {
+                                item { Text("继续播放 · 已观看 ${resume.positionMs / 1000} 秒 / ${resume.durationMs / 1000} 秒",
+                                    fontSize = 17.sp, color = Color(0xFFD4E6FD)) }
+                                item { TvButton("从头播放", reduced = reduceMotion) {
+                                    watchHistory.clear(catalogScope, film.id, episode,
+                                        if (currentLines.isEmpty()) "independent-test" else line)
+                                    screen = "player"
+                                } }
+                            }
+                            item { Text(if (film.playbackEpisodes.isEmpty()) "演示选集" else "授权选集",
+                                fontSize = 20.sp) }
                             item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                (1..film.episodes).forEach { n -> TvButton("第 $n 集", reduced = reduceMotion, selected = episode == n) { episode = n } }
+                                if (film.playbackEpisodes.isEmpty()) {
+                                    (1..film.episodes).forEach { n ->
+                                        TvButton("第 $n 集", reduced = reduceMotion,
+                                            selected = episode == n) { episode = n }
+                                    }
+                                } else {
+                                    film.playbackEpisodes.forEach { entry ->
+                                        TvButton("第 ${entry.number} 集 · ${entry.title}",
+                                            reduced = reduceMotion, selected = episode == entry.number) {
+                                            episode = entry.number
+                                            line = entry.lines.first().id
+                                        }
+                                    }
+                                }
                             } }
                             item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                listOf("演示线路 A", "演示线路 B").forEach { name -> TvButton(name, reduced = reduceMotion, selected = line == name) { line = name } }
+                                if (currentLines.isEmpty()) {
+                                    listOf("演示线路 A", "演示线路 B").forEach { name ->
+                                        TvButton(name, reduced = reduceMotion, selected = line == name) { line = name }
+                                    }
+                                } else {
+                                    currentLines.forEach { option ->
+                                        TvButton(option.title, reduced = reduceMotion,
+                                            selected = line == option.id) { line = option.id }
+                                    }
+                                }
                             } }
                         }
                     }

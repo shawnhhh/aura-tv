@@ -1,7 +1,7 @@
 name: HERRIN Android TV Emulator
 on:
   push:
-    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player']
+    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume']
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   emulator:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -31,6 +31,11 @@ jobs:
           mkdir -p android-tv/app/src/androidTest/assets
           ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=24' -f lavfi -i 'sine=frequency=440:sample_rate=48000' -t 6 -c:v libx264 -threads 1 -pix_fmt yuv420p -profile:v baseline -c:a aac -movflags +faststart android-tv/app/src/androidTest/assets/synthetic.mp4
           ffprobe -v error -show_streams android-tv/app/src/androidTest/assets/synthetic.mp4
+          # Serve these original H.264/AAC chunks from a TLS MockWebServer in instrumentation.
+          # No third-party film or video is bundled.
+          ffmpeg -hide_banner -loglevel error -y -i android-tv/app/src/androidTest/assets/synthetic.mp4 -c copy -hls_time 2 -hls_list_size 0 -hls_playlist_type vod -hls_segment_filename 'android-tv/app/src/androidTest/assets/synthetic-segment-%02d.ts' android-tv/app/src/androidTest/assets/synthetic-hls.m3u8
+          grep -q '#EXTM3U' android-tv/app/src/androidTest/assets/synthetic-hls.m3u8
+          ls -lh android-tv/app/src/androidTest/assets/synthetic*
       - name: Enable Linux KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

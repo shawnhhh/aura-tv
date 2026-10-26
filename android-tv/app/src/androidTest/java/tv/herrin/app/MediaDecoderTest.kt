@@ -85,10 +85,29 @@ class MediaDecoderTest {
                     scenario.onActivity { paused = !it.player.playWhenReady }
                     paused
                 }
+                // Decoder/audio clocks may finish one outstanding timestamp update after
+                // playWhenReady becomes false. Require two successive stable windows,
+                // rather than assuming the first asynchronous pause callback is settled.
+                await("Remote pause must settle the media clock") {
+                    var first = 0L
+                    var second = 0L
+                    var paused = false
+                    scenario.onActivity {
+                        paused = !it.player.playWhenReady
+                        first = it.player.currentPosition
+                    }
+                    Thread.sleep(220)
+                    scenario.onActivity { second = it.player.currentPosition }
+                    paused && kotlin.math.abs(second - first) < 100L
+                }
                 var pausedAt = 0L
                 scenario.onActivity { pausedAt = it.player.currentPosition }
                 Thread.sleep(250)
-                scenario.onActivity { assertTrue(kotlin.math.abs(it.player.currentPosition - pausedAt) < 100) }
+                scenario.onActivity {
+                    assertFalse("Playback must still be paused", it.player.playWhenReady)
+                    assertTrue("Paused media clock advanced after settling",
+                        kotlin.math.abs(it.player.currentPosition - pausedAt) < 100L)
+                }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PLAY)
                 await("Remote play must update playWhenReady") {
                     var playing = false

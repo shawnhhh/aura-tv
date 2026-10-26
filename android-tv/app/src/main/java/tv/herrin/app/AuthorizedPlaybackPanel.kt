@@ -17,6 +17,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,10 +52,17 @@ import androidx.media3.ui.PlayerView
  */
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
-fun AuthorizedPlaybackPanel(media: PlaybackMedia, onPlayer: (ExoPlayer) -> Unit = {}, onBack: () -> Unit) {
+fun AuthorizedPlaybackPanel(
+    media: PlaybackMedia,
+    onPlayer: (ExoPlayer) -> Unit = {},
+    startPositionMs: Long = 0L,
+    onPlaybackProgress: (positionMs: Long, durationMs: Long, finished: Boolean) -> Unit = { _, _, _ -> },
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var errorMessage by remember(media.uri) { mutableStateOf<String?>(null) }
+    val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val player = remember(media.uri) {
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(false)
@@ -77,17 +87,36 @@ fun AuthorizedPlaybackPanel(media: PlaybackMedia, onPlayer: (ExoPlayer) -> Unit 
                 }
             }.build()
             setMediaItem(item)
+            if (startPositionMs > 0L) seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
             prepare()
             playWhenReady = true
+        }
+    }
+    fun reportProgress() {
+        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
+        latestProgressCallback(player.currentPosition.coerceAtLeast(0L), duration,
+            player.playbackState == Player.STATE_ENDED)
+    }
+    LaunchedEffect(player) {
+        while (true) {
+            delay(2500)
+            if (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED)
+                reportProgress()
         }
     }
     DisposableEffect(player, lifecycle) {
         val session = MediaSession.Builder(context, player).build()
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) player.pause()
+            if (event == Lifecycle.Event.ON_STOP) { reportProgress(); player.pause() }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); session.release(); player.stop(); player.release() }
+        onDispose {
+            reportProgress()
+            lifecycle.removeObserver(observer)
+            session.release()
+            player.stop()
+            player.release()
+        }
     }
     BackHandler { onBack() }
     Box(Modifier.fillMaxSize().background(Color.Black).onPreviewKeyEvent { event ->

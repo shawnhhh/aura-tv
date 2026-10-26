@@ -63,10 +63,12 @@ object CatalogJson {
             val episodes = entry.optInt("episodes", 1).coerceIn(1, 99)
             val poster = entry.optString("artwork_url", "").takeIf { it.isNotBlank() }
                 ?.let { AuthorizedUrls.https(it) }
+            val licensedEpisodes = PlaybackCatalogJson.decode(entry)
             result += Film(
                 id = id, title = title, subtitle = subtitle, category = category,
                 year = year, synopsis = synopsis, artwork = placeholders[i % placeholders.size],
-                episodes = episodes, artworkUrl = poster
+                episodes = maxOf(episodes, licensedEpisodes.maxOfOrNull { it.number } ?: 1),
+                artworkUrl = poster, playbackEpisodes = licensedEpisodes
             )
         }
         return result
