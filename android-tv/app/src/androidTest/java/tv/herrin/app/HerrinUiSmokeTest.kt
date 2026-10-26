@@ -84,6 +84,12 @@ class HerrinUiSmokeTest {
     }
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")
+        // Visual parity: both home shelves must be displayed, not simply composed off-screen.
+        compose.onNodeWithText("继续观看").assertIsDisplayed()
+        compose.onNodeWithText("热门推荐").assertIsDisplayed()
+        compose.onNodeWithTag("card-orbit").assertExists()
+        compose.onNodeWithTag("recommend-blue").assertExists()
+        capture("home-two-shelves")
         val pixels = compose.onNodeWithText("HERRIN").captureToImage().toPixelMap()
         var brightPixels = 0
         for (y in 0 until pixels.height) for (x in 0 until pixels.width) {

@@ -79,15 +79,15 @@ class MainActivity : ComponentActivity() {
 /** Native focusable controls work with D-pad/Enter; no pointer-only actions. */
 @Composable
 private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
-                     selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit) {
+                     selected: Boolean = false, quiet: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.055f else 1f, tween(if (reduced) 0 else 160), label = "focus")
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(24.dp)
     Box(modifier.graphicsLayer { scaleX = scale; scaleY = scale }
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .border(if (focused) 2.dp else 0.dp, if (focused) Color.White else Color.Transparent, shape)
-        .clip(shape).background(if (focused || selected) Color.White else Color(0x99343840))
-        .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 11.dp), contentAlignment = Alignment.Center) {
+        .clip(shape).background(if (focused || selected) Color.White else if (quiet) Color.Transparent else Color(0x99343840))
+        .clickable(onClick = onClick).padding(horizontal = if (quiet) 13.dp else 16.dp, vertical = if (quiet) 8.dp else 11.dp), contentAlignment = Alignment.Center) {
         Text(label, color = if (focused || selected) Color(0xFF111318) else Color.White, fontSize = 14.sp)
     }
 }
@@ -116,7 +116,7 @@ private fun Herrin() {
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val reduceMotion = reduced || systemReduced
     var splash by rememberSaveable { mutableStateOf(true) }
-    val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search")).associateWith { rememberLazyListState() }
+    val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val film = films.firstOrNull { it.id == filmId } ?: films.first()
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
@@ -171,8 +171,15 @@ private fun Herrin() {
     }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
         Image(painterResource(film.artwork), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xEE05090E), Color.Transparent))))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x44050A10), Color.Transparent, Color(0xFF080B10)))))
+        // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+            0.0f to Color(0xF905080D), 0.32f to Color(0xD9060A11),
+            0.66f to Color(0x4B060911), 1.0f to Color(0x13060911)
+        )))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            0.0f to Color(0x8A05070B), 0.18f to Color.Transparent,
+            0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
+        )))
         if (splash) {
             Splash(reduceMotion) { splash = false }
         } else when (screen) {
@@ -183,17 +190,25 @@ private fun Herrin() {
                 }
                 // List states live outside screen composition and survive opening details.
                 val railState = railStates.getValue(if (isSearch) "search" else category)
-                Column(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 24.dp)) {
+                Column(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Row(Modifier.background(Color(0xCC13161C), RoundedCornerShape(40.dp)).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(Modifier.size(34.dp).border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
+                                contentAlignment = Alignment.Center) {
+                                Text("H", fontSize = 21.sp, fontWeight = FontWeight.Light, color = Color.White)
+                            }
+                            Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
+                        }
+                        Row(Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
+                            .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp)).padding(5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             listOf("首页", "电影", "剧集", "动漫", "直播", "我的").forEach { cat ->
                                 TvButton(cat, Modifier.testTag("nav-$cat").focusRequester(requester("nav-$cat")), reduceMotion, category == cat && !isSearch,
-                                    onFocus = { focusId = "nav-$cat" }) { category = cat; screen = "browse" }
+                                    quiet = true, onFocus = { focusId = "nav-$cat" }) { category = cat; screen = "browse" }
                             }
                         }
-                        TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, onFocus = { focusId = "search" }) { screen = "search" }
-                        TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion, onFocus = { focusId = "settings" }) { screen = "settings" }
+                        TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true, onFocus = { focusId = "search" }) { screen = "search" }
+                        TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion, quiet = true, onFocus = { focusId = "settings" }) { screen = "settings" }
                     }
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
@@ -209,19 +224,38 @@ private fun Herrin() {
                         Spacer(Modifier.weight(1f))
                     } else {
                         Spacer(Modifier.weight(1f))
-                        Text("HERRIN ORIGINALS  /  原创虚构演示", fontSize = 12.sp, letterSpacing = 2.sp, color = Color(0xFFD3D6DB))
-                        Text(film.title, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                        Text("${film.subtitle}    ·    ${film.year}    ·    ${film.category}", fontSize = 13.sp)
-                        Text(film.synopsis, Modifier.widthIn(max = 470.dp).padding(vertical = 6.dp), fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, color = Color(0xFFCFD1D7))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(Modifier.width(18.dp).height(2.dp).background(Color.White))
+                            Text("HERRIN  ·  ORIGINAL PREMIERE", fontSize = 12.sp, letterSpacing = 2.sp,
+                                fontWeight = FontWeight.Medium, color = Color(0xFFE5EAF2))
+                        }
+                        Spacer(Modifier.height(11.dp))
+                        Text(film.title, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.sp, color = Color.White, lineHeight = 49.sp)
+                        Text(film.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
+                            color = Color(0xFFE4E7EF))
+                        Spacer(Modifier.height(12.dp))
+                        Text("${film.year}   ·   ${film.category}   ·   ORIGINAL UI DEMO",
+                            fontSize = 13.sp, color = Color(0xFFF3F5F8))
+                        Text(film.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 6.dp),
+                            fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
+                            color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton("▶ 播放演示", reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
+                            TvButton("▶ 播放演示", selected = true, reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
                                 returnScreen = "browse"; episode = 1; screen = "player"
                             }
                             TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.testTag("details").focusRequester(requester("details"))) { details(film) }
                         }
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(12.dp))
                     }
-                    Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "我的" -> "我的收藏"; else -> "精选${category} · 演示片库" }, fontWeight = FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "我的" -> "我的收藏"; category == "首页" -> "继续观看"; else -> "精选${category} · 演示片库" },
+                            fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
+                        Text(if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN", fontSize = 11.sp, letterSpacing = 1.5.sp,
+                            color = Color(0xFFB6BBC5))
+                    }
+                    Spacer(Modifier.height(6.dp))
                     if (category == "直播" && !isSearch) Text("直播尚未接入 · M2 将支持用户配置的合法直播源", Modifier.padding(24.dp))
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -234,7 +268,26 @@ private fun Herrin() {
                                 }
                             }
                             Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
+                                onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) },
+                                progress = if (!isSearch && category == "首页") 0.34f else null)
+                        }
+                    }
+                    if (!isSearch && category == "首页") {
+                        Spacer(Modifier.height(11.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("热门推荐", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text("HERRIN PICKS", fontSize = 11.sp, letterSpacing = 1.6.sp, color = Color(0xFFB6BBC5))
+                        }
+                        Spacer(Modifier.height(5.dp))
+                        LazyRow(state = railStates.getValue("recommend"), contentPadding = PaddingValues(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(films.asReversed(), key = { it.id }) { item ->
+                                Poster(item, Modifier.testTag("recommend-${item.id}")
+                                    .focusRequester(requester("recommend-${item.id}")), reduceMotion,
+                                    onFocus = { filmId = item.id; focusId = "recommend-${item.id}" },
+                                    onClick = { details(item) })
+                            }
                         }
                     }
                 }
@@ -262,7 +315,7 @@ private fun Herrin() {
                             item { TvButton("返回详情", reduced = reduceMotion) { screen = "detail" } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                TvButton("▶ 播放演示", reduced = reduceMotion) { screen = "player" }
+                                TvButton("▶ 播放演示", selected = true, reduced = reduceMotion) { screen = "player" }
                                 TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) { prefs.toggle(film.id); favorites = prefs.ids() }
                             } }
                             item { Text("演示选集", fontSize = 20.sp) }
@@ -281,20 +334,50 @@ private fun Herrin() {
 }
 
 @Composable
-private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: () -> Unit, onClick: () -> Unit, progress: Float? = null) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.06f else 1f, tween(if (reduced) 0 else 160), label = "poster")
-    Column(modifier.width(204.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-        .onFocusChanged { focused = it.isFocused; RemoteTrace.event("POSTER ${film.id} focus=$focused"); if (it.isFocused) onFocus() }
-        .border(if (focused) 3.dp else 1.dp, if (focused) Color.White else Color(0x554C5668), RoundedCornerShape(10.dp))
-        .clip(RoundedCornerShape(10.dp)).background(Color(0xFF151A22))
+    val scale by animateFloatAsState(if (focused) 1.075f else 1f,
+        tween(if (reduced) 0 else 190), label = "poster")
+    val shape = RoundedCornerShape(13.dp)
+    Box(modifier.width(217.dp).height(116.dp)
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .onFocusChanged {
+            focused = it.isFocused
+            RemoteTrace.event("POSTER ${film.id} focus=$focused")
+            if (it.isFocused) onFocus()
+        }
+        .border(if (focused) 2.dp else 1.dp,
+            if (focused) Color.White else Color(0x665E6A78), shape)
+        .clip(shape).background(Color(0xFF101821))
         .onPreviewKeyEvent { event ->
-            // Diagnostic observer only; foundation clickable owns the entire press/release sequence.
+            // Keep native Compose clickable as the single source of key activation.
             RemoteTrace.event("POSTER ${film.id} key=${event.nativeKeyEvent.keyCode} type=${event.type} focus=$focused")
             false
-        }.clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
-        Image(painterResource(film.artwork), film.title, Modifier.fillMaxWidth().height(90.dp), contentScale = ContentScale.Crop)
-        Text(film.title, Modifier.padding(9.dp), fontSize = 14.sp)
+        }
+        .clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
+        Image(painterResource(film.artwork), film.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            0.0f to Color.Transparent, 0.45f to Color(0x1C06090E), 1f to Color(0xE9000409)
+        )))
+        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(film.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                color = Color.White, maxLines = 1)
+            Text("${film.year}   ·   ${film.category}", fontSize = 10.sp,
+                letterSpacing = 1.sp, color = Color(0xFFD3D8E1))
+        }
+        if (progress != null) {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)
+                .background(Color(0xCC495160))) {
+                Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight()
+                    .background(Color(0xFFDCE8FF)))
+            }
+        }
+        if (focused) {
+            Text("H", Modifier.align(Alignment.TopEnd)
+                .padding(10.dp).background(Color(0xBD10141A), RoundedCornerShape(7.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, color = Color.White)
+        }
     }
 }
 
