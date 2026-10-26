@@ -6,7 +6,9 @@ import org.json.JSONObject
  * Explicit per-title playback metadata from a catalog that the user configured and is
  * authorized to use. HERRIN never guesses episode URLs or extracts them from websites.
  */
-data class PlaybackLine(val id: String, val title: String, val uri: String)
+data class AuthorizedSubtitle(val language: String, val title: String, val uri: String)
+data class PlaybackLine(val id: String, val title: String, val uri: String,
+                        val subtitles: List<AuthorizedSubtitle> = emptyList())
 data class PlaybackEpisode(val number: Int, val title: String, val lines: List<PlaybackLine>)
 
 object PlaybackCatalogJson {
@@ -43,7 +45,22 @@ object PlaybackCatalogJson {
                 require(label.isNotEmpty() && label.length <= 64) { "线路名称无效" }
                 val url = AuthorizedUrls.https(variant.getString("url"))
                 require(url != null) { "线路必须使用合法 HTTPS 地址" }
-                PlaybackLine(id, label, url)
+                val sidecars = variant.optJSONArray("subtitles")
+                require(sidecars == null || sidecars.length() <= 6) { "每条线路最多支持 6 个 WebVTT 字幕" }
+                val uniqueLanguages = HashSet<String>()
+                val captions = if (sidecars == null) emptyList() else List(sidecars.length()) { k ->
+                    val track = sidecars.getJSONObject(k)
+                    val lang = track.getString("language").trim().lowercase()
+                    require(lang.matches(Regex("^[a-z]{2,3}(-[a-z0-9]{2,8})*$")) && uniqueLanguages.add(lang)) {
+                        "字幕语言格式重复或无效"
+                    }
+                    val name = track.optString("title", lang).trim()
+                    require(name.isNotBlank() && name.length <= 64) { "字幕名称无效" }
+                    val subtitleUrl = AuthorizedUrls.https(track.getString("url"))
+                    require(subtitleUrl != null) { "WebVTT 字幕必须使用合法 HTTPS URL" }
+                    AuthorizedSubtitle(lang, name, subtitleUrl)
+                }
+                PlaybackLine(id, label, url, captions)
             }
             PlaybackEpisode(number, title, lines)
         }.sortedBy { it.number }
@@ -58,6 +75,6 @@ object LicensedPlaybackResolver {
             ?: return PlaybackResult.Unavailable("请选择此集可用的授权播放线路")
         val url = AuthorizedUrls.https(selected.uri)
             ?: return PlaybackResult.Unavailable("播放地址无效")
-        return PlaybackResult.Ready(PlaybackMedia(url))
+        return PlaybackResult.Ready(PlaybackMedia(url, subtitles = selected.subtitles))
     }
 }

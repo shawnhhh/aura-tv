@@ -2,6 +2,10 @@ package tv.herrin.app
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.testTag
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import android.view.KeyEvent
@@ -45,6 +49,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.media3.common.Tracks
 
 /**
  * M2: real Android TV playback for an explicitly configured, licensed HTTPS test stream.
@@ -62,8 +67,9 @@ fun AuthorizedPlaybackPanel(
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var errorMessage by remember(media.uri) { mutableStateOf<String?>(null) }
+    var uiEpoch by remember(media.uri) { mutableIntStateOf(0) }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
-    val player = remember(media.uri) {
+    val player = remember(media.uri, media.subtitles) {
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(false)
             .setDefaultRequestProperties(media.headers)
@@ -74,11 +80,23 @@ fun AuthorizedPlaybackPanel(
             setHandleAudioBecomingNoisy(true)
             onPlayer(this)
             addListener(object : Player.Listener {
+                override fun onTracksChanged(tracks: Tracks) { uiEpoch++ }
+                override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { uiEpoch++ }
                 override fun onPlayerError(error: PlaybackException) {
                     errorMessage = "媒体播放失败：${error.errorCodeName}"
                 }
             })
             val item = MediaItem.Builder().setUri(media.uri).apply {
+                if (media.subtitles.isNotEmpty()) {
+                    setSubtitleConfigurations(media.subtitles.map { subtitle ->
+                        MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
+                            .setMimeType(MimeTypes.TEXT_VTT)
+                            .setLanguage(subtitle.language)
+                            .setLabel(subtitle.title)
+                            .build()
+                    })
+                }
                 when {
                     media.uri.substringBefore('?').endsWith(".m3u8", ignoreCase = true) ->
                         setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -124,6 +142,12 @@ fun AuthorizedPlaybackPanel(
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) onBack()
             true
+        } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND)) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                PlaybackTransport.seekBy(player,
+                    if (key.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 10_000L else -10_000L)
+            }
+            true
         } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
@@ -145,6 +169,14 @@ fun AuthorizedPlaybackPanel(
                         if (event.action == KeyEvent.ACTION_UP) onBack()
                         return true
                     }
+                    if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
+                        event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                            PlaybackTransport.seekBy(player,
+                                if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 10_000L else -10_000L)
+                        }
+                        return true
+                    }
                     return super.dispatchKeyEvent(event)
                 }
             }.apply {
@@ -164,8 +196,39 @@ fun AuthorizedPlaybackPanel(
         Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Button(onClick = onBack) { Text("返回详情") }
-            Text("用户授权的 HTTPS 测试媒体 · 不代表当前影片片源", color = Color.White)
+            Text("仅播放你有权使用的媒体 · 播放源按所选影片/线路确定", color = Color.White)
             if (errorMessage != null) Text(errorMessage!!, color = Color(0xFFFFD0D0))
+        }
+        // Native Compose controls remain focusable using D-pad CENTER (not pointer-only).
+        // Media3's PlayerView still handles its own seek bar and playback HUD.
+        val _observeTrackChanges = uiEpoch
+        val audios = PlaybackTransport.options(player, C.TRACK_TYPE_AUDIO)
+        val captions = PlaybackTransport.options(player, C.TRACK_TYPE_TEXT)
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 38.dp)
+                .background(Color(0xE9151820), RoundedCornerShape(20.dp))
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(onClick = { PlaybackTransport.seekBy(player, -10_000L) },
+                modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
+            Button(onClick = { if (player.playWhenReady) player.pause() else player.play() },
+                modifier = Modifier.testTag("transport-toggle")) {
+                Text(if (player.playWhenReady) "暂停" else "播放")
+            }
+            Button(onClick = { PlaybackTransport.seekBy(player, 10_000L) },
+                modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
+            Button(
+                onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
+                enabled = audios.size > 1,
+                modifier = Modifier.testTag("transport-audio")
+            ) { Text("音轨: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)) }
+            Button(
+                onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
+                enabled = captions.isNotEmpty(),
+                modifier = Modifier.testTag("transport-subtitle")
+            ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
         }
     }
 }

@@ -1,7 +1,7 @@
 name: HERRIN Android TV Emulator
 on:
   push:
-    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume']
+    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls']
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
@@ -29,8 +29,11 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
           mkdir -p android-tv/app/src/androidTest/assets
-          ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=24' -f lavfi -i 'sine=frequency=440:sample_rate=48000' -t 6 -c:v libx264 -threads 1 -pix_fmt yuv420p -profile:v baseline -c:a aac -movflags +faststart android-tv/app/src/androidTest/assets/synthetic.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x180:rate=24' -f lavfi -i 'sine=frequency=440:sample_rate=48000' -f lavfi -i 'sine=frequency=660:sample_rate=48000' -t 6 -map 0:v:0 -map 1:a:0 -map 2:a:0 -c:v libx264 -threads 1 -pix_fmt yuv420p -profile:v baseline -c:a aac -metadata:s:a:0 language=eng -metadata:s:a:1 language=zho -movflags +faststart android-tv/app/src/androidTest/assets/synthetic.mp4
           ffprobe -v error -show_streams android-tv/app/src/androidTest/assets/synthetic.mp4
+          # Synthetic WebVTT is used only by Media3 instrumentation, never shipped to the production APK.
+          printf 'WEBVTT\n\n00:00:00.200 --> 00:00:05.600\nHERRIN original subtitle testing only\n' > android-tv/app/src/androidTest/assets/synthetic.vtt
+          grep -q WEBVTT android-tv/app/src/androidTest/assets/synthetic.vtt
           # Serve these original H.264/AAC chunks from a TLS MockWebServer in instrumentation.
           # No third-party film or video is bundled.
           ffmpeg -hide_banner -loglevel error -y -i android-tv/app/src/androidTest/assets/synthetic.mp4 -c copy -hls_time 2 -hls_list_size 0 -hls_playlist_type vod -hls_segment_filename 'android-tv/app/src/androidTest/assets/synthetic-segment-%02d.ts' android-tv/app/src/androidTest/assets/synthetic-hls.m3u8

@@ -2,6 +2,7 @@ package tv.herrin.app
 
 import android.content.Intent
 import android.view.KeyEvent
+import androidx.media3.common.C
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -41,6 +42,7 @@ class HttpsPlaybackTest {
         val previous = HttpsURLConnection.getDefaultSSLSocketFactory()
         try {
             val mp4 = asset("synthetic.mp4")
+            val captions = if (hls) asset("synthetic.vtt") else byteArrayOf()
             val playlist = if (hls) asset("synthetic-hls.m3u8") else byteArrayOf()
             val segments = if (hls) (0..9).mapNotNull { n ->
                 val name = "synthetic-segment-${n.toString().padStart(2, '0')}.ts"
@@ -57,6 +59,7 @@ class HttpsPlaybackTest {
                     val (bytes, type) = when {
                         path == "/sample.mp4" -> mp4 to "video/mp4"
                         path == "/sample.m3u8" -> playlist to "application/vnd.apple.mpegurl"
+                        path == "/captions.vtt" -> captions to "text/vtt"
                         path.startsWith("/") && segments.containsKey(path.removePrefix("/")) ->
                             segments.getValue(path.removePrefix("/")) to "video/mp2t"
                         else -> return MockResponse().setResponseCode(404)
@@ -74,6 +77,7 @@ class HttpsPlaybackTest {
             HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.sslSocketFactory())
             val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
                 .putExtra("fixture", url)
+            if (hls) intent.putExtra("subtitle", server.url("/captions.vtt").toString())
             ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
                 var initialized = 0
                 var rendered = 0
@@ -95,6 +99,37 @@ class HttpsPlaybackTest {
                     rendered > 3)
                 assertTrue("Media3 must actually request the TLS fixture", server.requestCount > 0)
                 assertTrue("Media3 must enter READY", scenarioState(scenario, androidx.media3.common.Player.STATE_READY))
+                if (hls) {
+                    val tracksDeadline = System.currentTimeMillis() + 8000L
+                    var selected = false
+                    while (System.currentTimeMillis() < tracksDeadline) {
+                        scenario.onActivity { activity ->
+                            val available = PlaybackTransport.options(activity.player, C.TRACK_TYPE_TEXT)
+                            if (available.isNotEmpty()) {
+                                if (available.none { it.selected }) {
+                                    PlaybackTransport.cycle(activity.player, C.TRACK_TYPE_TEXT)
+                                }
+                                selected = PlaybackTransport.options(activity.player, C.TRACK_TYPE_TEXT)
+                                    .any { it.selected }
+                            }
+                        }
+                        if (selected) break
+                        Thread.sleep(70)
+                    }
+                    assertTrue("HTTPS WebVTT track must become available and selected", selected)
+                    val captionDeadline = System.currentTimeMillis() + 8000L
+                    var decodedCues = false
+                    while (System.currentTimeMillis() < captionDeadline) {
+                        scenario.onActivity {
+                            decodedCues = it.cueTexts.any { text ->
+                                text.contains("HERRIN original subtitle testing only")
+                            }
+                        }
+                        if (decodedCues) break
+                        Thread.sleep(70)
+                    }
+                    assertTrue("Media3 must fetch and decode actual HTTPS WebVTT cues", decodedCues)
+                }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PAUSE)
                 scenario.onActivity { assertFalse(it.player.playWhenReady) }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)

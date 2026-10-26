@@ -23,7 +23,8 @@ class DemoCatalog : CatalogSource {
 interface FavoritesStore { fun ids(): Set<String>; fun toggle(id: String) }
 /** Legal source resolvers supply URLs and headers; credentials must never be committed. */
 data class PlaybackRequest(val filmId: String, val episode: Int, val line: String)
-data class PlaybackMedia(val uri: String, val headers: Map<String, String> = emptyMap())
+data class PlaybackMedia(val uri: String, val headers: Map<String, String> = emptyMap(),
+                         val subtitles: List<AuthorizedSubtitle> = emptyList())
 sealed interface PlaybackResult {
     data class Ready(val media: PlaybackMedia) : PlaybackResult
     data class Unavailable(val reason: String) : PlaybackResult
