@@ -128,7 +128,6 @@ private fun Herrin() {
             withFrameNanos { }
             inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
             inputMethod.restartInput(view)
-            view.requestFocus()
             RemoteTrace.event("IME handoff acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
         }
     }
@@ -149,6 +148,9 @@ private fun Herrin() {
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
             val id = when (screen) { "browse", "search" -> focusId; else -> "screen-first" }
+            // A lazy search result attaches after its parent. Its item effect restores focus below.
+            if (screen == "search" && id.startsWith("card-") && catalog.search(query).any { "card-${it.id}" == id })
+                return@LaunchedEffect
             runCatching { requester(id).requestFocus() }.onFailure {
                 if (screen == "browse") runCatching { requester("nav-$category").requestFocus() }
             }
@@ -211,6 +213,13 @@ private fun Herrin() {
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         items(filtered, key = { it.id }) { item ->
+                            // Runs after this lazy item's focus target is attached, including Back from detail.
+                            LaunchedEffect(item.id) {
+                                if (isSearch && focusId == "card-${item.id}") {
+                                    requester("card-${item.id}").requestFocus()
+                                    RemoteTrace.event("RESTORE search card=${item.id} attached")
+                                }
+                            }
                             Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
                                 onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
                         }
