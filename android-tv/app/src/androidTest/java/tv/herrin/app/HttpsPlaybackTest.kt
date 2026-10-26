@@ -39,6 +39,7 @@ class HttpsPlaybackTest {
         val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
         val clientTls = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
         val server = MockWebServer()
+        val requestedPaths = java.util.concurrent.CopyOnWriteArrayList<String>()
         val previous = HttpsURLConnection.getDefaultSSLSocketFactory()
         try {
             val mp4 = asset("synthetic.mp4")
@@ -56,6 +57,7 @@ class HttpsPlaybackTest {
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     val path = request.path?.substringBefore('?') ?: ""
+                    requestedPaths.add(path)
                     val (bytes, type) = when {
                         path == "/sample.mp4" -> mp4 to "video/mp4"
                         path == "/sample.m3u8" -> playlist to "application/vnd.apple.mpegurl"
@@ -132,7 +134,7 @@ class HttpsPlaybackTest {
                     var observedCues = emptyList<String>()
                     while (System.currentTimeMillis() < captionDeadline) {
                         scenario.onActivity {
-                            observedCues = it.cueTexts.toList()
+                            observedCues = it.cueHistory.toList()
                             decodedCues = observedCues.any { text ->
                                 text.contains("HERRIN original subtitle testing only")
                             }
@@ -142,9 +144,11 @@ class HttpsPlaybackTest {
                         if (decodedCues) break
                         Thread.sleep(70)
                     }
-                    assertTrue("Media3 must fetch and decode HTTPS WebVTT cues: position=" +
+                    assertTrue("HLS must fetch real TLS WebVTT file: paths=" + requestedPaths,
+                        requestedPaths.contains("/captions.vtt"))
+                    assertTrue("Media3 must decode HTTPS WebVTT cues: position=" +
                         finalPosition + " state=" + finalState + " cues=" + observedCues +
-                        " requests=" + server.requestCount, decodedCues)
+                        " paths=" + requestedPaths, decodedCues)
                 }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PAUSE)
                 scenario.onActivity { assertFalse(it.player.playWhenReady) }
