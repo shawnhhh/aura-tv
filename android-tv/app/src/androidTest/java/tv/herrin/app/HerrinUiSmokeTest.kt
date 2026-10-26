@@ -242,4 +242,14 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("settings").assertIsFocused()
     }
+    @Test fun settingsExposeNativeSourcePickerWithoutReplacingExistingControls() {
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithText("目录源管理 · 最多 10 个授权 HTTPS 目录").assertExists()
+        compose.onNodeWithTag("source-demo").assertIsDisplayed()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-catalog-url"))
+        compose.onNodeWithTag("config-catalog-url").assertIsDisplayed()
+        compose.onNodeWithText("保存媒体配置").assertExists()
+        capture("settings-source-picker")
+    }
 }

@@ -57,3 +57,7 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 通过遥控器操作播放器底部真正可聚焦的播放、±10 秒跳转、音轨和字幕控制。音轨与字幕从当前 Media3 实际解码轨道读取，不会凭空显示不存在的语言。
 
 授权片源可通过每条 `playback.episodes[].lines[]` 的 `subtitles` 可选字段提供 HTTPS WebVTT 字幕。详见 [M2.3 文档](docs/M2_3_PLAYER_CONTROLS.md)。在线播放不内置未经授权的流；TCL 实机测试仍待完成。
+
+## M2.4 多目录源管理
+
+「设置」支持最多 10 个用户授权的 HTTPS JSON 目录保存与切换、返回离线演示、旧单目录地址自动迁移、按目录隔离收藏。通过原来的 `catalog_url` 接口继续驱动远端目录加载器，不复制 FongMi/TV GPL 代码或集成第三方抓取器。详见 [M2.4 文档](docs/M2_4_CATALOG_PROFILES.md)。

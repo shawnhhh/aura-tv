@@ -1,15 +1,31 @@
 package tv.herrin.app
 
 import android.content.Context
+import java.security.MessageDigest
 
 class Preferences(context: Context) : FavoritesStore {
     private val prefs = context.getSharedPreferences("herrin", Context.MODE_PRIVATE)
-    override fun ids(): Set<String> = prefs.getStringSet("favorites", emptySet())!!.toSet()
-    override fun toggle(id: String) {
-        val next = ids().toMutableSet()
-        if (!next.add(id)) next.remove(id)
-        prefs.edit().putStringSet("favorites", next).apply()
+    // Retain the old offline-demo key and its contents; all remote favorites are
+    // scoped to the canonical endpoint to avoid collisions between source IDs.
+    private fun favoriteKey(scope: String): String {
+        if (scope == "herrin-offline-demo") return "favorites"
+        val digest = MessageDigest.getInstance("SHA-256").digest(scope.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return "favorites-$digest"
     }
+    fun idsFor(scope: String): Set<String> = prefs.getStringSet(favoriteKey(scope), emptySet())!!.toSet()
+    fun toggleFor(scope: String, id: String) {
+        val next = idsFor(scope).toMutableSet()
+        if (!next.add(id)) next.remove(id)
+        prefs.edit().putStringSet(favoriteKey(scope), next).apply()
+    }
+    /** One-time best-effort copy of legacy global favorites into a migrated remote catalog. */
+    fun preserveLegacyFavoritesFor(scope: String) {
+        val key = favoriteKey(scope)
+        if (!prefs.contains(key)) prefs.edit().putStringSet(key, ids()).commit()
+    }
+    override fun ids(): Set<String> = idsFor("herrin-offline-demo")
+    override fun toggle(id: String) = toggleFor("herrin-offline-demo", id)
     /** Optional, user-entered licensed HTTPS catalog endpoint and playable test-media URL. */
     var catalogUrl: String
         get() = prefs.getString("catalog_url", "") ?: ""

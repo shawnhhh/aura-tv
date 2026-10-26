@@ -115,12 +115,16 @@ private fun Herrin() {
     var searchInputFocused by remember { mutableStateOf(false) }
     var configInputFocused by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
+    val profileStore = remember(context) { CatalogProfiles(context) }
     val watchHistory = remember(context) { PlaybackHistory(context) }
     val demoCatalog: CatalogSource = remember { DemoCatalog() }
     val demoFilms = remember { demoCatalog.titles() }
     val providerRepo = remember(context) { RemoteCatalogRepository(context) }
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
+    var savedProfiles by remember { mutableStateOf(profileStore.list()) }
+    var activeProfileId by remember { mutableStateOf(profileStore.activeId()) }
+    var sourceNameDraft by rememberSaveable { mutableStateOf("") }
     var configUrlDraft by rememberSaveable { mutableStateOf(prefs.catalogUrl) }
     var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
@@ -128,8 +132,9 @@ private fun Herrin() {
     val films = providerFilms ?: demoFilms
     LaunchedEffect(catalogRefresh) {
         val endpoint = prefs.catalogUrl
+        // Never leave the previous source's films visible while the next URL loads.
+        providerFilms = null
         if (endpoint.isBlank()) {
-            providerFilms = null
             providerStatus = "当前使用离线演示目录"
         } else {
             providerStatus = "正在同步授权目录…"
@@ -156,14 +161,14 @@ private fun Herrin() {
     var query by rememberSaveable { mutableStateOf("") }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
-    var favorites by remember { mutableStateOf(prefs.ids()) }
+    val catalogScope = prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
+    var favorites by remember(catalogScope) { mutableStateOf(prefs.idsFor(catalogScope)) }
     var reduced by remember { mutableStateOf(prefs.reducedMotion) }
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val reduceMotion = reduced || systemReduced
     var splash by rememberSaveable { mutableStateOf(true) }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val film = films.firstOrNull { it.id == filmId } ?: films.first()
-    val catalogScope = prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
     val currentLines = currentEpisode?.lines.orEmpty()
     val resume = watchHistory.load(catalogScope, film.id, episode,
@@ -397,10 +402,44 @@ private fun Herrin() {
                     if (screen == "settings") {
                         item { Text("设置", fontSize = 36.sp) }
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
-                        item { Text("M2 · 授权目录与播放器", fontSize = 22.sp) }
+                        item { Text("目录源管理 · 最多 10 个授权 HTTPS 目录", fontSize = 22.sp) }
+                        item {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp),
+                                contentPadding = PaddingValues(horizontal = 3.dp)) {
+                                item {
+                                    TvButton("离线演示", modifier = Modifier.testTag("source-demo"),
+                                        selected = activeProfileId == null, reduced = reduceMotion) {
+                                        if (profileStore.activate(null)) {
+                                            activeProfileId = null
+                                            configUrlDraft = ""
+                                            sourceNameDraft = ""
+                                            providerFilms = null
+                                            catalogRefresh++
+                                            configStatus = "已切换至离线演示目录"
+                                        }
+                                    }
+                                }
+                                items(savedProfiles, key = { it.id }) { profile ->
+                                    TvButton(profile.name, modifier = Modifier.testTag("source-${profile.id}"),
+                                        selected = activeProfileId == profile.id, reduced = reduceMotion) {
+                                        if (profileStore.activate(profile.id)) {
+                                            activeProfileId = profile.id
+                                            configUrlDraft = profile.url
+                                            sourceNameDraft = profile.name
+                                            providerFilms = null
+                                            catalogRefresh++
+                                            configStatus = "已切换至目录：${profile.name}"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        item { OutlinedTextField(sourceNameDraft, { sourceNameDraft = it },
+                            Modifier.fillMaxWidth().testTag("source-name").onFocusChanged { configInputFocused = it.isFocused },
+                            label = { Text("新目录名称（可留空）") }, singleLine = true) }
                         item { OutlinedTextField(configUrlDraft, { configUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("config-catalog-url").onFocusChanged { configInputFocused = it.isFocused },
-                            label = { Text("获授权的 HTTPS 目录 JSON 地址（可留空）") },
+                            label = { Text("新增／当前授权目录的 HTTPS JSON 地址（可留空）") },
                             singleLine = true) }
                         item { OutlinedTextField(mediaUrlDraft, { mediaUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("config-media-url").onFocusChanged { configInputFocused = it.isFocused },
@@ -410,22 +449,29 @@ private fun Herrin() {
                             onFocus = { focusId = "settings-save"; keyboard?.hide() }) {
                             val catalogLink = configUrlDraft.trim()
                             val mediaLink = mediaUrlDraft.trim()
-                            if ((catalogLink.isNotEmpty() && AuthorizedUrls.https(catalogLink) == null) ||
-                                (mediaLink.isNotEmpty() && AuthorizedUrls.https(mediaLink) == null)) {
+                            if (mediaLink.isNotEmpty() && AuthorizedUrls.https(mediaLink) == null) {
                                 configStatus = "保存失败：链接必须是合法 HTTPS 地址"
                             } else {
-                                prefs.catalogUrl = catalogLink
-                                prefs.testMediaUrl = mediaLink
-                                providerFilms = null
-                                catalogRefresh++
-                                configStatus = "配置已保存；测试流只会在手动进入演示播放页时使用"
+                                val result = if (catalogLink.isBlank()) {
+                                    if (profileStore.activate(null)) null else SaveProfileResult.Error("目录切换失败")
+                                } else profileStore.addAndActivate(sourceNameDraft, catalogLink)
+                                if (result is SaveProfileResult.Error) {
+                                    configStatus = "保存失败：${result.reason}"
+                                } else {
+                                    prefs.testMediaUrl = mediaLink
+                                    savedProfiles = profileStore.list()
+                                    activeProfileId = profileStore.activeId()
+                                    providerFilms = null
+                                    catalogRefresh++
+                                    configStatus = "配置已保存；测试流只会在手动进入演示播放页时使用"
+                                }
                             }
                         } }
                         item { TvButton("重新同步目录", reduced = reduceMotion,
                             onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
                         item { Text(providerStatus, fontSize = 15.sp, color = Color(0xFFCFD7E4)) }
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
-                        item { Text("请仅填写你有权使用的目录和媒体地址。此应用不会自动获取第三方影视片源；网络失败时仍可使用离线演示内容。", lineHeight = 22.sp) }
+                        item { Text("仅保存你有权访问的 HTTPS 目录。可在上方切换已保存目录，切换后会隔离各目录的收藏与续播。网络失败时仍可使用离线演示内容；不会抓取第三方影视站。", lineHeight = 22.sp) }
 
                         item { Text("HERRIN M2.2 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示。收藏仅保存在本机。\n可从用户提供的 HTTPS 地址读取影片元数据、加载海报与播放测试流；没有内置未授权片源。\nFongMi 接口与直播功能尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
@@ -446,7 +492,10 @@ private fun Herrin() {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 TvButton(if (film.playbackEpisodes.isEmpty()) "▶ 播放演示" else "▶ 播放授权片源",
                                     selected = true, reduced = reduceMotion) { screen = "player" }
-                                TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) { prefs.toggle(film.id); favorites = prefs.ids() }
+                                TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
+                                    prefs.toggleFor(catalogScope, film.id)
+                                    favorites = prefs.idsFor(catalogScope)
+                                }
                             } }
                             if (resume != null) {
                                 item { Text("继续播放 · 已观看 ${resume.positionMs / 1000} 秒 / ${resume.durationMs / 1000} 秒",
