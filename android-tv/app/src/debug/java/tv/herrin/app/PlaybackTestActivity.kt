@@ -32,6 +32,8 @@ class PlaybackTestActivity : ComponentActivity() {
                             override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
                                 cueTexts.clear()
                                 cueTexts.addAll(cueGroup.cues.mapNotNull { cue -> cue.text?.toString() })
+                                if (cueTexts.isNotEmpty()) android.util.Log.i("HerrinCaptions",
+                                    "decodedWebVttCues=" + cueTexts.toList())
                             }
                         })
                     },
