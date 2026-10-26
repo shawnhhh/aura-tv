@@ -1,6 +1,8 @@
 package tv.herrin.app
 
 import android.os.Bundle
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import android.content.Context
@@ -222,6 +224,14 @@ private fun Herrin() {
     var activeProfileId by remember { mutableStateOf(profileStore.activeId()) }
     var sourceNameDraft by rememberSaveable { mutableStateOf("") }
     var configUrlDraft by rememberSaveable { mutableStateOf(prefs.catalogUrl) }
+    var importProfilesDraft by rememberSaveable { mutableStateOf("") }
+    var pendingDeleteSourceId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(pendingDeleteSourceId) {
+        if (pendingDeleteSourceId != null) {
+            delay(15_000)
+            pendingDeleteSourceId = null
+        }
+    }
     var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
     var catalogRefresh by remember { mutableIntStateOf(0) }
@@ -503,6 +513,7 @@ private fun Herrin() {
                                     TvButton("离线演示", modifier = Modifier.testTag("source-demo"),
                                         selected = activeProfileId == null, reduced = reduceMotion) {
                                         if (profileStore.activate(null)) {
+                                            pendingDeleteSourceId = null
                                             activeProfileId = null
                                             configUrlDraft = ""
                                             sourceNameDraft = ""
@@ -516,6 +527,7 @@ private fun Herrin() {
                                     TvButton(profile.name, modifier = Modifier.testTag("source-${profile.id}"),
                                         selected = activeProfileId == profile.id, reduced = reduceMotion) {
                                         if (profileStore.activate(profile.id)) {
+                                            pendingDeleteSourceId = null
                                             activeProfileId = profile.id
                                             configUrlDraft = profile.url
                                             sourceNameDraft = profile.name
@@ -554,17 +566,80 @@ private fun Herrin() {
                                     prefs.testMediaUrl = mediaLink
                                     savedProfiles = profileStore.list()
                                     activeProfileId = profileStore.activeId()
+                                    pendingDeleteSourceId = null
                                     providerFilms = null
                                     catalogRefresh++
                                     configStatus = "配置已保存；测试流只会在手动进入演示播放页时使用"
                                 }
                             }
                         } }
+                        if (activeProfileId != null) {
+                            item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TvButton("修改当前目录", modifier = Modifier.testTag("source-edit"),
+                                    reduced = reduceMotion, onFocus = { focusId = "source-edit"; keyboard?.hide() }) {
+                                    val selectedId = activeProfileId
+                                    if (selectedId != null) {
+                                        when (val result = profileStore.update(selectedId, sourceNameDraft, configUrlDraft)) {
+                                            is SaveProfileResult.Saved -> {
+                                                savedProfiles = profileStore.list()
+                                                pendingDeleteSourceId = null
+                                                providerFilms = null
+                                                catalogRefresh++
+                                                configStatus = "已修改目录：${result.profile.name}"
+                                            }
+                                            is SaveProfileResult.Error -> configStatus = "修改失败：${result.reason}"
+                                        }
+                                    }
+                                }
+                                TvButton(
+                                    if (pendingDeleteSourceId == activeProfileId) "再次确定删除此目录" else "删除当前目录",
+                                    modifier = Modifier.testTag("source-delete"),
+                                    reduced = reduceMotion, onFocus = { focusId = "source-delete"; keyboard?.hide() }
+                                ) {
+                                    val selectedId = activeProfileId
+                                    if (selectedId != null) {
+                                        if (pendingDeleteSourceId != selectedId) {
+                                            pendingDeleteSourceId = selectedId
+                                            configStatus = "请再次按确定删除当前目录；本地收藏与播放历史不会被清除"
+                                        } else if (profileStore.delete(selectedId)) {
+                                            pendingDeleteSourceId = null
+                                            savedProfiles = profileStore.list()
+                                            activeProfileId = null
+                                            configUrlDraft = ""
+                                            sourceNameDraft = ""
+                                            providerFilms = null
+                                            catalogRefresh++
+                                            configStatus = "目录已删除，已切换至离线演示"
+                                        }
+                                    }
+                                }
+                            } }
+                        }
+                        item { TvButton("复制目录列表 JSON", modifier = Modifier.testTag("source-export"),
+                            reduced = reduceMotion, onFocus = { focusId = "source-export"; keyboard?.hide() }) {
+                            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            manager.setPrimaryClip(ClipData.newPlainText("HERRIN 目录备份", profileStore.exportJson()))
+                            configStatus = "目录 JSON 已复制到剪贴板；如地址包含访问令牌，请勿公开分享"
+                        } }
+                        item { OutlinedTextField(importProfilesDraft, { importProfilesDraft = it },
+                            Modifier.fillMaxWidth().testTag("import-catalogs-json").onFocusChanged { configInputFocused = it.isFocused },
+                            label = { Text("粘贴 HERRIN 目录 JSON（仅合并，不覆盖）") }, minLines = 2, maxLines = 5) }
+                        item { TvButton("导入目录列表 JSON", modifier = Modifier.testTag("source-import"),
+                            reduced = reduceMotion, onFocus = { focusId = "source-import"; keyboard?.hide() }) {
+                            when (val result = profileStore.importJson(importProfilesDraft.trim())) {
+                                is ImportProfilesResult.Imported -> {
+                                    savedProfiles = profileStore.list()
+                                    importProfilesDraft = ""
+                                    configStatus = "导入完成：新增 ${result.added} 个，跳过重复 ${result.skipped} 个；原选中目录保持不变"
+                                }
+                                is ImportProfilesResult.Error -> configStatus = result.reason
+                            }
+                        } }
                         item { TvButton("重新同步目录", reduced = reduceMotion,
                             onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
                         item { Text(providerStatus, fontSize = 15.sp, color = Color(0xFFCFD7E4)) }
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
-                        item { Text("仅保存你有权访问的 HTTPS 目录。可在上方切换已保存目录，切换后会隔离各目录的收藏与续播。网络失败时仍可使用离线演示内容；不会抓取第三方影视站。", lineHeight = 22.sp) }
+                        item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
                         item { Text("HERRIN M2.2 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示。收藏仅保存在本机。\n可从用户提供的 HTTPS 地址读取影片元数据、加载海报与播放测试流；没有内置未授权片源。\nFongMi 接口与直播功能尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
