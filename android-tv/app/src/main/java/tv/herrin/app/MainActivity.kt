@@ -15,6 +15,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,8 +38,13 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -118,6 +124,81 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
         .clip(shape).background(fill)
         .clickable(onClick = onClick).padding(horizontal = if (quiet) 13.dp else 16.dp, vertical = if (quiet) 8.dp else 11.dp), contentAlignment = Alignment.Center) {
         Text(label, color = if (focused) Color(0xFF111318) else Color.White, fontSize = 14.sp)
+    }
+}
+
+/**
+ * A continuous, non-focusable motion track follows the *real measured* tab positions.
+ * The white button focus remains instantaneous and unique; only this subtle underline
+ * glides when users reverse D-pad direction or hold a repeat key.
+ */
+@Composable
+private fun TvNavTabs(
+    category: String,
+    isSearch: Boolean,
+    focusId: String,
+    reducedMotion: Boolean,
+    requester: (String) -> FocusRequester,
+    onFocus: (String) -> Unit,
+    onSelect: (String) -> Unit
+) {
+    val categories = remember { listOf("首页", "电影", "剧集", "动漫", "直播", "我的") }
+    val measured = remember { mutableStateMapOf<String, NavPillBounds>() }
+    val focusedTab = focusId.removePrefix("nav-")
+        .takeIf { !isSearch && focusId.startsWith("nav-") && it in categories }
+    var lastFocusedTab by remember { mutableStateOf(categories.first()) }
+    LaunchedEffect(focusedTab) {
+        if (focusedTab != null) lastFocusedTab = focusedTab
+    }
+    val trackTarget = navTrackBounds(measured[focusedTab ?: lastFocusedTab] ?: NavPillBounds(0f, 0f))
+    // No layout remeasurement on animation frames: only this tiny Canvas redraws.
+    val motionSpec = if (reducedMotion) snap<Float>() else spring(dampingRatio = 0.90f, stiffness = 580f)
+    val trackX by animateFloatAsState(trackTarget.leftPx, motionSpec, label = "nav-glide-x")
+    val trackWidth by animateFloatAsState(trackTarget.widthPx, motionSpec, label = "nav-glide-width")
+    val trackAlpha by animateFloatAsState(
+        if (focusedTab != null && measured.containsKey(focusedTab)) 1f else 0f,
+        if (reducedMotion) snap() else tween(durationMillis = 100),
+        label = "nav-glide-visibility"
+    )
+    Column(
+        Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
+            .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
+            .padding(horizontal = 5.dp, vertical = 4.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            categories.forEach { cat ->
+                TvButton(
+                    cat,
+                    Modifier.testTag("nav-$cat")
+                        .onGloballyPositioned { coordinates ->
+                            val now = NavPillBounds(
+                                coordinates.positionInParent().x, coordinates.size.width.toFloat()
+                            )
+                            if (measured[cat] != now) measured[cat] = now
+                        }
+                        .focusRequester(requester("nav-$cat")),
+                    reducedMotion, category == cat && !isSearch,
+                    quiet = true, onFocus = { onFocus("nav-$cat") }
+                ) { onSelect(cat) }
+            }
+        }
+        Canvas(Modifier.fillMaxWidth().height(4.dp).testTag("nav-motion-track")) {
+            if (trackAlpha > 0f && trackWidth > 0f) {
+                val glowHeight = 3.dp.toPx()
+                drawRoundRect(
+                    Color(0xFF94B6E5).copy(alpha = 0.56f * trackAlpha),
+                    topLeft = Offset(trackX, 0f),
+                    size = Size(trackWidth, glowHeight),
+                    cornerRadius = CornerRadius(glowHeight / 2f)
+                )
+                drawRoundRect(
+                    Color.White.copy(alpha = trackAlpha),
+                    topLeft = Offset(trackX + trackWidth * 0.15f, 0f),
+                    size = Size(trackWidth * 0.70f, 1.6.dp.toPx()),
+                    cornerRadius = CornerRadius(1.dp.toPx())
+                )
+            }
+        }
     }
 }
 
@@ -292,13 +373,10 @@ private fun Herrin() {
                             }
                             Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
                         }
-                        Row(Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
-                            .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp)).padding(5.dp),
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            listOf("首页", "电影", "剧集", "动漫", "直播", "我的").forEach { cat ->
-                                TvButton(cat, Modifier.testTag("nav-$cat").focusRequester(requester("nav-$cat")), reduceMotion, category == cat && !isSearch,
-                                    quiet = true, onFocus = { focusId = "nav-$cat" }) { category = cat; screen = "browse" }
-                            }
+                        TvNavTabs(category, isSearch, focusId, reduceMotion, { id -> requester(id) },
+                            onFocus = { focusId = it }) { selected ->
+                            category = selected
+                            screen = "browse"
                         }
                         TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true, onFocus = { focusId = "search" }) { screen = "search" }
                         TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion, quiet = true, onFocus = { focusId = "settings" }) { screen = "settings" }

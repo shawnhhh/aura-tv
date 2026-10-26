@@ -6,6 +6,7 @@
 - Splash stays centered, increases lettering from 56sp to up to ~86sp, progressively collapses to H, has no visible skip label and can still be skipped with remote OK/Enter/Back.
 - Avoid decoding/drawing the home hero behind the opaque splash. Splash letters use one graphics-layer translation/opacity timeline, not repeated per-letter width relayouts.
 - Episode/line/navigation buttons have a **single white remote focus**. A saved/selected value is blue-grey so the old selection cannot resemble a second focus pill. D-pad focus state updates immediately; a short interruptible GPU-only spring now adds 2.8–4.2% scale and a tiny lift, instead of the old sluggish 160ms effect. No per-frame layout work; reduced-motion settings bypass the effect.
+- M2.5 navigation adds a **measured-position focus glide**: a restrained white/blue underline tracks the current top-tab focus with an interruptible spring, including quick Left→Right→Left reversals. The indicator is a decorative Canvas, not an extra focus target or a second white pill. It fades when the remote leaves the navigation strip, and snaps without animation when reduced motion is enabled.
 - Native Android UI requests a high refresh rate **only if the Android display API exposes a 90–120Hz mode at the current output resolution**. No resolution downgrade or hard-coded frame loop. The request is advisory; the firmware decides the actual rate.
 
 ## Cloud checks
@@ -19,6 +20,7 @@
 1. After installing the new APK, confirm the launcher label `Herrin` and icon H, then force-stop and cold-launch. Splash should show large `HERRIN` ending at centered `H` in ~2.9 seconds, without a bottom prompt. OK and Back should still skip.
 2. On a detail page, navigate episode chips and line chips rapidly; **only the button under focus is white**. The chosen episode/line remains tinted until OK commits another selection. Verify no missing or duplicated D-pad steps.
    Focus movement should feel fluid but must still follow every rapid Left/Right press and reverse direction cleanly mid-animation. No persistent white ghost or delayed activation.
+   On the home navigation tabs, repeatedly press Left, Right and reverse mid-motion. A narrow highlight should *travel* between measured tab positions while the actual white focus switches immediately. Move Down to a poster or across to Search: the highlight should fade, not remain stuck. In reduced-motion mode, it should snap instead of sliding.
 3. In TV display settings, select the actual high-refresh output mode if available. Read `adb logcat -d -s HerrinDisplay:I` to see the modes exposed to the app and its refresh hint. This log is diagnostic; it is **not proof of rendered FPS**.
 4. Capture UI frame stats while repeatedly traversing chips:
 
