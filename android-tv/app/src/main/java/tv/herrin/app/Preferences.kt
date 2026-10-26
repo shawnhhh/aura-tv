@@ -37,6 +37,9 @@ class Preferences(context: Context) : FavoritesStore {
     var livePlaylistUrl: String
         get() = prefs.getString("live_playlist_url", "") ?: ""
         set(value) { prefs.edit().putString("live_playlist_url", value).apply() }
+    var liveEpgUrl: String
+        get() = prefs.getString("live_epg_url", "") ?: ""
+        set(value) { prefs.edit().putString("live_epg_url", value).apply() }
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }

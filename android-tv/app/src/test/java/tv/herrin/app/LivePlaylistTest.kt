@@ -20,6 +20,7 @@ class LivePlaylistTest {
         assertEquals(2, channels.size)
         assertEquals("新闻频道", channels[0].name)
         assertEquals("News, Local", channels[0].group)
+        assertEquals("news", channels[0].tvgId)
         assertEquals("体育频道", channels[1].name)
     }
 

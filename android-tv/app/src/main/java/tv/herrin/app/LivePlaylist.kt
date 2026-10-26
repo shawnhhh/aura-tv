@@ -7,7 +7,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class LiveChannel(val name: String, val url: String, val group: String = "")
+data class LiveChannel(val name: String, val url: String, val group: String = "", val tvgId: String = "")
 
 sealed interface LivePlaylistResult {
     data class Ready(val channels: List<LiveChannel>) : LivePlaylistResult
@@ -18,6 +18,7 @@ sealed interface LivePlaylistResult {
 internal object AuthorizedLivePlaylist {
     private const val MAX_CHANNELS = 250
     private val group = Regex("""group-title="([^"]{0,60})"""")
+    private val tvgId = Regex("""tvg-id="([^"]{0,80})"""")
 
     fun decode(raw: String): List<LiveChannel> {
         require(raw.toByteArray(Charsets.UTF_8).size <= 512_000) { "Playlist too large" }
@@ -28,6 +29,7 @@ internal object AuthorizedLivePlaylist {
         val urls = HashSet<String>()
         var pendingName: String? = null
         var pendingGroup = ""
+        var pendingTvgId = ""
         for (line in lines.drop(1)) {
             if (line.startsWith("#EXTINF:", ignoreCase = true)) {
                 val duration = line.substringAfter(':').substringBefore(',').substringBefore(' ').toDoubleOrNull()
@@ -45,15 +47,17 @@ internal object AuthorizedLivePlaylist {
                 val label = if (comma >= 0) line.substring(comma + 1).trim() else ""
                 pendingName = label.takeIf { it.isNotEmpty() && it.length <= 80 && it.none { c -> c.code < 32 } }
                 pendingGroup = group.find(line)?.groupValues?.get(1).orEmpty()
+                pendingTvgId = tvgId.find(line)?.groupValues?.get(1).orEmpty()
             } else if (!line.startsWith('#') && line.isNotEmpty()) {
                 val name = pendingName
                 val url = AuthorizedUrls.https(line)
                 if (name != null && url != null && urls.add(url)) {
                     require(result.size < MAX_CHANNELS) { "Too many channels" }
-                    result += LiveChannel(name, url, pendingGroup)
+                    result += LiveChannel(name, url, pendingGroup, pendingTvgId)
                 }
                 pendingName = null
                 pendingGroup = ""
+                pendingTvgId = ""
             }
         }
         require(result.isNotEmpty()) { "No authorized HTTPS channels" }
