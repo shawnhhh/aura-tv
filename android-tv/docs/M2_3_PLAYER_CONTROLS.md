@@ -1,47 +1,50 @@
-# HERRIN M2.3 — Native TV transport and authorized subtitles
+# HERRIN M2.3 — media controls, tracks and WebVTT
 
-This stacked draft PR is based on M2.2 PR #5. It **does not alter the approved M1.6 homepage** and must not be merged until CI and actual Android TV screenshot evidence pass.
+M2.3 is a **separate, stacked draft** based on verified M2.2 PR #5.
+M1.6 home visuals and M2.2 episode/resume flows must remain unchanged.
 
-## Features actually implemented
-- Native focusable player controls: 播放/暂停, -10s, +10s, audio track and subtitle track selectors. PlayerView's built-in controls remain available.
-- MEDIA_FAST_FORWARD / MEDIA_REWIND remote keys invoke the same transport seek operations as visible buttons. Existing MEDIA_PLAY / PAUSE and BACK behavior is kept.
-- Audio and subtitle selections are sourced from **Media3's actual supported track groups**. No fake choices are shown. The audio selector is disabled for one or fewer audio tracks; subtitle selector is disabled when there are no text tracks.
-- Authorized catalog JSON v1 optional `subtitles` per episode/line; each track specifies language, title and **HTTPS WebVTT** URL. Media3 is configured with each actual `MediaItem.SubtitleConfiguration` and uses normal production TLS checks.
-- Catalogue/film/episode line binding, watch-progress isolation and two-scroll-row Apple TV-inspired approved UI are inherited from M2.2.
+## Implemented
+- Media3 ExoPlayer native Android TV playback continues to handle HLS, DASH and progressive MP4.
+- D-pad focusable Compose controls at bottom of player: ±10 seconds, Play/Pause, next audio track, next subtitle track or subtitle off.
+- Real remote MEDIA_FAST_FORWARD and MEDIA_REWIND transport keys are supported, with bounded seeking (0..duration for known duration); native Media3 PlayerView controller is retained. Back still exits and releases the player.
+- Tracks are enumerated from **Media3's actual supported currentTracks**, not fictional languages. Audio selection requires at least two supported tracks; subtitles disabled if absent. Selection uses TrackSelectionOverride and the actual media track groups.
+- Optional HTTPS WebVTT sidecars per authorized playback line. Nothing is scraped or guessed. User-provided media and caption URLs must have appropriate rights and remain HTTPS.
+- CI original synthetic fixture has video + two audio tracks (eng and zho) and a WebVTT file. Offline Android TV tests use a local synthetic clip, while separate loopback HTTPS HLS testing checks a real TLS subtitle fetch/cue decode path.
 
-## Optional line schema
+## Optional per-line catalog schema
+
 ```json
 {
   "id": "official",
-  "title": "有版权的播放线路",
-  "url": "https://media.example.org/ep1/index.m3u8",
+  "title": "正版官方线路",
+  "url": "https://licensed.example.org/series/1/master.m3u8",
   "subtitles": [
     {
       "language": "zh-CN",
       "title": "简体中文",
-      "url": "https://media.example.org/ep1/zh.vtt"
+      "url": "https://licensed.example.org/captions/zh-CN.vtt"
     },
     {
       "language": "en",
       "title": "English",
-      "url": "https://media.example.org/ep1/en.vtt"
+      "url": "https://licensed.example.org/captions/en.vtt"
     }
   ]
 }
 ```
-Max six captions per line, unique language identifiers, HTTPS only; HTTP, URL credentials and duplicate language tracks rejected. These example URLs are **not** real streaming services.
 
-## Real emulator verification gate
-GitHub Actions generates **original synthetic 6s H.264 test video with two different AAC audio tracks** and `synthetic.vtt` (only test assets, not distributed in release APK). Android instrumentation must:
-1. Start real Media3 player, initialize decoder and render frames.
-2. Enumerate at least two real audio tracks and verify the selected Media3 track changes.
-3. Enumerate real WebVTT subtitle track(s), enable and disable an actual track.
-4. Operate remote MEDIA_PAUSE, MEDIA_FAST_FORWARD, MEDIA_REWIND and BACK keys, verify changed position/paused state and player release.
-5. Preserve original M2.2 17/17 tests including HTTPS loopback MP4/HLS decode, M1.6 two rails, search IME handoff, favorites, watch history, and settings.
-6. Save JUnit XML, logcat, screenshot and APK artifact. Prefer debugging actual failures over weakening tests.
+`subtitles` is optional; each line may carry up to 6 unique BCP-47-like language tags. Subtitles must be explicitly configured, legal-to-use **HTTPS WebVTT**. Unsupported caption types and arbitrary remote scripts are out of scope. Unsigned/HTTP/video-site extractor URLs are not provided.
 
-## Explicit boundaries
-The synthetic file and sidecar are provided by GitHub test CI. No licensed remote supplier, public CDN, DRM, subtitles on commercial provider content, real TCL T7L Ultra or FongMi integration has been verified. These all require separate validation. Original-fiction images remain only demo assets. Root GitHub Pages and all earlier PRs remain unchanged.
+## Verification gates
+- Android Debug: compilation, static source check, JUnit parser/authorization validation, lint, installable APK.
+- Android TV API30 emulator: all M1, M1.6, M2.1, M2.2 tests must continue passing; new tests validate actual dual audio and caption tracks, proper selection, physical remote media seek, D-pad CENTER on Compose player controls and real HTTPS WebVTT cue decoding in a TLS fixture.
+- Save genuine screenshot, logcat and JUnit artifacts on failure and success. Do not loosen assertions to force green.
+- Demo content and synthetic playback are **not proof** of compatibility with arbitrary real CDNs, provider-specific headers, DRM, all codec/audio combinations or TCL T7L Ultra physical TV.
 
-## FongMi/TV status
-Defer import of GPL-3.0 components to a distinct code/license review PR. Avoid silently combining GPL source into HERRIN before deciding redistribution obligations, third-party AAR provenance and user-facing licensing.
+## Still pending
+- Physical TCL remote + IME / actual HDMI output QA.
+- Real approved licensed source/CDN tests; protected-provider integrations.
+- Accessibility, subtitle style preferences, audio output device selection, playback speed, 4K HDR/DRM and audio passthrough.
+- FongMi/TV legal and architectural review; no GPL code imported into this PR.
+
+Keep PRs #2–#6 unmerged until reviewed. Root GitHub Pages files stay unchanged.
