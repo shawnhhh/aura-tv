@@ -106,6 +106,7 @@ private fun Herrin() {
     var screen by rememberSaveable { mutableStateOf("browse") }
     var filmId by rememberSaveable { mutableStateOf(films.first().id) }
     var focusId by rememberSaveable { mutableStateOf("nav-首页") }
+    var pendingToolbarFocus by rememberSaveable { mutableStateOf<String?>(null) }
     var returnScreen by rememberSaveable { mutableStateOf("browse") }
     var query by rememberSaveable { mutableStateOf("") }
     var episode by rememberSaveable { mutableIntStateOf(1) }
@@ -135,7 +136,12 @@ private fun Herrin() {
         when (screen) {
             "player" -> screen = "detail"
             "detail" -> screen = returnScreen
-            "search", "settings" -> { focusId = if (screen == "settings") "settings" else "search"; screen = "browse" }
+            "search", "settings" -> {
+                val target = if (screen == "settings") "settings" else "search"
+                pendingToolbarFocus = target
+                focusId = target
+                screen = "browse"
+            }
             else -> { category = "首页"; focusId = "nav-首页" }
         }
     }
@@ -147,11 +153,18 @@ private fun Herrin() {
         if (!splash) {
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
-            val id = when (screen) { "browse", "search" -> focusId; else -> "screen-first" }
+            val id = when (screen) {
+                "browse" -> pendingToolbarFocus ?: focusId
+                "search" -> focusId
+                else -> "screen-first"
+            }
             // A lazy search result attaches after its parent. Its item effect restores focus below.
             if (screen == "search" && id.startsWith("card-") && catalog.search(query).any { "card-${it.id}" == id })
                 return@LaunchedEffect
-            runCatching { requester(id).requestFocus() }.onFailure {
+            runCatching { requester(id).requestFocus() }.onSuccess {
+                pendingToolbarFocus = null
+                RemoteTrace.event("RESTORE target=$id completed")
+            }.onFailure {
                 if (screen == "browse") runCatching { requester("nav-$category").requestFocus() }
             }
         }
