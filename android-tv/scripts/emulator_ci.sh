@@ -12,6 +12,8 @@ collect() {
     adb exec-out screencap -p > build/emulator-evidence/final.png || true
     adb shell uiautomator dump /sdcard/herrin-final.xml || true
     adb pull /sdcard/herrin-final.xml build/emulator-evidence/final.xml >/dev/null 2>&1 || true
+    adb logcat -d -s HerrinRemote:D > build/emulator-evidence/remote-trace.log 2>&1 || true
+    cat build/emulator-evidence/remote-trace.log
     python3 scripts/emulator_report.py "$code" || true
     # Small genuine PNG previews in logs allow review even if artifact download access is restricted.
     python3 - <<'PY'
@@ -29,7 +31,8 @@ PY
 trap collect EXIT
 gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/build.log
 adb logcat -G 16M || true
+adb shell setprop log.tag.HerrinRemote DEBUG
 bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
 # Shell-owned evidence survives the package uninstall performed by AGP.
 adb shell rm -rf /data/local/tmp/herrin-test-evidence
-gradle :app:connectedDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log
+gradle :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=tv.herrin.app.HerrinUiSmokeTest#offlineSearchTextEmptyAndRemoteResult --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log

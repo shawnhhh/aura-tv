@@ -40,7 +40,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
+/** Enabled explicitly by adb setprop log.tag.HerrinRemote DEBUG in diagnostics. */
+internal object RemoteTrace {
+    fun event(message: String) {
+        if (android.util.Log.isLoggable("HerrinRemote", android.util.Log.DEBUG))
+            android.util.Log.d("HerrinRemote", message)
+    }
+}
+
 class MainActivity : ComponentActivity() {
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        RemoteTrace.event("ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}")
+        val handled = super.dispatchKeyEvent(event)
+        RemoteTrace.event("ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled")
+        return handled
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -92,7 +106,7 @@ private fun Herrin() {
     val film = films.firstOrNull { it.id == filmId } ?: films.first()
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
-    fun details(f: Film) { filmId = f.id; episode = 1; returnScreen = screen; screen = "detail" }
+    fun details(f: Film) { RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen"); filmId = f.id; episode = 1; returnScreen = screen; screen = "detail" }
     fun back() {
         when (screen) {
             "player" -> screen = "detail"
@@ -105,6 +119,7 @@ private fun Herrin() {
         if (splash) splash = false else back()
     }
     LaunchedEffect(screen, splash, category) {
+        RemoteTrace.event("ROUTE screen=$screen category=$category focusId=$focusId")
         if (!splash) {
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
@@ -143,7 +158,7 @@ private fun Herrin() {
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
                         Text("搜索 · 离线演示片库", fontSize = 24.sp)
-                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input").fillMaxWidth().padding(vertical = 8.dp),
+                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input").onFocusChanged { RemoteTrace.event("INPUT focus=${it.isFocused}") }.fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
                         // An on-screen keyboard also permits search without a hardware keyboard or IME.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,17 +238,18 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.06f else 1f, tween(if (reduced) 0 else 160), label = "poster")
     Column(modifier.width(204.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
+        .onFocusChanged { focused = it.isFocused; RemoteTrace.event("POSTER ${film.id} focus=$focused"); if (it.isFocused) onFocus() }
         .border(if (focused) 3.dp else 1.dp, if (focused) Color.White else Color(0x554C5668), RoundedCornerShape(10.dp))
         .clip(RoundedCornerShape(10.dp)).background(Color(0xFF151A22))
         .onPreviewKeyEvent { event ->
+            RemoteTrace.event("POSTER ${film.id} key=${event.nativeKeyEvent.keyCode} type=${event.type} focus=$focused")
             // TV IMEs may consume the initial confirm down event while leaving text input.
             // Activate on confirm release whenever this poster owns focus, including that transition.
             if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
-                if (event.type == KeyEventType.KeyUp) onClick()
+                if (event.type == KeyEventType.KeyUp) { RemoteTrace.event("POSTER ${film.id} CLICK preview"); onClick() }
                 true
             } else false
-        }.clickable(onClick = onClick)) {
+        }.clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
         Image(painterResource(film.artwork), film.title, Modifier.fillMaxWidth().height(90.dp), contentScale = ContentScale.Crop)
         Text(film.title, Modifier.padding(9.dp), fontSize = 14.sp)
     }

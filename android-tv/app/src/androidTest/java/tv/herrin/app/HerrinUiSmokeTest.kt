@@ -49,6 +49,7 @@ class HerrinUiSmokeTest {
         }
     }
     private fun key(code: Int) {
+        RemoteTrace.event("TEST inject code=$code windowFocus=${compose.activity.hasWindowFocus()}")
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(code)
         compose.waitForIdle()
     }
@@ -59,6 +60,8 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_CENTER)
     }
     private fun capture(label: String) {
+        // PixelCopy synchronizes the rendered root before the device screenshot (not just semantics).
+        compose.onRoot().captureToImage()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         fun shell(command: String) {
             instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
@@ -110,6 +113,7 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("演示选集").assertExists()
         compose.onNodeWithText("第 6 集").assertExists()
+        compose.onNodeWithText("演示选集").assertIsDisplayed()
         capture("detail")
         activate("▶ 播放演示")
         compose.onNodeWithText("播放演示").assertExists()
