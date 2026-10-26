@@ -1,7 +1,7 @@
 name: HERRIN Android TV Emulator
 on:
   push:
-    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic']
+    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player']
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
