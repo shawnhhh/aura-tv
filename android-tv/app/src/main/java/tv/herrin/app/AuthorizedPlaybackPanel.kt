@@ -92,7 +92,10 @@ fun AuthorizedPlaybackPanel(media: PlaybackMedia, onPlayer: (ExoPlayer) -> Unit 
     BackHandler { onBack() }
     Box(Modifier.fillMaxSize().background(Color.Black).onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
-        if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
+        if (key.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (key.action == KeyEvent.ACTION_UP) onBack()
+            true
+        } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 when (key.keyCode) {
@@ -105,7 +108,17 @@ fun AuthorizedPlaybackPanel(media: PlaybackMedia, onPlayer: (ExoPlayer) -> Unit 
         } else false
     }.focusable()) {
         AndroidView(
-            factory = { ctx -> PlayerView(ctx).apply {
+            factory = { ctx -> object : PlayerView(ctx) {
+                // Native PlayerView otherwise consumes the first Back to hide its controller.
+                // HERRIN treats Back as leaving playback, independent of controller visibility.
+                override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                    if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                        if (event.action == KeyEvent.ACTION_UP) onBack()
+                        return true
+                    }
+                    return super.dispatchKeyEvent(event)
+                }
+            }.apply {
                 useController = true
                 controllerAutoShow = true
                 keepScreenOn = true

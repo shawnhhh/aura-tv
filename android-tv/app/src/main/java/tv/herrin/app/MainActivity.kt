@@ -99,6 +99,7 @@ private fun Herrin() {
     val view = LocalView.current
     val inputMethod = remember(context) { context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager }
     var searchInputFocused by remember { mutableStateOf(false) }
+    var configInputFocused by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
     val demoCatalog: CatalogSource = remember { DemoCatalog() }
     val demoFilms = remember { demoCatalog.titles() }
@@ -152,8 +153,9 @@ private fun Herrin() {
     fun details(f: Film) { RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen"); filmId = f.id; episode = 1; returnScreen = screen; screen = "detail" }
     // Hiding an IME window alone does not release the TV IME's served input connection.
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
-    LaunchedEffect(screen, focusId, searchInputFocused) {
-        if (screen == "search" && !searchInputFocused && focusId.startsWith("card-")) {
+    LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
+        if ((screen == "search" && !searchInputFocused && focusId.startsWith("card-")) ||
+            (screen == "settings" && !configInputFocused)) {
             keyboard?.hide()
             withFrameNanos { }
             inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
@@ -334,11 +336,11 @@ private fun Herrin() {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
                         item { Text("M2 · 授权目录与播放器", fontSize = 22.sp) }
                         item { OutlinedTextField(configUrlDraft, { configUrlDraft = it },
-                            Modifier.fillMaxWidth().testTag("config-catalog-url"),
+                            Modifier.fillMaxWidth().testTag("config-catalog-url").onFocusChanged { configInputFocused = it.isFocused },
                             label = { Text("获授权的 HTTPS 目录 JSON 地址（可留空）") },
                             singleLine = true) }
                         item { OutlinedTextField(mediaUrlDraft, { mediaUrlDraft = it },
-                            Modifier.fillMaxWidth().testTag("config-media-url"),
+                            Modifier.fillMaxWidth().testTag("config-media-url").onFocusChanged { configInputFocused = it.isFocused },
                             label = { Text("有权播放的 HTTPS 测试流（可留空）") },
                             singleLine = true) }
                         item { TvButton("保存媒体配置", reduced = reduceMotion) {

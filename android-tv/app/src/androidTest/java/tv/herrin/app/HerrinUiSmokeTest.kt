@@ -198,6 +198,9 @@ class HerrinUiSmokeTest {
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
         compose.onNodeWithTag("config-media-url").performScrollTo().assertTextContains("https://media.example.org/authorized.mp4")
+        // Leave the restored editor before Back, just as a remote user moves to a control.
+        compose.onNodeWithTag("screen-first").performScrollTo()
+        focus("screen-first")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("settings").assertIsFocused()
     }
