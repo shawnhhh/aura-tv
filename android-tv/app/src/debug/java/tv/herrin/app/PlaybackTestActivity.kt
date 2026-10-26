@@ -12,20 +12,41 @@ import androidx.media3.exoplayer.ExoPlayer
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
     val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
+    val cueTexts = java.util.concurrent.CopyOnWriteArrayList<String>()
+    // Retain a short history: the final empty cue event on ENDED must not erase
+    // evidence that Media3 really decoded a WebVTT caption earlier in the clip.
+    val cueHistory = java.util.concurrent.CopyOnWriteArrayList<String>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             var showing by remember { mutableStateOf(true) }
             MaterialTheme {
                 if (showing) AuthorizedPlaybackPanel(
-                    PlaybackMedia(intent.getStringExtra("fixture")!!),
+                    PlaybackMedia(
+                        intent.getStringExtra("fixture")!!,
+                        subtitles = intent.getStringExtra("subtitle")?.let {
+                            listOf(AuthorizedSubtitle("zh", "简体中文测试字幕", it))
+                        }.orEmpty()
+                    ),
                     onPlayer = {
                         player = it
                         it.addListener(object : androidx.media3.common.Player.Listener {
                             override fun onPlaybackStateChanged(state: Int) { states.add(state) }
+                            override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+                                cueTexts.clear()
+                                cueTexts.addAll(cueGroup.cues.mapNotNull { cue -> cue.text?.toString() })
+                                if (cueTexts.isNotEmpty()) {
+                                    cueHistory.addAll(cueTexts)
+                                    android.util.Log.i("HerrinCaptions",
+                                        "decodedWebVttCues=" + cueTexts.toList())
+                                }
+                            }
                         })
                     },
-                    onBack = { showing = false }
+                    onBack = {
+                        android.util.Log.i("HerrinPlayerBack", "debug onBack invoked showing=$showing")
+                        showing = false
+                    }
                 ) else Text("Playback released")
             }
         }

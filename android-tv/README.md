@@ -50,3 +50,10 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 - 原有 `episodes` 数字目录继续兼容，未配置播放线路仍显示演示占位。
 - 续播记录保存在本机并按目录地址、影片、集数和线路隔离；不会保存媒体 URL 或授权凭据。
 - Android TV 模拟器自动测试通过临时的、只供测试使用的 HTTPS 服务，验证 FFmpeg 原创 MP4 与 HLS 的真正网络解码出帧。具体 JSON 示例与适用范围见 [M2.2 文档](docs/M2_2_EPISODES_RESUME.md)。
+
+
+## M2.3 播放器（字幕、音轨、进度）
+
+通过遥控器操作播放器底部真正可聚焦的播放、±10 秒跳转、音轨和字幕控制。音轨与字幕从当前 Media3 实际解码轨道读取，不会凭空显示不存在的语言。
+
+授权片源可通过每条 `playback.episodes[].lines[]` 的 `subtitles` 可选字段提供 HTTPS WebVTT 字幕。详见 [M2.3 文档](docs/M2_3_PLAYER_CONTROLS.md)。在线播放不内置未经授权的流；TCL 实机测试仍待完成。
