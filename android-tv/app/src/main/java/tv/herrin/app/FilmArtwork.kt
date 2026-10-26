@@ -40,7 +40,10 @@ fun FilmArtwork(film: Film, modifier: Modifier) {
 }
 
 /** Small bounded private disk cache; no SDK tracker, cookies, or downloaded executable content. */
-class AuthorizedPosterCache(private val context: Context) {
+class AuthorizedPosterCache(
+    private val context: Context,
+    private val openConnection: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection }
+) {
     fun load(raw: String): Bitmap? {
         val url = AuthorizedUrls.https(raw) ?: return null
         val key = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
@@ -48,8 +51,12 @@ class AuthorizedPosterCache(private val context: Context) {
         val dir = File(context.cacheDir, "authorized-posters")
         val file = File(dir, "$key.img")
         val existing = file.takeIf { it.isFile && it.length() in 1..4_000_000 }
-        if (existing != null) return decode(existing.readBytes())
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+        if (existing != null) {
+            val bitmap = decode(existing.readBytes())
+            if (bitmap != null) return bitmap
+            existing.delete() // A damaged cached image must not permanently suppress network recovery.
+        }
+        val connection = openConnection(url).apply {
             connectTimeout = 7000
             readTimeout = 8000
             instanceFollowRedirects = false

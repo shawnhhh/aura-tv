@@ -18,6 +18,13 @@ class RemoteCatalogTest {
         assertNull(AuthorizedUrls.https("https://media.example.org/catalog.json#fragment"))
     }
 
+    @Test fun rejectsAmbiguousAuthorityAndAcceptsCdnQuery() {
+        listOf("https://example.org:0/file", "https://example.org:65536/file",
+            "https://user%40example.org/file", "https://user:pass@example.org/file",
+            "https://example.org%2f.evil/file").forEach { assertNull(it, AuthorizedUrls.https(it)) }
+        assertEquals("https://cdn.example.org:8443/file.mp4?token=signature",
+            AuthorizedUrls.https("https://cdn.example.org:8443/file.mp4?token=signature"))
+    }
     @Test fun parsesAuthorizedFilmMetadataAndKeepsFallbackArtwork() {
         val json = """
           {

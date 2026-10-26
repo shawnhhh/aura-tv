@@ -23,6 +23,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -40,8 +45,9 @@ import androidx.media3.ui.PlayerView
  */
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
-fun AuthorizedPlaybackPanel(media: PlaybackMedia, onBack: () -> Unit) {
+fun AuthorizedPlaybackPanel(media: PlaybackMedia, onPlayer: (ExoPlayer) -> Unit = {}, onBack: () -> Unit) {
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     var errorMessage by remember(media.uri) { mutableStateOf<String?>(null) }
     val player = remember(media.uri) {
         val http = DefaultHttpDataSource.Factory()
@@ -49,6 +55,10 @@ fun AuthorizedPlaybackPanel(media: PlaybackMedia, onBack: () -> Unit) {
             .setDefaultRequestProperties(media.headers)
         val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
         ExoPlayer.Builder(context).setMediaSourceFactory(factory).build().apply {
+            setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
+            setHandleAudioBecomingNoisy(true)
+            onPlayer(this)
             addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     errorMessage = "媒体播放失败：${error.errorCodeName}"
@@ -67,8 +77,12 @@ fun AuthorizedPlaybackPanel(media: PlaybackMedia, onBack: () -> Unit) {
             playWhenReady = true
         }
     }
-    DisposableEffect(player) {
-        onDispose { player.stop(); player.release() }
+    DisposableEffect(player, lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) player.pause()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); player.stop(); player.release() }
     }
     BackHandler { onBack() }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -77,9 +91,14 @@ fun AuthorizedPlaybackPanel(media: PlaybackMedia, onBack: () -> Unit) {
                 useController = true
                 controllerAutoShow = true
                 keepScreenOn = true
+                setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                setPadding(32, 32, 32, 32)
+                isFocusable = true
+                requestFocus()
                 this.player = player
             } },
             update = { it.player = player },
+            onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
         Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),

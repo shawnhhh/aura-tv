@@ -22,7 +22,8 @@ object AuthorizedUrls {
         return try {
             val uri = URI(text)
             if (uri.scheme?.lowercase() != "https" || uri.host.isNullOrBlank() ||
-                uri.userInfo != null || uri.fragment != null) null else uri.toASCIIString()
+                uri.rawUserInfo != null || uri.fragment != null ||
+                uri.port !in -1..65535 || uri.port == 0 || uri.rawAuthority.contains('%')) null else uri.toASCIIString()
         } catch (_: Exception) { null }
     }
 }
@@ -72,7 +73,11 @@ object CatalogJson {
     }
 }
 
-class RemoteCatalogRepository(private val context: Context) {
+class RemoteCatalogRepository(
+    private val context: Context,
+    private val openConnection: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
+    private val timeoutMs: Int = 8000
+) {
     suspend fun load(endpoint: String): CatalogLoadResult = withContext(Dispatchers.IO) {
         val safe = AuthorizedUrls.https(endpoint)
             ?: return@withContext CatalogLoadResult.Error("目录地址必须为合法 HTTPS 链接")
@@ -88,6 +93,8 @@ class RemoteCatalogRepository(private val context: Context) {
             temp.writeText(json, Charsets.UTF_8)
             if (!temp.renameTo(file)) { file.writeText(json, Charsets.UTF_8); temp.delete() }
             CatalogLoadResult.Ready(LoadedCatalog(films, fromCache = false))
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             // Cache is per-URL. Never show another user's catalog after switching endpoints.
             val cached = runCatching {
@@ -100,14 +107,17 @@ class RemoteCatalogRepository(private val context: Context) {
     }
 
     private fun fetch(url: String): String {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 8000
-            readTimeout = 8000
+        val connection = openConnection(url).apply {
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
         }
         try {
             if (connection.responseCode != 200) throw IOException("Bad catalog response")
+            val type = connection.contentType?.substringBefore(';')?.trim()?.lowercase()
+            if (type != "application/json" && type?.endsWith("+json") != true)
+                throw IOException("Expected JSON content type")
             val bytes = connection.inputStream.use { stream ->
                 val buffer = ByteArray(8192)
                 val data = java.io.ByteArrayOutputStream()

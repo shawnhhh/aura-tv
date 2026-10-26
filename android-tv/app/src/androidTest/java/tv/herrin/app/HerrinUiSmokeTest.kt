@@ -177,6 +177,28 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("nav-我的").assertIsFocused()
         capture("favorites-empty")
     }
+    @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
+        focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("config-media-url").performScrollTo().performTextReplacement("http://invalid.example/test.mp4")
+        key(KeyEvent.KEYCODE_BACK) // dismiss IME
+        compose.onNodeWithText("保存媒体配置").performScrollTo()
+        activate("保存媒体配置")
+        compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("config-media-url").performScrollTo().performTextReplacement("https://media.example.org/authorized.mp4")
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithText("保存媒体配置").performScrollTo()
+        activate("保存媒体配置")
+        compose.onNodeWithText("配置已保存；测试流只会在手动进入演示播放页时使用").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("重新同步目录").performScrollTo()
+        activate("重新同步目录")
+        compose.onNodeWithText("当前使用离线演示目录").assertExists()
+        capture("media-settings-saved")
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+        compose.onNodeWithTag("config-media-url").performScrollTo().assertTextContains("https://media.example.org/authorized.mp4")
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("settings").assertIsFocused()
+    }
     @Test fun settingsPersistReducedMotion() {
         focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         activate("减少动态效果：关")
