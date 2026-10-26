@@ -105,6 +105,11 @@ class PlaybackButtonsTest {
                 changed
             }
             inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            // The real remote Back callback already fired. This test owns Compose's
+            // virtual frame clock: advance pending recomposition so the screen's
+            // DisposableEffect can release Media3 before asserting release.
+            // Do not replace Back with performClick or remove the release assertion.
+            compose.waitForIdle()
             until("Back must release player after using UI") {
                 var released = false
                 scenario.onActivity { released = it.player.isReleased }
