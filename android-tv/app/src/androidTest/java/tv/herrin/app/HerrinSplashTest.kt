@@ -6,7 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import android.graphics.Bitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.input.key.Key
+import android.view.KeyEvent
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import org.junit.Assert.*
@@ -48,7 +48,8 @@ class HerrinSplashTest {
         var completed = false
         compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(false) { completed = true } } } }
         compose.onNodeWithText("跳过 · 确定").assertDoesNotExist()
-        compose.onNodeWithTag("splash").performKeyInput { keyDown(Key.Enter); keyUp(Key.Enter) }
+        compose.onNodeWithTag("splash").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.runOnIdle { assertTrue(completed) }
     }
     @Test fun reducedMotionCompletesWithoutWaitingForAnimation() {
