@@ -43,7 +43,10 @@ class PlaybackTestActivity : ComponentActivity() {
                             }
                         })
                     },
-                    onBack = { showing = false }
+                    onBack = {
+                        android.util.Log.i("HerrinPlayerBack", "debug onBack invoked showing=$showing")
+                        showing = false
+                    }
                 ) else Text("Playback released")
             }
         }
