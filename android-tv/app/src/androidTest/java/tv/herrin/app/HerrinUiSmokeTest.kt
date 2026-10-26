@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
+import kotlin.math.abs
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -117,6 +118,33 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("card-orbit").assertIsFocused()
         capture("remote-focused-poster")
+    }
+    @Test fun navMotionTrackGlidesToMeasuredTabAndReversesWithDpad() {
+        fun trackCenter(): Float {
+            val pixels = compose.onNodeWithTag("nav-motion-track").captureToImage().toPixelMap()
+            var weighted = 0f
+            var count = 0f
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                val color = pixels[x, y]
+                if (color.red > 0.58f && color.green > 0.63f && color.blue > 0.70f) {
+                    weighted += x
+                    count++
+                }
+            }
+            assertTrue("Focused navigation track must remain visible", count > 5)
+            return weighted / count
+        }
+        focus("nav-首页")
+        val homeX = trackCenter()
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("nav-电影").assertIsFocused()
+        val moviesX = trackCenter()
+        assertTrue("Track must physically move with focus", moviesX > homeX + 25f)
+        key(KeyEvent.KEYCODE_DPAD_LEFT)
+        compose.onNodeWithTag("nav-首页").assertIsFocused()
+        val returnedX = trackCenter()
+        assertTrue("Reversing D-pad direction must return to the same tab", abs(returnedX - homeX) < 12f)
+        capture("nav-motion-reversed")
     }
     @Test fun posterDetailBackRestoresFocus() {
         focus("card-tide")
