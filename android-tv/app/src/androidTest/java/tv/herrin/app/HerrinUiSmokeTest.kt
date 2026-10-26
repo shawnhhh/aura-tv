@@ -280,4 +280,21 @@ class HerrinUiSmokeTest {
         compose.onNodeWithText("保存媒体配置").assertExists()
         capture("settings-source-picker")
     }
+
+    @Test fun settingsOfferExplicitSourceBackupImportAndSafeDeleteFlow() {
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        val settings = compose.onNodeWithTag("settings-list")
+        settings.performScrollToNode(hasTestTag("source-export"))
+        compose.onNodeWithTag("source-export").assertIsDisplayed()
+        settings.performScrollToNode(hasTestTag("import-catalogs-json"))
+        compose.onNodeWithTag("import-catalogs-json").assertIsDisplayed()
+        settings.performScrollToNode(hasTestTag("source-import"))
+        compose.onNodeWithTag("source-import").assertIsDisplayed()
+        settings.performScrollToNode(hasTestTag("source-export"))
+        activate("复制目录列表 JSON")
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("目录 JSON 已复制到剪贴板；如地址包含访问令牌，请勿公开分享"))
+        compose.onNodeWithText("目录 JSON 已复制到剪贴板；如地址包含访问令牌，请勿公开分享").assertIsDisplayed()
+        capture("settings-source-backup")
+    }
 }

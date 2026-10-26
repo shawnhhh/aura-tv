@@ -66,4 +66,62 @@ class CatalogProfilesTest {
         assertTrue("demo-film" in prefs.ids())
         assertFalse("demo-film" in prefs.idsFor(one))
     }
+
+    @Test fun editingTheActiveSourceUpdatesItsUrlButRejectsDuplicateAndInvalidEdits() {
+        context.getSharedPreferences("herrin", 0).edit().clear().commit()
+        val store = CatalogProfiles(context)
+        val first = store.addAndActivate("片源 A", "https://catalog-a.example.org/feed") as SaveProfileResult.Saved
+        store.addAndActivate("片源 B", "https://catalog-b.example.org/feed")
+        assertTrue(store.activate(first.profile.id))
+
+        assertTrue(store.update(first.profile.id, "重命名 A", "http://invalid.example.org") is SaveProfileResult.Error)
+        assertTrue(store.update(first.profile.id, "重命名 A", "https://catalog-b.example.org/feed") is SaveProfileResult.Error)
+        assertEquals("片源 A", store.list().first().name)
+        assertEquals("https://catalog-a.example.org/feed", Preferences(context).catalogUrl)
+
+        assertTrue(store.update(first.profile.id, "重命名 A", "https://catalog-a2.example.org/feed") is SaveProfileResult.Saved)
+        assertEquals("重命名 A", store.list().first().name)
+        assertEquals("https://catalog-a2.example.org/feed", Preferences(context).catalogUrl)
+        assertEquals(first.profile.id, store.activeId())
+    }
+
+    @Test fun deletingActiveSourceFallsBackToDemoWithoutTouchingOtherSourcesOrFavorites() {
+        context.getSharedPreferences("herrin", 0).edit().clear().commit()
+        val store = CatalogProfiles(context)
+        val a = store.addAndActivate("A", "https://a.example.org/list") as SaveProfileResult.Saved
+        val b = store.addAndActivate("B", "https://b.example.org/list") as SaveProfileResult.Saved
+        Preferences(context).toggleFor("https://b.example.org/list", "film-b")
+        assertFalse(store.delete("missing"))
+        assertTrue(store.delete(b.profile.id))
+        assertNull(store.activeId())
+        assertEquals("", Preferences(context).catalogUrl)
+        assertEquals(listOf(a.profile.id), store.list().map { it.id })
+        assertTrue("film-b" in Preferences(context).idsFor("https://b.example.org/list"))
+    }
+
+    @Test fun jsonExportImportMergesWithoutOverwritingAndRejectsInvalidBatchesAtomically() {
+        context.getSharedPreferences("herrin", 0).edit().clear().commit()
+        val store = CatalogProfiles(context)
+        val original = store.addAndActivate("原始", "https://a.example.org/feed") as SaveProfileResult.Saved
+        val snapshot = store.exportJson()
+        assertEquals(1, CatalogProfileCodec.decode(snapshot).size)
+        val merge = CatalogProfileCodec.encode(listOf(
+            CatalogProfile("external1", "重复目录", "https://a.example.org/feed"),
+            CatalogProfile("external2", "新增目录", "https://b.example.org/feed")
+        ))
+        assertEquals(ImportProfilesResult.Imported(1, 1), store.importJson(merge))
+        assertEquals(2, store.list().size)
+        assertEquals(original.profile.id, store.activeId())
+        assertEquals("原始", store.list().first().name)
+        assertEquals(ImportProfilesResult.Imported(0, 1), store.importJson(snapshot))
+
+        val before = store.exportJson()
+        assertTrue(store.importJson("{bad json}") is ImportProfilesResult.Error)
+        assertEquals(before, store.exportJson())
+        val oversized = CatalogProfileCodec.encode((1..9).map {
+            CatalogProfile("p$it", "新增$it", "https://new$it.example.org/feed")
+        })
+        assertTrue(store.importJson(oversized) is ImportProfilesResult.Error)
+        assertEquals(before, store.exportJson())
+    }
 }
