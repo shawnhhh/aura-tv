@@ -12,7 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 
-/** Exercises the same panel as production using CI-generated synthetic H.264/AAC, never a film. */
+/** Exercises production panel with bundled original test-only H.264/AAC, never a film. */
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 @RunWith(AndroidJUnit4::class)
 class MediaDecoderTest {
