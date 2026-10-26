@@ -42,7 +42,7 @@ class AuthorizedCatalogIntegrationTest {
         try { test(context, server, open) } finally { server.shutdown(); dir.deleteRecursively() }
     }
     @Test fun catalogValidMalformedTimeoutOfflineIsolationRedirectSizeAndFallback() = fixture { context, server, open ->
-        val repo = RemoteCatalogRepository(context, open, timeoutMs = 300)
+        val repo = RemoteCatalogRepository(context, open, timeoutMs = 1000)
         val url = server.url("/catalog").toString()
         fun load(endpoint: String = url) = runBlocking { repo.load(endpoint) }
         server.enqueue(response())

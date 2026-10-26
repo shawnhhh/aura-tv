@@ -26,11 +26,30 @@ class MediaDecoderTest {
         fail(message)
     }
     private fun capture(name: String) {
-        inst.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence").close()
-        inst.uiAutomation.takeScreenshot().let { bitmap ->
-            val file = File(inst.targetContext.cacheDir, "$name.png")
-            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-            inst.uiAutomation.executeShellCommand("cp ${file.absolutePath} /data/local/tmp/herrin-test-evidence/$name.png").close()
+        fun shell(command: String) {
+            inst.uiAutomation.executeShellCommand(command).use { fd ->
+                java.io.FileInputStream(fd.fileDescriptor).use { it.readBytes() }
+            }
+        }
+        shell("mkdir -p /data/local/tmp/herrin-test-evidence")
+        shell("screencap -p /data/local/tmp/herrin-test-evidence/$name.png")
+    }
+    @Test fun invalidMediaShowsErrorAndBackReleases() {
+        val file = File(inst.targetContext.cacheDir, "invalid.mp4").apply { writeText("synthetic invalid format") }
+        val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java).putExtra("fixture", file.toURI().toString())
+        ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
+            await("Invalid media must raise a playback error") {
+                var failed = false
+                scenario.onActivity { failed = it.player.playerError != null }
+                failed
+            }
+            capture("player-format-error")
+            inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            await("Error screen Back must release") {
+                var released = false
+                scenario.onActivity { released = it.player.isReleased }
+                released
+            }
         }
     }
     @Test fun actualFramesRemotePauseBackgroundBackAndRepeatRelease() {
@@ -48,7 +67,7 @@ class MediaDecoderTest {
                 await("H.264 decoder must render frames") {
                     scenario.onActivity { activity ->
                         val p = activity.player
-                        if (states.lastOrNull() != p.playbackState) states.add(p.playbackState)
+                        states.clear(); states.addAll(activity.states)
                         rendered = p.videoDecoderCounters?.renderedOutputBufferCount ?: 0
                         initialized = p.videoDecoderCounters?.decoderInitCount ?: 0
                         playerError = p.playerError?.errorCodeName
@@ -56,6 +75,7 @@ class MediaDecoderTest {
                     playerError?.let { fail(it) }
                     rendered > 3 && initialized > 0
                 }
+                assertTrue(states.contains(Player.STATE_BUFFERING))
                 assertTrue(states.contains(Player.STATE_READY))
                 android.util.Log.i("HerrinDecoder", "cycle=$cycle states=$states decoderInit=$initialized rendered=$rendered")
                 capture("decoded-frames-$cycle")
@@ -73,6 +93,13 @@ class MediaDecoderTest {
                 scenario.moveToState(Lifecycle.State.CREATED)
                 scenario.moveToState(Lifecycle.State.RESUMED)
                 scenario.onActivity { assertFalse(it.player.playWhenReady) }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PLAY)
+                await("Synthetic clip must reach ENDED") {
+                    var ended = false
+                    scenario.onActivity { ended = it.player.playbackState == Player.STATE_ENDED }
+                    ended
+                }
+                android.util.Log.i("HerrinDecoder", "cycle=$cycle reached ENDED")
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                 await("Back must release the player") {
                     var released = false

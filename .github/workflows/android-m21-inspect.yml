@@ -1,0 +1,36 @@
+name: HERRIN M2.1 Evidence Summary
+on:
+  push:
+    branches: ['feat/herrin-m2-provider-player']
+    paths: ['.github/workflows/android-m21-inspect.yml']
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Emulator workflow run to inspect
+        required: true
+        default: '40282488927'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id || '40282488927' }}
+          path: evidence
+      - name: Print factual test and decoder evidence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for name in ['summary.json', 'REPORT.md', 'instrumentation.log', 'build.log']:
+              for p in Path('evidence').rglob(name):
+                  text = p.read_text(errors='replace')
+                  print(p, text[-15000:] if name in ['summary.json', 'REPORT.md'] else '\n'.join(l[:600] for l in text.splitlines() if re.search(r'e: |FAILED|failed|Exception|tests completed|Error', l))[-15000:])
+          for p in Path('evidence').rglob('logcat.txt'):
+              print('\n'.join(l[:700] for l in p.read_text(errors='replace').splitlines() if re.search(r'HerrinDecoder|HerrinCatalog|TestRunner.*failed|Assertion|FATAL EXCEPTION', l))[-18000:])
+          PY

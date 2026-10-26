@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 /** Debug-only host. Local test media is never accepted by production settings. */
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
+    val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -18,7 +19,12 @@ class PlaybackTestActivity : ComponentActivity() {
             MaterialTheme {
                 if (showing) AuthorizedPlaybackPanel(
                     PlaybackMedia(intent.getStringExtra("fixture")!!),
-                    onPlayer = { player = it },
+                    onPlayer = {
+                        player = it
+                        it.addListener(object : androidx.media3.common.Player.Listener {
+                            override fun onPlaybackStateChanged(state: Int) { states.add(state) }
+                        })
+                    },
                     onBack = { showing = false }
                 ) else Text("Playback released")
             }

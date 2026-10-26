@@ -28,7 +28,10 @@ for label, parts in chunks.items():
         dest.write_bytes(base64.b64decode(''.join(parts[i][1] for i in range(total))))
 summary = {'exit_code': int(sys.argv[1]), 'device': 'Android TV API 30 x86 / tv_1080p',
            'instrumentation': tests, 'fatal_exception_present': 'FATAL EXCEPTION' in log,
-           'physical_TCL_tested': False}
+           'physical_TCL_tested': False,
+           'decoder_evidence': re.findall(r'HerrinDecoder[^\n]*', log),
+           'catalog_evidence': re.findall(r'HerrinCatalog[^\n]*', log),
+           'remote_HTTPS_stream_tested': False}
 (out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',
          '| Instrumentation test | Result |', '| --- | --- |']
