@@ -79,15 +79,15 @@ class MainActivity : ComponentActivity() {
 /** Native focusable controls work with D-pad/Enter; no pointer-only actions. */
 @Composable
 private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
-                     selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit) {
+                     selected: Boolean = false, quiet: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.055f else 1f, tween(if (reduced) 0 else 160), label = "focus")
     val shape = RoundedCornerShape(24.dp)
     Box(modifier.graphicsLayer { scaleX = scale; scaleY = scale }
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .border(if (focused) 2.dp else 0.dp, if (focused) Color.White else Color.Transparent, shape)
-        .clip(shape).background(if (focused || selected) Color.White else Color(0x99343840))
-        .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 11.dp), contentAlignment = Alignment.Center) {
+        .clip(shape).background(if (focused || selected) Color.White else if (quiet) Color.Transparent else Color(0x99343840))
+        .clickable(onClick = onClick).padding(horizontal = if (quiet) 13.dp else 16.dp, vertical = if (quiet) 8.dp else 11.dp), contentAlignment = Alignment.Center) {
         Text(label, color = if (focused || selected) Color(0xFF111318) else Color.White, fontSize = 14.sp)
     }
 }
@@ -116,7 +116,7 @@ private fun Herrin() {
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val reduceMotion = reduced || systemReduced
     var splash by rememberSaveable { mutableStateOf(true) }
-    val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search")).associateWith { rememberLazyListState() }
+    val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val film = films.firstOrNull { it.id == filmId } ?: films.first()
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
@@ -190,7 +190,7 @@ private fun Herrin() {
                 }
                 // List states live outside screen composition and survive opening details.
                 val railState = railStates.getValue(if (isSearch) "search" else category)
-                Column(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 24.dp)) {
+                Column(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(Modifier.size(34.dp).border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
@@ -204,11 +204,11 @@ private fun Herrin() {
                             horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             listOf("首页", "电影", "剧集", "动漫", "直播", "我的").forEach { cat ->
                                 TvButton(cat, Modifier.testTag("nav-$cat").focusRequester(requester("nav-$cat")), reduceMotion, category == cat && !isSearch,
-                                    onFocus = { focusId = "nav-$cat" }) { category = cat; screen = "browse" }
+                                    quiet = true, onFocus = { focusId = "nav-$cat" }) { category = cat; screen = "browse" }
                             }
                         }
-                        TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, onFocus = { focusId = "search" }) { screen = "search" }
-                        TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion, onFocus = { focusId = "settings" }) { screen = "settings" }
+                        TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true, onFocus = { focusId = "search" }) { screen = "search" }
+                        TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion, quiet = true, onFocus = { focusId = "settings" }) { screen = "settings" }
                     }
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
@@ -230,15 +230,15 @@ private fun Herrin() {
                                 fontWeight = FontWeight.Medium, color = Color(0xFFE5EAF2))
                         }
                         Spacer(Modifier.height(11.dp))
-                        Text(film.title, fontSize = 48.sp, fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.sp, color = Color.White, lineHeight = 56.sp)
+                        Text(film.title, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.sp, color = Color.White, lineHeight = 49.sp)
                         Text(film.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
                             color = Color(0xFFE4E7EF))
                         Spacer(Modifier.height(12.dp))
                         Text("${film.year}   ·   ${film.category}   ·   ORIGINAL UI DEMO",
                             fontSize = 13.sp, color = Color(0xFFF3F5F8))
-                        Text(film.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 10.dp),
-                            fontSize = 14.sp, lineHeight = 22.sp, maxLines = 2,
+                        Text(film.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 6.dp),
+                            fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton("▶ 播放演示", selected = true, reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
@@ -246,13 +246,13 @@ private fun Herrin() {
                             }
                             TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.testTag("details").focusRequester(requester("details"))) { details(film) }
                         }
-                        Spacer(Modifier.height(30.dp))
+                        Spacer(Modifier.height(12.dp))
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "我的" -> "我的收藏"; else -> "精选${category} · 演示片库" },
+                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "我的" -> "我的收藏"; category == "首页" -> "继续观看"; else -> "精选${category} · 演示片库" },
                             fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
-                        Text("DISCOVER   /   HERRIN", fontSize = 11.sp, letterSpacing = 1.5.sp,
+                        Text(if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN", fontSize = 11.sp, letterSpacing = 1.5.sp,
                             color = Color(0xFFB6BBC5))
                     }
                     Spacer(Modifier.height(6.dp))
@@ -268,7 +268,8 @@ private fun Herrin() {
                                 }
                             }
                             Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) })
+                                onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) },
+                                progress = if (!isSearch && category == "首页") 0.34f else null)
                         }
                     }
                 }
