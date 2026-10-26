@@ -181,12 +181,16 @@ class HerrinUiSmokeTest {
         focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("config-media-url").performScrollTo().performTextReplacement("http://invalid.example/test.mp4")
         key(KeyEvent.KEYCODE_BACK) // dismiss IME
+        // Android TV may still route CENTER to the closing IME window for a few frames.
+        // Await the real OS window hand-off, then inject an actual D-pad CENTER (no performClick).
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
         compose.onNodeWithText("保存媒体配置").performScrollTo()
         activate("保存媒体配置")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存失败：链接必须是合法 HTTPS 地址"))
         compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").assertIsDisplayed()
         compose.onNodeWithTag("config-media-url").performScrollTo().performTextReplacement("https://media.example.org/authorized.mp4")
         key(KeyEvent.KEYCODE_BACK)
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
         compose.onNodeWithText("保存媒体配置").performScrollTo()
         activate("保存媒体配置")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("配置已保存；测试流只会在手动进入演示播放页时使用"))
