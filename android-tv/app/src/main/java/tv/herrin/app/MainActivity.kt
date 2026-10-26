@@ -55,14 +55,18 @@ internal object RemoteTrace {
 }
 
 class MainActivity : ComponentActivity() {
-    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-        RemoteTrace.event("ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}")
-        val handled = super.dispatchKeyEvent(event)
-        RemoteTrace.event("ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled")
-        return handled
-    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Observe through the public Window.Callback contract without calling AndroidX restricted APIs.
+        val originalCallback = window.callback
+        window.callback = object : android.view.Window.Callback by originalCallback {
+            override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+                RemoteTrace.event("ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}")
+                val handled = originalCallback.dispatchKeyEvent(event)
+                RemoteTrace.event("ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled")
+                return handled
+            }
+        }
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
