@@ -2,6 +2,10 @@ package tv.herrin.app
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import android.view.KeyEvent
+import androidx.media3.session.MediaSession
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,14 +82,28 @@ fun AuthorizedPlaybackPanel(media: PlaybackMedia, onPlayer: (ExoPlayer) -> Unit 
         }
     }
     DisposableEffect(player, lifecycle) {
+        val session = MediaSession.Builder(context, player).build()
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) player.pause()
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); player.stop(); player.release() }
+        onDispose { lifecycle.removeObserver(observer); session.release(); player.stop(); player.release() }
     }
     BackHandler { onBack() }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(Color.Black).onPreviewKeyEvent { event ->
+        val key = event.nativeKeyEvent
+        if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                when (key.keyCode) {
+                    KeyEvent.KEYCODE_MEDIA_PLAY -> player.play()
+                    KeyEvent.KEYCODE_MEDIA_PAUSE -> player.pause()
+                    else -> if (player.playWhenReady) player.pause() else player.play()
+                }
+            }
+            true
+        } else false
+    }.focusable()) {
         AndroidView(
             factory = { ctx -> PlayerView(ctx).apply {
                 useController = true

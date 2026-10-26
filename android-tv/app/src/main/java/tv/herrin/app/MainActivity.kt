@@ -327,7 +327,7 @@ private fun Herrin() {
                 val testMedia = if (screen == "player") AuthorizedUrls.https(prefs.testMediaUrl) else null
                 if (testMedia != null) {
                     AuthorizedPlaybackPanel(PlaybackMedia(testMedia)) { screen = "detail" }
-                } else LazyColumn(Modifier.fillMaxSize().background(Color(0xAA080B10)), contentPadding = PaddingValues(48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize().background(Color(0xAA080B10)), contentPadding = PaddingValues(48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     if (screen == "settings") {
                         item { Text("设置", fontSize = 36.sp) }

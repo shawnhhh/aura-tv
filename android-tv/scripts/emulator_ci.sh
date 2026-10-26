@@ -14,18 +14,8 @@ collect() {
     adb pull /sdcard/herrin-final.xml build/emulator-evidence/final.xml >/dev/null 2>&1 || true
     adb logcat -d -s HerrinRemote:D > build/emulator-evidence/remote-trace.log 2>&1 || true
     cat build/emulator-evidence/remote-trace.log
+    # Full PNGs remain in artifacts; keep logs bounded so connector log retrieval is reliable.
     python3 scripts/emulator_report.py "$code" || true
-    # Small genuine PNG previews in logs allow review even if artifact download access is restricted.
-    python3 - <<'PY'
-import base64
-from pathlib import Path
-for name in ['home.png', 'test-evidence/splash-HERRIN.png', 'test-evidence/splash-H.png', 'test-evidence/search.png', 'test-evidence/detail.png', 'test-evidence/search-detail.png', 'test-evidence/favorites-persisted.png', 'test-evidence/remote-focused-poster.png']:
-    p = Path('build/emulator-evidence') / name
-    if p.is_file():
-        print('HERRIN_PNG ' + name + ' ' + base64.b64encode(p.read_bytes()).decode())
-for p in Path('build/emulator-evidence/test-evidence').glob('FAIL-*-semantics.txt'):
-    print('HERRIN_FAILURE_TREE', p.name, p.read_text()[:30000])
-PY
     exit "$code"
 }
 trap collect EXIT

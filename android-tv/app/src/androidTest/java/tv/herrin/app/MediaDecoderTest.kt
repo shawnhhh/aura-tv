@@ -80,13 +80,21 @@ class MediaDecoderTest {
                 android.util.Log.i("HerrinDecoder", "cycle=$cycle states=$states decoderInit=$initialized rendered=$rendered")
                 capture("decoded-frames-$cycle")
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PAUSE)
-                scenario.onActivity { assertFalse(it.player.playWhenReady) }
+                await("Remote pause must update playWhenReady") {
+                    var paused = false
+                    scenario.onActivity { paused = !it.player.playWhenReady }
+                    paused
+                }
                 var pausedAt = 0L
                 scenario.onActivity { pausedAt = it.player.currentPosition }
                 Thread.sleep(250)
                 scenario.onActivity { assertTrue(kotlin.math.abs(it.player.currentPosition - pausedAt) < 100) }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PLAY)
-                scenario.onActivity { assertTrue(it.player.playWhenReady) }
+                await("Remote play must update playWhenReady") {
+                    var playing = false
+                    scenario.onActivity { playing = it.player.playWhenReady }
+                    playing
+                }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
                 capture("player-remote-focus-$cycle")
                 // Activity STOP is the lifecycle transition caused by Home/background.
