@@ -38,7 +38,7 @@ import androidx.media3.ui.PlayerView
  * M2: real Android TV playback for an explicitly configured, licensed HTTPS test stream.
  * Does not guess episode URLs or access third-party provider streams.
  */
-@OptIn(UnstableApi::class)
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
 fun AuthorizedPlaybackPanel(media: PlaybackMedia, onBack: () -> Unit) {
     val context = LocalContext.current
