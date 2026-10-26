@@ -6,10 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import android.view.KeyEvent
@@ -72,9 +68,6 @@ fun AuthorizedPlaybackPanel(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var errorMessage by remember(media.uri) { mutableStateOf<String?>(null) }
     var uiEpoch by remember(media.uri) { mutableIntStateOf(0) }
-    var shownPosition by remember(media.uri) { mutableLongStateOf(0L) }
-    var shownDuration by remember(media.uri) { mutableLongStateOf(0L) }
-    val initialControl = remember { FocusRequester() }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val player = remember(media.uri, media.subtitles) {
         val http = DefaultHttpDataSource.Factory()
@@ -123,18 +116,12 @@ fun AuthorizedPlaybackPanel(
             player.playbackState == Player.STATE_ENDED)
     }
     LaunchedEffect(player) {
-        var tick = 0
         while (true) {
-            delay(500)
-            shownPosition = player.currentPosition.coerceAtLeast(0L)
-            shownDuration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
-            tick++
-            if (tick % 5 == 0 &&
-                (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED))
+            delay(2500)
+            if (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED)
                 reportProgress()
         }
     }
-    LaunchedEffect(player) { initialControl.requestFocus() }
     DisposableEffect(player, lifecycle) {
         val session = MediaSession.Builder(context, player).build()
         val observer = LifecycleEventObserver { _, event ->
@@ -172,7 +159,7 @@ fun AuthorizedPlaybackPanel(
             }
             true
         } else false
-    }) {
+    }.focusable()) {
         AndroidView(
             factory = { ctx -> object : PlayerView(ctx) {
                 // Native PlayerView otherwise consumes the first Back to hide its controller.
@@ -193,14 +180,13 @@ fun AuthorizedPlaybackPanel(
                     return super.dispatchKeyEvent(event)
                 }
             }.apply {
-                // One TV focus system: native view renders video and subtitles only;
-                // the Compose row below provides seek, play, tracks and a progress timeline.
-                useController = false
-                isFocusable = false
-                descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                useController = true
+                controllerAutoShow = true
                 keepScreenOn = true
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 setPadding(32, 32, 32, 32)
+                isFocusable = true
+                requestFocus()
                 this.player = player
             } },
             update = { it.player = player },
@@ -213,49 +199,36 @@ fun AuthorizedPlaybackPanel(
             Text("仅播放你有权使用的媒体 · 播放源按所选影片/线路确定", color = Color.White)
             if (errorMessage != null) Text(errorMessage!!, color = Color(0xFFFFD0D0))
         }
-        // One visible, original HERRIN transport surface; no competing native overlay.
+        // Native Compose controls remain focusable using D-pad CENTER (not pointer-only).
+        // Media3's PlayerView still handles its own seek bar and playback HUD.
         val _observeTrackChanges = uiEpoch
         val audios = PlaybackTransport.options(player, C.TRACK_TYPE_AUDIO)
         val captions = PlaybackTransport.options(player, C.TRACK_TYPE_TEXT)
-        val percent = if (shownDuration > 0L)
-            (shownPosition.toDouble() / shownDuration.toDouble()).toFloat().coerceIn(0f, 1f)
-            else 0f
-        fun elapsed(ms: Long): String {
-            val seconds = (ms / 1000L).coerceAtLeast(0L)
-            return "%02d:%02d".format(seconds / 60L, seconds % 60L)
-        }
-        Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.80f).padding(bottom = 36.dp)
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 38.dp)
                 .background(Color(0xE9151820), RoundedCornerShape(20.dp))
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(elapsed(shownPosition), color = Color.White)
-                Text(elapsed(shownDuration), color = Color(0xFFD2D5DE))
+            Button(onClick = { PlaybackTransport.seekBy(player, -10_000L) },
+                modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
+            Button(onClick = { if (player.playWhenReady) player.pause() else player.play() },
+                modifier = Modifier.testTag("transport-toggle")) {
+                Text(if (player.playWhenReady) "暂停" else "播放")
             }
-            Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0xFF434857))) {
-                Box(Modifier.fillMaxWidth(percent).fillMaxHeight().background(Color.White))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { PlaybackTransport.seekBy(player, -10_000L) },
-                    modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
-                Button(onClick = { if (player.playWhenReady) player.pause() else player.play() },
-                    modifier = Modifier.focusRequester(initialControl).testTag("transport-toggle")) {
-                    Text(if (player.playWhenReady) "暂停" else "播放")
-                }
-                Button(onClick = { PlaybackTransport.seekBy(player, 10_000L) },
-                    modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
-                Button(
-                    onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
-                    enabled = audios.size > 1, modifier = Modifier.testTag("transport-audio")
-                ) { Text("音轨: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)) }
-                Button(
-                    onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
-                    enabled = captions.isNotEmpty(), modifier = Modifier.testTag("transport-subtitle")
-                ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
-            }
+            Button(onClick = { PlaybackTransport.seekBy(player, 10_000L) },
+                modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
+            Button(
+                onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
+                enabled = audios.size > 1,
+                modifier = Modifier.testTag("transport-audio")
+            ) { Text("音轨: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)) }
+            Button(
+                onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
+                enabled = captions.isNotEmpty(),
+                modifier = Modifier.testTag("transport-subtitle")
+            ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
         }
     }
 }
