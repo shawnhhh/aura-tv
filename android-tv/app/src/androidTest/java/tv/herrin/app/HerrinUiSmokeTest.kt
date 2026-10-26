@@ -328,4 +328,14 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("search-filter-status").assertTextContains("全部 · 6 个结果")
         capture("search-filter-sort")
     }
+
+    @Test fun diagnosticsNeverTreatRefreshHintAsMeasuredFps() {
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("diagnostic-refresh"))
+        activate("查看设备状态")
+        compose.onNodeWithTag("device-status").assertTextContains("提示值不等于实际帧率")
+        compose.onNodeWithTag("poster-cache-clear").assertExists()
+        capture("settings-refresh-diagnostics")
+    }
 }

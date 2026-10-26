@@ -219,6 +219,16 @@ private fun Herrin() {
     val demoCatalog: CatalogSource = remember { DemoCatalog() }
     val demoFilms = remember { demoCatalog.titles() }
     val providerRepo = remember(context) { RemoteCatalogRepository(context) }
+    val posterCache = remember(context) { PosterCacheMaintenance(context) }
+    var deviceStatus by remember { mutableStateOf("选择「查看设备状态」读取当前输出刷新率") }
+    var posterCacheStatus by remember { mutableStateOf("海报缓存不会影响收藏或观看历史") }
+    var confirmCacheClear by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmCacheClear) {
+        if (confirmCacheClear) {
+            delay(15_000)
+            confirmCacheClear = false
+        }
+    }
     val liveRepo = remember { RemoteLivePlaylistRepository() }
     var liveChannels by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
     var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
@@ -258,6 +268,18 @@ private fun Herrin() {
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
     var catalogRefresh by remember { mutableIntStateOf(0) }
     val films = providerFilms ?: demoFilms
+    fun readDeviceStatus(): String {
+        val activity = context as? ComponentActivity ?: return "当前环境不支持读取屏幕刷新率"
+        @Suppress("DEPRECATION")
+        val display = activity.windowManager.defaultDisplay
+        val mode = display.mode
+        val current = UiDisplayMode(mode.physicalWidth, mode.physicalHeight, mode.refreshRate)
+        val supported = display.supportedModes.map {
+            UiDisplayMode(it.physicalWidth, it.physicalHeight, it.refreshRate)
+        }
+        return deviceStatusSummary(current, preferredUiRefreshRate(current, supported),
+            profileStore.list().size, prefs.livePlaylistUrl.isNotBlank())
+    }
     LaunchedEffect(catalogRefresh) {
         val endpoint = prefs.catalogUrl
         // Never leave the previous source's films visible while the next URL loads.
@@ -738,6 +760,33 @@ private fun Herrin() {
                         } }
                         item { TvButton("重新同步目录", reduced = reduceMotion,
                             onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
+                        item { Text("设备状态与维护", fontSize = 21.sp) }
+                        item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TvButton("查看设备状态", modifier = Modifier.testTag("diagnostic-refresh"),
+                                reduced = reduceMotion) { deviceStatus = readDeviceStatus() }
+                            TvButton("复制诊断摘要", modifier = Modifier.testTag("diagnostic-copy"),
+                                reduced = reduceMotion) {
+                                deviceStatus = readDeviceStatus()
+                                val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                manager.setPrimaryClip(ClipData.newPlainText("HERRIN 设备诊断", deviceStatus))
+                                configStatus = "诊断摘要已复制；不包含目录地址或播放链接"
+                            }
+                        } }
+                        item { Text(deviceStatus, modifier = Modifier.testTag("device-status"),
+                            color = Color(0xFFCFD7E4), lineHeight = 22.sp) }
+                        item { TvButton(if (confirmCacheClear) "再次确定清理海报缓存" else "清理海报缓存",
+                            modifier = Modifier.testTag("poster-cache-clear"), reduced = reduceMotion) {
+                            if (!confirmCacheClear) {
+                                confirmCacheClear = true
+                                posterCacheStatus = "请在 15 秒内再次确定；只清理授权海报缓存文件"
+                            } else {
+                                val cleared = posterCache.clearFiles()
+                                confirmCacheClear = false
+                                posterCacheStatus = "已清理 $cleared 个缓存文件；收藏、播放历史和目录均已保留"
+                            }
+                        } }
+                        item { Text(posterCacheStatus, modifier = Modifier.testTag("poster-cache-status"),
+                            color = Color(0xFFBDC8D6)) }
                         item { Text(providerStatus, fontSize = 15.sp, color = Color(0xFFCFD7E4)) }
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
