@@ -185,8 +185,10 @@ fun AuthorizedPlaybackPanel(
                 keepScreenOn = true
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 setPadding(32, 32, 32, 32)
-                isFocusable = true
-                requestFocus()
+                // AndroidView must never steal the TV focus away from Compose transport buttons.
+                // The outer Compose focus target handles remote transport keys; the native
+                // PlayerView controller remains available without grabbing initial focus.
+                isFocusable = false
                 this.player = player
             } },
             update = { it.player = player },
