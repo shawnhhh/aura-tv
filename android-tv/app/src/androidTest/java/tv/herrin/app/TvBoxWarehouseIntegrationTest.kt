@@ -5,9 +5,45 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
+import androidx.test.platform.app.InstrumentationRegistry
 
 /** HTTP tests use only a local fixture server; no third-party TVBox service is contacted. */
 class TvBoxWarehouseIntegrationTest {
+    @Test fun fallsBackToPreviouslyValidatedJsonWhenSourceBecomesImage() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val address = server.url("/tv").toString()
+            val repo = TvBoxConfigRepository(InstrumentationRegistry.getInstrumentation().targetContext)
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"sites":[{"name":"备用演示"}],"lives":[]}"""))
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/x-ms-bmp")
+                .setBody("not-a-json-image"))
+            val first = repo.load(address, allowHttp = true) as TvBoxConfig.Single
+            assertFalse(first.fromCache)
+            val second = repo.load(address, allowHttp = true) as TvBoxConfig.Single
+            assertTrue(second.fromCache)
+            assertEquals("备用演示", second.sites.single().name)
+            assertEquals(2, server.requestCount)
+        }
+    }
+
+    @Test fun manualJsonImportUnlocksOfflineFallbackButNeverBypassesHttpConsent() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val address = server.url("/expired-source").toString()
+            val repo = TvBoxConfigRepository(InstrumentationRegistry.getInstrumentation().targetContext)
+            val json = """{"sites":[],"lives":[{"name":"家庭直播","channels":[{"name":"测试台","urls":["https://example.org/test.m3u8"]}]}]}"""
+            assertTrue(repo.importJson(json, address, allowHttp = false) is TvBoxConfig.Error)
+            assertEquals(0, server.requestCount)
+            assertTrue(repo.importJson(json, address, allowHttp = true) is TvBoxConfig.Single)
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/x-ms-bmp")
+                .setBody("not-a-json-image"))
+            assertTrue(repo.load(address, allowHttp = false) is TvBoxConfig.Error)
+            val cached = repo.load(address, allowHttp = true) as TvBoxConfig.Single
+            assertTrue(cached.fromCache)
+            assertEquals("测试台", cached.lives.single().channels.single().name)
+        }
+    }
     @Test fun explicitlyAuthorizedHttpNavigatesMultiwarehouseToSingle() = runBlocking {
         MockWebServer().use { server ->
             server.start()

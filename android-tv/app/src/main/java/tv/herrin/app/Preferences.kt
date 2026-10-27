@@ -44,6 +44,10 @@ class Preferences(context: Context) : FavoritesStore {
     var tvBoxWarehouseUrl: String
         get() = prefs.getString("tvbox_warehouse_url", "") ?: ""
         set(value) { prefs.edit().putString("tvbox_warehouse_url", value).apply() }
+    /** Set only after a manual import: show already-approved offline channels on launch. */
+    var tvBoxLiveActive: Boolean
+        get() = prefs.getBoolean("tvbox_live_active", false)
+        set(value) { prefs.edit().putBoolean("tvbox_live_active", value).apply() }
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
