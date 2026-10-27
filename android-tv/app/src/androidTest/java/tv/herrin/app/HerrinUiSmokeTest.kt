@@ -20,6 +20,11 @@ import org.junit.rules.ExternalResource
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import org.junit.runner.RunWith
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
+import javax.net.ssl.HttpsURLConnection
 
 /** Real Activity + OS key injection. Focus setup is explicit, never inferred from timing. */
 @RunWith(AndroidJUnit4::class)
@@ -357,5 +362,85 @@ class HerrinUiSmokeTest {
         settings.performScrollToNode(hasTestTag("epg-save"))
         compose.onNodeWithTag("epg-save").assertIsDisplayed()
         capture("settings-xmltv-guide")
+    }
+
+    @Test fun liveGroupsAndFavoritesComposeWithRealDpadAndManualRefresh() {
+        val certificate = HeldCertificate.Builder().commonName("localhost")
+            .addSubjectAlternativeName("localhost").build()
+        val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
+        val clientTls = HandshakeCertificates.Builder()
+            .addTrustedCertificate(certificate.certificate).build()
+        val previousTls = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val server = MockWebServer().apply { useHttps(serverTls.sslSocketFactory(), false); start() }
+        val playlist = """#EXTM3U
+            #EXTINF:-1 group-title="新闻",新闻一
+            https://licensed.example.org/news1.m3u8
+            #EXTINF:-1 group-title="体育",体育一
+            https://licensed.example.org/sports.m3u8
+            #EXTINF:-1 group-title="新闻",新闻二
+            https://licensed.example.org/news2.m3u8
+            #EXTINF:-1,独立台
+            https://licensed.example.org/other.m3u8
+        """.trimIndent()
+        fun enqueue() = server.enqueue(MockResponse().setHeader("Content-Type", "audio/x-mpegurl")
+            .setBody(playlist))
+        try {
+            HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.sslSocketFactory())
+            enqueue()
+            focus("settings")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val settings = compose.onNodeWithTag("settings-list")
+            settings.performScrollToNode(hasTestTag("config-live-url"))
+            compose.onNodeWithTag("config-live-url")
+                .performTextReplacement(server.url("/channels.m3u").toString())
+            key(KeyEvent.KEYCODE_BACK)
+            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+            settings.performScrollToNode(hasTestTag("live-save"))
+            focus("live-save")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            settings.performScrollToNode(hasText("直播列表配置已保存；只读取你主动提供的频道"))
+            compose.onNodeWithText("直播列表配置已保存；只读取你主动提供的频道").assertExists()
+            settings.performScrollToNode(hasTestTag("screen-first"))
+            focus("screen-first")
+            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+            key(KeyEvent.KEYCODE_BACK)
+            focus("nav-直播")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("live-filter-status")
+                    .assertTextContains("4 / 4") }.isSuccess
+            }
+            compose.onNodeWithTag("live-group-rail").assertExists()
+            focus("live-group-1") // 体育
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4")
+            focus("live-group-all")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("4 / 4")
+            focus("live-favorite-0") // Only 新闻一 is favorited.
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            focus("live-favorites-filter")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4")
+            focus("live-group-1") // Sports + favorites has no matches.
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("0 / 4")
+            compose.onNodeWithText("当前分组暂无收藏频道，可切换「全部频道」或其他分组")
+                .assertExists()
+            focus("live-group-all")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            enqueue()
+            focus("live-refresh")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("live-status")
+                    .assertTextContains("已加载 4 个授权直播频道") }.isSuccess
+            }
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4")
+            capture("live-groups-dpad-favorites-refresh")
+        } finally {
+            HttpsURLConnection.setDefaultSSLSocketFactory(previousTls)
+            server.shutdown()
+        }
     }
 }
