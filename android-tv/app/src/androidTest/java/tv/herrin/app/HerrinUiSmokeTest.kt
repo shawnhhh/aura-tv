@@ -387,23 +387,14 @@ class HerrinUiSmokeTest {
         try {
             HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.sslSocketFactory())
             enqueue()
-            focus("settings")
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            val settings = compose.onNodeWithTag("settings-list")
-            settings.performScrollToNode(hasTestTag("config-live-url"))
-            compose.onNodeWithTag("config-live-url")
-                .performTextReplacement(server.url("/channels.m3u").toString())
-            key(KeyEvent.KEYCODE_BACK)
-            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
-            settings.performScrollToNode(hasTestTag("live-save"))
-            focus("live-save")
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            settings.performScrollToNode(hasText("直播列表配置已保存；只读取你主动提供的频道"))
-            compose.onNodeWithText("直播列表配置已保存；只读取你主动提供的频道").assertExists()
-            settings.performScrollToNode(hasTestTag("screen-first"))
-            focus("screen-first")
-            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
-            key(KeyEvent.KEYCODE_BACK)
+            // Settings/IME D-pad handoff is covered separately. Start this
+            // test with a saved authorized URL so its subject is group focus,
+            // favorites and refresh, never TV keyboard timing.
+            Preferences(compose.activity).livePlaylistUrl = server.url("/channels.m3u").toString()
+            compose.activityRule.scenario.recreate()
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("nav-直播").assertExists() }.isSuccess
+            }
             focus("nav-直播")
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitUntil(10000) {
