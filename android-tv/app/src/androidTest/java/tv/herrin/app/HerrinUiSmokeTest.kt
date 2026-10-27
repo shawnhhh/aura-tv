@@ -308,6 +308,7 @@ class HerrinUiSmokeTest {
             // button's accessible click directly for this keyboard handoff only.
             focus("tvbox-warehouse-load")
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
+            settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(5000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("只接受 HTTPS") }.isSuccess
             }
@@ -315,13 +316,16 @@ class HerrinUiSmokeTest {
             settings.performScrollToNode(hasTestTag("tvbox-http-consent"))
             focus("tvbox-http-consent")
             compose.onNodeWithTag("tvbox-http-consent").performClick()
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             focus("tvbox-warehouse-load")
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
+            settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库") }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("tvbox-entry-0"))
             focus("tvbox-entry-0"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓") }.isSuccess
             }
