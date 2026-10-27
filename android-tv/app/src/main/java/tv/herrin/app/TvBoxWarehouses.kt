@@ -18,7 +18,8 @@ import java.security.MessageDigest
 internal data class TvBoxWarehouse(val name: String, val url: String)
 internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null,
                               val key: String = "", val spiderApi: String? = null,
-                              val extension: String = "", val jar: String? = null)
+                              val extension: String = "", val jar: String? = null,
+                              val scriptApi: String? = null)
 internal data class TvBoxLive(val name: String, val playlistUrl: String?,
                               val sourceUrl: String? = null, val channels: List<LiveChannel> = emptyList())
 
@@ -98,12 +99,21 @@ internal object TvBoxConfigParser {
                     if (title.isBlank()) null else {
                         val api = site.optString("api").trim()
                         val direct = TvBoxUrl.normalize(api, allowHttp = true)
+                        // TVBox drpy/JS rules are script definitions, not JSON CMS endpoints.
+                        // Fetching them with ac=detail mislabels a script as a playable catalog.
+                        val script = direct?.takeIf { address ->
+                            runCatching { URI(address).path.lowercase().let {
+                                it.endsWith(".js") || it.endsWith(".py")
+                            } }.getOrDefault(false)
+                        }
+                        val cms = direct?.takeUnless { script != null }
                         val extension = site.opt("ext")?.let { if (it is String) it else it.toString() }.orEmpty()
-                        TvBoxSite(title, api.isNotBlank() && direct == null, direct,
+                        TvBoxSite(title, api.isNotBlank() && cms == null, cms,
                             key = site.optString("key").take(90).ifBlank { "site_$i" },
                             spiderApi = api.takeIf { it.startsWith("csp_") && it.matches(Regex("csp_[A-Za-z0-9_]{1,64}")) },
                             extension = extension.take(64_000),
-                            jar = site.optString("jar").takeIf { it.isNotBlank() })
+                            jar = site.optString("jar").takeIf { it.isNotBlank() },
+                            scriptApi = script)
                     }
                 }
             }

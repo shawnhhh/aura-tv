@@ -45,6 +45,19 @@ class TvBoxWarehousesTest {
         assertNull(config.lives[2].playlistUrl)
     }
 
+    @Test fun drpyJavascriptRulesAreNotMisidentifiedAsCmsCatalogs() {
+        val config = TvBoxConfigParser.parse("""{"sites":[
+            {"name":"JS站","api":"https://example.org/drpy2.min.js"},
+            {"name":"CMS站","api":"http://example.org/api.php"},
+            {"name":"爬虫站","api":"csp_Guard"}
+        ]}""", "https://example.org") as TvBoxConfig.Single
+        assertEquals("https://example.org/drpy2.min.js", config.sites[0].scriptApi)
+        assertNull(config.sites[0].apiUrl)
+        assertTrue(config.sites[0].needsAdapter)
+        assertEquals("http://example.org/api.php", config.sites[1].apiUrl)
+        assertEquals("csp_Guard", config.sites[2].spiderApi)
+    }
+
     @Test fun recognizesHerrinCatalogButDoesNotConfuseOtherFormats() {
         val own = TvBoxConfigParser.parse("""{"version":1,"items":[{},{}]}""", "https://mine.example.org/catalog")
         assertEquals(2, (own as TvBoxConfig.HerrinCatalog).count)

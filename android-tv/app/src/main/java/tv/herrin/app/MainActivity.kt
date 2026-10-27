@@ -581,7 +581,7 @@ private fun Herrin() {
                 focusId = target
                 screen = "browse"
             }
-            "sites" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
+            "sites" -> { settingsTvBoxOnly = true; focusId = "settings"; screen = "settings" }
             else -> { category = "首页"; focusId = "nav-首页" }
         }
     }
@@ -654,7 +654,7 @@ private fun Herrin() {
                 LazyColumn(Modifier.fillMaxSize().testTag("site-list"),
                     contentPadding = PaddingValues(horizontal = 44.dp, vertical = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                    item { TvButton("‹ 返回首页", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
+                    item { TvButton("‹ 返回设置", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     item { Text("影视站点", fontSize = 34.sp, fontWeight = FontWeight.Bold) }
                     item { Text("从已添加的影视源选择站点。标准 CMS 自动读取；Java Spider 执行第三方代码前需要你明确授权。", color = Color(0xFFBDC8D6)) }
                     item { Text(tvBoxStatus, Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
@@ -685,6 +685,7 @@ private fun Herrin() {
                         TvButton("${site.name}  ·  ${when {
                             site.apiUrl != null -> "CMS"
                             site.spiderApi != null -> "Spider"
+                            site.scriptApi != null -> "JS 规则"
                             else -> "尚不兼容"
                         }}", Modifier.testTag("site-select-$index"), reduceMotion) {
                             when {
@@ -721,6 +722,7 @@ private fun Herrin() {
                                         }
                                     }
                                 }
+                                site.scriptApi != null -> tvBoxStatus = "${site.name} 属于 TVBox JS 规则，当前尚未集成对应运行时，请选择 Spider 站点"
                                 else -> tvBoxStatus = "${site.name} 使用尚不支持的插件格式，无法直接解析"
                             }
                         }
@@ -808,13 +810,8 @@ private fun Herrin() {
                         Spacer(Modifier.weight(1f))
                         Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.testTag("source-empty-title"))
-                        Text(providerStatus, fontSize = 15.sp, lineHeight = 23.sp,
+                        Text(providerStatus + "；请进入设置选择站点", fontSize = 15.sp, lineHeight = 23.sp,
                             color = Color(0xFFCDD8E6), modifier = Modifier.testTag("source-empty-status"))
-                        Spacer(Modifier.height(14.dp))
-                        TvButton("选择影视站点", modifier = Modifier.testTag("source-open-sites")
-                            .focusRequester(requester("source-open-sites")), reduced = reduceMotion) {
-                            screen = "sites"
-                        }
                         Spacer(Modifier.height(24.dp))
                     } else {
                         Spacer(Modifier.weight(1f))
@@ -854,13 +851,9 @@ private fun Herrin() {
                         horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "我的收藏"; category == "首页" -> if (sourceConfigured) "来自影视源 · ${filtered.size} 部" else "继续观看"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
                             fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
-                        if (sourceConfigured && category != "直播") {
-                            TvButton("切换影视站点", modifier = Modifier.testTag("source-switch-site"),
-                                reduced = reduceMotion, quiet = true) { screen = "sites" }
-                        } else {
-                            Text(if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN", fontSize = 11.sp, letterSpacing = 1.5.sp,
-                                color = Color(0xFFB6BBC5))
-                        }
+                        Text(if (sourceConfigured) "${providerStatus.take(48)}" else if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN",
+                            fontSize = 11.sp, letterSpacing = 1.5.sp,
+                            color = Color(0xFFB6BBC5))
                     }
                     Spacer(Modifier.height(6.dp))
                     if (category == "直播" && !isSearch) {
@@ -1298,6 +1291,11 @@ private fun Herrin() {
                             color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
                         if (settingsTvBoxOnly) {
                             item { Text("影视源将自动连接可用站点并更新首页。Java Spider 等第三方可执行插件仍需单独授权。", color = Color(0xFFBFC8D6), fontSize = 13.sp) }
+                            if (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty()) {
+                                item { TvButton("选择影视站点 / 仓库", modifier = Modifier.testTag("settings-source-sites"), reduced = reduceMotion) {
+                                    screen = "sites"
+                                } }
+                            }
                             item { TvButton("返回首页", modifier = Modifier.testTag("settings-home"), reduced = reduceMotion) {
                                 category = "首页"; screen = "browse"
                             } }
