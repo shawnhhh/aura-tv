@@ -310,7 +310,7 @@ class HerrinUiSmokeTest {
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(5000) {
-                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("只接受 HTTPS") }.isSuccess
+                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("只接受 HTTPS", substring = true) }.isSuccess
             }
             assertTrue(server.requestCount == 0)
             settings.performScrollToNode(hasTestTag("tvbox-http-consent"))
@@ -321,13 +321,13 @@ class HerrinUiSmokeTest {
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(8000) {
-                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库") }.isSuccess
+                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库", substring = true) }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("tvbox-entry-0"))
             focus("tvbox-entry-0"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(8000) {
-                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓") }.isSuccess
+                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓", substring = true) }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("tvbox-site-preview"))
             compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示")
