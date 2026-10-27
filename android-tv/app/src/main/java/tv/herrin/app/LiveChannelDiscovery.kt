@@ -10,9 +10,15 @@ internal object LiveChannelDiscovery {
     fun selectedGroupOrAll(channels: List<LiveChannel>, requested: String?): String? =
         requested?.takeIf { it in groups(channels) }
 
+    /** Keep the existing positional predicate API for group/favorites clients. */
     fun visible(
         channels: List<LiveChannel>, selectedGroup: String?, favoritesOnly: Boolean,
-        query: String = "",
+        isFavorite: (LiveChannel) -> Boolean
+    ): List<LiveChannel> = visible(channels, selectedGroup, favoritesOnly, "", isFavorite)
+
+    fun visible(
+        channels: List<LiveChannel>, selectedGroup: String?, favoritesOnly: Boolean,
+        query: String,
         isFavorite: (LiveChannel) -> Boolean
     ): List<LiveChannel> {
         val group = selectedGroupOrAll(channels, selectedGroup)
