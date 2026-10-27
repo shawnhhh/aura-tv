@@ -97,3 +97,7 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M3.3 可选 XMLTV 节目单
 
 可另填自己的 HTTPS XMLTV 节目单，按 IPTV 的 tvg-id 匹配频道并展示「正在播出」；支持时区，使用有界且禁用外部实体的 XML 解析器，节目单故障不影响直播播放。详见 [M3.3 文档](docs/M3_3_XMLTV_EPG.md)。
+
+## M3.4 节目单预览与 Android TV 兼容
+
+直播频道获得遥控器焦点后，在频道栏下方预览「当前 / 下一档」节目及当前节目进度；只使用已读取的用户授权 XMLTV 数据，不因焦点切换而发起网络请求。修复 API 30 Android XML 解析器缺少 JAXP 安全特性开关造成的 M3.3 模拟器测试失败，继续拒绝 DTD/实体注入。详见 [M3.4 文档](docs/M3_4_LIVE_GUIDE.md)。

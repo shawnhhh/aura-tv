@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
+import org.xml.sax.SAXException
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.StringReader
@@ -12,10 +13,14 @@ import java.net.URL
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
 data class LiveProgramme(val channelId: String, val title: String, val startMs: Long, val stopMs: Long)
+data class LiveGuideSnapshot(
+    val now: LiveProgramme?,
+    val next: LiveProgramme?,
+    val progress: Float?
+)
 
 sealed interface LiveEpgResult {
     data class Ready(val programmes: List<LiveProgramme>) : LiveEpgResult
@@ -40,14 +45,27 @@ internal object AuthorizedXmlTv {
         require(!document.contains("<!DOCTYPE", ignoreCase = true))
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = false
-            setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            // Android's Harmony parser (including API 30) does not implement all
+            // JAXP feature URIs. Keep the up-front DOCTYPE/ENTITY rejection and
+            // the fail-closed resolver below even when a feature is unsupported.
+            listOf(
+                "http://javax.xml.XMLConstants/feature/secure-processing" to true,
+                "http://apache.org/xml/features/disallow-doctype-decl" to true,
+                "http://xml.org/sax/features/external-general-entities" to false,
+                "http://xml.org/sax/features/external-parameter-entities" to false,
+                "http://apache.org/xml/features/nonvalidating/load-external-dtd" to false
+            ).forEach { (feature, enabled) ->
+                runCatching { setFeature(feature, enabled) }
+            }
             isExpandEntityReferences = false
-            isXIncludeAware = false
+            runCatching { isXIncludeAware = false }
         }
-        val xml = factory.newDocumentBuilder().parse(InputSource(StringReader(document)))
+        val builder = factory.newDocumentBuilder().apply {
+            setEntityResolver { _, _ ->
+                throw SAXException("External XML entities are forbidden")
+            }
+        }
+        val xml = builder.parse(InputSource(StringReader(document)))
         require(xml.documentElement?.nodeName == "tv")
         val nodes = xml.getElementsByTagName("programme")
         require(nodes.length in 1..MAX_PROGRAMMES)
@@ -72,6 +90,21 @@ internal object AuthorizedXmlTv {
 
     fun current(programmes: List<LiveProgramme>, channelId: String, nowMs: Long): LiveProgramme? =
         programmes.firstOrNull { it.channelId == channelId && nowMs in it.startMs until it.stopMs }
+
+    /** Local-only programme lookup; no extra network request when TV focus moves. */
+    fun snapshots(programmes: List<LiveProgramme>, nowMs: Long): Map<String, LiveGuideSnapshot> =
+        programmes.groupBy { it.channelId }.mapValues { (_, entries) ->
+            val current = entries.filter { nowMs in it.startMs until it.stopMs }
+                .maxWithOrNull(compareBy<LiveProgramme> { it.startMs }.thenBy { it.stopMs })
+            val nextBoundary = current?.stopMs ?: nowMs
+            val next = entries.asSequence().filter { it.startMs >= nextBoundary }
+                .minWithOrNull(compareBy<LiveProgramme> { it.startMs }.thenBy { it.stopMs })
+            val progress = current?.let {
+                ((nowMs - it.startMs).toDouble() / (it.stopMs - it.startMs))
+                    .coerceIn(0.0, 1.0).toFloat()
+            }
+            LiveGuideSnapshot(current, next, progress)
+        }
 }
 
 /** Optional, explicitly configured HTTPS XMLTV URL; no automatic guide discovery. */
