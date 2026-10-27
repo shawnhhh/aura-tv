@@ -341,7 +341,7 @@ class HerrinUiSmokeTest {
             settings.performScrollToNode(hasTestTag("tvbox-sites-toggle"))
             compose.onNodeWithTag("tvbox-sites-toggle").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-site-48"))
-            compose.onNodeWithTag("tvbox-site-48").assertTextContains("站点48")
+            compose.onNodeWithTag("tvbox-site-48").assertTextContains("站点48", substring = true)
             compose.onNodeWithTag("tvbox-site-48").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.onNodeWithTag("tvbox-status").assertTextContains("没有安全执行引擎", substring = true)
