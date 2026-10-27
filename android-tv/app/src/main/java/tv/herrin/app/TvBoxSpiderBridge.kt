@@ -7,6 +7,7 @@ import com.github.catvod.Runtime
 import com.github.catvod.crawler.Spider
 import com.github.catvod.net.Net
 import com.github.catvod.utils.Local
+import com.github.catvod.utils.RuntimeModule
 import dalvik.system.DexClassLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -194,8 +195,11 @@ internal class TvBoxSpiderBridge(private val context: Context) {
             Runtime.set(context.applicationContext)
             Runtime.setActivity { context as? Activity }
             Runtime.setToast { android.util.Log.i("HerrinCatVod", it.take(150)) }
-            val loader = DexClassLoader(file.absolutePath, context.codeCacheDir.absolutePath,
-                context.applicationInfo.nativeLibraryDir, Spider::class.java.classLoader)
+            // Match FongMi's JarLoader: protected Spider packs may extract native
+            // libraries beside the verified JAR, and runtime-owned classes must
+            // resolve through the CatVod SDK's delegated Spider class loader.
+            val loader = DexClassLoader(file.absolutePath, file.parentFile!!.absolutePath,
+                file.parentFile!!.absolutePath, RuntimeModule.getSpiderClassLoader())
             runCatching {
                 val initializer = loader.loadClass("com.github.catvod.spider.Init")
                 initializer.getMethod("init", Context::class.java).invoke(null, context)
