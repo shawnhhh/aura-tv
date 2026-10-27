@@ -518,6 +518,16 @@ private fun Herrin() {
                             }
                         }
                         Spacer(Modifier.weight(1f))
+                    } else if (category == "直播") {
+                        // A live TV rail must not inherit the movie hero's tall
+                        // spacer, poster synopsis and demo-play actions: those
+                        // pushed the final channel row into TV overscan at 1080p.
+                        Spacer(Modifier.height(24.dp))
+                        Text("直播中心", fontSize = 34.sp, fontWeight = FontWeight.Bold,
+                            color = Color.White)
+                        Text("你授权的频道 · HTTPS M3U · 可选 XMLTV 节目预览",
+                            fontSize = 13.sp, color = Color(0xFFBDC8D6))
+                        Spacer(Modifier.height(18.dp))
                     } else {
                         Spacer(Modifier.weight(1f))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -549,7 +559,7 @@ private fun Herrin() {
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "我的" -> "我的收藏"; category == "首页" -> "继续观看"; else -> "精选${category} · 演示片库" },
+                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "我的收藏"; category == "首页" -> "继续观看"; else -> "精选${category} · 演示片库" },
                             fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
                         Text(if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN", fontSize = 11.sp, letterSpacing = 1.5.sp,
                             color = Color(0xFFB6BBC5))

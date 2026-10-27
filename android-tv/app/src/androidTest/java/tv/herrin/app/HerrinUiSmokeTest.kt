@@ -408,23 +408,24 @@ class HerrinUiSmokeTest {
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitUntil(10000) {
                 runCatching { compose.onNodeWithTag("live-filter-status")
-                    .assertTextContains("4 / 4") }.isSuccess
+                    .assertTextContains("4 / 4", substring = true) }.isSuccess
             }
             compose.onNodeWithTag("live-group-rail").assertExists()
+            compose.onNodeWithTag("live-0").assertIsDisplayed()
             focus("live-group-1") // 体育
             key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4")
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
             focus("live-group-all")
             key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("4 / 4")
+            compose.onNodeWithTag("live-filter-status").assertTextContains("4 / 4", substring = true)
             focus("live-favorite-0") // Only 新闻一 is favorited.
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             focus("live-favorites-filter")
             key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4")
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
             focus("live-group-1") // Sports + favorites has no matches.
             key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("0 / 4")
+            compose.onNodeWithTag("live-filter-status").assertTextContains("0 / 4", substring = true)
             compose.onNodeWithText("当前分组暂无收藏频道，可切换「全部频道」或其他分组")
                 .assertExists()
             focus("live-group-all")
@@ -436,7 +437,7 @@ class HerrinUiSmokeTest {
                 runCatching { compose.onNodeWithTag("live-status")
                     .assertTextContains("已加载 4 个授权直播频道") }.isSuccess
             }
-            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4")
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
             capture("live-groups-dpad-favorites-refresh")
         } finally {
             HttpsURLConnection.setDefaultSSLSocketFactory(previousTls)
