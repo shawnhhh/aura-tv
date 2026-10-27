@@ -525,7 +525,7 @@ private fun Herrin() {
                         Spacer(Modifier.height(24.dp))
                         Text("直播中心", fontSize = 34.sp, fontWeight = FontWeight.Bold,
                             color = Color.White)
-                        Text("你授权的频道 · HTTPS M3U · 可选 XMLTV 节目预览",
+                        Text("你授权的频道 · HTTPS M3U · 可选 XMLTV / .xml.gz 节目预览",
                             fontSize = 13.sp, color = Color(0xFFBDC8D6))
                         Spacer(Modifier.height(18.dp))
                     } else {
@@ -849,7 +849,7 @@ private fun Herrin() {
                         item { OutlinedTextField(epgUrlDraft, { epgUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("config-epg-url")
                                 .onFocusChanged { configInputFocused = it.isFocused },
-                            label = { Text("可选 HTTPS XMLTV 节目单地址") }, singleLine = true) }
+                            label = { Text("可选 HTTPS XMLTV（.xml / .xml.gz）节目单地址") }, singleLine = true) }
                         item { TvButton("保存 XMLTV 节目单", modifier = Modifier.testTag("epg-save"),
                             reduced = reduceMotion, onFocus = { focusId = "epg-save"; keyboard?.hide() }) {
                             val typed = epgUrlDraft.trim()
@@ -980,7 +980,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M3.5 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持分组、收藏筛选、手动刷新及可选 XMLTV 节目单。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M3.6 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }

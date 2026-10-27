@@ -5,8 +5,10 @@ import kotlinx.coroutines.withContext
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import org.xml.sax.SAXException
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.StringReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -14,6 +16,7 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
+import java.util.zip.GZIPInputStream
 
 data class LiveProgramme(val channelId: String, val title: String, val startMs: Long, val stopMs: Long)
 data class LiveGuideSnapshot(
@@ -29,8 +32,10 @@ sealed interface LiveEpgResult {
 
 /** Bounded XMLTV parser. External entities and DTD fetching are never enabled. */
 internal object AuthorizedXmlTv {
-    private const val MAX_BYTES = 2_000_000
-    private const val MAX_PROGRAMMES = 800
+    // A bounded, moderately sized schedule supports compressed day guides
+    // without allowing large documents to exhaust a TV's heap.
+    internal const val MAX_BYTES = 6_000_000
+    private const val MAX_PROGRAMMES = 8_000
     private val simpleDtd = Regex("""<!DOCTYPE\s+tv\s+SYSTEM\s+["'][^"'<>]+["']\s*>""",
         RegexOption.IGNORE_CASE)
     private val formatters = listOf(
@@ -107,6 +112,37 @@ internal object AuthorizedXmlTv {
         }
 }
 
+/** Read a user-supplied .xml or .xml.gz without trusting MIME or filename.
+ * Both the transferred bytes and inflated XML are capped (gzip-bomb safe).
+ */
+internal object XmlTvPayload {
+    private const val MAX_TRANSFER_BYTES = 4_000_000
+
+    fun read(input: InputStream): String {
+        val transfer = input.use { readBounded(it, MAX_TRANSFER_BYTES) }
+        val gzip = transfer.size >= 2 &&
+            transfer[0] == 0x1f.toByte() && transfer[1] == 0x8b.toByte()
+        val document = if (gzip) {
+            GZIPInputStream(ByteArrayInputStream(transfer)).use {
+                readBounded(it, AuthorizedXmlTv.MAX_BYTES)
+            }
+        } else transfer
+        return document.toString(Charsets.UTF_8)
+    }
+
+    private fun readBounded(input: InputStream, limit: Int): ByteArray {
+        val output = ByteArrayOutputStream()
+        val chunk = ByteArray(8192)
+        while (true) {
+            val count = input.read(chunk)
+            if (count < 0) break
+            if (output.size() + count > limit) throw IOException("XMLTV payload too large")
+            output.write(chunk, 0, count)
+        }
+        return output.toByteArray()
+    }
+}
+
 /** Optional, explicitly configured HTTPS XMLTV URL; no automatic guide discovery. */
 class RemoteLiveEpgRepository(
     private val openConnection: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
@@ -121,25 +157,15 @@ class RemoteLiveEpgRepository(
                 connectTimeout = timeoutMs
                 readTimeout = timeoutMs
                 instanceFollowRedirects = false
-                setRequestProperty("Accept", "application/xml, text/xml")
+                setRequestProperty("Accept", "application/xml, text/xml, application/gzip, application/x-gzip")
             }
             connection = active
             if (active.responseCode != 200) throw IOException("EPG unavailable")
             val type = active.contentType?.substringBefore(';')?.trim()?.lowercase()
-            if (type != null && type !in setOf("application/xml", "text/xml", "application/octet-stream"))
+            if (type != null && type !in setOf("application/xml", "text/xml",
+                    "application/octet-stream", "application/gzip", "application/x-gzip"))
                 throw IOException("Unsupported XMLTV response")
-            val bytes = active.inputStream.use { input ->
-                val output = ByteArrayOutputStream()
-                val chunk = ByteArray(8192)
-                while (true) {
-                    val count = input.read(chunk)
-                    if (count < 0) break
-                    if (output.size() + count > 2_000_000) throw IOException("Too large")
-                    output.write(chunk, 0, count)
-                }
-                output.toByteArray()
-            }
-            LiveEpgResult.Ready(AuthorizedXmlTv.decode(bytes.toString(Charsets.UTF_8)))
+            LiveEpgResult.Ready(AuthorizedXmlTv.decode(XmlTvPayload.read(active.inputStream)))
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (_: Exception) {
