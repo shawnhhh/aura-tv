@@ -23,6 +23,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -55,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -213,6 +216,8 @@ private fun Herrin() {
     val inputMethod = remember(context) { context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager }
     var searchInputFocused by remember { mutableStateOf(false) }
     var configInputFocused by remember { mutableStateOf(false) }
+    var liveSearchEditorFocused by remember { mutableStateOf(false) }
+    var pendingLiveSearchFocus by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
     val profileStore = remember(context) { CatalogProfiles(context) }
     val watchHistory = remember(context) { PlaybackHistory(context) }
@@ -237,6 +242,7 @@ private fun Herrin() {
     var selectedLiveGroup by rememberSaveable { mutableStateOf<String?>(null) }
     var liveSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var liveSearchQuery by rememberSaveable { mutableStateOf("") }
+    val liveChannelRailState = rememberLazyListState()
     var liveFavoriteEpoch by remember { mutableIntStateOf(0) }
     var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
     var epgProgrammes by remember { mutableStateOf<List<LiveProgramme>>(emptyList()) }
@@ -407,8 +413,18 @@ private fun Herrin() {
             else -> { category = "首页"; focusId = "nav-首页" }
         }
     }
+    fun finishLiveSearchInput() {
+        keyboard?.hide()
+        inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
+        pendingLiveSearchFocus = true
+    }
     BackHandler(splash || screen != "browse" || category != "首页") {
-        if (splash) splash = false else back()
+        when {
+            splash -> splash = false
+            screen == "browse" && category == "直播" &&
+                liveSearchExpanded && liveSearchEditorFocused -> finishLiveSearchInput()
+            else -> back()
+        }
     }
     LaunchedEffect(screen, splash, category) {
         RemoteTrace.event("ROUTE screen=$screen category=$category focusId=$focusId")
@@ -636,6 +652,7 @@ private fun Herrin() {
                                         liveSearchExpanded = !liveSearchExpanded
                                         if (!liveSearchExpanded) {
                                             liveSearchQuery = ""
+                                            pendingLiveSearchFocus = false
                                             keyboard?.hide()
                                         }
                                     }
@@ -655,10 +672,15 @@ private fun Herrin() {
                                             modifier = Modifier.width(390.dp)
                                                 .testTag("live-search-input")
                                                 .onFocusChanged {
+                                                    liveSearchEditorFocused = it.isFocused
                                                     if (it.isFocused) focusId = "live-search-input"
                                                 },
                                             label = { Text("输入频道名称或 tvg-id") },
-                                            singleLine = true
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                            keyboardActions = KeyboardActions(onDone = {
+                                                finishLiveSearchInput()
+                                            })
                                         )
                                         TvButton("清空关键词", modifier = Modifier.testTag("live-search-clear")
                                             .focusRequester(requester("live-search-clear")),
@@ -677,6 +699,11 @@ private fun Herrin() {
                                         liveFavorites.contains(prefs.livePlaylistUrl, channel.url)
                                     }
                                 }
+                                LaunchedEffect(liveSearchQuery, resolvedGroup,
+                                    showFavoriteChannelsOnly, liveChannels) {
+                                    // An old rail offset can hide a newly filtered first result.
+                                    liveChannelRailState.scrollToItem(0)
+                                }
                                 Text("${if (liveSearchQuery.isBlank()) "显示" else "匹配"} ${visibleChannels.size} / ${liveChannels.size} 个频道",
                                     modifier = Modifier.testTag("live-filter-status"),
                                     color = Color(0xFFADBBD0), fontSize = 12.sp)
@@ -690,7 +717,8 @@ private fun Herrin() {
                                     },
                                         color = Color(0xFFCFD7E4))
                                 }
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                LazyRow(state = liveChannelRailState,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     contentPadding = PaddingValues(10.dp)) {
                                     itemsIndexed(visibleChannels, key = { _, item -> item.url }) { index, channel ->
                                         val nowProgramme = currentGuide[channel.tvgId.ifBlank { channel.name }]?.now
@@ -725,6 +753,30 @@ private fun Herrin() {
                                                 liveFavorites.toggle(prefs.livePlaylistUrl, channel.url)
                                                 liveFavoriteEpoch++
                                             }
+                                        }
+                                    }
+                                }
+                                LaunchedEffect(pendingLiveSearchFocus, visibleChannels.size,
+                                    liveSearchExpanded) {
+                                    if (pendingLiveSearchFocus && liveSearchExpanded) {
+                                        // The TV IME must release its editor before a native
+                                        // channel pill can receive the first remote key.
+                                        liveChannelRailState.scrollToItem(0)
+                                        withFrameNanos { }
+                                        val target = if (visibleChannels.isEmpty())
+                                            "live-search-clear" else "live-0"
+                                        var focused = runCatching {
+                                            requester(target).requestFocus()
+                                        }.getOrDefault(false)
+                                        if (!focused) {
+                                            withFrameNanos { }
+                                            focused = runCatching {
+                                                requester(target).requestFocus()
+                                            }.getOrDefault(false)
+                                        }
+                                        if (focused) {
+                                            focusId = target
+                                            pendingLiveSearchFocus = false
                                         }
                                     }
                                 }
@@ -881,6 +933,7 @@ private fun Herrin() {
                                 showFavoriteChannelsOnly = false
                                 liveSearchExpanded = false
                                 liveSearchQuery = ""
+                                pendingLiveSearchFocus = false
                                 highlightedLiveUrl = null
                                 liveRefresh++
                                 configStatus = "直播列表配置已保存；只读取你主动提供的频道"
@@ -1020,7 +1073,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M3.7 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持频道查找、分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M3.8 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持频道查找、分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n直播搜索输入完成后自动把焦点交还频道或清空按钮。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }
