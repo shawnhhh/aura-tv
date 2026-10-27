@@ -9,6 +9,7 @@ The Live tab remains driven only by the user's explicit HTTPS M3U URL.
 - A failed same-address refresh retains the last in-memory channel/guide snapshot with an honest failure status. Editing the M3U or XMLTV endpoint clears old data before fetching a different source. An empty/failed playlist can be retried from the Live tab.
 - `LiveChannelDiscovery` is a pure local filter with JVM tests covering mixed/missing groups, order, favorite intersection, and stale selection after a source change.
 - The native D-pad regression asserts that loaded channels are actually displayed, not merely present in an offscreen semantics tree.
+- Every new focusable live control updates the global focus identity so the M2.5 navigation underline fades when focus leaves the top tabs. The native test moves Right/Right through two actual group chips and checks the underline's pixel state.
 - Debug version: `0.3.5-alpha` / code 5.
 
 Acceptance: cloud Android Debug lint/unit/APK and full API30 TV emulator tests, followed by TCL T7L Ultra checks of group-row scrolling, one-white-focus semantics, rapid D-pad motion, refresh and Back from live playback. No provider, stream, credentials, GPL FongMi source or repository-root Pages change is included. Physical TCL refresh rate and subjective smoothness remain unverified by emulator.

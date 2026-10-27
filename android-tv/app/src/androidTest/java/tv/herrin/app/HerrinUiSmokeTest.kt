@@ -412,7 +412,19 @@ class HerrinUiSmokeTest {
             }
             compose.onNodeWithTag("live-group-rail").assertExists()
             compose.onNodeWithTag("live-0").assertIsDisplayed()
-            focus("live-group-1") // 体育
+            focus("live-group-all")
+            key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag("live-group-0").assertIsFocused() // 新闻
+            key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag("live-group-1").assertIsFocused() // 体育
+            // The white nav underline belongs only to focused top tabs.
+            val track = compose.onNodeWithTag("nav-motion-track").captureToImage().toPixelMap()
+            var bright = 0
+            for (y in 0 until track.height) for (x in 0 until track.width) {
+                val color = track[x, y]
+                if (color.red > 0.74f && color.green > 0.74f && color.blue > 0.74f) bright++
+            }
+            assertTrue("Nav underline should fade after D-pad enters live groups", bright < 10)
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
             focus("live-group-all")

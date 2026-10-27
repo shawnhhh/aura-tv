@@ -580,8 +580,9 @@ private fun Herrin() {
                                 }
                                 if (prefs.livePlaylistUrl.isNotBlank()) {
                                     TvButton("重试加载直播与节目单",
-                                        modifier = Modifier.testTag("live-retry"),
-                                        reduced = reduceMotion) {
+                                        modifier = Modifier.testTag("live-retry")
+                                            .focusRequester(requester("live-retry")),
+                                        reduced = reduceMotion, onFocus = { focusId = "live-retry" }) {
                                         liveRefresh++
                                         epgRefresh++
                                     }
@@ -600,15 +601,19 @@ private fun Herrin() {
                                         contentPadding = PaddingValues(horizontal = 9.dp, vertical = 3.dp)
                                     ) {
                                         item(key = "all-groups") {
-                                            TvButton("全部分组", modifier = Modifier.testTag("live-group-all"),
-                                                reduced = reduceMotion, selected = resolvedGroup == null) {
+                                            TvButton("全部分组", modifier = Modifier.testTag("live-group-all")
+                                                .focusRequester(requester("live-group-all")),
+                                                reduced = reduceMotion, selected = resolvedGroup == null,
+                                                onFocus = { focusId = "live-group-all" }) {
                                                 selectedLiveGroup = null
                                             }
                                         }
                                         itemsIndexed(groups, key = { _, group -> "group:$group" }) { index, group ->
                                             TvButton(if (group.isBlank()) "未分组" else group,
-                                                modifier = Modifier.testTag("live-group-$index"),
-                                                reduced = reduceMotion, selected = resolvedGroup == group) {
+                                                modifier = Modifier.testTag("live-group-$index")
+                                                    .focusRequester(requester("live-group-$index")),
+                                                reduced = reduceMotion, selected = resolvedGroup == group,
+                                                onFocus = { focusId = "live-group-$index" }) {
                                                 selectedLiveGroup = group
                                             }
                                         }
@@ -616,11 +621,15 @@ private fun Herrin() {
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     TvButton(if (showFavoriteChannelsOnly) "全部频道" else "★ 只看收藏",
-                                        modifier = Modifier.testTag("live-favorites-filter"),
-                                        reduced = reduceMotion, selected = showFavoriteChannelsOnly
+                                        modifier = Modifier.testTag("live-favorites-filter")
+                                            .focusRequester(requester("live-favorites-filter")),
+                                        reduced = reduceMotion, selected = showFavoriteChannelsOnly,
+                                        onFocus = { focusId = "live-favorites-filter" }
                                     ) { showFavoriteChannelsOnly = !showFavoriteChannelsOnly }
-                                    TvButton("刷新频道与节目单", modifier = Modifier.testTag("live-refresh"),
-                                        reduced = reduceMotion, quiet = true) {
+                                    TvButton("刷新频道与节目单", modifier = Modifier.testTag("live-refresh")
+                                        .focusRequester(requester("live-refresh")),
+                                        reduced = reduceMotion, quiet = true,
+                                        onFocus = { focusId = "live-refresh" }) {
                                         liveRefresh++
                                         epgRefresh++
                                     }
@@ -670,8 +679,10 @@ private fun Herrin() {
                                             TvButton(
                                                 if (liveFavorites.contains(prefs.livePlaylistUrl, channel.url))
                                                     "★ 已收藏" else "☆ 收藏",
-                                                modifier = Modifier.testTag("live-favorite-$index"),
-                                                reduced = reduceMotion, quiet = true
+                                                modifier = Modifier.testTag("live-favorite-$index")
+                                                    .focusRequester(requester("live-favorite-$index")),
+                                                reduced = reduceMotion, quiet = true,
+                                                onFocus = { focusId = "live-favorite-$index" }
                                             ) {
                                                 liveFavorites.toggle(prefs.livePlaylistUrl, channel.url)
                                                 liveFavoriteEpoch++
