@@ -767,12 +767,12 @@ private fun Herrin() {
                                             "live-search-clear" else "live-0"
                                         var focused = runCatching {
                                             requester(target).requestFocus()
-                                        }.getOrDefault(false)
+                                        }.isSuccess
                                         if (!focused) {
                                             withFrameNanos { }
                                             focused = runCatching {
                                                 requester(target).requestFocus()
-                                            }.getOrDefault(false)
+                                            }.isSuccess
                                         }
                                         if (focused) {
                                             focusId = target
