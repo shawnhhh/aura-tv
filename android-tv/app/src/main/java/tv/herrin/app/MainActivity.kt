@@ -1049,7 +1049,7 @@ private fun Herrin() {
                             }
                         } }
                         item { Text("TVBox 多仓 / 单仓 / IPTV", fontSize = 22.sp) }
-                        item { Text("支持 urls 多仓、sites/lives 单仓、内嵌直播、M3U 与 TVBox TXT。影视 Spider/JAR/JS 插件尚不运行；失效的接口可从本机已缓存的有效 JSON 回退。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
+                        item { Text("支持 urls 多仓、sites/lives 单仓、内嵌直播、M3U 与 TVBox TXT。Java csp_* Spider 可在本次明确授权后尝试加载与解析；JS/Python、网页二次解析及部分受保护插件仍可能不兼容。失效的配置接口可从本机已缓存的有效 JSON 回退。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
                         item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
                                 .onFocusChanged { configInputFocused = it.isFocused },

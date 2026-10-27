@@ -53,7 +53,13 @@ public class Runtime {
 
     public static CompletableFuture<String> dialog(String options, Function<String, CompletableFuture<String>> onAction) {
         var dialog = get().dialog;
-        if (dialog == null) return CompletableFuture.failedFuture(new UnsupportedOperationException("Dialog requires a compatible App"));
+        if (dialog == null) {
+            // CompletableFuture.failedFuture was introduced at API 31; HERRIN
+            // supports Android TV API 26+ and must not invoke it directly.
+            CompletableFuture<String> unavailable = new CompletableFuture<>();
+            unavailable.completeExceptionally(new UnsupportedOperationException("Dialog requires a compatible App"));
+            return unavailable;
+        }
         return dialog.apply(options, onAction);
     }
 
