@@ -70,6 +70,13 @@ class HerrinUiSmokeTest {
         compose.onNodeWithText(text).assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_CENTER)
     }
+    private fun advancedSettings() {
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
+        compose.onNodeWithTag("settings-advanced").performClick()
+        compose.waitForIdle()
+    }
     private fun capture(label: String) {
         // PixelCopy synchronizes the rendered root before the device screenshot (not just semantics).
         compose.onRoot().captureToImage()
@@ -89,19 +96,53 @@ class HerrinUiSmokeTest {
             android.util.Log.i("HerrinEvidence", "TREE $label $index/${chunks.size} $chunk")
         }
     }
-    @Test fun homeHeaderKeepsSourceManagementAndSettingsVisible() {
-        // A real TCL TV screenshot exposed the former single-row header
-        // clipping both actions after the six navigation pills.
-        compose.onNodeWithTag("source-settings").assertIsDisplayed()
+    @Test fun homeHeaderKeepsCompactSettingsAndExactlyTwoSourceInputs() {
+        // The approved compact header has one row and no standalone source button.
+        compose.onNodeWithTag("source-settings").assertDoesNotExist()
         compose.onNodeWithTag("settings").assertIsDisplayed()
-        focus("source-settings")
+        focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithText("影视源管理").assertIsDisplayed()
+        compose.onNodeWithText("设置 · 内容来源").assertIsDisplayed()
         compose.onNodeWithTag("tvbox-warehouse-url").assertIsDisplayed()
-        compose.onNodeWithTag("tvbox-http-consent").assertExists()
-        capture("source-settings-entry")
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-live-direct-url"))
+        compose.onNodeWithTag("tvbox-live-direct-url").assertIsDisplayed()
+        compose.onNodeWithTag("tvbox-http-consent").assertDoesNotExist()
+        compose.onNodeWithTag("tvbox-import-json").assertDoesNotExist()
+        compose.onNodeWithTag("config-media-url").assertDoesNotExist()
+        capture("compact-settings-two-inputs")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("settings").assertIsDisplayed()
+    }
+    @Test fun applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab() {
+        MockWebServer().use { server ->
+            server.start()
+            val api = server.url("/cms").toString()
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"sites":[{"name":"授权影视站","api":"$api"}]}"""))
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"list":[{"vod_id":"remote-film-7","vod_name":"远端电影","type_name":"电影","vod_year":"2026"}]}"""))
+            focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val settings = compose.onNodeWithTag("settings-list")
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
+            compose.onNodeWithTag("tvbox-warehouse-url")
+                .performTextReplacement(server.url("/box.json").toString())
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
+            compose.onNodeWithTag("tvbox-warehouse-load").performClick()
+            compose.waitUntil(15000) {
+                runCatching { compose.onNodeWithTag("tvbox-status")
+                    .assertTextContains("已自动导入", substring = true) }.isSuccess
+            }
+            settings.performScrollToNode(hasTestTag("settings-home"))
+            compose.onNodeWithTag("settings-home").performClick()
+            compose.onAllNodesWithText("远端电影").onFirst().assertIsDisplayed()
+            compose.onNodeWithTag("source-switch-site").assertIsDisplayed()
+            focus("nav-电影"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("source-switch-site").assertIsDisplayed()
+            compose.onAllNodesWithText("远端电影").onFirst().assertIsDisplayed()
+            compose.onNodeWithText("蓝色边界").assertDoesNotExist()
+            assertEquals(2, server.requestCount)
+            capture("tvbox-applied-home")
+        }
     }
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")
@@ -246,7 +287,7 @@ class HerrinUiSmokeTest {
         capture("favorites-empty")
     }
     @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
-        focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
         compose.onNodeWithTag("config-media-url").performTextReplacement("http://invalid.example/test.mp4")
         key(KeyEvent.KEYCODE_BACK) // dismiss IME
@@ -283,7 +324,7 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings").assertIsFocused()
     }
     @Test fun settingsPersistReducedMotion() {
-        focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        advancedSettings()
         activate("减少动态效果：关")
         compose.onNodeWithText("减少动态效果：开").assertExists()
         compose.activityRule.scenario.recreate()
@@ -294,8 +335,7 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings").assertIsFocused()
     }
     @Test fun settingsExposeNativeSourcePickerWithoutReplacingExistingControls() {
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        advancedSettings()
         compose.onNodeWithText("目录源管理 · 最多 10 个授权 HTTPS 目录").assertExists()
         compose.onNodeWithTag("source-demo").assertIsDisplayed()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-catalog-url"))
@@ -318,7 +358,7 @@ class HerrinUiSmokeTest {
                 .setBody("""{"urls":[{"name":"自建演示仓","url":"$singleUrl"}]}"""))
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
                 .setBody(sites))
-            focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            advancedSettings()
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/multi.json").toString())
@@ -327,17 +367,7 @@ class HerrinUiSmokeTest {
             // button's accessible click directly for this keyboard handoff only.
             focus("tvbox-warehouse-load")
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            settings.performScrollToNode(hasTestTag("tvbox-status"))
-            compose.waitUntil(5000) {
-                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("只接受 HTTPS", substring = true) }.isSuccess
-            }
-            assertTrue(server.requestCount == 0)
-            settings.performScrollToNode(hasTestTag("tvbox-http-consent"))
-            focus("tvbox-http-consent")
-            compose.onNodeWithTag("tvbox-http-consent").performClick()
-            settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
-            focus("tvbox-warehouse-load")
-            compose.onNodeWithTag("tvbox-warehouse-load").performClick()
+            // HTTP is accepted by default; there is no extra enable switch.
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库", substring = true) }.isSuccess
@@ -367,8 +397,7 @@ class HerrinUiSmokeTest {
     }
 
     @Test fun settingsOfferExplicitSourceBackupImportAndSafeDeleteFlow() {
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        advancedSettings()
         val settings = compose.onNodeWithTag("settings-list")
         settings.performScrollToNode(hasTestTag("source-export"))
         compose.onNodeWithTag("source-export").assertIsDisplayed()
@@ -389,8 +418,7 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("live-status").assertExists()
         compose.onNodeWithTag("live-config").assertExists()
         key(KeyEvent.KEYCODE_BACK)
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-live-url"))
         compose.onNodeWithTag("config-live-url").assertIsDisplayed()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("live-save"))
@@ -415,8 +443,7 @@ class HerrinUiSmokeTest {
     }
 
     @Test fun diagnosticsNeverTreatRefreshHintAsMeasuredFps() {
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("diagnostic-refresh"))
         activate("查看设备状态")
         compose.onNodeWithTag("device-status").assertTextContains("提示值不等于实际帧率", substring = true)
@@ -430,8 +457,7 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("live-epg-status").assertTextContains("未配置 XMLTV", substring = true)
         key(KeyEvent.KEYCODE_BACK)
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        advancedSettings()
         val settings = compose.onNodeWithTag("settings-list")
         settings.performScrollToNode(hasTestTag("config-epg-url"))
         compose.onNodeWithTag("config-epg-url").assertIsDisplayed()

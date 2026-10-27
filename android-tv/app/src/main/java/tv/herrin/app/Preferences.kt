@@ -40,10 +40,14 @@ class Preferences(context: Context) : FavoritesStore {
     var liveEpgUrl: String
         get() = prefs.getString("live_epg_url", "") ?: ""
         set(value) { prefs.edit().putString("live_epg_url", value).apply() }
-    /** Stored only for convenient re-entry; never auto-fetch an untrusted TVBox source on launch. */
+    /** User-applied URL; later launches may refresh metadata, never auto-execute Spider code. */
     var tvBoxWarehouseUrl: String
         get() = prefs.getString("tvbox_warehouse_url", "") ?: ""
         set(value) { prefs.edit().putString("tvbox_warehouse_url", value).apply() }
+    /** Last user-submitted live playlist URL; actual validated channels live in TvBoxLiveStore. */
+    var tvBoxLiveSourceUrl: String
+        get() = prefs.getString("tvbox_live_source_url", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_live_source_url", value).apply() }
     /** Set only after a manual import: show already-approved offline channels on launch. */
     var tvBoxLiveActive: Boolean
         get() = prefs.getBoolean("tvbox_live_active", false)

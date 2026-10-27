@@ -27,7 +27,7 @@ internal object TvBoxVodCodec {
             val episodes = decodeEpisodes(item)
             Film(id = "tvbox-$index-${id.hashCode().toUInt().toString(16)}", title = title,
                 subtitle = item.optString("vod_remarks").take(80),
-                category = item.optString("type_name").take(40).ifBlank { "电影" },
+                category = TvBoxCategories.topLevel(item.optString("type_name")),
                 year = item.optString("vod_year").take(10),
                 synopsis = item.optString("vod_content").replace(Regex("<[^>]*>"), " ").take(1200),
                 artwork = R.drawable.photofilm_orbit, artworkUrl = artwork,

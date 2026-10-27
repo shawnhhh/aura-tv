@@ -40,7 +40,7 @@ internal object SpiderVodCodec {
             if (id.isEmpty() || title.isEmpty()) return@mapNotNull null
             Film(id = "spider-${site.key.hashCode().toUInt().toString(16)}-${id.hashCode().toUInt().toString(16)}-$index",
                 title = title, subtitle = vod.optString("vod_remarks").take(80),
-                category = vod.optString("type_name").take(40).ifBlank { "影视" },
+                category = TvBoxCategories.topLevel(vod.optString("type_name")),
                 year = vod.optString("vod_year").take(10),
                 synopsis = vod.optString("vod_content").replace(Regex("<[^>]*>"), " ").take(1200),
                 artwork = R.drawable.photofilm_orbit,

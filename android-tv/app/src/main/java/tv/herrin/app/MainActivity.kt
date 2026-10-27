@@ -23,7 +23,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
@@ -169,7 +168,8 @@ private fun TvNavTabs(
         label = "nav-glide-visibility"
     )
     Column(
-        Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
+        Modifier.width(IntrinsicSize.Max)
+            .background(Color(0xE910131A), RoundedCornerShape(50.dp))
             .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
             .padding(horizontal = 5.dp, vertical = 4.dp)
     ) {
@@ -297,6 +297,11 @@ private fun Herrin() {
     }
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
+    var filmId by rememberSaveable { mutableStateOf(demoFilms.first().id) }
+    var configuredTvBoxUrl by remember { mutableStateOf(prefs.tvBoxWarehouseUrl) }
+    // Default settings are deliberately just two source inputs. Legacy diagnostics
+    // and import tools remain behind an explicit advanced page.
+    var settingsTvBoxOnly by rememberSaveable { mutableStateOf(true) }
     var savedProfiles by remember { mutableStateOf(profileStore.list()) }
     var activeProfileId by remember { mutableStateOf(profileStore.activeId()) }
     var sourceNameDraft by rememberSaveable { mutableStateOf("") }
@@ -317,9 +322,10 @@ private fun Herrin() {
     var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseUrl) }
     // Large pasted backups should never be marshalled into an Activity saved-state Bundle.
     var tvBoxJsonDraft by remember { mutableStateOf("") }
-    var tvBoxLiveUrlDraft by rememberSaveable { mutableStateOf("") }
-    // Consent applies only to this app process; it is never persisted or granted on startup.
-    var tvBoxAllowHttp by remember { mutableStateOf(false) }
+    var tvBoxLiveUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxLiveSourceUrl) }
+    // HTTP metadata/playlist access is user-enabled by default. Executing
+    // third-party Spider binaries continues to require separate session consent.
+    var tvBoxAllowHttp by remember { mutableStateOf(true) }
     var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
     var tvBoxLoadEpoch by remember { mutableIntStateOf(0) }
@@ -329,9 +335,17 @@ private fun Herrin() {
     var tvBoxShowAllSites by remember { mutableStateOf(false) }
     var tvBoxHerrinCatalog by remember { mutableStateOf<TvBoxConfig.HerrinCatalog?>(null) }
     var tvBoxSelectedName by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        if (configuredTvBoxUrl.isNotBlank()) {
+            tvBoxRequest = configuredTvBoxUrl to true
+            tvBoxLoadEpoch++
+        }
+    }
     LaunchedEffect(tvBoxLoadEpoch) {
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
         tvBoxStatus = "正在读取 TVBox 配置…"
+        spiderActive = false
+        spiderBridge.close()
         tvBoxSingle = null
         tvBoxShowAllSites = false
         tvBoxHerrinCatalog = null
@@ -342,6 +356,17 @@ private fun Herrin() {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
                 tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}已识别 ${result.entries.size} 个仓库${if (result.ignored > 0) "；跳过 ${result.ignored} 个无效／重复条目" else ""}。选中下方仓库可预览。"
+                if (settingsTvBoxOnly) {
+                    for (warehouse in result.entries.take(5)) {
+                        val nested = tvBoxRepository.load(warehouse.url, true)
+                        if (nested is TvBoxConfig.Single) {
+                            tvBoxSelectedName = warehouse.name
+                            tvBoxSingle = nested
+                            tvBoxStatus += "；已进入 ${warehouse.name}：${nested.sites.size} 个站点"
+                            break
+                        }
+                    }
+                }
             }
             is TvBoxConfig.Single -> {
                 if (isRoot) tvBoxWarehouses = emptyList()
@@ -358,7 +383,59 @@ private fun Herrin() {
                 tvBoxStatus = result.reason
             }
         }
-        if (isRoot && (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty())) prefs.tvBoxWarehouseUrl = address
+        if (isRoot && (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty())) {
+            prefs.tvBoxWarehouseUrl = address
+            configuredTvBoxUrl = address
+        }
+        if (settingsTvBoxOnly && tvBoxSingle != null) {
+            // Import must activate an actual catalog, not just display 49 names
+            // under Settings while the home page stays on the demo collection.
+            val directSites = tvBoxSingle!!.sites.filter { it.apiUrl != null }
+            var chosen: Pair<TvBoxSite, List<Film>>? = null
+            for (site in directSites.take(8)) {
+                when (val loaded = tvBoxVodRepo.load(site, allowHttp = true)) {
+                    is TvBoxVodResult.Ready -> {
+                        if (loaded.films.isNotEmpty()) {
+                            chosen = site to loaded.films
+                            break
+                        }
+                    }
+                    is TvBoxVodResult.Error -> Unit
+                }
+            }
+            if (chosen != null) {
+                spiderActive = false
+                providerFilms = chosen.second
+                providerStatus = "TVBox ${chosen.first.name} · ${chosen.second.size} 部"
+                tvBoxVodScope = "tvbox:${chosen.first.apiUrl}"
+                filmId = chosen.second.first().id
+                tvBoxStatus += "；已自动导入 ${chosen.first.name}，首页已切换到影视源内容"
+            } else {
+                providerFilms = null
+                tvBoxVodScope = "tvbox:pending:$address"
+                providerStatus = "配置已导入，但标准影视接口暂未返回影片；请在首页选择站点（Spider 需单独授权）"
+                tvBoxStatus += "；标准 CMS 暂无内容，请返回首页选择影视站点"
+            }
+            // TVBox single warehouses can carry their own live channel groups.
+            // Respect an independently configured live source if one exists.
+            if (prefs.tvBoxLiveSourceUrl.isBlank() && prefs.livePlaylistUrl.isBlank() &&
+                !prefs.tvBoxLiveActive) {
+                for (live in tvBoxSingle!!.lives.take(4)) {
+                    val loaded = if (live.channels.isNotEmpty()) {
+                        val channels = live.channels.filter { TvBoxUrl.normalize(it.url, true) != null }
+                        if (channels.isEmpty()) TvBoxLiveResult.Error("频道地址无效")
+                        else TvBoxLiveResult.Ready(channels)
+                    } else if (live.sourceUrl != null) tvBoxLiveRepo.load(live.sourceUrl, true)
+                    else continue
+                    if (loaded is TvBoxLiveResult.Ready && tvBoxLiveStore.save(loaded.channels, true)) {
+                        prefs.tvBoxLiveActive = true
+                        liveRefresh++
+                        tvBoxStatus += "；直播页已导入 ${loaded.channels.size} 个频道"
+                        break
+                    }
+                }
+            }
+        }
     }
     var pendingDeleteSourceId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(pendingDeleteSourceId) {
@@ -370,7 +447,8 @@ private fun Herrin() {
     var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
     var catalogRefresh by remember { mutableIntStateOf(0) }
-    val films = providerFilms ?: demoFilms
+    val sourceConfigured = configuredTvBoxUrl.isNotBlank()
+    val films = providerFilms ?: if (sourceConfigured) emptyList() else demoFilms
     fun readDeviceStatus(): String {
         val activity = context as? ComponentActivity ?: return "当前环境不支持读取屏幕刷新率"
         @Suppress("DEPRECATION")
@@ -384,12 +462,15 @@ private fun Herrin() {
             profileStore.list().size, prefs.livePlaylistUrl.isNotBlank())
     }
     LaunchedEffect(catalogRefresh) {
+        // Once a TVBox URL has been applied, the legacy/demo catalog must not
+        // race with TVBox import and silently put synthetic films back on Home.
+        if (sourceConfigured) return@LaunchedEffect
         spiderActive = false
         val endpoint = prefs.catalogUrl
         // Never leave the previous source's films visible while the next URL loads.
-        providerFilms = null
+        if (!sourceConfigured) providerFilms = null
         if (endpoint.isBlank()) {
-            providerStatus = "当前使用离线演示目录"
+            if (!sourceConfigured) providerStatus = "当前使用离线演示目录"
         } else {
             providerStatus = "正在同步授权目录…"
             when (val result = providerRepo.load(endpoint)) {
@@ -408,8 +489,6 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
-    // Keep source management immediately reachable on smaller TV viewports.
-    var settingsTvBoxOnly by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(category, screen) {
         if (category == "直播" && screen == "browse") {
             while (true) {
@@ -418,7 +497,6 @@ private fun Herrin() {
             }
         }
     }
-    var filmId by rememberSaveable { mutableStateOf(films.first().id) }
     var focusId by rememberSaveable { mutableStateOf("nav-首页") }
     var pendingToolbarFocus by rememberSaveable { mutableStateOf<String?>(null) }
     var returnScreen by rememberSaveable { mutableStateOf("browse") }
@@ -436,7 +514,7 @@ private fun Herrin() {
     val reduceMotion = reduced || systemReduced
     var splash by rememberSaveable { mutableStateOf(true) }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
-    val film = films.firstOrNull { it.id == filmId } ?: films.first()
+    val film = films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
     LaunchedEffect(screen, filmId, spiderActive) {
         if (spiderActive && screen == "detail" && film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
             spiderStatus = "正在读取 ${film.title} 的详情和选集…"
@@ -503,6 +581,7 @@ private fun Herrin() {
                 focusId = target
                 screen = "browse"
             }
+            "sites" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
             else -> { category = "首页"; focusId = "nav-首页" }
         }
     }
@@ -543,7 +622,7 @@ private fun Herrin() {
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
         // Defer decoding and drawing the large hero until after splash: loading the
         // artwork underneath an opaque splash causes avoidable startup frame stalls.
-        if (!splash) {
+        if (!splash && (!sourceConfigured || films.isNotEmpty())) {
             FilmArtwork(film, Modifier.fillMaxSize())
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
@@ -570,6 +649,84 @@ private fun Herrin() {
                     Text("当前未选中直播频道", Modifier.padding(50.dp))
                 }
             }
+            "sites" -> {
+                val selected = tvBoxSingle
+                LazyColumn(Modifier.fillMaxSize().testTag("site-list"),
+                    contentPadding = PaddingValues(horizontal = 44.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                    item { TvButton("‹ 返回首页", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
+                    item { Text("影视站点", fontSize = 34.sp, fontWeight = FontWeight.Bold) }
+                    item { Text("从已添加的影视源选择站点。标准 CMS 自动读取；Java Spider 执行第三方代码前需要你明确授权。", color = Color(0xFFBDC8D6)) }
+                    item { Text(tvBoxStatus, Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
+                    if (tvBoxWarehouses.isNotEmpty()) {
+                        item { Text("仓库", fontSize = 20.sp) }
+                        itemsIndexed(tvBoxWarehouses) { index, warehouse ->
+                            TvButton("${warehouse.name} →", Modifier.testTag("site-warehouse-$index"), reduceMotion) {
+                                settingsTvBoxOnly = true
+                                tvBoxSelectedName = warehouse.name
+                                tvBoxRequest = warehouse.url to false
+                                tvBoxLoadEpoch++
+                            }
+                        }
+                    }
+                    if (selected?.hasExternalEngine == true) {
+                        item { TvButton("运行第三方 Spider：${if (tvBoxAllowSpider) "本次已授权" else "需单独授权"}",
+                            Modifier.testTag("site-spider-consent"), reduceMotion, selected = tvBoxAllowSpider) {
+                            tvBoxAllowSpider = !tvBoxAllowSpider
+                            if (!tvBoxAllowSpider) {
+                                spiderActive = false
+                                spiderBridge.close()
+                            }
+                            tvBoxStatus = if (tvBoxAllowSpider) "已授权本次运行外部 Spider；第三方插件能以应用权限执行代码，请仅选择可信源"
+                            else "外部 Spider 授权已撤销"
+                        } }
+                    }
+                    itemsIndexed(selected?.sites.orEmpty()) { index, site ->
+                        TvButton("${site.name}  ·  ${when {
+                            site.apiUrl != null -> "CMS"
+                            site.spiderApi != null -> "Spider"
+                            else -> "尚不兼容"
+                        }}", Modifier.testTag("site-select-$index"), reduceMotion) {
+                            when {
+                                site.apiUrl != null -> uiScope.launch {
+                                    tvBoxStatus = "正在读取 ${site.name}…"
+                                    when (val result = tvBoxVodRepo.load(site, true)) {
+                                        is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${result.reason}"
+                                        is TvBoxVodResult.Ready -> {
+                                            spiderActive = false
+                                            providerFilms = result.films
+                                            providerStatus = "TVBox ${site.name} · ${result.films.size} 部"
+                                            tvBoxVodScope = "tvbox:${site.apiUrl}"
+                                            filmId = result.films.first().id
+                                            category = "首页"
+                                            screen = "browse"
+                                            tvBoxStatus = "已导入 ${site.name} 的影片目录"
+                                        }
+                                    }
+                                }
+                                site.spiderApi != null && !tvBoxAllowSpider -> tvBoxStatus = "请先授权运行可信第三方 Spider，再选择站点"
+                                site.spiderApi != null && selected != null -> uiScope.launch {
+                                    tvBoxStatus = "正在通过 ${site.name} 加载影片…"
+                                    when (val result = spiderBridge.browse(site, selected)) {
+                                        is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${result.message}"
+                                        is SpiderResult.Ready -> {
+                                            spiderActive = true
+                                            providerFilms = result.value
+                                            providerStatus = "TVBox ${site.name} · ${result.value.size} 部"
+                                            tvBoxVodScope = "spider:${site.key}:${selected.spiderJar}"
+                                            filmId = result.value.first().id
+                                            category = "首页"
+                                            screen = "browse"
+                                            tvBoxStatus = "已导入 ${site.name} 的影片目录"
+                                        }
+                                    }
+                                }
+                                else -> tvBoxStatus = "${site.name} 使用尚不支持的插件格式，无法直接解析"
+                            }
+                        }
+                    }
+                }
+            }
             "browse", "search" -> {
                 val isSearch = screen == "search"
                 val filtered = if (isSearch) SearchDiscovery.results(
@@ -592,30 +749,19 @@ private fun Herrin() {
                             }
                             Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true,
-                                onFocus = { focusId = "search" }) { screen = "search" }
-                            TvButton("影视源", Modifier.testTag("source-settings").focusRequester(requester("source-settings")),
-                                reduceMotion, quiet = true, onFocus = { focusId = "source-settings" }) {
-                                settingsTvBoxOnly = true
-                                screen = "settings"
-                            }
-                            TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion,
-                                quiet = true, onFocus = { focusId = "settings" }) {
-                                settingsTvBoxOnly = false
-                                screen = "settings"
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    // Keep the tab strip in a bounded-width parent. A horizontal
-                    // scroll container gives its children unbounded width, which
-                    // collapses the fillMaxWidth nav motion canvas to 0 px.
-                    Row(Modifier.fillMaxWidth()) {
                         TvNavTabs(category, isSearch, focusId, reduceMotion, { id -> requester(id) },
                             onFocus = { focusId = it }) { selected ->
                             category = selected
                             screen = "browse"
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true,
+                                onFocus = { focusId = "search" }) { screen = "search" }
+                            TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion,
+                                quiet = true, onFocus = { focusId = "settings" }) {
+                                settingsTvBoxOnly = true
+                                screen = "settings"
+                            }
                         }
                     }
                     Spacer(Modifier.height(20.dp))
@@ -658,6 +804,18 @@ private fun Herrin() {
                         Text("你授权的频道 · HTTPS M3U · 可选 XMLTV / .xml.gz 节目预览",
                             fontSize = 13.sp, color = Color(0xFFBDC8D6))
                         Spacer(Modifier.height(18.dp))
+                    } else if (sourceConfigured && films.isEmpty()) {
+                        Spacer(Modifier.weight(1f))
+                        Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.testTag("source-empty-title"))
+                        Text(providerStatus, fontSize = 15.sp, lineHeight = 23.sp,
+                            color = Color(0xFFCDD8E6), modifier = Modifier.testTag("source-empty-status"))
+                        Spacer(Modifier.height(14.dp))
+                        TvButton("选择影视站点", modifier = Modifier.testTag("source-open-sites")
+                            .focusRequester(requester("source-open-sites")), reduced = reduceMotion) {
+                            screen = "sites"
+                        }
+                        Spacer(Modifier.height(24.dp))
                     } else {
                         Spacer(Modifier.weight(1f))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -677,11 +835,16 @@ private fun Herrin() {
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton("▶ 播放演示", selected = true, reduced = reduceMotion, onFocus = { focusId = "play" }, modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
-                                returnScreen = "browse"
-                                episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
-                                line = film.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
-                                screen = "player"
+                            TvButton(if (providerFilms == null) "▶ 播放演示" else if (film.playbackEpisodes.isNotEmpty()) "▶ 播放" else "查看选集",
+                                selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },
+                                modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
+                                if (providerFilms != null && film.playbackEpisodes.isEmpty()) details(film)
+                                else {
+                                    returnScreen = "browse"
+                                    episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
+                                    line = film.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
+                                    screen = "player"
+                                }
                             }
                             TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.testTag("details").focusRequester(requester("details"))) { details(film) }
                         }
@@ -689,10 +852,15 @@ private fun Herrin() {
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "我的收藏"; category == "首页" -> "继续观看"; else -> "精选${category} · 演示片库" },
+                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "我的收藏"; category == "首页" -> if (sourceConfigured) "来自影视源 · ${filtered.size} 部" else "继续观看"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
                             fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
-                        Text(if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN", fontSize = 11.sp, letterSpacing = 1.5.sp,
-                            color = Color(0xFFB6BBC5))
+                        if (sourceConfigured && category != "直播") {
+                            TvButton("切换影视站点", modifier = Modifier.testTag("source-switch-site"),
+                                reduced = reduceMotion, quiet = true) { screen = "sites" }
+                        } else {
+                            Text(if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN", fontSize = 11.sp, letterSpacing = 1.5.sp,
+                                color = Color(0xFFB6BBC5))
+                        }
                     }
                     Spacer(Modifier.height(6.dp))
                     if (category == "直播" && !isSearch) {
@@ -983,7 +1151,7 @@ private fun Herrin() {
                     verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
                     item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     if (screen == "settings") {
-                        item { Text(if (settingsTvBoxOnly) "影视源管理" else "设置", fontSize = 36.sp) }
+                        item { Text(if (settingsTvBoxOnly) "设置 · 内容来源" else "高级设置", fontSize = 32.sp) }
                         if (!settingsTvBoxOnly) {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
                         item { Text("目录源管理 · 最多 10 个授权 HTTPS 目录", fontSize = 22.sp) }
@@ -1073,27 +1241,22 @@ private fun Herrin() {
                             }
                         } }
                         }
-                        item { Text("TVBox 多仓 / 单仓 / IPTV", fontSize = 22.sp) }
-                        item { Text("支持 urls 多仓、sites/lives 单仓、内嵌直播、M3U 与 TVBox TXT。Java csp_* Spider 可在本次明确授权后尝试加载与解析；JS/Python、网页二次解析及部分受保护插件仍可能不兼容。失效的配置接口可从本机已缓存的有效 JSON 回退。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
+                        item { Text(if (settingsTvBoxOnly) "影视源" else "TVBox 多仓 / 单仓 / IPTV", fontSize = 22.sp) }
+                        if (!settingsTvBoxOnly) {
+                            item { Text("支持 urls 多仓、sites/lives 单仓、内嵌直播、M3U 与 TVBox TXT。Java csp_* Spider 可在本次明确授权后尝试加载与解析；JS/Python、网页二次解析及部分受保护插件仍可能不兼容。失效的配置接口可从本机已缓存的有效 JSON 回退。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
+                        }
                         item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
                                 .onFocusChanged { configInputFocused = it.isFocused },
-                            label = { Text("TVBox 多仓／单仓 HTTP(S) JSON 地址") }, singleLine = true) }
-                        item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton("本次允许 HTTP：${if (tvBoxAllowHttp) "开" else "关"}",
-                                modifier = Modifier.testTag("tvbox-http-consent"), reduced = reduceMotion,
-                                selected = tvBoxAllowHttp) {
-                                tvBoxAllowHttp = !tvBoxAllowHttp
-                                tvBoxStatus = if (tvBoxAllowHttp) "已允许本次手动读取 HTTP 配置与直播列表（明文传输，有安全风险）"
-                                else "已关闭 HTTP 配置读取授权"
-                            }
-                            TvButton("读取配置", modifier = Modifier.testTag("tvbox-warehouse-load"),
-                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
-                                tvBoxSelectedName = ""
-                                tvBoxRequest = tvBoxUrlDraft.trim() to true
-                                tvBoxLoadEpoch++
-                            }
+                            label = { Text("影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址") }, singleLine = true) }
+                        item { TvButton(if (settingsTvBoxOnly) "应用影视源" else "读取配置",
+                            modifier = Modifier.testTag("tvbox-warehouse-load"),
+                            reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                            tvBoxSelectedName = ""
+                            tvBoxRequest = tvBoxUrlDraft.trim() to true
+                            tvBoxLoadEpoch++
                         } }
+                        if (!settingsTvBoxOnly) {
                         item { OutlinedTextField(tvBoxJsonDraft, { tvBoxJsonDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-import-json")
                                 .onFocusChanged { configInputFocused = it.isFocused },
@@ -1106,11 +1269,14 @@ private fun Herrin() {
                             tvBoxImportJsonRequest = tvBoxJsonDraft
                             tvBoxLoadEpoch++
                         } }
+                        }
+                        item { Text("直播源", fontSize = 22.sp) }
                         item { OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
                                 .onFocusChanged { configInputFocused = it.isFocused },
-                            label = { Text("直接导入 M3U / TXT / TVBox 内嵌直播 JSON URL") }, singleLine = true) }
-                        item { TvButton("导入直播源并打开直播", modifier = Modifier.testTag("tvbox-live-direct-load"),
+                            label = { Text("直播源 · M3U / TXT / TVBox HTTP(S) 地址") }, singleLine = true) }
+                        item { TvButton(if (settingsTvBoxOnly) "应用直播源" else "导入直播源并打开直播",
+                            modifier = Modifier.testTag("tvbox-live-direct-load"),
                             reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
                             val source = tvBoxLiveUrlDraft.trim()
                             uiScope.launch {
@@ -1120,6 +1286,7 @@ private fun Herrin() {
                                     is TvBoxLiveResult.Ready -> {
                                         if (tvBoxLiveStore.save(loaded.channels, tvBoxAllowHttp)) {
                                             prefs.tvBoxLiveActive = true
+                                            prefs.tvBoxLiveSourceUrl = source
                                             liveRefresh++
                                             tvBoxStatus = "已验证并缓存 ${loaded.channels.size} 个直播频道，请打开直播页"
                                         } else tvBoxStatus = "本地保存直播频道失败"
@@ -1129,6 +1296,16 @@ private fun Herrin() {
                         } }
                         item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
                             color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
+                        if (settingsTvBoxOnly) {
+                            item { Text("影视源将自动连接可用站点并更新首页。Java Spider 等第三方可执行插件仍需单独授权。", color = Color(0xFFBFC8D6), fontSize = 13.sp) }
+                            item { TvButton("返回首页", modifier = Modifier.testTag("settings-home"), reduced = reduceMotion) {
+                                category = "首页"; screen = "browse"
+                            } }
+                            item { TvButton("高级工具与诊断", modifier = Modifier.testTag("settings-advanced"), reduced = reduceMotion) {
+                                settingsTvBoxOnly = false
+                            } }
+                        }
+                        if (!settingsTvBoxOnly) {
                         if (tvBoxWarehouses.isNotEmpty()) {
                             item { Text("仓库列表 · 遥控器选择并预览", fontSize = 18.sp) }
                             item { LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1286,6 +1463,7 @@ private fun Herrin() {
                                     tvBoxStatus = "已填入目录栏；请按「保存媒体配置」以完成导入"
                                 } else tvBoxStatus = "HERRIN 目录仅允许 HTTPS，不能从 HTTP 导入"
                             } }
+                        }
                         }
                         if (!settingsTvBoxOnly) {
                         item { TvButton("保存媒体配置", reduced = reduceMotion,
