@@ -76,6 +76,7 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
         compose.onNodeWithTag("settings-advanced").performClick()
         compose.waitForIdle()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("screen-first"))
     }
     private fun capture(label: String) {
         // PixelCopy synchronizes the rendered root before the device screenshot (not just semantics).
@@ -142,6 +143,62 @@ class HerrinUiSmokeTest {
             compose.onNodeWithText("蓝色边界").assertDoesNotExist()
             assertEquals(2, server.requestCount)
             capture("tvbox-applied-home")
+        }
+    }
+    @Test fun applyingLiveSourcePopulatesLiveTabWithoutHttpToggle() {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setHeader("Content-Type", "audio/x-mpegurl")
+                .setBody("""#EXTM3U
+#EXTINF:-1 group-title="新闻",家庭新闻台
+http://example.org/live/channel.m3u8
+"""))
+            focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val settings = compose.onNodeWithTag("settings-list")
+            settings.performScrollToNode(hasTestTag("tvbox-live-direct-url"))
+            compose.onNodeWithTag("tvbox-live-direct-url")
+                .performTextReplacement(server.url("/live.m3u").toString())
+            settings.performScrollToNode(hasTestTag("tvbox-live-direct-load"))
+            compose.onNodeWithTag("tvbox-live-direct-load").performClick()
+            compose.waitUntil(15000) {
+                runCatching { compose.onNodeWithTag("tvbox-status")
+                    .assertTextContains("已验证并缓存 1 个直播频道", substring = true) }.isSuccess
+            }
+            settings.performScrollToNode(hasTestTag("settings-home"))
+            compose.onNodeWithTag("settings-home").performClick()
+            focus("nav-直播"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(8000) {
+                runCatching { compose.onNodeWithTag("live-0").assertIsDisplayed() }.isSuccess
+            }
+            compose.onNodeWithText("家庭新闻台").assertIsDisplayed()
+            assertEquals(1, server.requestCount)
+        }
+    }
+    @Test fun spiderOnlySourceDoesNotSilentlyFallBackToDemoFilms() {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"sites":[{"name":"第三方测试站","api":"csp_Demo"}],
+                    "spider":"https://example.org/spider.jar;md5;0123456789abcdef0123456789abcdef"}"""))
+            focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val settings = compose.onNodeWithTag("settings-list")
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
+            compose.onNodeWithTag("tvbox-warehouse-url")
+                .performTextReplacement(server.url("/spider-only.json").toString())
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
+            compose.onNodeWithTag("tvbox-warehouse-load").performClick()
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("tvbox-status")
+                    .assertTextContains("标准 CMS 暂无内容", substring = true) }.isSuccess
+            }
+            settings.performScrollToNode(hasTestTag("settings-home"))
+            compose.onNodeWithTag("settings-home").performClick()
+            compose.onNodeWithTag("source-empty-title").assertIsDisplayed()
+            compose.onNodeWithText("蓝色边界").assertDoesNotExist()
+            compose.onNodeWithTag("source-open-sites").performClick()
+            compose.onNodeWithTag("site-spider-consent").assertExists()
+            compose.onNodeWithTag("site-select-0").assertExists()
+            assertEquals(1, server.requestCount)
         }
     }
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
@@ -345,7 +402,7 @@ class HerrinUiSmokeTest {
         capture("settings-source-picker")
     }
 
-    @Test fun tvBoxMultiwarehouseRequiresConsentThenNavigatesWithRemote() {
+    @Test fun tvBoxMultiwarehouseAcceptsHttpByDefaultAndNavigatesWithRemote() {
         MockWebServer().use { server ->
             server.start()
             val singleUrl = server.url("/single.json")

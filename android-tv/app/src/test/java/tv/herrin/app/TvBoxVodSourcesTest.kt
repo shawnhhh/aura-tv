@@ -27,4 +27,15 @@ class TvBoxVodSourcesTest {
         assertThrows(IllegalStateException::class.java) { TvBoxVodCodec.decode("{}") }
         assertTrue(TvBoxVodCodec.decode("""{"list":[{"vod_name":"缺少编号"}]}""").isEmpty())
     }
+
+    @Test fun userAllowedHttpAlsoAppliesToPostersAndPlayback() {
+        val json = """{"list":[{"vod_id":"42","vod_name":"家庭测试片",
+            "vod_pic":"http://example.org/poster.jpg",
+            "vod_play_url":"正片${'$'}http://example.org/movie.m3u8"}]}"""
+        val strict = TvBoxVodCodec.decode(json)
+        assertTrue(strict.single().playbackEpisodes.isEmpty())
+        val allowed = TvBoxVodCodec.decode(json, allowHttp = true).single()
+        assertEquals("http://example.org/poster.jpg", allowed.artworkUrl)
+        assertEquals("http://example.org/movie.m3u8", allowed.playbackEpisodes.single().lines.single().uri)
+    }
 }

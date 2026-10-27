@@ -15,7 +15,7 @@ internal sealed interface TvBoxVodResult {
 
 /** Standard TVBox-compatible CMS JSON list. No Spider/JAR/JS is ever evaluated. */
 internal object TvBoxVodCodec {
-    fun decode(json: String): List<Film> {
+    fun decode(json: String, allowHttp: Boolean = false): List<Film> {
         require(json.toByteArray(Charsets.UTF_8).size <= 1_048_576) { "影视数据过大" }
         val items = JSONObject(json).optJSONArray("list") ?: error("缺少 CMS list 列表")
         return (0 until minOf(60, items.length())).mapNotNull { index ->
@@ -23,8 +23,8 @@ internal object TvBoxVodCodec {
             val id = item.optString("vod_id").trim().take(80)
             val title = item.optString("vod_name").trim().take(100)
             if (id.isEmpty() || title.isEmpty()) return@mapNotNull null
-            val artwork = TvBoxUrl.normalize(item.optString("vod_pic"))
-            val episodes = decodeEpisodes(item)
+            val artwork = TvBoxUrl.normalize(item.optString("vod_pic"), allowHttp)
+            val episodes = decodeEpisodes(item, allowHttp)
             Film(id = "tvbox-$index-${id.hashCode().toUInt().toString(16)}", title = title,
                 subtitle = item.optString("vod_remarks").take(80),
                 category = TvBoxCategories.topLevel(item.optString("type_name")),
@@ -35,7 +35,7 @@ internal object TvBoxVodCodec {
         }
     }
 
-    private fun decodeEpisodes(item: JSONObject): List<PlaybackEpisode> {
+    private fun decodeEpisodes(item: JSONObject, allowHttp: Boolean): List<PlaybackEpisode> {
         val play = item.optString("vod_play_url")
         if (play.isBlank()) return emptyList()
         val namedLines = item.optString("vod_play_from").split("$$$")
@@ -44,8 +44,9 @@ internal object TvBoxVodCodec {
             val name = namedLines.getOrNull(sourceIndex)?.take(50).orEmpty().ifBlank { "线路 ${sourceIndex + 1}" }
             playlist.split('#').take(99).forEachIndexed { episodeIndex, entry ->
                 val address = entry.substringAfterLast('$', "").trim()
-                // Other TVBox parsers may resolve proprietary schemes; native playback only takes HTTPS.
-                val url = TvBoxUrl.normalize(address) ?: return@forEachIndexed
+                // Honor the user's HTTP source preference for direct media too;
+                // never treat JS/plugin/opaque identifiers as native media URLs.
+                val url = TvBoxUrl.normalize(address, allowHttp) ?: return@forEachIndexed
                 merged.getOrPut(episodeIndex + 1) { mutableListOf() } += PlaybackLine(
                     "cms-$sourceIndex", name, url)
             }
@@ -93,7 +94,7 @@ internal class TvBoxVodRepository {
                     output.write(buffer, 0, count)
                 }
             }
-            val films = TvBoxVodCodec.decode(output.toString(Charsets.UTF_8.name()))
+            val films = TvBoxVodCodec.decode(output.toString(Charsets.UTF_8.name()), allowHttp)
             if (films.isEmpty()) TvBoxVodResult.Error("接口没有返回可识别的影视条目")
             else TvBoxVodResult.Ready(films)
         } catch (_: Exception) {
