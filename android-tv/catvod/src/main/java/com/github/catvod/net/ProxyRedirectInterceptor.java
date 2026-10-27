@@ -18,50 +18,33 @@ final class ProxyRedirectInterceptor implements Interceptor {
 
     private static final int MAX_FOLLOW_UPS = 20;
 
-    private final OkProxySelector selector;
-
     ProxyRedirectInterceptor(OkProxySelector selector) {
-        this.selector = selector;
+        // OkHttp 4.12 configures proxy selection at the OkHttpClient level;
+        // unlike upstream OkHttp 5 it cannot override it on an interceptor Chain.
     }
 
     @NonNull
     @Override
     public Response intercept(@NonNull Chain chain) throws IOException {
         Request request = chain.request();
-        OkProxySelector.Policy previousPolicy = null;
         Response previousResponse = null;
         int followUpCount = 0;
         while (true) {
-            OkProxySelector.Policy policy = selectPolicy(chain, request, previousPolicy);
-            request = withPolicy(request, policy, previousPolicy);
-            Chain routed = policy == null ? chain : chain.withProxySelector(policy);
-            Response response = routed.proceed(request);
+            Response response = chain.proceed(request);
             followUpCount += countFollowUps(response);
             response = withPriorResponse(response, previousResponse);
             checkFollowUps(response, followUpCount);
             NetOptions options = request.tag(NetOptions.class);
             if (options != null && !options.isRedirect()) return response;
-            Request followUp = redirect(response, chain.getFollowSslRedirects());
+            Request followUp = redirect(response, true);
             if (followUp == null) return response;
             RequestBody body = followUp.body();
             if (body != null && body.isOneShot()) return response;
             response.close();
             if (++followUpCount > MAX_FOLLOW_UPS) throw new ProtocolException("Too many follow-up requests: " + followUpCount);
-            previousResponse = response.newBuilder().body(ResponseBody.EMPTY).build();
-            previousPolicy = policy;
+            previousResponse = response.newBuilder().body(ResponseBody.create(null, new byte[0])).build();
             request = followUp;
         }
-    }
-
-    private OkProxySelector.Policy selectPolicy(Chain chain, Request request, OkProxySelector.Policy previous) {
-        return chain.getProxy() == null && chain.getProxySelector() == selector ? selector.policy(request.url().uri(), previous) : null;
-    }
-
-    private Request withPolicy(Request request, OkProxySelector.Policy policy, OkProxySelector.Policy previous) {
-        if (policy == null) return request;
-        Request.Builder builder = request.newBuilder();
-        if (previous != null && !policy.sharesProxyCredentials(previous)) builder.removeHeader("Proxy-Authorization");
-        return builder.tag(OkProxySelector.Policy.class, policy).build();
     }
 
     private int countFollowUps(Response response) {

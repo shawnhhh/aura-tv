@@ -18,6 +18,18 @@ GitHub Actions `HERRIN Android Debug` 在 PR 和开发分支 push 时构建。�
 构建成功后，在该次运行页面 Artifacts 下载 `HERRIN-debug-apk`，解压得到 `app-debug.apk`。
 Artifact 保留 14 天；需登录 GitHub。仅 debug 签名，不需要生产签名或密钥。
 
+## M4.5 · Java CatVod Spider 站点与 Media3 播放适配（Draft）
+
+在 M4.4 基础上集成经用户许可选用的 FongMi/TV GPL-3.0 CatVod
+核心。设置内需**手动开启本次外部 Spider 授权**，才能从 `csp_*`
+Java 站点读取首页、分类、影片详情和选集；获取到 `playerContent`
+返回的 `parse:0` 直链后交给现有 Media3 播放器。插件必须使用带
+`;md5;` 校验的 HTTPS 地址，并有只读和下载大小保护。应用**不附带**
+任何第三方抓取器。**外部 JAR 仍是可执行代码，目前不是隔离沙箱**；
+只有信任源时才授权。非 Java 插件、云盘登录、网页解析、内置代理和
+特殊加密线路仍可能无法播放。详细实现和 GPL 分发要求见
+[CatVod 集成说明](docs/CATVOD_GPL.md)。
+
 ## M4.2 TVBox 直播与标准影视 JSON 接口（Draft 开发分支）
 
 在 M4.1 多仓/单仓配置之上：可直接解析单仓 `lives[].channels`，或手动导入 M3U、TVBox TXT 与内嵌直播 JSON；将已授权频道保存在应用私有存储中供下次启动使用。配置 JSON 经校验后按 URL 缓存，远端变成图片/报错时只回退到**同 URL** 已验证的旧 JSON；用户也可手动粘贴从旧 TVBox 备份的 JSON 并绑定到来源地址。可以对 `sites[].api` 为直接 HTTP(S) 地址的**标准 CMS JSON** 尝试读取影片列表与自带 HTTPS 播放线路。

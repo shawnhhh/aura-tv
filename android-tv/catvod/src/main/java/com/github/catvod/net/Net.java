@@ -821,7 +821,6 @@ public final class Net implements AutoCloseable {
                 .retryOnConnectionFailure(false)
                 .sslSocketFactory(strict.sslSocketFactory(), strict.x509TrustManager())
                 .hostnameVerifier(strict.hostnameVerifier())
-                .webSocketCloseTimeout(Math.min(options.getTimeout(), 1000), TimeUnit.MILLISECONDS)
                 .build();
     }
 

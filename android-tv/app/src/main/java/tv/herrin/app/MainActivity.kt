@@ -1380,7 +1380,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.3 Alpha · 原生 Android TV\n内置影片为原创虚构演示，收藏和观看记录保存在本机。\n支持 TVBox 多仓/单仓、图片末尾 Base64 封装 JSON、M3U/TXT/内嵌直播与标准 CMS JSON 影视列表、本地私有缓存。\n需要 Spider/JAR/JS 的影视站点尚未兼容；能解析配置不等于所有影片都能播放。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.5 Alpha · 原生 Android TV\n内置影片为原创虚构演示，收藏和观看记录保存在本机。\n支持 TVBox 多仓/单仓、图片末尾 Base64 JSON、直播/CMS，以及需主动授权的 Java CatVod Spider。\n外部 Spider 可执行不受信任的代码，请仅用于可信源；部分线路需要网页解析或额外插件，不能保证播放。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player" && !spiderActive) "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}${if (film.spiderVodId == null) "  ·  原创虚构样片" else "  ·  TVBox 外部源"}\n${film.synopsis}", lineHeight = 26.sp) }

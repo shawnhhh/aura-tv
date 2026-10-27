@@ -210,7 +210,9 @@ public class OkHttp {
 
     private static OkHttpClient.Builder getBuilder() {
         OkProxySelector selector = selector();
-        OkHttpClient.Builder builder = new OkHttpClient.Builder().addInterceptor(requestInterceptor()).addInterceptor(authInterceptor()).addInterceptor(new ProxyRedirectInterceptor(selector)).addNetworkInterceptor(responseInterceptor()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).dns(dns()).hostnameVerifier((hostname, session) -> true).sslSocketFactory(getSSLContext().getSocketFactory(), trustAllCertificates()).followRedirects(false);
+        // HERRIN security change: retain platform TLS certificate + hostname
+        // validation. The upstream version bypasses both checks globally.
+        OkHttpClient.Builder builder = new OkHttpClient.Builder().addInterceptor(requestInterceptor()).addInterceptor(authInterceptor()).addInterceptor(new ProxyRedirectInterceptor(selector)).addNetworkInterceptor(responseInterceptor()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).dns(dns()).followRedirects(false);
         HttpLoggingInterceptor logging = new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY);
         builder.proxyAuthenticator(authenticator());
         //builder.addNetworkInterceptor(logging);
@@ -218,33 +220,6 @@ public class OkHttp {
         return builder;
     }
 
-    private static SSLContext getSSLContext() {
-        try {
-            SSLContext context = SSLContext.getInstance("TLS");
-            context.init(null, new TrustManager[]{trustAllCertificates()}, new SecureRandom());
-            return context;
-        } catch (Throwable e) {
-            return null;
-        }
-    }
-
-    @SuppressLint({"TrustAllX509TrustManager", "CustomX509TrustManager"})
-    private static X509TrustManager trustAllCertificates() {
-        return new X509TrustManager() {
-            @Override
-            public void checkClientTrusted(X509Certificate[] chain, String authType) {
-            }
-
-            @Override
-            public void checkServerTrusted(X509Certificate[] chain, String authType) {
-            }
-
-            @Override
-            public X509Certificate[] getAcceptedIssuers() {
-                return new X509Certificate[0];
-            }
-        };
-    }
 
     public void clear() {
         cancelAll();
