@@ -470,6 +470,7 @@ private fun Herrin() {
                 if (selected != null) {
                     AuthorizedPlaybackPanel(
                         media = PlaybackMedia(selected.url),
+                        isLive = true,
                         onBack = { focusId = "live-$activeLiveIndex"; screen = "browse" }
                     )
                 } else {
@@ -1073,7 +1074,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M3.8 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持频道查找、分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n直播搜索输入完成后自动把焦点交还频道或清空按钮。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M3.9 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持频道查找、分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n播放器新增本地实播状态面板，可查看是否真实出帧、分辨率、丢帧与音轨字幕信息。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }

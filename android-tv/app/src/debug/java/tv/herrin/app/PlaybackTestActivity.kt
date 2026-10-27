@@ -11,25 +11,32 @@ import androidx.media3.exoplayer.ExoPlayer
 /** Debug-only host. Local test media is never accepted by production settings. */
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
+    val createdPlayers = java.util.concurrent.CopyOnWriteArrayList<ExoPlayer>()
+    private var selectedFixture by mutableStateOf<String?>(null)
     val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val cueTexts = java.util.concurrent.CopyOnWriteArrayList<String>()
     // Retain a short history: the final empty cue event on ENDED must not erase
     // evidence that Media3 really decoded a WebVTT caption earlier in the clip.
     val cueHistory = java.util.concurrent.CopyOnWriteArrayList<String>()
+    /** Instrumentation-only route switch: exercises the same production player. */
+    fun switchFixture(url: String) { selectedFixture = url }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedFixture = intent.getStringExtra("fixture")
         setContent {
             var showing by remember { mutableStateOf(true) }
             MaterialTheme {
                 if (showing) AuthorizedPlaybackPanel(
                     PlaybackMedia(
-                        intent.getStringExtra("fixture")!!,
+                        selectedFixture ?: error("Debug playback fixture not configured"),
                         subtitles = intent.getStringExtra("subtitle")?.let {
                             listOf(AuthorizedSubtitle("zh", "简体中文测试字幕", it))
                         }.orEmpty()
                     ),
                     onPlayer = {
                         player = it
+                        createdPlayers.add(it)
                         it.addListener(object : androidx.media3.common.Player.Listener {
                             override fun onPlaybackStateChanged(state: Int) { states.add(state) }
                             override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
