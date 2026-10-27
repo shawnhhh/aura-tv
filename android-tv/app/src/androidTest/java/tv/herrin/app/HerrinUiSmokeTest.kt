@@ -174,7 +174,9 @@ http://example.org/live/channel.m3u8
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("live-0").assertIsDisplayed() }.isSuccess
             }
-            compose.onNodeWithText("家庭新闻台").assertIsDisplayed()
+            // The channel button includes its group prefix: "新闻 · 家庭新闻台".
+            compose.onNodeWithTag("live-0")
+                .assertTextContains("家庭新闻台", substring = true)
             assertEquals(1, server.requestCount)
         }
     }
