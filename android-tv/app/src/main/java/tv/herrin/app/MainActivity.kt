@@ -23,7 +23,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -609,7 +608,10 @@ private fun Herrin() {
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    // Keep the tab strip in a bounded-width parent. A horizontal
+                    // scroll container gives its children unbounded width, which
+                    // collapses the fillMaxWidth nav motion canvas to 0 px.
+                    Row(Modifier.fillMaxWidth()) {
                         TvNavTabs(category, isSearch, focusId, reduceMotion, { id -> requester(id) },
                             onFocus = { focusId = it }) { selected ->
                             category = selected
