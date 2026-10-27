@@ -9,8 +9,10 @@ are GPL-3.0. The complete GPL-3.0 license text is at
 [`LICENSE-GPL-3.0.md`](../LICENSE-GPL-3.0.md). We preserve upstream names,
 source, and structure. The one SDK modification is a Java 21 pattern switch in
 `Prefers.java` rewritten as Java 17 `instanceof` clauses. Its behavior is
-unchanged. The `catvod/build.gradle.kts` file expresses equivalent dependencies
-and the local Java 17/AGP 8.7 toolchain.
+unchanged. The `catvod/build.gradle.kts` file expresses upstream dependency
+families and the local Java 17/AGP 8.7 toolchain. OkHttp is pinned to 4.12.0
+instead of upstream 5.5.0 to keep Android SDK 35; this requires separate
+build and runtime verification.
 
 HERRIN Android sources and binaries incorporating this SDK must be distributed
 in compliance with GPL-3.0, including provision of the full corresponding
