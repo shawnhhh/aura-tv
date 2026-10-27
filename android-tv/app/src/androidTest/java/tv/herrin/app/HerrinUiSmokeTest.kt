@@ -447,4 +447,58 @@ class HerrinUiSmokeTest {
             server.shutdown()
         }
     }
+
+    @Test fun liveChannelSearchIsLocalAndUpdatesTheVisibleRail() {
+        val certificate = HeldCertificate.Builder().commonName("localhost")
+            .addSubjectAlternativeName("localhost").build()
+        val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
+        val clientTls = HandshakeCertificates.Builder()
+            .addTrustedCertificate(certificate.certificate).build()
+        val previousTls = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val server = MockWebServer().apply { useHttps(serverTls.sslSocketFactory(), false); start() }
+        val playlist = """#EXTM3U
+            #EXTINF:-1 tvg-id="news-main" group-title="新闻",新闻台
+            https://licensed.example.org/news.m3u8
+            #EXTINF:-1 tvg-id="SPORT-HD" group-title="体育",体育台
+            https://licensed.example.org/sport.m3u8
+            #EXTINF:-1 tvg-id="music-1" group-title="音乐",音乐台
+            https://licensed.example.org/music.m3u8
+        """.trimIndent()
+        try {
+            HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.sslSocketFactory())
+            server.enqueue(MockResponse().setHeader("Content-Type", "audio/x-mpegurl")
+                .setBody(playlist))
+            Preferences(compose.activity).livePlaylistUrl = server.url("/licensed.m3u").toString()
+            compose.activityRule.scenario.recreate()
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("nav-直播").assertExists() }.isSuccess
+            }
+            focus("nav-直播")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("live-filter-status")
+                    .assertTextContains("3 / 3", substring = true) }.isSuccess
+            }
+            focus("live-search-toggle")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-search-input").assertIsDisplayed()
+            compose.onNodeWithTag("live-search-input").performTextReplacement("sport")
+            compose.onNodeWithTag("live-filter-status")
+                .assertTextContains("匹配 1 / 3", substring = true)
+            compose.onNodeWithText("体育台", substring = true).assertExists()
+            compose.onNodeWithTag("live-search-input").performTextReplacement("无结果")
+            compose.onNodeWithTag("live-filter-status")
+                .assertTextContains("匹配 0 / 3", substring = true)
+            compose.onNodeWithText("未找到匹配频道，请清空关键词或调整分组、收藏筛选")
+                .assertExists()
+            compose.onNodeWithTag("live-search-clear").performClick()
+            compose.onNodeWithTag("live-filter-status")
+                .assertTextContains("3 / 3", substring = true)
+            assertTrue("Live search must not request another playlist", server.requestCount == 1)
+            capture("live-search-local-filter")
+        } finally {
+            HttpsURLConnection.setDefaultSSLSocketFactory(previousTls)
+            server.shutdown()
+        }
+    }
 }

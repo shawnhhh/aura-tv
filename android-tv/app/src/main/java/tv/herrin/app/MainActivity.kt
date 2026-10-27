@@ -235,6 +235,8 @@ private fun Herrin() {
     var liveChannels by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
     var showFavoriteChannelsOnly by rememberSaveable { mutableStateOf(false) }
     var selectedLiveGroup by rememberSaveable { mutableStateOf<String?>(null) }
+    var liveSearchExpanded by rememberSaveable { mutableStateOf(false) }
+    var liveSearchQuery by rememberSaveable { mutableStateOf("") }
     var liveFavoriteEpoch by remember { mutableIntStateOf(0) }
     var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
     var epgProgrammes by remember { mutableStateOf<List<LiveProgramme>>(emptyList()) }
@@ -626,6 +628,17 @@ private fun Herrin() {
                                         reduced = reduceMotion, selected = showFavoriteChannelsOnly,
                                         onFocus = { focusId = "live-favorites-filter" }
                                     ) { showFavoriteChannelsOnly = !showFavoriteChannelsOnly }
+                                    TvButton(if (liveSearchExpanded) "收起查找" else "⌕ 查找频道",
+                                        modifier = Modifier.testTag("live-search-toggle")
+                                            .focusRequester(requester("live-search-toggle")),
+                                        reduced = reduceMotion, selected = liveSearchExpanded,
+                                        onFocus = { focusId = "live-search-toggle" }) {
+                                        liveSearchExpanded = !liveSearchExpanded
+                                        if (!liveSearchExpanded) {
+                                            liveSearchQuery = ""
+                                            keyboard?.hide()
+                                        }
+                                    }
                                     TvButton("刷新频道与节目单", modifier = Modifier.testTag("live-refresh")
                                         .focusRequester(requester("live-refresh")),
                                         reduced = reduceMotion, quiet = true,
@@ -634,22 +647,47 @@ private fun Herrin() {
                                         epgRefresh++
                                     }
                                 }
+                                if (liveSearchExpanded) {
+                                    Row(verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        OutlinedTextField(
+                                            liveSearchQuery, { liveSearchQuery = it.take(40) },
+                                            modifier = Modifier.width(390.dp)
+                                                .testTag("live-search-input")
+                                                .onFocusChanged {
+                                                    if (it.isFocused) focusId = "live-search-input"
+                                                },
+                                            label = { Text("输入频道名称或 tvg-id") },
+                                            singleLine = true
+                                        )
+                                        TvButton("清空关键词", modifier = Modifier.testTag("live-search-clear")
+                                            .focusRequester(requester("live-search-clear")),
+                                            reduced = reduceMotion, quiet = true,
+                                            onFocus = { focusId = "live-search-clear"; keyboard?.hide() }) {
+                                            liveSearchQuery = ""
+                                        }
+                                    }
+                                }
                                 val visibleChannels = remember(
                                     liveChannels, resolvedGroup, showFavoriteChannelsOnly,
-                                    prefs.livePlaylistUrl, liveFavoriteEpoch
+                                    liveSearchQuery, prefs.livePlaylistUrl, liveFavoriteEpoch
                                 ) {
                                     LiveChannelDiscovery.visible(liveChannels, resolvedGroup,
-                                        showFavoriteChannelsOnly) { channel ->
+                                        showFavoriteChannelsOnly, query = liveSearchQuery) { channel ->
                                         liveFavorites.contains(prefs.livePlaylistUrl, channel.url)
                                     }
                                 }
-                                Text("显示 ${visibleChannels.size} / ${liveChannels.size} 个频道",
+                                Text("${if (liveSearchQuery.isBlank()) "显示" else "匹配"} ${visibleChannels.size} / ${liveChannels.size} 个频道",
                                     modifier = Modifier.testTag("live-filter-status"),
                                     color = Color(0xFFADBBD0), fontSize = 12.sp)
                                 if (visibleChannels.isEmpty()) {
-                                    Text(if (showFavoriteChannelsOnly)
-                                        "当前分组暂无收藏频道，可切换「全部频道」或其他分组"
-                                        else "当前分组暂无频道，请选择其他分组",
+                                    Text(when {
+                                        liveSearchQuery.isNotBlank() ->
+                                            "未找到匹配频道，请清空关键词或调整分组、收藏筛选"
+                                        showFavoriteChannelsOnly ->
+                                            "当前分组暂无收藏频道，可切换「全部频道」或其他分组"
+                                        else -> "当前分组暂无频道，请选择其他分组"
+                                    },
                                         color = Color(0xFFCFD7E4))
                                 }
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -841,6 +879,8 @@ private fun Herrin() {
                                 liveChannels = emptyList()
                                 selectedLiveGroup = null
                                 showFavoriteChannelsOnly = false
+                                liveSearchExpanded = false
+                                liveSearchQuery = ""
                                 highlightedLiveUrl = null
                                 liveRefresh++
                                 configStatus = "直播列表配置已保存；只读取你主动提供的频道"
@@ -980,7 +1020,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M3.6 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M3.7 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持频道查找、分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }

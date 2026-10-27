@@ -38,4 +38,25 @@ class LiveChannelDiscoveryTest {
         assertEquals(replacement, LiveChannelDiscovery.visible(replacement, "新闻", false) { false })
         assertTrue(LiveChannelDiscovery.visible(emptyList(), "新闻", false) { false }.isEmpty())
     }
+
+    @Test fun localizedNameAndTvgIdQueriesComposeWithGroupAndFavorites() {
+        val mixed = channels + LiveChannel("BBC World News", "https://licensed.example.org/world",
+            "新闻", "bbc-world")
+        val isFavorite: (LiveChannel) -> Boolean = { it.url == mixed.last().url }
+        assertEquals(listOf("新闻一", "新闻二"), LiveChannelDiscovery.visible(
+            mixed, "新闻", false, query = "  新闻 ", isFavorite = isFavorite).map { it.name })
+        assertEquals(listOf("BBC World News"), LiveChannelDiscovery.visible(
+            mixed, null, true, query = "BBC", isFavorite = isFavorite).map { it.name })
+        assertEquals(listOf("BBC World News"), LiveChannelDiscovery.visible(
+            mixed, "新闻", false, query = "WORLD", isFavorite = isFavorite).map { it.name })
+        assertEquals(listOf("BBC World News"), LiveChannelDiscovery.visible(
+            mixed, null, false, query = "bbc-world", isFavorite = isFavorite).map { it.name })
+        assertTrue(LiveChannelDiscovery.visible(
+            mixed, "体育", false, query = "BBC", isFavorite = isFavorite).isEmpty())
+        assertEquals(mixed, LiveChannelDiscovery.visible(
+            mixed, null, false, query = " ", isFavorite = isFavorite))
+        // Search never matches a private playback URL or sends a network query.
+        assertTrue(LiveChannelDiscovery.visible(
+            mixed, null, false, query = "licensed.example.org", isFavorite = isFavorite).isEmpty())
+    }
 }
