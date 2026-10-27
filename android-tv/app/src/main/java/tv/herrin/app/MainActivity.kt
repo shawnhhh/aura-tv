@@ -331,6 +331,8 @@ private fun Herrin() {
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
     var tvBoxLoadEpoch by remember { mutableIntStateOf(0) }
     var tvBoxStatus by remember { mutableStateOf("TVBox 多仓仅读取配置元数据，需手动输入并点击读取") }
+    var vodImportFeedback by remember { mutableStateOf("") }
+    var liveImportFeedback by remember { mutableStateOf("") }
     var tvBoxWarehouses by remember { mutableStateOf<List<TvBoxWarehouse>>(emptyList()) }
     var tvBoxSingle by remember { mutableStateOf<TvBoxConfig.Single?>(null) }
     var tvBoxShowAllSites by remember { mutableStateOf(false) }
@@ -347,6 +349,7 @@ private fun Herrin() {
         val runSpiderAfterApply = tvBoxRunSpiderAfterApply
         tvBoxRunSpiderAfterApply = false
         tvBoxStatus = "正在读取 TVBox 配置…"
+        vodImportFeedback = "读取中…"
         spiderActive = false
         spiderBridge.close()
         tvBoxSingle = null
@@ -415,7 +418,15 @@ private fun Herrin() {
             var spiderFailure = ""
             if (chosen == null) {
                 val config = tvBoxSingle!!
-                for (site in config.sites.filter { it.spiderApi != null }.take(3)) {
+                // The first entries in many TVBox bundles are account/cloud
+                // management sites, not playable video catalogs. Explore later
+                // candidates instead of giving up after the first three.
+                val candidates = config.sites.filter { it.spiderApi != null }
+                    .sortedBy { site ->
+                        if (site.name.contains("云盘") || site.name.contains("片单") ||
+                            site.name.contains("预告") || site.name.contains("音乐")) 1 else 0
+                    }.take(12)
+                for (site in candidates) {
                     val jarSpec = site.jar ?: config.spiderJar ?: continue
                     // No silent execution of a changed or newly introduced JAR on startup.
                     if (!TvBoxSpiderPolicy.mayRun(runSpiderAfterApply, prefs.tvBoxWarehouseUrl,
@@ -423,7 +434,10 @@ private fun Herrin() {
                             prefs.tvBoxTrustedSpiderJarSpec)) continue
                     tvBoxStatus += "；正在自动读取 ${site.name}…"
                     when (val result = spiderBridge.browse(site, config)) {
-                        is SpiderResult.Failure -> spiderFailure = result.message
+                        is SpiderResult.Failure -> {
+                            spiderFailure = result.message
+                            Log.w("HerrinCatVod", "站点 ${site.key}: ${result.message}")
+                        }
                         is SpiderResult.Ready -> if (result.value.isNotEmpty()) {
                             chosenSpider = site to result.value
                             prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
@@ -440,6 +454,7 @@ private fun Herrin() {
                 tvBoxVodScope = "tvbox:${chosen.first.apiUrl}"
                 filmId = chosen.second.first().id
                 tvBoxStatus += "；已自动导入 ${chosen.first.name}，首页已切换到影视源内容"
+                vodImportFeedback = "成功"
             } else if (chosenSpider != null) {
                 spiderActive = true
                 providerFilms = chosenSpider.second
@@ -447,12 +462,14 @@ private fun Herrin() {
                 tvBoxVodScope = "spider:${chosenSpider.first.key}:${tvBoxSingle!!.spiderJar}"
                 filmId = chosenSpider.second.first().id
                 tvBoxStatus += "；已自动导入 ${chosenSpider.first.name}，首页已切换到真实影视内容"
+                vodImportFeedback = "成功"
             } else {
                 providerFilms = null
                 tvBoxVodScope = "tvbox:pending:$address"
                 providerStatus = "配置已导入，暂无可播放影视目录；可在设置重新应用影视源"
                 tvBoxStatus += "；标准 CMS 与已允许的 Spider 均未提供可用目录" +
                     (if (spiderFailure.isNotBlank()) "（${spiderFailure.take(80)}）" else "")
+                vodImportFeedback = "未获取到影片"
             }
             // TVBox single warehouses can carry their own live channel groups.
             // Respect an independently configured live source if one exists.
@@ -474,6 +491,7 @@ private fun Herrin() {
                 }
             }
         }
+        if (tvBoxSingle == null) vodImportFeedback = "导入失败"
     }
     var pendingDeleteSourceId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(pendingDeleteSourceId) {
@@ -545,6 +563,13 @@ private fun Herrin() {
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
     var activeLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
     var activeLiveIndex by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(liveChannels, category, screen) {
+        if (category == "直播" && screen == "browse" && liveChannels.isNotEmpty()) {
+            if (activeLiveChannel?.url !in liveChannels.map { it.url })
+                activeLiveChannel = liveChannels.first()
+            screen = "live-player"
+        }
+    }
     val catalogScope = tvBoxVodScope ?: prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
     var favorites by remember(catalogScope) { mutableStateOf(prefs.idsFor(catalogScope)) }
     var reduced by remember { mutableStateOf(prefs.reducedMotion) }
@@ -611,7 +636,7 @@ private fun Herrin() {
     fun back() {
         when (screen) {
             "player" -> screen = "detail"
-            "live-player" -> { focusId = "live-$activeLiveIndex"; screen = "browse" }
+            "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
             "detail" -> screen = returnScreen
             "search", "settings" -> {
                 val target = if (screen == "settings") "settings" else "search"
@@ -678,10 +703,17 @@ private fun Herrin() {
             "live-player" -> {
                 val selected = activeLiveChannel
                 if (selected != null) {
-                    AuthorizedPlaybackPanel(
-                        media = PlaybackMedia(selected.url),
-                        isLive = true,
-                        onBack = { focusId = "live-$activeLiveIndex"; screen = "browse" }
+                    LiveTvSurface(
+                        channels = liveChannels,
+                        selected = selected,
+                        onChannel = { channel ->
+                            activeLiveChannel = channel
+                            activeLiveIndex = liveChannels.indexOfFirst { it.url == channel.url }
+                        },
+                        favorites = liveFavorites,
+                        favoriteScope = liveFavoriteScope,
+                        onBack = { category = "首页"; focusId = "nav-首页"; screen = "browse" },
+                        reduced = reduceMotion
                     )
                 } else {
                     Text("当前未选中直播频道", Modifier.padding(50.dp))
@@ -781,7 +813,12 @@ private fun Herrin() {
                         TvNavTabs(category, isSearch, focusId, reduceMotion, { id -> requester(id) },
                             onFocus = { focusId = it }) { selected ->
                             category = selected
-                            screen = "browse"
+                            if (selected == "直播" && liveChannels.isNotEmpty()) {
+                                if (activeLiveChannel?.url !in liveChannels.map { it.url }) {
+                                    activeLiveChannel = liveChannels.first()
+                                }
+                                screen = "live-player"
+                            } else screen = "browse"
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true,
@@ -1269,13 +1306,23 @@ private fun Herrin() {
                             Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
                                 .onFocusChanged { configInputFocused = it.isFocused },
                             label = { Text("影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址") }, singleLine = true) }
-                        item { TvButton(if (settingsTvBoxOnly) "应用影视源" else "读取配置",
-                            modifier = Modifier.testTag("tvbox-warehouse-load"),
-                            reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
-                            tvBoxSelectedName = ""
-                            tvBoxRunSpiderAfterApply = true
-                            tvBoxRequest = tvBoxUrlDraft.trim() to true
-                            tvBoxLoadEpoch++
+                        item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            TvButton(if (settingsTvBoxOnly) "应用影视源" else "读取配置",
+                                modifier = Modifier.testTag("tvbox-warehouse-load"),
+                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                                tvBoxSelectedName = ""
+                                tvBoxRunSpiderAfterApply = true
+                                vodImportFeedback = "读取中…"
+                                tvBoxRequest = tvBoxUrlDraft.trim() to true
+                                tvBoxLoadEpoch++
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
+                                Text(vodImportFeedback, Modifier.testTag("vod-apply-feedback"),
+                                    color = if (vodImportFeedback == "成功") Color(0xFF85D9B5)
+                                    else if (vodImportFeedback.contains("失败") || vodImportFeedback.contains("未获取")) Color(0xFFF2A5A5)
+                                    else Color(0xFFC4D3E7), fontSize = 14.sp)
+                            }
                         } }
                         if (!settingsTvBoxOnly) {
                         item { OutlinedTextField(tvBoxJsonDraft, { tvBoxJsonDraft = it },
@@ -1296,34 +1343,52 @@ private fun Herrin() {
                             Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
                                 .onFocusChanged { configInputFocused = it.isFocused },
                             label = { Text("直播源 · M3U / TXT / TVBox HTTP(S) 地址") }, singleLine = true) }
-                        item { TvButton(if (settingsTvBoxOnly) "应用直播源" else "导入直播源并打开直播",
-                            modifier = Modifier.testTag("tvbox-live-direct-load"),
-                            reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
-                            val source = tvBoxLiveUrlDraft.trim()
-                            uiScope.launch {
-                                tvBoxStatus = "正在验证直播源…"
-                                when (val loaded = tvBoxLiveRepo.load(source, tvBoxAllowHttp)) {
-                                    is TvBoxLiveResult.Error -> tvBoxStatus = loaded.reason
-                                    is TvBoxLiveResult.Ready -> {
-                                        if (tvBoxLiveStore.save(loaded.channels, tvBoxAllowHttp)) {
-                                            prefs.tvBoxLiveActive = true
-                                            prefs.tvBoxLiveSourceUrl = source
-                                            liveRefresh++
-                                            tvBoxStatus = "已验证并缓存 ${loaded.channels.size} 个直播频道，请打开直播页"
-                                        } else tvBoxStatus = "本地保存直播频道失败"
+                        item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TvButton(if (settingsTvBoxOnly) "应用直播源" else "导入直播源并打开直播",
+                                modifier = Modifier.testTag("tvbox-live-direct-load"),
+                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                                val source = tvBoxLiveUrlDraft.trim()
+                                liveImportFeedback = "读取中…"
+                                uiScope.launch {
+                                    tvBoxStatus = "正在验证直播源…"
+                                    when (val loaded = tvBoxLiveRepo.load(source, tvBoxAllowHttp)) {
+                                        is TvBoxLiveResult.Error -> {
+                                            tvBoxStatus = loaded.reason
+                                            liveImportFeedback = "失败"
+                                        }
+                                        is TvBoxLiveResult.Ready -> {
+                                            if (tvBoxLiveStore.save(loaded.channels, tvBoxAllowHttp)) {
+                                                prefs.tvBoxLiveActive = true
+                                                prefs.tvBoxLiveSourceUrl = source
+                                                liveRefresh++
+                                                tvBoxStatus = "已验证并缓存 ${loaded.channels.size} 个直播频道，请打开直播页"
+                                                liveImportFeedback = "成功"
+                                            } else {
+                                                tvBoxStatus = "本地保存直播频道失败"
+                                                liveImportFeedback = "失败"
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        } }
-                        item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
-                            color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
-                        if (settingsTvBoxOnly) {
-                            item { Text("点击「应用影视源」会自动尝试该源的 CMS 与 Java Spider 站点。第三方插件在应用进程中执行代码，请只添加你信任的来源；更新后的插件校验值不同则不会在下次启动时自动执行。", color = Color(0xFFE2C38B), fontSize = 13.sp, lineHeight = 19.sp) }
-                            if (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty()) {
-                                item { TvButton("选择影视站点 / 仓库", modifier = Modifier.testTag("settings-source-sites"), reduced = reduceMotion) {
-                                    screen = "sites"
-                                } }
+                            if (settingsTvBoxOnly) {
+                                TvButton("选择影视点", modifier = Modifier.testTag("settings-source-sites"),
+                                    reduced = reduceMotion) { screen = "sites" }
                             }
+                            Spacer(Modifier.weight(1f))
+                            if (settingsTvBoxOnly && liveImportFeedback.isNotBlank()) {
+                                Text(liveImportFeedback, Modifier.testTag("live-apply-feedback"),
+                                    color = if (liveImportFeedback == "成功") Color(0xFF85D9B5)
+                                    else if (liveImportFeedback == "失败") Color(0xFFF2A5A5)
+                                    else Color(0xFFC4D3E7), fontSize = 14.sp)
+                            }
+                        } }
+                        if (!settingsTvBoxOnly) {
+                            item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
+                                color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
+                        }
+                        if (settingsTvBoxOnly) {
                             item { TvButton("返回首页", modifier = Modifier.testTag("settings-home"), reduced = reduceMotion) {
                                 category = "首页"; screen = "browse"
                             } }
@@ -1594,7 +1659,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.5 Alpha · 原生 Android TV\n内置影片为原创虚构演示，收藏和观看记录保存在本机。\n支持 TVBox 多仓/单仓、图片末尾 Base64 JSON、直播/CMS，以及需主动授权的 Java CatVod Spider。\n外部 Spider 可执行不受信任的代码，请仅用于可信源；部分线路需要网页解析或额外插件，不能保证播放。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.8 Alpha · 原生 Android TV\n直播默认全屏，按左键或确定键从左侧选择分组和频道。\n影视、直播配置都在设置首页；高级工具中可查看解析错误。\n外部 Spider 可执行不受信任的代码，请仅用于可信源；部分受保护插件及网页解析线路仍可能无法兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
                     } else {
                         item { Text(if (screen == "player" && !spiderActive) "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
@@ -1669,6 +1734,136 @@ private fun Herrin() {
                                     }
                                 }
                             } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Full-screen live television: Left/OK reveals the channel drawer over the playing video. */
+@Composable
+private fun LiveTvSurface(
+    channels: List<LiveChannel>,
+    selected: LiveChannel,
+    onChannel: (LiveChannel) -> Unit,
+    favorites: LiveFavorites,
+    favoriteScope: String,
+    onBack: () -> Unit,
+    reduced: Boolean
+) {
+    var drawerOpen by remember { mutableStateOf(false) }
+    var drawerGroup by remember { mutableStateOf<String?>(null) }
+    var favoriteOnly by remember { mutableStateOf(false) }
+    var searchOpen by remember { mutableStateOf(false) }
+    var searchText by remember { mutableStateOf("") }
+    var favoriteVersion by remember { mutableIntStateOf(0) }
+    val groups = remember(channels) { LiveChannelDiscovery.groups(channels) }
+    val visible = remember(channels, drawerGroup, favoriteOnly, searchText, favoriteVersion) {
+        LiveChannelDiscovery.visible(channels, drawerGroup, favoriteOnly, searchText) {
+            favorites.contains(favoriteScope, it.url)
+        }
+    }
+    val groupRequester = remember { FocusRequester() }
+    val selectedChannelRequester = remember { FocusRequester() }
+    LaunchedEffect(drawerOpen, drawerGroup) {
+        if (drawerOpen) {
+            withFrameNanos { }
+            runCatching { selectedChannelRequester.requestFocus() }
+                .onFailure { runCatching { groupRequester.requestFocus() } }
+        }
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black).testTag("live-fullscreen")) {
+        AuthorizedPlaybackPanel(
+            media = PlaybackMedia(selected.url),
+            isLive = true,
+            onLiveMenu = { drawerOpen = true },
+            onBack = { if (drawerOpen) drawerOpen = false else onBack() }
+        )
+        if (!drawerOpen) {
+            Column(Modifier.align(Alignment.BottomStart).padding(28.dp)
+                .background(Color(0xA5141924), RoundedCornerShape(16.dp))
+                .padding(horizontal = 18.dp, vertical = 12.dp)) {
+                Text(selected.name, color = Color.White, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.testTag("live-playing-name"))
+                Text("按左键或确定键打开频道列表", fontSize = 12.sp, color = Color(0xFFBECBD9),
+                    modifier = Modifier.testTag("live-open-drawer-hint"))
+            }
+        } else {
+            Row(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(630.dp)
+                .background(Color(0xF208101B)).testTag("live-channel-drawer")
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown &&
+                        event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+                        // Right at the group edge moves into channels by normal
+                        // focus search; Right from an already selected channel closes.
+                        false
+                    } else false
+                }) {
+                Column(Modifier.width(165.dp).fillMaxHeight()
+                    .background(Color(0xDD111A26)).padding(12.dp)) {
+                    Text("分组", fontWeight = FontWeight.Bold, fontSize = 20.sp,
+                        color = Color.White, modifier = Modifier.padding(9.dp))
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        item {
+                            TvButton("全部频道", Modifier.testTag("live-drawer-all")
+                                .focusRequester(groupRequester), reduced,
+                                selected = drawerGroup == null) { drawerGroup = null }
+                        }
+                        itemsIndexed(groups) { index, group ->
+                            TvButton(group.ifBlank { "未分组" },
+                                Modifier.testTag("live-drawer-group-$index"), reduced,
+                                selected = group == drawerGroup) { drawerGroup = group }
+                        }
+                    }
+                }
+                Column(Modifier.weight(1f).fillMaxHeight().padding(12.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                    Text("频道 · ${visible.size}", fontWeight = FontWeight.SemiBold,
+                            color = Color.White, fontSize = 19.sp)
+                        TvButton("收起", Modifier.testTag("live-drawer-close"), reduced, quiet = true) {
+                            drawerOpen = false
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TvButton(if (favoriteOnly) "全部" else "★ 收藏",
+                            Modifier.testTag("live-drawer-favorites"), reduced,
+                            selected = favoriteOnly, quiet = true) { favoriteOnly = !favoriteOnly }
+                        TvButton(if (searchOpen) "取消查找" else "⌕ 查找",
+                            Modifier.testTag("live-drawer-search-toggle"), reduced, quiet = true) {
+                            searchOpen = !searchOpen
+                            if (!searchOpen) searchText = ""
+                        }
+                    }
+                    if (searchOpen) {
+                        OutlinedTextField(searchText, { searchText = it.take(40) },
+                            Modifier.fillMaxWidth().testTag("live-drawer-search-input"),
+                            label = { Text("频道名称 / tvg-id") }, singleLine = true)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    if (visible.isEmpty()) Text("当前筛选没有频道", color = Color(0xFFBDC8D6),
+                        modifier = Modifier.testTag("live-drawer-empty"))
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        itemsIndexed(visible, key = { _, channel -> channel.url }) { index, channel ->
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                TvButton(channel.name,
+                                    Modifier.weight(1f).testTag("live-drawer-channel-$index")
+                                        .then(if (index == 0) Modifier.focusRequester(selectedChannelRequester)
+                                            else Modifier), reduced,
+                                    selected = selected.url == channel.url) {
+                                    onChannel(channel)
+                                    drawerOpen = false
+                                }
+                                TvButton(if (favorites.contains(favoriteScope, channel.url)) "★" else "☆",
+                                    Modifier.testTag("live-drawer-favorite-$index"), reduced,
+                                    quiet = true) {
+                                    favorites.toggle(favoriteScope, channel.url)
+                                    favoriteVersion++
+                                }
+                            }
                         }
                     }
                 }

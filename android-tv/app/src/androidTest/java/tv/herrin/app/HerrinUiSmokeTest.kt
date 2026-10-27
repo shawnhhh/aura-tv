@@ -131,8 +131,8 @@ class HerrinUiSmokeTest {
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.waitUntil(15000) {
-                runCatching { compose.onNodeWithTag("tvbox-status")
-                    .assertTextContains("已自动导入", substring = true) }.isSuccess
+                runCatching { compose.onNodeWithTag("vod-apply-feedback")
+                    .assertTextEquals("成功") }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("settings-home"))
             compose.onNodeWithTag("settings-home").performClick()
@@ -166,18 +166,20 @@ http://example.org/live/channel.m3u8
             settings.performScrollToNode(hasTestTag("tvbox-live-direct-load"))
             compose.onNodeWithTag("tvbox-live-direct-load").performClick()
             compose.waitUntil(15000) {
-                runCatching { compose.onNodeWithTag("tvbox-status")
-                    .assertTextContains("已验证并缓存 1 个直播频道", substring = true) }.isSuccess
+                runCatching { compose.onNodeWithTag("live-apply-feedback")
+                    .assertTextEquals("成功") }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("settings-home"))
             compose.onNodeWithTag("settings-home").performClick()
             focus("nav-直播"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitUntil(8000) {
-                runCatching { compose.onNodeWithTag("live-0").assertIsDisplayed() }.isSuccess
+                runCatching { compose.onNodeWithTag("live-fullscreen").assertIsDisplayed() }.isSuccess
             }
-            // The channel button includes its group prefix: "新闻 · 家庭新闻台".
-            compose.onNodeWithTag("live-0")
+            compose.onNodeWithTag("live-playing-name")
                 .assertTextContains("家庭新闻台", substring = true)
+            key(KeyEvent.KEYCODE_DPAD_LEFT)
+            compose.onNodeWithTag("live-channel-drawer").assertIsDisplayed()
+            compose.onNodeWithTag("live-drawer-channel-0").assertTextContains("家庭新闻台")
             assertEquals(1, server.requestCount)
         }
     }
@@ -195,8 +197,8 @@ http://example.org/live/channel.m3u8
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.waitUntil(10000) {
-                runCatching { compose.onNodeWithTag("tvbox-status")
-                    .assertTextContains("均未提供可用目录", substring = true) }.isSuccess
+                runCatching { compose.onNodeWithTag("vod-apply-feedback")
+                    .assertTextEquals("未获取到影片") }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("settings-home"))
             compose.onNodeWithTag("settings-home").performClick()
@@ -533,7 +535,7 @@ http://example.org/live/channel.m3u8
         capture("settings-xmltv-guide")
     }
 
-    @Test fun liveGroupsAndFavoritesComposeWithRealDpadAndManualRefresh() {
+    @Test fun liveStartsFullscreenAndDrawerSupportsGroupsFavoritesAndChannelSwitch() {
         val certificate = HeldCertificate.Builder().commonName("localhost")
             .addSubjectAlternativeName("localhost").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
@@ -551,14 +553,10 @@ http://example.org/live/channel.m3u8
             #EXTINF:-1,独立台
             https://licensed.example.org/other.m3u8
         """.trimIndent()
-        fun enqueue() = server.enqueue(MockResponse().setHeader("Content-Type", "audio/x-mpegurl")
+        server.enqueue(MockResponse().setHeader("Content-Type", "audio/x-mpegurl")
             .setBody(playlist))
         try {
             HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.sslSocketFactory())
-            enqueue()
-            // Settings/IME D-pad handoff is covered separately. Start this
-            // test with a saved authorized URL so its subject is group focus,
-            // favorites and refresh, never TV keyboard timing.
             Preferences(compose.activity).livePlaylistUrl = server.url("/channels.m3u").toString()
             compose.activityRule.scenario.recreate()
             compose.waitUntil(10000) {
@@ -567,57 +565,35 @@ http://example.org/live/channel.m3u8
             focus("nav-直播")
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitUntil(10000) {
-                runCatching { compose.onNodeWithTag("live-filter-status")
-                    .assertTextContains("4 / 4", substring = true) }.isSuccess
+                runCatching { compose.onNodeWithTag("live-fullscreen").assertExists() }.isSuccess
             }
-            compose.onNodeWithTag("live-group-rail").assertExists()
-            compose.onNodeWithTag("live-0").assertIsDisplayed()
-            focus("live-group-all")
-            key(KeyEvent.KEYCODE_DPAD_RIGHT)
-            compose.onNodeWithTag("live-group-0").assertIsFocused() // 新闻
-            key(KeyEvent.KEYCODE_DPAD_RIGHT)
-            compose.onNodeWithTag("live-group-1").assertIsFocused() // 体育
-            // The white nav underline belongs only to focused top tabs.
-            val track = compose.onNodeWithTag("nav-motion-track").captureToImage().toPixelMap()
-            var bright = 0
-            for (y in 0 until track.height) for (x in 0 until track.width) {
-                val color = track[x, y]
-                if (color.red > 0.74f && color.green > 0.74f && color.blue > 0.74f) bright++
-            }
-            assertTrue("Nav underline should fade after D-pad enters live groups", bright < 10)
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
-            focus("live-group-all")
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("4 / 4", substring = true)
-            focus("live-favorite-0") // Only 新闻一 is favorited.
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            focus("live-favorites-filter")
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
-            focus("live-group-1") // Sports + favorites has no matches.
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-filter-status").assertTextContains("0 / 4", substring = true)
-            compose.onNodeWithText("当前分组暂无收藏频道，可切换「全部频道」或其他分组")
-                .assertExists()
-            focus("live-group-all")
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            enqueue()
-            focus("live-refresh")
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.waitUntil(10000) {
-                runCatching { compose.onNodeWithTag("live-status")
-                    .assertTextContains("已加载 4 个授权直播频道") }.isSuccess
-            }
-            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
-            capture("live-groups-dpad-favorites-refresh")
+            compose.onNodeWithTag("live-playing-name").assertTextEquals("新闻一")
+            compose.onNodeWithTag("live-drawer-all").assertDoesNotExist()
+            key(KeyEvent.KEYCODE_DPAD_LEFT)
+            compose.onNodeWithTag("live-channel-drawer").assertIsDisplayed()
+            compose.onNodeWithTag("live-drawer-all").assertExists()
+            compose.onNodeWithTag("live-drawer-group-1").performClick() // 体育
+            compose.onNodeWithTag("live-drawer-channel-0").assertTextContains("体育一")
+            compose.onNodeWithTag("live-drawer-channel-0").performClick()
+            compose.onNodeWithTag("live-playing-name").assertTextEquals("体育一")
+            compose.onNodeWithTag("live-channel-drawer").assertDoesNotExist()
+            key(KeyEvent.KEYCODE_DPAD_LEFT)
+            compose.onNodeWithTag("live-drawer-all").performClick()
+            compose.onNodeWithTag("live-drawer-favorite-0").performClick()
+            compose.onNodeWithTag("live-drawer-favorites").performClick()
+            compose.onNodeWithTag("live-drawer-channel-0").assertTextContains("新闻一")
+            compose.onNodeWithTag("live-drawer-group-1").performClick()
+            compose.onNodeWithTag("live-drawer-empty").assertExists()
+            key(KeyEvent.KEYCODE_BACK)
+            compose.onNodeWithTag("live-channel-drawer").assertDoesNotExist()
+            capture("live-fullscreen-left-drawer")
         } finally {
             HttpsURLConnection.setDefaultSSLSocketFactory(previousTls)
             server.shutdown()
         }
     }
 
-    @Test fun liveChannelSearchIsLocalAndUpdatesTheVisibleRail() {
+    @Test fun liveChannelSearchRunsInsidePlaybackDrawerWithoutRefetchingPlaylist() {
         val certificate = HeldCertificate.Builder().commonName("localhost")
             .addSubjectAlternativeName("localhost").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
@@ -645,47 +621,20 @@ http://example.org/live/channel.m3u8
             focus("nav-直播")
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitUntil(10000) {
-                runCatching { compose.onNodeWithTag("live-filter-status")
-                    .assertTextContains("3 / 3", substring = true) }.isSuccess
+                runCatching { compose.onNodeWithTag("live-fullscreen").assertExists() }.isSuccess
             }
-            focus("live-search-toggle")
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithTag("live-search-input").assertIsDisplayed()
-            compose.onNodeWithTag("live-search-input").performTextReplacement("sport")
-            compose.onNodeWithTag("live-filter-status")
-                .assertTextContains("匹配 1 / 3", substring = true)
-            compose.onNodeWithText("体育台", substring = true).assertExists()
-            compose.onNodeWithTag("live-search-input").performTextReplacement("无结果")
-            compose.onNodeWithTag("live-filter-status")
-                .assertTextContains("匹配 0 / 3", substring = true)
-            compose.onNodeWithText("未找到匹配频道，请清空关键词或调整分组、收藏筛选")
-                .assertExists()
-            compose.onNodeWithTag("live-search-clear").performClick()
-            compose.onNodeWithTag("live-filter-status")
-                .assertTextContains("3 / 3", substring = true)
-            // The TV keyboard's Done action must return the next remote key
-            // to the first matching native channel, not leave it in the IME.
-            compose.onNodeWithTag("live-search-input").performTextReplacement("sport")
-            compose.onNodeWithTag("live-search-input").performImeAction()
-            compose.waitUntil(8000) {
-                runCatching { compose.onNodeWithTag("live-0").assertIsFocused() }.isSuccess
-            }
-            key(KeyEvent.KEYCODE_DPAD_RIGHT)
-            // The first D-pad event can be swallowed while the TV IME is
-            // relinquishing its native window focus after Done.
-            val favoriteFocus = {
-                runCatching { compose.onNodeWithTag("live-favorite-0")
-                    .assertIsFocused() }.isSuccess
-            }
-            if (!favoriteFocus()) {
-                compose.waitForIdle()
-                key(KeyEvent.KEYCODE_DPAD_RIGHT)
-            }
-            compose.waitUntil(5000) { favoriteFocus() }
-            key(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithText("★ 已收藏").assertExists()
+            key(KeyEvent.KEYCODE_DPAD_LEFT)
+            compose.onNodeWithTag("live-drawer-search-toggle").performClick()
+            compose.onNodeWithTag("live-drawer-search-input").assertIsDisplayed()
+            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("SPORT")
+            compose.onNodeWithTag("live-drawer-channel-0").assertTextContains("体育台")
+            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("无结果")
+            compose.onNodeWithTag("live-drawer-empty").assertExists()
+            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("sport")
+            compose.onNodeWithTag("live-drawer-channel-0").performClick()
+            compose.onNodeWithTag("live-playing-name").assertTextEquals("体育台")
             assertTrue("Live search must not request another playlist", server.requestCount == 1)
-            capture("live-search-ime-return-to-channel")
+            capture("live-drawer-search-and-switch")
         } finally {
             HttpsURLConnection.setDefaultSSLSocketFactory(previousTls)
             server.shutdown()

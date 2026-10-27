@@ -4,9 +4,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.lang.reflect.InvocationTargetException
 
 class TvBoxSpiderBridgeTest {
     private val site = TvBoxSite("测试站", true, key = "video", spiderApi = "csp_Demo")
+
+    @Test fun `reflection errors surface the actual failing Spider dependency`() {
+        val nested = InvocationTargetException(IllegalStateException("guard initialization unavailable"))
+        assertEquals("IllegalStateException：guard initialization unavailable",
+            SpiderFailureDetails.message(nested))
+    }
 
     @Test fun `site metadata retains external jar and extension without execution`() {
         val parsed = TvBoxConfigParser.parse("""

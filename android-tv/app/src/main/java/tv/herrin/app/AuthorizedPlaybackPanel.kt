@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,6 +68,7 @@ fun AuthorizedPlaybackPanel(
     startPositionMs: Long = 0L,
     onPlaybackProgress: (positionMs: Long, durationMs: Long, finished: Boolean) -> Unit = { _, _, _ -> },
     isLive: Boolean = false,
+    onLiveMenu: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -188,6 +190,10 @@ fun AuthorizedPlaybackPanel(
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
             true
+        } else if (isLive && key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) onLiveMenu()
+            true
         } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 PlaybackTransport.seekBy(player,
@@ -240,7 +246,22 @@ fun AuthorizedPlaybackPanel(
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
-        Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
+        if (isLive) {
+            // A tiny focus anchor lets DPAD_LEFT/OK open the channel drawer while
+            // the video remains edge-to-edge. No visible transport controls.
+            Box(Modifier.size(1.dp).focusRequester(initialControl).focusable()
+                .testTag("live-player-focus"))
+            if (errorMessage != null) {
+                Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 42.dp)
+                    .background(Color(0xD9161B25), RoundedCornerShape(14.dp)).padding(16.dp)) {
+                    Text(errorMessage!!, color = Color(0xFFFFD0D0),
+                        modifier = Modifier.testTag("player-error"))
+                    Button(onClick = { retryPlayback() }, modifier = Modifier.testTag("player-retry")) {
+                        Text("重试")
+                    }
+                }
+            }
+        } else Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Button(onClick = { requestBack("visible-button") }) {
                 Text(if (isLive) "返回频道" else "返回详情")
@@ -287,7 +308,7 @@ fun AuthorizedPlaybackPanel(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        Column(
+        if (!isLive) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.80f).padding(bottom = 36.dp)
                 .background(Color(0xE9151820), RoundedCornerShape(20.dp))
                 .padding(horizontal = 18.dp, vertical = 12.dp),

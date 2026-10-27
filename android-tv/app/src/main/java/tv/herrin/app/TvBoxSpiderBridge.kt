@@ -15,9 +15,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.lang.reflect.InvocationTargetException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import android.os.Build
 import java.util.zip.ZipFile
 
 /**
@@ -171,6 +174,47 @@ internal object SpiderJarCache {
     private fun isDexArchive(file: File): Boolean = runCatching {
         ZipFile(file).use { it.getEntry("classes.dex") != null }
     }.getOrDefault(false)
+
+    /** Some older protected CatVod packs ship JNI under assets rather than lib/<abi>. */
+    fun nativeLibrary(context: Context, jar: File): File? {
+        val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
+        val entryName = when {
+            abi.startsWith("arm64") -> "assets/ftyguard_v8.so"
+            abi.startsWith("armeabi") -> "assets/ftyguard_v7.so"
+            else -> return null // Never feed ARM machine code to an x86 emulator.
+        }
+        return ZipFile(jar).use { zip ->
+            val entry = zip.getEntry(entryName) ?: return@use null
+            require(entry.size in 1..(512 * 1024L)) { "Spider native library size invalid" }
+            val folder = File(context.codeCacheDir, "herrin-spider-native/${jar.nameWithoutExtension}")
+            check(folder.isDirectory || folder.mkdirs()) { "无法创建 Spider native 缓存" }
+            val target = File(folder, "libftyguard.so")
+            if (target.length() == entry.size && target.canRead()) return@use target
+            val tmp = File(folder, "libftyguard.tmp")
+            zip.getInputStream(entry).use { input ->
+                FileOutputStream(tmp).use { output ->
+                    val count = input.copyTo(output, 8192)
+                    check(count == entry.size) { "Spider native library incomplete" }
+                    output.fd.sync()
+                }
+            }
+            if (target.exists()) check(target.delete()) { "无法更新 Spider native 缓存" }
+            check(tmp.renameTo(target)) { "无法保存 Spider native library" }
+            check(target.setReadOnly()) { "无法锁定 Spider native library" }
+            target
+        }
+    }
+}
+
+internal object SpiderFailureDetails {
+    /** Reflection wrappers must not hide the actual failing native/JNI dependency. */
+    fun message(error: Throwable): String {
+        val causes = generateSequence(error) { current ->
+            (current as? InvocationTargetException)?.targetException ?: current.cause
+        }.take(8).toList()
+        val cause = causes.last()
+        return "${cause.javaClass.simpleName}：${cause.message.orEmpty().take(160)}"
+    }
 }
 
 internal class TvBoxSpiderBridge(private val context: Context) {
@@ -180,9 +224,9 @@ internal class TvBoxSpiderBridge(private val context: Context) {
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
         SpiderResult.Ready(withTimeout(30_000) { runInterruptible(Dispatchers.IO) { block() } })
     } catch (exception: Exception) {
-        SpiderResult.Failure("Spider ${exception.javaClass.simpleName}：${exception.message.orEmpty().take(140)}")
+        SpiderResult.Failure("Spider ${SpiderFailureDetails.message(exception)}")
     } catch (error: LinkageError) {
-        SpiderResult.Failure("Spider 缺少兼容依赖：${error.message.orEmpty().take(140)}")
+        SpiderResult.Failure("Spider ${SpiderFailureDetails.message(error)}")
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = attempt {
@@ -198,8 +242,14 @@ internal class TvBoxSpiderBridge(private val context: Context) {
             // Match FongMi's JarLoader: protected Spider packs may extract native
             // libraries beside the verified JAR, and runtime-owned classes must
             // resolve through the CatVod SDK's delegated Spider class loader.
+            val native = SpiderJarCache.nativeLibrary(context, file)
             val loader = DexClassLoader(file.absolutePath, file.parentFile!!.absolutePath,
-                file.parentFile!!.absolutePath, RuntimeModule.getSpiderClassLoader())
+                native?.parentFile?.absolutePath ?: file.parentFile!!.absolutePath,
+                RuntimeModule.getSpiderClassLoader())
+            // Guarded legacy jars may use JNI_OnLoad registration before Init.init.
+            // The extracted binary is inside the already MD5-verified jar.
+            if (native != null) runCatching { System.load(native.absolutePath) }
+                .onFailure { android.util.Log.w("HerrinCatVod", "guard preload: ${SpiderFailureDetails.message(it)}") }
             runCatching {
                 val initializer = loader.loadClass("com.github.catvod.spider.Init")
                 initializer.getMethod("init", Context::class.java).invoke(null, context)

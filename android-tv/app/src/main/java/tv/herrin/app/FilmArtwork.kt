@@ -29,7 +29,10 @@ fun FilmArtwork(film: Film, modifier: Modifier) {
     var poster by remember(film.artworkUrl) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(film.artworkUrl) {
         poster = withContext(Dispatchers.IO) {
-            runCatching { film.artworkUrl?.let { AuthorizedPosterCache(context).load(it) } }.getOrNull()
+            runCatching { film.artworkUrl?.let {
+                AuthorizedPosterCache(context).load(it,
+                    allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null)
+            } }.getOrNull()
         }
     }
     if (poster == null) {
@@ -44,8 +47,11 @@ class AuthorizedPosterCache(
     private val context: Context,
     private val openConnection: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection }
 ) {
-    fun load(raw: String): Bitmap? {
-        val url = AuthorizedUrls.https(raw) ?: return null
+    fun load(raw: String, allowHttp: Boolean = false): Bitmap? {
+        // TVBox allows plain HTTP posters. Only explicitly imported TVBox
+        // catalogs may take this path; legacy catalog posters remain HTTPS-only.
+        val url = (if (allowHttp) TvBoxUrl.normalize(raw, true) else AuthorizedUrls.https(raw))
+            ?: return null
         val key = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
             .joinToString("") { "%02x".format(it) }
         val dir = File(context.cacheDir, "authorized-posters")
