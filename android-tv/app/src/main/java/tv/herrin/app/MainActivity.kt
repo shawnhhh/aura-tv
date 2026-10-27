@@ -336,7 +336,7 @@ private fun Herrin() {
             is TvBoxConfig.Single -> {
                 if (isRoot) tvBoxWarehouses = emptyList()
                 tvBoxSingle = result
-                tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}已识别单仓：${result.sites.size} 个站点，${result.lives.size} 组直播配置；可导入可直接解析的直播；Spider/JAR/JS 站点仍需插件引擎。"
+                tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}${if (result.wrappedInImage) "已解开图片内嵌配置；" else ""}已识别单仓：${result.sites.size} 个站点，${result.lives.size} 组直播配置；可导入可直接解析的直播；Spider/JAR/JS 站点仍需插件引擎。"
             }
             is TvBoxConfig.HerrinCatalog -> {
                 if (isRoot) tvBoxWarehouses = emptyList()
@@ -1276,7 +1276,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.2 Alpha · 原生 Android TV\n内置影片为原创虚构演示，收藏和观看记录保存在本机。\n支持自有 HTTPS 目录、M3U 直播与 TVBox 多仓/单仓 JSON，新增 TVBox 内嵌直播、TXT/M3U 导入、标准 CMS JSON 影视列表与本地配置缓存。\n需要 Spider/JAR/JS 的影视站点尚未兼容；远端源能否使用取决于实际返回的数据。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.3 Alpha · 原生 Android TV\n内置影片为原创虚构演示，收藏和观看记录保存在本机。\n支持 TVBox 多仓/单仓、图片末尾 Base64 封装 JSON、M3U/TXT/内嵌直播与标准 CMS JSON 影视列表、本地私有缓存。\n需要 Spider/JAR/JS 的影视站点尚未兼容；能解析配置不等于所有影片都能播放。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }

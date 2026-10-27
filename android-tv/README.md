@@ -22,7 +22,11 @@ Artifact 保留 14 天；需登录 GitHub。仅 debug 签名，不需要生产�
 
 在 M4.1 多仓/单仓配置之上：可直接解析单仓 `lives[].channels`，或手动导入 M3U、TVBox TXT 与内嵌直播 JSON；将已授权频道保存在应用私有存储中供下次启动使用。配置 JSON 经校验后按 URL 缓存，远端变成图片/报错时只回退到**同 URL** 已验证的旧 JSON；用户也可手动粘贴从旧 TVBox 备份的 JSON 并绑定到来源地址。可以对 `sites[].api` 为直接 HTTP(S) 地址的**标准 CMS JSON** 尝试读取影片列表与自带 HTTPS 播放线路。
 
-不包括任意 TVBox Spider/JAR/JS 插件、加密配置或私有采集协议的执行；不保证任意 TVBox 源均可播放。特别是 [M4.2 兼容说明](docs/M4_2_TVBOX_IPTV_AND_CMS.md) 中的饭太硬地址，曾从外部实测返回 JPEG 图片，不是可以解析的配置。当前用户在别的 TVBox 上继续看，很可能与历史缓存或不同网络返回结果有关，不能凭图片逆向恢复 JSON。
+不包括任意 TVBox Spider/JAR/JS 插件、加密配置或私有采集协议的执行；不保证任意 TVBox 源均可播放。
+
+### M4.3 · 图片尾随 Base64 的 TVBox 单仓解封装
+
+进一步分析证实：`http://www.饭太硬.net/tv` 等地址虽然响应 MIME 标为图片，**但 JPEG 结束标记之后含有 `标记**Base64(JSON)` 配置尾部**。M4.3 将此尾部安全解码，兼容 `//` 注释，校验 `sites/lives` 并保存为本机 JSON 缓存。该真实源在本轮外网取样中可恢复 **49 个影视站点、6 组直播**，但影视站点几乎均为 `csp_` Spider 适配器，完整影片搜索、解析与播放仍待实现。详见 [M4.3 图片配置诊断报告](docs/M4_3_TVBOX_IMAGE_WRAPPER.md)。
 
 ## M4.1 TVBox 多仓安全预览（基础能力）
 
