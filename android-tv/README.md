@@ -18,6 +18,12 @@ GitHub Actions `HERRIN Android Debug` 在 PR 和开发分支 push 时构建。�
 构建成功后，在该次运行页面 Artifacts 下载 `HERRIN-debug-apk`，解压得到 `app-debug.apk`。
 Artifact 保留 14 天；需登录 GitHub。仅 debug 签名，不需要生产签名或密钥。
 
+## M4.1 TVBox 多仓安全预览（独立开发分支）
+
+**设置 → TVBox 多仓 / 单仓配置**，可粘贴 TVBox `urls` 多仓入口并用遥控器选择单仓；也可直接粘贴包含 `sites`、`lives` 的单仓 JSON。显示站点名称、直播组名称及需要独立适配器的提示。检测到明确的 HTTPS M3U 链接时，可手动导入现有直播模块。HTTP 链接需要本次手动授权，应用不会自动打开上次使用的仓库。详见 [M4.1 兼容范围与测试](docs/M4_1_TVBOX_MULTIWAREHOUSE.md)。
+
+**兼容范围有限**：现阶段只解析 TVBox JSON 的安全元数据；不运行远端 Spider/JAR/JS，不自动爬取影视站，不代表配置中的所有影视源都能检索或播放。
+
 ## M1 / M1.6 功能
 
 - 全屏原创电影感示例画面、深色渐层、悬浮导航、横向卡片、焦点缩放与白色边框。

@@ -40,6 +40,10 @@ class Preferences(context: Context) : FavoritesStore {
     var liveEpgUrl: String
         get() = prefs.getString("live_epg_url", "") ?: ""
         set(value) { prefs.edit().putString("live_epg_url", value).apply() }
+    /** Stored only for convenient re-entry; never auto-fetch an untrusted TVBox source on launch. */
+    var tvBoxWarehouseUrl: String
+        get() = prefs.getString("tvbox_warehouse_url", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_warehouse_url", value).apply() }
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
