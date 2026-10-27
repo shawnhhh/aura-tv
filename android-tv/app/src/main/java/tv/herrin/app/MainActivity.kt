@@ -23,6 +23,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
@@ -407,6 +409,8 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    // Keep source management immediately reachable on smaller TV viewports.
+    var settingsTvBoxOnly by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(category, screen) {
         if (category == "直播" && screen == "browse") {
             while (true) {
@@ -589,13 +593,28 @@ private fun Herrin() {
                             }
                             Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
                         }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true,
+                                onFocus = { focusId = "search" }) { screen = "search" }
+                            TvButton("影视源", Modifier.testTag("source-settings").focusRequester(requester("source-settings")),
+                                reduceMotion, quiet = true, onFocus = { focusId = "source-settings" }) {
+                                settingsTvBoxOnly = true
+                                screen = "settings"
+                            }
+                            TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion,
+                                quiet = true, onFocus = { focusId = "settings" }) {
+                                settingsTvBoxOnly = false
+                                screen = "settings"
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                         TvNavTabs(category, isSearch, focusId, reduceMotion, { id -> requester(id) },
                             onFocus = { focusId = it }) { selected ->
                             category = selected
                             screen = "browse"
                         }
-                        TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true, onFocus = { focusId = "search" }) { screen = "search" }
-                        TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion, quiet = true, onFocus = { focusId = "settings" }) { screen = "settings" }
                     }
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
@@ -957,10 +976,13 @@ private fun Herrin() {
                         },
                         onBack = { screen = "detail" }
                     )
-                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize().background(Color(0xAA080B10)), contentPadding = PaddingValues(48.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize().background(Color(0xAA080B10)),
+                    contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
                     item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     if (screen == "settings") {
-                        item { Text("设置", fontSize = 36.sp) }
+                        item { Text(if (settingsTvBoxOnly) "影视源管理" else "设置", fontSize = 36.sp) }
+                        if (!settingsTvBoxOnly) {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
                         item { Text("目录源管理 · 最多 10 个授权 HTTPS 目录", fontSize = 22.sp) }
                         item {
@@ -1048,6 +1070,7 @@ private fun Herrin() {
                                 configStatus = "节目单配置已保存；只读取你主动提供的 XMLTV"
                             }
                         } }
+                        }
                         item { Text("TVBox 多仓 / 单仓 / IPTV", fontSize = 22.sp) }
                         item { Text("支持 urls 多仓、sites/lives 单仓、内嵌直播、M3U 与 TVBox TXT。Java csp_* Spider 可在本次明确授权后尝试加载与解析；JS/Python、网页二次解析及部分受保护插件仍可能不兼容。失效的配置接口可从本机已缓存的有效 JSON 回退。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
                         item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
@@ -1262,6 +1285,7 @@ private fun Herrin() {
                                 } else tvBoxStatus = "HERRIN 目录仅允许 HTTPS，不能从 HTTP 导入"
                             } }
                         }
+                        if (!settingsTvBoxOnly) {
                         item { TvButton("保存媒体配置", reduced = reduceMotion,
                             onFocus = { focusId = "settings-save"; keyboard?.hide() }) {
                             val catalogLink = configUrlDraft.trim()
@@ -1381,6 +1405,7 @@ private fun Herrin() {
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
                         item { Text("HERRIN M4.5 Alpha · 原生 Android TV\n内置影片为原创虚构演示，收藏和观看记录保存在本机。\n支持 TVBox 多仓/单仓、图片末尾 Base64 JSON、直播/CMS，以及需主动授权的 Java CatVod Spider。\n外部 Spider 可执行不受信任的代码，请仅用于可信源；部分线路需要网页解析或额外插件，不能保证播放。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        }
                     } else {
                         item { Text(if (screen == "player" && !spiderActive) "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}${if (film.spiderVodId == null) "  ·  原创虚构样片" else "  ·  TVBox 外部源"}\n${film.synopsis}", lineHeight = 26.sp) }

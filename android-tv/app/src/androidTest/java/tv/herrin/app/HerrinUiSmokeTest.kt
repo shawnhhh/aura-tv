@@ -89,6 +89,20 @@ class HerrinUiSmokeTest {
             android.util.Log.i("HerrinEvidence", "TREE $label $index/${chunks.size} $chunk")
         }
     }
+    @Test fun homeHeaderKeepsSourceManagementAndSettingsVisible() {
+        // A real TCL TV screenshot exposed the former single-row header
+        // clipping both actions after the six navigation pills.
+        compose.onNodeWithTag("source-settings").assertIsDisplayed()
+        compose.onNodeWithTag("settings").assertIsDisplayed()
+        focus("source-settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithText("影视源管理").assertIsDisplayed()
+        compose.onNodeWithTag("tvbox-warehouse-url").assertIsDisplayed()
+        compose.onNodeWithTag("tvbox-http-consent").assertExists()
+        capture("source-settings-entry")
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("settings").assertIsDisplayed()
+    }
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")
         // Visual parity: both home shelves must be displayed, not simply composed off-screen.
