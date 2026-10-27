@@ -66,6 +66,7 @@ fun AuthorizedPlaybackPanel(
     onPlayer: (ExoPlayer) -> Unit = {},
     startPositionMs: Long = 0L,
     onPlaybackProgress: (positionMs: Long, durationMs: Long, finished: Boolean) -> Unit = { _, _, _ -> },
+    isLive: Boolean = false,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -75,6 +76,8 @@ fun AuthorizedPlaybackPanel(
     var uiEpoch by remember(media.uri, media.headers, media.subtitles) { mutableIntStateOf(0) }
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
+    var showVerification by remember { mutableStateOf(false) }
+    var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val player = remember(media.uri, media.headers, media.subtitles) {
@@ -91,6 +94,7 @@ fun AuthorizedPlaybackPanel(
             onPlayer(this)
             addListener(object : Player.Listener {
                 override fun onTracksChanged(tracks: Tracks) { uiEpoch++ }
+                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { uiEpoch++ }
                 override fun onPlaybackStateChanged(state: Int) {
@@ -150,6 +154,12 @@ fun AuthorizedPlaybackPanel(
             if (tick % 5 == 0 &&
                 (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED))
                 reportProgress()
+        }
+    }
+    LaunchedEffect(player, showVerification) {
+        while (showVerification) {
+            verificationTick++
+            delay(1_000)
         }
     }
     LaunchedEffect(player) { initialControl.requestFocus() }
@@ -232,8 +242,29 @@ fun AuthorizedPlaybackPanel(
         )
         Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Button(onClick = { requestBack("visible-button") }) { Text("返回详情") }
-            Text("仅播放你有权使用的媒体 · 播放源按所选影片/线路确定", color = Color.White)
+            Button(onClick = { requestBack("visible-button") }) {
+                Text(if (isLive) "返回频道" else "返回详情")
+            }
+            Text(if (isLive) "仅播放你有权使用的直播频道"
+                else "仅播放你有权使用的媒体 · 播放源按所选影片/线路确定", color = Color.White)
+            Button(onClick = { showVerification = !showVerification },
+                modifier = Modifier.testTag("player-verification-toggle")) {
+                Text(if (showVerification) "收起实播状态" else "查看实播状态")
+            }
+            if (showVerification) {
+                val _observeVerification = verificationTick + uiEpoch
+                val counters = player.videoDecoderCounters
+                Text(PlaybackAcceptance.summary(player.playbackState,
+                    counters?.renderedOutputBufferCount ?: 0,
+                    counters?.droppedBufferCount ?: 0,
+                    player.videoSize.width, player.videoSize.height,
+                    PlaybackTransport.options(player, C.TRACK_TYPE_AUDIO).size,
+                    PlaybackTransport.options(player, C.TRACK_TYPE_TEXT).size,
+                    errorMessage), color = Color(0xFFDBE8F9),
+                    modifier = Modifier.testTag("player-verification-status"))
+                Text("这是解码器出帧与丢帧计数，不代表电视面板刷新率或界面帧率。",
+                    color = Color(0xFFADBBD0))
+            }
             if (errorMessage != null) {
                 Text(errorMessage!!, color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
                 Button(onClick = { retryPlayback() },

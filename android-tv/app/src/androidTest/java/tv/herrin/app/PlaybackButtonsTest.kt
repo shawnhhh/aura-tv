@@ -6,6 +6,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
@@ -63,6 +64,9 @@ class PlaybackButtonsTest {
                 scenario.onActivity { decoded = it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0 }
                 decoded > 3
             }
+            remoteClick("player-verification-toggle")
+            compose.onNodeWithTag("player-verification-status")
+                .assertTextContains("已输出视频帧：", substring = true)
             inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PAUSE)
             until("Pause media before seeking") {
                 var paused = false
