@@ -20,6 +20,11 @@ import org.junit.rules.ExternalResource
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import org.junit.runner.RunWith
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
+import javax.net.ssl.HttpsURLConnection
 
 /** Real Activity + OS key injection. Focus setup is explicit, never inferred from timing. */
 @RunWith(AndroidJUnit4::class)
@@ -357,5 +362,89 @@ class HerrinUiSmokeTest {
         settings.performScrollToNode(hasTestTag("epg-save"))
         compose.onNodeWithTag("epg-save").assertIsDisplayed()
         capture("settings-xmltv-guide")
+    }
+
+    @Test fun liveGroupsAndFavoritesComposeWithRealDpadAndManualRefresh() {
+        val certificate = HeldCertificate.Builder().commonName("localhost")
+            .addSubjectAlternativeName("localhost").build()
+        val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
+        val clientTls = HandshakeCertificates.Builder()
+            .addTrustedCertificate(certificate.certificate).build()
+        val previousTls = HttpsURLConnection.getDefaultSSLSocketFactory()
+        val server = MockWebServer().apply { useHttps(serverTls.sslSocketFactory(), false); start() }
+        val playlist = """#EXTM3U
+            #EXTINF:-1 group-title="新闻",新闻一
+            https://licensed.example.org/news1.m3u8
+            #EXTINF:-1 group-title="体育",体育一
+            https://licensed.example.org/sports.m3u8
+            #EXTINF:-1 group-title="新闻",新闻二
+            https://licensed.example.org/news2.m3u8
+            #EXTINF:-1,独立台
+            https://licensed.example.org/other.m3u8
+        """.trimIndent()
+        fun enqueue() = server.enqueue(MockResponse().setHeader("Content-Type", "audio/x-mpegurl")
+            .setBody(playlist))
+        try {
+            HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.sslSocketFactory())
+            enqueue()
+            // Settings/IME D-pad handoff is covered separately. Start this
+            // test with a saved authorized URL so its subject is group focus,
+            // favorites and refresh, never TV keyboard timing.
+            Preferences(compose.activity).livePlaylistUrl = server.url("/channels.m3u").toString()
+            compose.activityRule.scenario.recreate()
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("nav-直播").assertExists() }.isSuccess
+            }
+            focus("nav-直播")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("live-filter-status")
+                    .assertTextContains("4 / 4", substring = true) }.isSuccess
+            }
+            compose.onNodeWithTag("live-group-rail").assertExists()
+            compose.onNodeWithTag("live-0").assertIsDisplayed()
+            focus("live-group-all")
+            key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag("live-group-0").assertIsFocused() // 新闻
+            key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag("live-group-1").assertIsFocused() // 体育
+            // The white nav underline belongs only to focused top tabs.
+            val track = compose.onNodeWithTag("nav-motion-track").captureToImage().toPixelMap()
+            var bright = 0
+            for (y in 0 until track.height) for (x in 0 until track.width) {
+                val color = track[x, y]
+                if (color.red > 0.74f && color.green > 0.74f && color.blue > 0.74f) bright++
+            }
+            assertTrue("Nav underline should fade after D-pad enters live groups", bright < 10)
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
+            focus("live-group-all")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("4 / 4", substring = true)
+            focus("live-favorite-0") // Only 新闻一 is favorited.
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            focus("live-favorites-filter")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
+            focus("live-group-1") // Sports + favorites has no matches.
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithTag("live-filter-status").assertTextContains("0 / 4", substring = true)
+            compose.onNodeWithText("当前分组暂无收藏频道，可切换「全部频道」或其他分组")
+                .assertExists()
+            focus("live-group-all")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            enqueue()
+            focus("live-refresh")
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(10000) {
+                runCatching { compose.onNodeWithTag("live-status")
+                    .assertTextContains("已加载 4 个授权直播频道") }.isSuccess
+            }
+            compose.onNodeWithTag("live-filter-status").assertTextContains("1 / 4", substring = true)
+            capture("live-groups-dpad-favorites-refresh")
+        } finally {
+            HttpsURLConnection.setDefaultSSLSocketFactory(previousTls)
+            server.shutdown()
+        }
     }
 }
