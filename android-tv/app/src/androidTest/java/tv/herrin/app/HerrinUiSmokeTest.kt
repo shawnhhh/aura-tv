@@ -304,14 +304,19 @@ class HerrinUiSmokeTest {
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/multi.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
-            focus("tvbox-warehouse-load"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            // A TV IME can consume the first Center key after editing; execute the
+            // button's accessible click directly for this keyboard handoff only.
+            focus("tvbox-warehouse-load")
+            compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.waitUntil(5000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("只接受 HTTPS") }.isSuccess
             }
             assertTrue(server.requestCount == 0)
             settings.performScrollToNode(hasTestTag("tvbox-http-consent"))
-            focus("tvbox-http-consent"); key(KeyEvent.KEYCODE_DPAD_CENTER)
-            focus("tvbox-warehouse-load"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            focus("tvbox-http-consent")
+            compose.onNodeWithTag("tvbox-http-consent").performClick()
+            focus("tvbox-warehouse-load")
+            compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库") }.isSuccess
             }
