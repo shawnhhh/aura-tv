@@ -2,7 +2,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
-    <!-- HTTP is used only for manually approved TVBox JSON metadata fetches. All playback/catalog URLs stay HTTPS-only. -->
+    <!-- Cleartext only for manually approved TVBox JSON and user-imported family unicast HTTP/RTSP;
+         existing remote catalog, test playback and HTTPS subscription validators remain strict. -->
     <application android:label="Herrin" android:icon="@mipmap/ic_launcher" android:banner="@drawable/tv_banner" android:theme="@style/Theme.Herrin" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true">
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape">
             <intent-filter>

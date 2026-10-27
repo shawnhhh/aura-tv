@@ -8,6 +8,8 @@ import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -62,6 +64,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Enabled explicitly by adb setprop log.tag.HerrinRemote DEBUG in diagnostics. */
 internal object RemoteTrace {
@@ -237,6 +240,10 @@ private fun Herrin() {
     val liveRepo = remember { RemoteLivePlaylistRepository() }
     val epgRepo = remember { RemoteLiveEpgRepository() }
     val liveFavorites = remember(context) { LiveFavorites(context) }
+    val familyLiveStore = remember(context) { FamilyLiveStore(context) }
+    var familyLiveActive by remember { mutableStateOf(familyLiveStore.isActive()) }
+    var familyImportStatus by remember { mutableStateOf("尚未导入家庭频道。可从 U 盘选择 UTF-8 M3U 文件。") }
+    val importScope = rememberCoroutineScope()
     var liveChannels by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
     var showFavoriteChannelsOnly by rememberSaveable { mutableStateOf(false) }
     var selectedLiveGroup by rememberSaveable { mutableStateOf<String?>(null) }
@@ -251,6 +258,32 @@ private fun Herrin() {
     var epgRefresh by remember { mutableIntStateOf(0) }
     var liveClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var liveRefresh by remember { mutableIntStateOf(0) }
+    val liveFavoriteScope = if (familyLiveActive) FamilyLivePlaylist.FAVORITES_SCOPE else prefs.livePlaylistUrl
+    val familyFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            importScope.launch {
+                familyImportStatus = "正在读取本地频道文件…"
+                try {
+                    val (raw, parsed) = FamilyLivePlaylist.readDocument(context, uri)
+                    if (!familyLiveStore.replace(raw, parsed)) {
+                        familyImportStatus = "保存失败；原有频道列表未被替换"
+                    } else {
+                        familyLiveActive = true
+                        liveChannels = emptyList()
+                        selectedLiveGroup = null
+                        showFavoriteChannelsOnly = false
+                        liveSearchExpanded = false
+                        liveSearchQuery = ""
+                        highlightedLiveUrl = null
+                        liveRefresh++
+                        familyImportStatus = "已本地保存 ${parsed.channels.size} 个单播频道；跳过 ${parsed.skipped} 个不支持或重复条目。拔掉机顶盒后仍需实测播放。"
+                    }
+                } catch (error: Exception) {
+                    familyImportStatus = "导入失败：${error.message ?: "无法读取文件"}；原有列表不变"
+                }
+            }
+        }
+    }
     LaunchedEffect(epgRefresh) {
         val endpoint = prefs.liveEpgUrl
         if (endpoint.isBlank()) {
@@ -268,9 +301,18 @@ private fun Herrin() {
             }
         }
     }
-    LaunchedEffect(liveRefresh) {
+    LaunchedEffect(liveRefresh, familyLiveActive) {
         val endpoint = prefs.livePlaylistUrl
-        if (endpoint.isBlank()) {
+        if (familyLiveActive) {
+            try {
+                val imported = familyLiveStore.load()
+                liveChannels = imported.channels
+                liveStatus = "已从电视本地读取 ${imported.channels.size} 个家庭单播频道（无常驻代理）"
+            } catch (error: Exception) {
+                liveChannels = emptyList()
+                liveStatus = "本地频道读取失败：${error.message ?: "无效列表"}，请重新导入"
+            }
+        } else if (endpoint.isBlank()) {
             liveChannels = emptyList()
             liveStatus = "请在设置中配置自己的授权 HTTPS M3U 直播列表"
         } else {
@@ -353,7 +395,7 @@ private fun Herrin() {
             UiDisplayMode(it.physicalWidth, it.physicalHeight, it.refreshRate)
         }
         return deviceStatusSummary(current, preferredUiRefreshRate(current, supported),
-            profileStore.list().size, prefs.livePlaylistUrl.isNotBlank())
+            profileStore.list().size, prefs.livePlaylistUrl.isNotBlank() || familyLiveStore.hasPlaylist())
     }
     LaunchedEffect(catalogRefresh) {
         val endpoint = prefs.catalogUrl
@@ -582,7 +624,9 @@ private fun Herrin() {
                         Spacer(Modifier.height(24.dp))
                         Text("直播中心", fontSize = 34.sp, fontWeight = FontWeight.Bold,
                             color = Color.White)
-                        Text("你授权的频道 · HTTPS M3U · 可选 XMLTV / .xml.gz 节目预览",
+                        Text(if (familyLiveActive)
+                            "家庭 IPTV · 本机单播 M3U · 机顶盒与 Mac 无需常开"
+                            else "你授权的频道 · HTTPS M3U · 可选 XMLTV / .xml.gz 节目预览",
                             fontSize = 13.sp, color = Color(0xFFBDC8D6))
                         Spacer(Modifier.height(18.dp))
                     } else {
@@ -731,11 +775,11 @@ private fun Herrin() {
                                 }
                                 val visibleChannels = remember(
                                     liveChannels, resolvedGroup, showFavoriteChannelsOnly,
-                                    liveSearchQuery, prefs.livePlaylistUrl, liveFavoriteEpoch
+                                    liveSearchQuery, liveFavoriteScope, liveFavoriteEpoch
                                 ) {
                                     LiveChannelDiscovery.visible(liveChannels, resolvedGroup,
                                         showFavoriteChannelsOnly, query = liveSearchQuery) { channel ->
-                                        liveFavorites.contains(prefs.livePlaylistUrl, channel.url)
+                                        liveFavorites.contains(liveFavoriteScope, channel.url)
                                     }
                                 }
                                 LaunchedEffect(liveSearchQuery, resolvedGroup,
@@ -782,14 +826,14 @@ private fun Herrin() {
                                                 screen = "live-player"
                                             }
                                             TvButton(
-                                                if (liveFavorites.contains(prefs.livePlaylistUrl, channel.url))
+                                                if (liveFavorites.contains(liveFavoriteScope, channel.url))
                                                     "★ 已收藏" else "☆ 收藏",
                                                 modifier = Modifier.testTag("live-favorite-$index")
                                                     .focusRequester(requester("live-favorite-$index")),
                                                 reduced = reduceMotion, quiet = true,
                                                 onFocus = { focusId = "live-favorite-$index" }
                                             ) {
-                                                liveFavorites.toggle(prefs.livePlaylistUrl, channel.url)
+                                                liveFavorites.toggle(liveFavoriteScope, channel.url)
                                                 liveFavoriteEpoch++
                                             }
                                         }
@@ -978,6 +1022,41 @@ private fun Herrin() {
                                 configStatus = "直播列表配置已保存；只读取你主动提供的频道"
                             }
                         } }
+                        item { Text("家庭 IPTV · 一次性导入", fontSize = 21.sp) }
+                        item { Text(
+                            "用 U 盘或电视文件选择器导入自己提取的 UTF-8 M3U。只接受 HTTP、HTTPS、RTSP 单播地址；RTP/UDP 组播、DRM 或依赖机顶盒登录的流无法脱离机顶盒直接播放。列表保存在电视应用内，日后不需要 Mac、NAS 或常开代理。",
+                            color = Color(0xFFBDC8D6), lineHeight = 23.sp
+                        ) }
+                        item { TvButton("选择本地 M3U 文件", modifier = Modifier.testTag("family-import"),
+                            reduced = reduceMotion, onFocus = { focusId = "family-import"; keyboard?.hide() }) {
+                            familyFilePicker.launch(arrayOf("*/*"))
+                        } }
+                        item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TvButton("家庭频道", modifier = Modifier.testTag("family-enable"),
+                                reduced = reduceMotion, selected = familyLiveActive) {
+                                if (familyLiveStore.setActive(true)) {
+                                    familyLiveActive = true
+                                    liveChannels = emptyList()
+                                    selectedLiveGroup = null
+                                    showFavoriteChannelsOnly = false
+                                    liveRefresh++
+                                    familyImportStatus = "已切换为电视本地家庭频道"
+                                } else familyImportStatus = "请先导入有效的家庭 M3U 文件"
+                            }
+                            TvButton("HTTPS 订阅频道", modifier = Modifier.testTag("family-disable"),
+                                reduced = reduceMotion, selected = !familyLiveActive) {
+                                if (familyLiveStore.setActive(false)) {
+                                    familyLiveActive = false
+                                    liveChannels = emptyList()
+                                    selectedLiveGroup = null
+                                    showFavoriteChannelsOnly = false
+                                    liveRefresh++
+                                    familyImportStatus = "已切换为 HTTPS 订阅；家庭 M3U 仍保存在电视中"
+                                } else familyImportStatus = "切换失败，请重试"
+                            }
+                        } }
+                        item { Text(familyImportStatus, modifier = Modifier.testTag("family-status"),
+                            color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
                         item { OutlinedTextField(epgUrlDraft, { epgUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("config-epg-url")
                                 .onFocusChanged { configInputFocused = it.isFocused },
@@ -1049,6 +1128,8 @@ private fun Herrin() {
                                             val link = live.playlistUrl ?: return@TvButton
                                             liveUrlDraft = link
                                             prefs.livePlaylistUrl = link
+                                            familyLiveStore.setActive(false)
+                                            familyLiveActive = false
                                             liveChannels = emptyList()
                                             selectedLiveGroup = null
                                             liveRefresh++

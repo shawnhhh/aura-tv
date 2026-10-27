@@ -15,8 +15,12 @@ internal class LiveFavorites(context: Context) {
         token(channelUrl) in prefs.getStringSet(key(playlist), emptySet()).orEmpty()
 
     fun toggle(playlist: String, channelUrl: String): Boolean {
-        require(AuthorizedUrls.https(playlist) != null)
-        require(AuthorizedUrls.https(channelUrl) != null)
+        if (playlist == FamilyLivePlaylist.FAVORITES_SCOPE) {
+            require(FamilyLiveUrls.unicast(channelUrl) != null)
+        } else {
+            require(AuthorizedUrls.https(playlist) != null)
+            require(AuthorizedUrls.https(channelUrl) != null)
+        }
         val ids = prefs.getStringSet(key(playlist), emptySet()).orEmpty().toMutableSet()
         val added = ids.add(token(channelUrl))
         if (!added) ids.remove(token(channelUrl))
