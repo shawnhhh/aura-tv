@@ -305,6 +305,13 @@ private fun Herrin() {
     var importProfilesDraft by rememberSaveable { mutableStateOf("") }
     val tvBoxRepository = remember(context) { TvBoxConfigRepository(context) }
     val tvBoxVodRepo = remember { TvBoxVodRepository() }
+    val spiderBridge = remember(context) { TvBoxSpiderBridge(context) }
+    DisposableEffect(spiderBridge) { onDispose { spiderBridge.close() } }
+    // Running a third-party DEX is a security-sensitive choice and never auto-enabled.
+    var tvBoxAllowSpider by remember { mutableStateOf(false) }
+    var spiderActive by remember { mutableStateOf(false) }
+    var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
+    var spiderResolved by remember { mutableStateOf<PlaybackResult?>(null) }
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseUrl) }
     // Large pasted backups should never be marshalled into an Activity saved-state Bundle.
@@ -338,7 +345,7 @@ private fun Herrin() {
             is TvBoxConfig.Single -> {
                 if (isRoot) tvBoxWarehouses = emptyList()
                 tvBoxSingle = result
-                tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}${if (result.wrappedInImage) "已解开图片内嵌配置；" else ""}已识别单仓：${result.sites.size} 个站点，${result.lives.size} 组直播配置；可导入可直接解析的直播；Spider/JAR/JS 站点仍需插件引擎。"
+                tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}${if (result.wrappedInImage) "已解开图片内嵌配置；" else ""}已识别单仓：${result.sites.size} 个站点，${result.lives.size} 组直播配置；Java Spider 需本次授权，部分站点仍依赖其他运行时。"
             }
             is TvBoxConfig.HerrinCatalog -> {
                 if (isRoot) tvBoxWarehouses = emptyList()
@@ -376,6 +383,7 @@ private fun Herrin() {
             profileStore.list().size, prefs.livePlaylistUrl.isNotBlank())
     }
     LaunchedEffect(catalogRefresh) {
+        spiderActive = false
         val endpoint = prefs.catalogUrl
         // Never leave the previous source's films visible while the next URL loads.
         providerFilms = null
@@ -426,6 +434,30 @@ private fun Herrin() {
     var splash by rememberSaveable { mutableStateOf(true) }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val film = films.firstOrNull { it.id == filmId } ?: films.first()
+    LaunchedEffect(screen, filmId, spiderActive) {
+        if (spiderActive && screen == "detail" && film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
+            spiderStatus = "正在读取 ${film.title} 的详情和选集…"
+            when (val loaded = spiderBridge.details(film)) {
+                is SpiderResult.Ready -> {
+                    providerFilms = providerFilms?.map { if (it.id == film.id) loaded.value else it }
+                    spiderStatus = if (loaded.value.playbackEpisodes.isEmpty()) "该影片没有可用选集" else "已加载选集，请选择播放"
+                }
+                is SpiderResult.Failure -> spiderStatus = loaded.message
+            }
+        }
+    }
+    LaunchedEffect(screen, film.id, episode, line, spiderActive) {
+        spiderResolved = null
+        if (spiderActive && screen == "player") {
+            spiderStatus = "正在通过 Spider 解析播放线路…"
+            spiderResolved = spiderBridge.play(film, episode, line, tvBoxAllowHttp)
+            spiderStatus = when (val result = spiderResolved) {
+                is PlaybackResult.Ready -> "播放地址已解析，正在准备播放器"
+                is PlaybackResult.Unavailable -> result.reason
+                else -> "播放解析未返回结果"
+            }
+        }
+    }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
     val currentLines = currentEpisode?.lines.orEmpty()
     val resume = watchHistory.load(catalogScope, film.id, episode,
@@ -907,10 +939,11 @@ private fun Herrin() {
                 }
             }
             "detail", "player", "settings" -> {
-                val licensed = if (screen == "player" && film.playbackEpisodes.isNotEmpty())
+                val licensed = if (spiderActive && screen == "player") spiderResolved
+                    else if (screen == "player" && film.playbackEpisodes.isNotEmpty())
                     LicensedPlaybackResolver.resolve(film, episode, line) else null
                 val licensedMedia = (licensed as? PlaybackResult.Ready)?.media
-                val testMedia = if (screen == "player") AuthorizedUrls.https(prefs.testMediaUrl) else null
+                val testMedia = if (screen == "player" && !spiderActive) AuthorizedUrls.https(prefs.testMediaUrl) else null
                 val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
                     val historyLine = if (licensedMedia != null) line else "independent-test"
@@ -1092,8 +1125,22 @@ private fun Herrin() {
                             item { Text("${if (tvBoxSelectedName.isBlank()) "当前单仓" else tvBoxSelectedName} · ${preview.sites.size} 个影视站点", fontSize = 18.sp) }
                             item { Text(preview.sites.take(15).joinToString("  ·  ") { it.name }.ifBlank { "未提供站点条目" },
                                 modifier = Modifier.testTag("tvbox-site-preview"), lineHeight = 24.sp) }
-                            item { Text("${directCount} 个 HTTP(S) 接口可尝试标准 CMS JSON；${adapterCount} 个站点需要 Spider/JS 适配器。成功识别配置不等于可播放。",
+                            item { Text("${directCount} 个 HTTP(S) CMS 接口；${adapterCount} 个站点需要 Spider/JS。Java csp_* 可单独授权尝试加载，成功识别配置仍不等于可播放。",
                                 modifier = Modifier.testTag("tvbox-site-capabilities"), lineHeight = 23.sp) }
+                            if (preview.hasExternalEngine) {
+                                item { TvButton("本次允许运行外部 Spider：${if (tvBoxAllowSpider) "已授权" else "未授权"}",
+                                    modifier = Modifier.testTag("tvbox-spider-consent"),
+                                    selected = tvBoxAllowSpider, reduced = reduceMotion) {
+                                    tvBoxAllowSpider = !tvBoxAllowSpider
+                                    if (!tvBoxAllowSpider) {
+                                        spiderActive = false
+                                        spiderBridge.close()
+                                    }
+                                    tvBoxStatus = if (tvBoxAllowSpider)
+                                        "本次已授权：外部 JAR 将执行第三方代码，可能访问本机数据或网络；仅加载你信任的来源。关闭应用后授权失效。"
+                                    else "已撤销外部 Spider 授权；运行实例已停止"
+                                } }
+                            }
                             item { TvButton(if (tvBoxShowAllSites) "收起完整站点列表" else "查看全部 ${preview.sites.size} 个影视站点",
                                 modifier = Modifier.testTag("tvbox-sites-toggle"), reduced = reduceMotion) {
                                 tvBoxShowAllSites = !tvBoxShowAllSites
@@ -1102,12 +1149,14 @@ private fun Herrin() {
                                 itemsIndexed(preview.sites) { index, site ->
                                     TvButton("${index + 1}. ${site.name} · ${when {
                                         site.apiUrl != null -> "标准 CMS 试读入口"
-                                        site.needsAdapter -> "需 Spider/JS"
+                                        site.spiderApi != null -> "Java Spider · 可尝试"
+                                        site.needsAdapter -> "需其他解析插件"
                                         else -> "无可访问接口"
                                     }}", modifier = Modifier.testTag("tvbox-site-$index"), reduced = reduceMotion) {
                                         tvBoxStatus = when {
                                             site.apiUrl != null -> "${site.name} 是 HTTP(S) 入口；请使用上方「浏览 ${site.name}」尝试标准 CMS JSON。"
-                                            site.needsAdapter -> "${site.name} 使用 TVBox 专用 Spider/JAR/JS 接口；已识别元数据，但当前版本没有安全执行引擎，无法加载影视列表。"
+                                            site.spiderApi != null -> "${site.name} 使用 Java Spider；请打开上方本次授权，再点击下方浏览按钮。"
+                                            site.needsAdapter -> "${site.name} 需要不属于 Java csp_* 的其他插件，当前不能执行。"
                                             else -> "${site.name} 未声明 HTTP(S) 影视接口，暂无可用的内容加载方式。"
                                         }
                                     }
@@ -1125,6 +1174,7 @@ private fun Herrin() {
                                                 when (val loaded = tvBoxVodRepo.load(site, tvBoxAllowHttp)) {
                                                     is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${loaded.reason}"
                                                     is TvBoxVodResult.Ready -> {
+                                                        spiderActive = false
                                                         providerFilms = loaded.films
                                                         providerStatus = "TVBox ${site.name} · ${loaded.films.size} 部（标准 CMS JSON）"
                                                         tvBoxVodScope = "tvbox:${site.apiUrl}"
@@ -1139,8 +1189,37 @@ private fun Herrin() {
                                     }
                                 } }
                             }
-                            if (preview.hasExternalEngine) {
-                                item { Text("注意：Spider/JAR/JS 站点还需要隔离的执行引擎；标准 CMS JSON 才能直接尝试浏览。", color = Color(0xFFE2C38B)) }
+                            val spiderSites = preview.sites.filter { it.spiderApi != null }
+                            if (spiderSites.isNotEmpty()) {
+                                item { Text("Java Spider 影视站点 · ${spiderSites.size} 个", fontSize = 18.sp) }
+                                item { LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    itemsIndexed(spiderSites) { index, site ->
+                                        TvButton("浏览 ${site.name}", modifier = Modifier.testTag("tvbox-spider-$index"),
+                                            reduced = reduceMotion) {
+                                            if (!tvBoxAllowSpider) {
+                                                tvBoxStatus = "请先单独允许本次运行第三方 Spider；它是可执行代码，必须信任来源"
+                                            } else {
+                                                uiScope.launch {
+                                                    tvBoxStatus = "正在核验 JAR 并通过 ${site.name} 读取影视…"
+                                                    when (val loaded = spiderBridge.browse(site, preview)) {
+                                                        is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${loaded.message}"
+                                                        is SpiderResult.Ready -> {
+                                                            spiderActive = true
+                                                            providerFilms = loaded.value
+                                                            providerStatus = "TVBox Spider ${site.name} · ${loaded.value.size} 部"
+                                                            tvBoxVodScope = "spider:${site.key}:${preview.spiderJar}"
+                                                            filmId = loaded.value.first().id
+                                                            category = "首页"
+                                                            screen = "browse"
+                                                            tvBoxStatus = "已读取 ${loaded.value.size} 部；打开详情获取选集，选择线路后解析播放"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } }
+                                item { Text("外部插件运行于应用进程，可能执行任意代码。当前仅支持 Java JAR + MD5 校验；QuickJS/Python、云盘授权、网页二次解析及需要内置代理的线路尚未保证兼容。", color = Color(0xFFE2C38B), lineHeight = 22.sp) }
                             }
                             val playlists = preview.lives.filter { it.sourceUrl != null || it.channels.isNotEmpty() }.take(15)
                             if (playlists.isNotEmpty()) {
@@ -1303,10 +1382,11 @@ private fun Herrin() {
 
                         item { Text("HERRIN M4.3 Alpha · 原生 Android TV\n内置影片为原创虚构演示，收藏和观看记录保存在本机。\n支持 TVBox 多仓/单仓、图片末尾 Base64 封装 JSON、M3U/TXT/内嵌直播与标准 CMS JSON 影视列表、本地私有缓存。\n需要 Spider/JAR/JS 的影视站点尚未兼容；能解析配置不等于所有影片都能播放。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
-                        item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
-                        item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }
+                        item { Text(if (screen == "player" && !spiderActive) "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
+                        item { Text("${film.year}  ·  ${film.category}${if (film.spiderVodId == null) "  ·  原创虚构样片" else "  ·  TVBox 外部源"}\n${film.synopsis}", lineHeight = 26.sp) }
+                        if (spiderActive) item { Text(spiderStatus, color = Color(0xFFE2C38B), modifier = Modifier.testTag("spider-status")) }
                         if (screen == "player") {
-                            item { var status by remember { mutableStateOf("正在准备演示…") }
+                            if (!spiderActive) item { var status by remember { mutableStateOf("正在准备演示…") }
                                 LaunchedEffect(film.id, episode, line) {
                                     status = when(val result = DemoPlaybackSource().resolve(PlaybackRequest(film.id, episode, line))) {
                                         is PlaybackResult.Unavailable -> result.reason
@@ -1318,8 +1398,16 @@ private fun Herrin() {
                             item { TvButton("返回详情", reduced = reduceMotion) { screen = "detail" } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                TvButton(if (film.playbackEpisodes.isEmpty()) "▶ 播放演示" else "▶ 播放授权片源",
-                                    selected = true, reduced = reduceMotion) { screen = "player" }
+                                TvButton(when {
+                                    spiderActive && film.playbackEpisodes.isEmpty() -> "等待 Spider 选集"
+                                    spiderActive -> "▶ 解析并播放"
+                                    film.playbackEpisodes.isEmpty() -> "▶ 播放演示"
+                                    else -> "▶ 播放授权片源"
+                                }, selected = true, reduced = reduceMotion) {
+                                    if (spiderActive && film.playbackEpisodes.isEmpty())
+                                        spiderStatus = "Spider 尚未返回播放选集，请稍后重试或选择其他站点"
+                                    else screen = "player"
+                                }
                                 TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
                                     prefs.toggleFor(catalogScope, film.id)
                                     favorites = prefs.idsFor(catalogScope)

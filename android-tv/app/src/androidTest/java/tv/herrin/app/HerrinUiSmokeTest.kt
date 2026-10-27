@@ -344,7 +344,9 @@ class HerrinUiSmokeTest {
             compose.onNodeWithTag("tvbox-site-48").assertTextContains("站点48", substring = true)
             compose.onNodeWithTag("tvbox-site-48").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-status"))
-            compose.onNodeWithTag("tvbox-status").assertTextContains("没有安全执行引擎", substring = true)
+            compose.onNodeWithTag("tvbox-status").assertTextContains("Java Spider", substring = true)
+            settings.performScrollToNode(hasTestTag("tvbox-spider-consent"))
+            compose.onNodeWithTag("tvbox-spider-consent").assertTextContains("未授权", substring = true)
             assertEquals(2, server.requestCount)
             capture("settings-tvbox-multiwarehouse")
         }

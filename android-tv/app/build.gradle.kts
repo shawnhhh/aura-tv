@@ -10,8 +10,8 @@ android {
         applicationId = "tv.herrin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.4.4-alpha"
+        versionCode = 14
+        versionName = "0.4.5-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
@@ -39,6 +39,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
+    implementation(project(":catvod"))
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

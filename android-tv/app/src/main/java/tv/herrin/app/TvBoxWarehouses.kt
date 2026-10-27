@@ -14,16 +14,19 @@ import java.net.URL
 import java.io.File
 import java.security.MessageDigest
 
-/** TVBox metadata is untrusted: no Spider, JAR, JavaScript or site API is executed. */
+/** TVBox metadata is untrusted; executable plugins require a separate, explicit opt-in. */
 internal data class TvBoxWarehouse(val name: String, val url: String)
-internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null)
+internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null,
+                              val key: String = "", val spiderApi: String? = null,
+                              val extension: String = "", val jar: String? = null)
 internal data class TvBoxLive(val name: String, val playlistUrl: String?,
                               val sourceUrl: String? = null, val channels: List<LiveChannel> = emptyList())
 
 internal sealed interface TvBoxConfig {
     data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,
-                      val fromCache: Boolean = false, val wrappedInImage: Boolean = false) : TvBoxConfig
+                      val fromCache: Boolean = false, val wrappedInImage: Boolean = false,
+                      val spiderJar: String? = null) : TvBoxConfig
     data class HerrinCatalog(val address: String, val count: Int) : TvBoxConfig
     data class Error(val reason: String) : TvBoxConfig
 }
@@ -95,7 +98,12 @@ internal object TvBoxConfigParser {
                     if (title.isBlank()) null else {
                         val api = site.optString("api").trim()
                         val direct = TvBoxUrl.normalize(api, allowHttp = true)
-                        TvBoxSite(title, api.isNotBlank() && direct == null, direct)
+                        val extension = site.opt("ext")?.let { if (it is String) it else it.toString() }.orEmpty()
+                        TvBoxSite(title, api.isNotBlank() && direct == null, direct,
+                            key = site.optString("key").take(90).ifBlank { "site_$i" },
+                            spiderApi = api.takeIf { it.startsWith("csp_") && it.matches(Regex("csp_[A-Za-z0-9_]{1,64}")) },
+                            extension = extension.take(64_000),
+                            jar = site.optString("jar").takeIf { it.isNotBlank() })
                     }
                 }
             }
@@ -113,7 +121,8 @@ internal object TvBoxConfigParser {
                     }
                 }
             }
-            return TvBoxConfig.Single(sites, lives, root.optString("spider").isNotBlank() || sites.any { it.needsAdapter })
+            val spider = root.optString("spider").takeIf { it.isNotBlank() }
+            return TvBoxConfig.Single(sites, lives, spider != null || sites.any { it.needsAdapter }, spiderJar = spider)
         }
         if (root.optInt("version", -1) == 1 && root.optJSONArray("items") != null) {
             return TvBoxConfig.HerrinCatalog(origin, root.getJSONArray("items").length())
