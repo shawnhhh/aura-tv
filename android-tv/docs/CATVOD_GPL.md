@@ -2,7 +2,8 @@
 
 ## Licensing and provenance
 
-The contents of `catvod/src/main` are copied from the `fongmi` branch of
+The contents of `app/src/main/java/com/github/catvod` and
+`app/src/main/java/com/fongmi/quickjs/host` are copied from the `fongmi` branch of
 [`FongMi/TV`](https://github.com/FongMi/TV) at commit
 `123cc086159b0f13bf54bdf64bacbc259ca47c88` (2026-10-27). Those files
 are GPL-3.0. The complete GPL-3.0 license text is at
@@ -11,10 +12,13 @@ source, and structure. Local SDK modifications include a Java 21 pattern switch
 in `Prefers.java` rewritten as Java 17 `instanceof` clauses; adapting the
 proxy/redirect interceptor and WebSocket timeout calls to OkHttp 4.12; and
 **removing the upstream global TLS trust-all/hostname-bypass** in `OkHttp.java`.
-The `catvod/build.gradle.kts` file expresses upstream dependency
-families and the local Java 17/AGP 8.7 toolchain. OkHttp is pinned to 4.12.0
-instead of upstream 5.5.0 to keep Android SDK 35; this requires separate
-build and runtime verification.
+`app/build.gradle.kts` lists the upstream dependency families for the local
+Java 17/AGP 8.7 toolchain. OkHttp is pinned to 4.12.0 instead of upstream
+5.5.0 to keep Android SDK 35. Java sources are compiled in the HERRIN app
+module because the initial dedicated library module compiled successfully
+but hit an AGP 8.7/D8 cross-module artifact transform error (`android.jar`
+reported outside the library class directory). This workaround preserves
+the package namespace but requires build/runtime regression testing.
 
 HERRIN Android sources and binaries incorporating this SDK must be distributed
 in compliance with GPL-3.0, including provision of the full corresponding

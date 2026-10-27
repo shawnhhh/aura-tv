@@ -209,13 +209,17 @@ internal class TvBoxSpiderBridge(private val context: Context) {
             }.also { active = it; activeKey = key }
         }
         val home = spider.homeContent(true)
-        val films = SpiderVodCodec.listing(home, site)
-            .ifEmpty { SpiderVodCodec.listing(spider.homeVideoContent(), site) }
+        // Some FongMi plugins deliberately return no home JSON and only expose
+        // homeVideoContent or a category list. Do not abort before those fallbacks.
+        fun tryListing(payload: String): List<Film> = runCatching {
+            SpiderVodCodec.listing(payload, site)
+        }.getOrDefault(emptyList())
+        val films = tryListing(home).ifEmpty { tryListing(spider.homeVideoContent()) }
         if (films.isEmpty()) {
-            val classes = JSONObject(home).optJSONArray("class")
+            val classes = runCatching { JSONObject(home).optJSONArray("class") }.getOrNull()
             val first = classes?.optJSONObject(0)?.optString("type_id").orEmpty()
             if (first.isBlank()) error("Spider 首页没有可浏览的影片或分类")
-            SpiderVodCodec.listing(spider.categoryContent(first, "1", false, hashMapOf()), site)
+            tryListing(spider.categoryContent(first, "1", false, hashMapOf()))
                 .ifEmpty { error("Spider 分类没有返回影片") }
         } else films
     }
