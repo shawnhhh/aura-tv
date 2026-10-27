@@ -494,8 +494,19 @@ class HerrinUiSmokeTest {
             compose.onNodeWithTag("live-search-clear").performClick()
             compose.onNodeWithTag("live-filter-status")
                 .assertTextContains("3 / 3", substring = true)
+            // The TV keyboard's Done action must return the next remote key
+            // to the first matching native channel, not leave it in the IME.
+            compose.onNodeWithTag("live-search-input").performTextReplacement("sport")
+            compose.onNodeWithTag("live-search-input").performImeAction()
+            compose.waitUntil(8000) {
+                runCatching { compose.onNodeWithTag("live-0").assertIsFocused() }.isSuccess
+            }
+            key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag("live-favorite-0").assertIsFocused()
+            key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithText("★ 已收藏").assertExists()
             assertTrue("Live search must not request another playlist", server.requestCount == 1)
-            capture("live-search-local-filter")
+            capture("live-search-ime-return-to-channel")
         } finally {
             HttpsURLConnection.setDefaultSSLSocketFactory(previousTls)
             server.shutdown()
