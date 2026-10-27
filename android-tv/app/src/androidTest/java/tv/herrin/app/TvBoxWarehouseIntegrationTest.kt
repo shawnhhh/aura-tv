@@ -6,9 +6,37 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 import androidx.test.platform.app.InstrumentationRegistry
+import java.util.Base64
+import okio.Buffer
 
 /** HTTP tests use only a local fixture server; no third-party TVBox service is contacted. */
 class TvBoxWarehouseIntegrationTest {
+    @Test fun imageContentTypeActuallyContainsTvBoxJsonAfterJpegEndMarker() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val json = """{"spider":"https://example.org/guard.jar",
+              // disabled legacy site
+              "sites":[{"name":"真实单仓站点","api":"csp_Guard"}],
+              "lives":[{"name":"央视","channels":[{"name":"CCTV1","urls":["https://example.org/one.m3u8"]}]}]}"""
+            val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0x10, 0xFF.toByte(), 0xD9.toByte())
+            val wrapped = jpeg + ("DYxAlYOt**" + Base64.getEncoder()
+                .encodeToString(json.toByteArray(Charsets.UTF_8))).toByteArray(Charsets.US_ASCII)
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/x-ms-bmp")
+                .setBody(Buffer().write(wrapped)))
+            val url = server.url("/wrapped-single").toString()
+            val repo = TvBoxConfigRepository(InstrumentationRegistry.getInstrumentation().targetContext)
+            val result = repo.load(url, allowHttp = true) as TvBoxConfig.Single
+            assertFalse(result.fromCache)
+            assertEquals("真实单仓站点", result.sites.single().name)
+            assertEquals("CCTV1", result.lives.single().channels.single().name)
+            assertTrue(result.hasExternalEngine)
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/jpeg").setBody("plain-image"))
+            val cached = repo.load(url, allowHttp = true) as TvBoxConfig.Single
+            assertTrue(cached.fromCache)
+            assertEquals("真实单仓站点", cached.sites.single().name)
+        }
+    }
+
     @Test fun fallsBackToPreviouslyValidatedJsonWhenSourceBecomesImage() = runBlocking {
         MockWebServer().use { server ->
             server.start()

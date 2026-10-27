@@ -23,7 +23,7 @@ internal data class TvBoxLive(val name: String, val playlistUrl: String?,
 internal sealed interface TvBoxConfig {
     data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,
-                      val fromCache: Boolean = false) : TvBoxConfig
+                      val fromCache: Boolean = false, val wrappedInImage: Boolean = false) : TvBoxConfig
     data class HerrinCatalog(val address: String, val count: Int) : TvBoxConfig
     data class Error(val reason: String) : TvBoxConfig
 }
@@ -66,7 +66,8 @@ internal object TvBoxConfigParser {
     private const val MAX_ENTRIES = 100
 
     fun parse(json: String, origin: String): TvBoxConfig {
-        val root = try { JSONObject(json.trimStart('\uFEFF', ' ', '\n', '\r', '\t')) }
+        val root = try { JSONObject(TvBoxWrappedConfig.stripComments(json)
+            .trimStart('\uFEFF', ' ', '\n', '\r', '\t')) }
         catch (_: JSONException) { return TvBoxConfig.Error("配置不是有效 JSON；可能返回了图片或网页") }
 
         if (root.has("urls")) {
@@ -158,7 +159,7 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
             return@withContext TvBoxConfig.Error("本地 JSON 必须为 1 字节至 1 MB")
         when (val parsed = TvBoxConfigParser.parse(json, url)) {
             is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
-                runCatching { save(url, json) }
+                runCatching { save(url, TvBoxWrappedConfig.stripComments(json)) }
                 parsed
             }
             else -> TvBoxConfig.Error("只能缓存有效的 TVBox 单仓或多仓 JSON")
@@ -182,9 +183,9 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
             if (status !in 200..299) return@withContext cached(address)
                 ?: TvBoxConfig.Error("配置读取失败：HTTP $status")
             val contentType = connection.contentType.orEmpty().lowercase()
-            if (contentType.startsWith("image/") || contentType.startsWith("video/") || contentType.startsWith("text/html")) {
+            if (contentType.startsWith("video/") || contentType.startsWith("text/html")) {
                 return@withContext cached(address)
-                    ?: TvBoxConfig.Error("地址返回了图片或网页，不是 TVBox JSON 配置")
+                    ?: TvBoxConfig.Error("地址返回了网页或视频，不是 TVBox JSON 配置")
             }
             val maxBytes = 1024 * 1024
             if (connection.contentLengthLong > maxBytes) return@withContext cached(address)
@@ -200,11 +201,18 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
                     bytes.write(buffer, 0, read)
                 }
             }
-            val json = bytes.toString(Charsets.UTF_8.name())
+            val wrapped = TvBoxWrappedConfig.extract(bytes.toByteArray())
+            if (wrapped == null && contentType.startsWith("image/")) {
+                return@withContext cached(address)
+                    ?: TvBoxConfig.Error("地址返回图片，但未找到有效的 TVBox 尾随 Base64 配置")
+            }
+            val json = TvBoxWrappedConfig.stripComments(wrapped ?: bytes.toString(Charsets.UTF_8.name()))
             when (val parsed = TvBoxConfigParser.parse(json, address)) {
                 is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
                     runCatching { save(address, json) }
-                    parsed
+                    if (parsed is TvBoxConfig.Single && wrapped != null)
+                        parsed.copy(wrappedInImage = true)
+                    else parsed
                 }
                 is TvBoxConfig.Error -> cached(address) ?: parsed
                 else -> parsed
