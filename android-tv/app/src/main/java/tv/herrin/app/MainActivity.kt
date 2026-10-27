@@ -294,6 +294,44 @@ private fun Herrin() {
     var liveUrlDraft by rememberSaveable { mutableStateOf(prefs.livePlaylistUrl) }
     var epgUrlDraft by rememberSaveable { mutableStateOf(prefs.liveEpgUrl) }
     var importProfilesDraft by rememberSaveable { mutableStateOf("") }
+    val tvBoxRepository = remember { TvBoxConfigRepository() }
+    var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseUrl) }
+    // Consent applies only to this app process; it is never persisted or granted on startup.
+    var tvBoxAllowHttp by remember { mutableStateOf(false) }
+    var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var tvBoxLoadEpoch by remember { mutableIntStateOf(0) }
+    var tvBoxStatus by remember { mutableStateOf("TVBox 多仓仅读取配置元数据，需手动输入并点击读取") }
+    var tvBoxWarehouses by remember { mutableStateOf<List<TvBoxWarehouse>>(emptyList()) }
+    var tvBoxSingle by remember { mutableStateOf<TvBoxConfig.Single?>(null) }
+    var tvBoxHerrinCatalog by remember { mutableStateOf<TvBoxConfig.HerrinCatalog?>(null) }
+    var tvBoxSelectedName by remember { mutableStateOf("") }
+    LaunchedEffect(tvBoxLoadEpoch) {
+        val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
+        tvBoxStatus = "正在读取 TVBox 配置…"
+        tvBoxSingle = null
+        tvBoxHerrinCatalog = null
+        when (val result = tvBoxRepository.load(address, tvBoxAllowHttp)) {
+            is TvBoxConfig.Warehouses -> {
+                tvBoxWarehouses = result.entries
+                tvBoxStatus = "已识别 ${result.entries.size} 个仓库${if (result.ignored > 0) "；跳过 ${result.ignored} 个无效／重复条目" else ""}。选中下方仓库可预览。"
+            }
+            is TvBoxConfig.Single -> {
+                if (isRoot) tvBoxWarehouses = emptyList()
+                tvBoxSingle = result
+                tvBoxStatus = "已识别单仓：${result.sites.size} 个站点，${result.lives.size} 组直播配置；仅展示元数据。"
+            }
+            is TvBoxConfig.HerrinCatalog -> {
+                if (isRoot) tvBoxWarehouses = emptyList()
+                tvBoxHerrinCatalog = result
+                tvBoxStatus = "检测到 HERRIN 格式（${result.count} 个条目），可添加到现有 HTTPS 目录管理。"
+            }
+            is TvBoxConfig.Error -> {
+                if (isRoot) tvBoxWarehouses = emptyList()
+                tvBoxStatus = result.reason
+            }
+        }
+        if (isRoot && tvBoxStatus.startsWith("已识别")) prefs.tvBoxWarehouseUrl = address
+    }
     var pendingDeleteSourceId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(pendingDeleteSourceId) {
         if (pendingDeleteSourceId != null) {
@@ -956,6 +994,80 @@ private fun Herrin() {
                                 configStatus = "节目单配置已保存；只读取你主动提供的 XMLTV"
                             }
                         } }
+                        item { Text("TVBox 多仓 / 单仓配置", fontSize = 22.sp) }
+                        item { Text("支持 urls 多仓入口与 sites / lives 单仓预览。输入自己的配置地址后手动读取；不会执行第三方 Spider、JAR、JS 或解析站点内容。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
+                        item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
+                            Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
+                                .onFocusChanged { configInputFocused = it.isFocused },
+                            label = { Text("TVBox 多仓／单仓 HTTP(S) JSON 地址") }, singleLine = true) }
+                        item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TvButton("本次允许 HTTP：${if (tvBoxAllowHttp) "开" else "关"}",
+                                modifier = Modifier.testTag("tvbox-http-consent"), reduced = reduceMotion,
+                                selected = tvBoxAllowHttp) {
+                                tvBoxAllowHttp = !tvBoxAllowHttp
+                                tvBoxStatus = if (tvBoxAllowHttp) "已允许本次手动读取 HTTP 配置（不加密）；影视目录及播放仍只允许 HTTPS"
+                                else "已关闭 HTTP 配置读取授权"
+                            }
+                            TvButton("读取配置", modifier = Modifier.testTag("tvbox-warehouse-load"),
+                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                                tvBoxSelectedName = ""
+                                tvBoxRequest = tvBoxUrlDraft.trim() to true
+                                tvBoxLoadEpoch++
+                            }
+                        } }
+                        item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
+                            color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
+                        if (tvBoxWarehouses.isNotEmpty()) {
+                            item { Text("仓库列表 · 遥控器选择并预览", fontSize = 18.sp) }
+                            item { LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(5.dp)) {
+                                itemsIndexed(tvBoxWarehouses) { index, warehouse ->
+                                    TvButton(warehouse.name, modifier = Modifier.testTag("tvbox-entry-$index"),
+                                        reduced = reduceMotion, selected = tvBoxSelectedName == warehouse.name) {
+                                        tvBoxSelectedName = warehouse.name
+                                        tvBoxRequest = warehouse.url to false
+                                        tvBoxLoadEpoch++
+                                    }
+                                }
+                            } }
+                        }
+                        if (tvBoxSingle != null) {
+                            val preview = tvBoxSingle!!
+                            item { Text("${if (tvBoxSelectedName.isBlank()) "当前单仓" else tvBoxSelectedName} · 站点预览", fontSize = 18.sp) }
+                            item { Text(preview.sites.take(15).joinToString("  ·  ") { it.name }.ifBlank { "未提供站点条目" },
+                                modifier = Modifier.testTag("tvbox-site-preview"), lineHeight = 24.sp) }
+                            if (preview.hasExternalEngine) {
+                                item { Text("注意：此仓包含需要 TVBox 专用解析器的站点；HERRIN 当前仅显示名称，不能直接搜索或播放。", color = Color(0xFFE2C38B)) }
+                            }
+                            val playlists = preview.lives.filter { it.playlistUrl != null }.take(10)
+                            if (playlists.isNotEmpty()) {
+                                item { Text("可尝试使用的授权 HTTPS M3U 直播列表", fontSize = 18.sp) }
+                                item { LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    itemsIndexed(playlists) { index, live ->
+                                        TvButton("导入 ${live.name}", modifier = Modifier.testTag("tvbox-live-$index"),
+                                            reduced = reduceMotion) {
+                                            val link = live.playlistUrl ?: return@TvButton
+                                            liveUrlDraft = link
+                                            prefs.livePlaylistUrl = link
+                                            liveChannels = emptyList()
+                                            selectedLiveGroup = null
+                                            liveRefresh++
+                                            tvBoxStatus = "已导入 ${live.name} 的 HTTPS M3U 地址；请到直播页检查实际解析结果"
+                                        }
+                                    }
+                                } }
+                            }
+                        }
+                        if (tvBoxHerrinCatalog != null) {
+                            item { TvButton("填入 HERRIN HTTPS 目录栏", modifier = Modifier.testTag("tvbox-herrin-use"),
+                                reduced = reduceMotion) {
+                                val link = tvBoxHerrinCatalog?.address.orEmpty()
+                                if (AuthorizedUrls.https(link) != null) {
+                                    configUrlDraft = link
+                                    tvBoxStatus = "已填入目录栏；请按「保存媒体配置」以完成导入"
+                                } else tvBoxStatus = "HERRIN 目录仅允许 HTTPS，不能从 HTTP 导入"
+                            } }
+                        }
                         item { TvButton("保存媒体配置", reduced = reduceMotion,
                             onFocus = { focusId = "settings-save"; keyboard?.hide() }) {
                             val catalogLink = configUrlDraft.trim()
@@ -1074,7 +1186,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M3.9 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持频道查找、分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\n播放器新增本地实播状态面板，可查看是否真实出帧、分辨率、丢帧与音轨字幕信息。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.1 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表；支持频道查找、分组、收藏筛选、手动刷新及可选 XMLTV / .xml.gz 节目单。\nTVBox 多仓与单仓可安全预览；Spider/JAR/JS 解析、第三方影视搜索播放仍未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }

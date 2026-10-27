@@ -3,6 +3,7 @@ package tv.herrin.app
 import android.os.Build
 import android.view.WindowInsets
 import androidx.compose.ui.graphics.toPixelMap
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import android.graphics.Bitmap
 import android.view.KeyEvent
@@ -288,6 +289,42 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
         compose.onNodeWithText("保存媒体配置").assertIsDisplayed()
         capture("settings-source-picker")
+    }
+
+    @Test fun tvBoxMultiwarehouseRequiresConsentThenNavigatesWithRemote() {
+        MockWebServer().use { server ->
+            server.start()
+            val singleUrl = server.url("/single.json")
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"urls":[{"name":"自建演示仓","url":"$singleUrl"}]}"""))
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"sites":[{"name":"影视菜单演示","api":"csp_Demo"}]}"""))
+            focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val settings = compose.onNodeWithTag("settings-list")
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
+            compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/multi.json").toString())
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
+            focus("tvbox-warehouse-load"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(5000) {
+                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("只接受 HTTPS") }.isSuccess
+            }
+            assertTrue(server.requestCount == 0)
+            settings.performScrollToNode(hasTestTag("tvbox-http-consent"))
+            focus("tvbox-http-consent"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            focus("tvbox-warehouse-load"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(8000) {
+                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库") }.isSuccess
+            }
+            settings.performScrollToNode(hasTestTag("tvbox-entry-0"))
+            focus("tvbox-entry-0"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(8000) {
+                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓") }.isSuccess
+            }
+            settings.performScrollToNode(hasTestTag("tvbox-site-preview"))
+            compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示")
+            assertEquals(2, server.requestCount)
+            capture("settings-tvbox-multiwarehouse")
+        }
     }
 
     @Test fun settingsOfferExplicitSourceBackupImportAndSafeDeleteFlow() {
