@@ -318,12 +318,14 @@ private fun Herrin() {
     var tvBoxStatus by remember { mutableStateOf("TVBox 多仓仅读取配置元数据，需手动输入并点击读取") }
     var tvBoxWarehouses by remember { mutableStateOf<List<TvBoxWarehouse>>(emptyList()) }
     var tvBoxSingle by remember { mutableStateOf<TvBoxConfig.Single?>(null) }
+    var tvBoxShowAllSites by remember { mutableStateOf(false) }
     var tvBoxHerrinCatalog by remember { mutableStateOf<TvBoxConfig.HerrinCatalog?>(null) }
     var tvBoxSelectedName by remember { mutableStateOf("") }
     LaunchedEffect(tvBoxLoadEpoch) {
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
         tvBoxStatus = "正在读取 TVBox 配置…"
         tvBoxSingle = null
+        tvBoxShowAllSites = false
         tvBoxHerrinCatalog = null
         val imported = tvBoxImportJsonRequest
         tvBoxImportJsonRequest = null
@@ -1085,10 +1087,33 @@ private fun Herrin() {
                         }
                         if (tvBoxSingle != null) {
                             val preview = tvBoxSingle!!
-                            item { Text("${if (tvBoxSelectedName.isBlank()) "当前单仓" else tvBoxSelectedName} · 站点预览", fontSize = 18.sp) }
+                            val directCount = preview.sites.count { it.apiUrl != null }
+                            val adapterCount = preview.sites.count { it.needsAdapter }
+                            item { Text("${if (tvBoxSelectedName.isBlank()) "当前单仓" else tvBoxSelectedName} · ${preview.sites.size} 个影视站点", fontSize = 18.sp) }
                             item { Text(preview.sites.take(15).joinToString("  ·  ") { it.name }.ifBlank { "未提供站点条目" },
                                 modifier = Modifier.testTag("tvbox-site-preview"), lineHeight = 24.sp) }
-                            val directSites = preview.sites.filter { it.apiUrl != null }.take(15)
+                            item { Text("${directCount} 个 HTTP(S) 接口可尝试标准 CMS JSON；${adapterCount} 个站点需要 Spider/JS 适配器。成功识别配置不等于可播放。",
+                                modifier = Modifier.testTag("tvbox-site-capabilities"), lineHeight = 23.sp) }
+                            item { TvButton(if (tvBoxShowAllSites) "收起完整站点列表" else "查看全部 ${preview.sites.size} 个影视站点",
+                                modifier = Modifier.testTag("tvbox-sites-toggle"), reduced = reduceMotion) {
+                                tvBoxShowAllSites = !tvBoxShowAllSites
+                            } }
+                            if (tvBoxShowAllSites) {
+                                itemsIndexed(preview.sites) { index, site ->
+                                    TvButton("${index + 1}. ${site.name} · ${when {
+                                        site.apiUrl != null -> "标准 CMS 试读入口"
+                                        site.needsAdapter -> "需 Spider/JS"
+                                        else -> "无可访问接口"
+                                    }}", modifier = Modifier.testTag("tvbox-site-$index"), reduced = reduceMotion) {
+                                        tvBoxStatus = when {
+                                            site.apiUrl != null -> "${site.name} 是 HTTP(S) 入口；请使用上方「浏览 ${site.name}」尝试标准 CMS JSON。"
+                                            site.needsAdapter -> "${site.name} 使用 TVBox 专用 Spider/JAR/JS 接口；已识别元数据，但当前版本没有安全执行引擎，无法加载影视列表。"
+                                            else -> "${site.name} 未声明 HTTP(S) 影视接口，暂无可用的内容加载方式。"
+                                        }
+                                    }
+                                }
+                            }
+                            val directSites = preview.sites.filter { it.apiUrl != null }
                             if (directSites.isNotEmpty()) {
                                 item { Text("可尝试读取的标准 CMS 影视接口", fontSize = 18.sp) }
                                 item { LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

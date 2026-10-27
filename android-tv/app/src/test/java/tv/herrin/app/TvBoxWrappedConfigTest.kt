@@ -29,6 +29,33 @@ class TvBoxWrappedConfigTest {
         assertEquals("https://example.org/list.m3u", config.lives.single().sourceUrl)
     }
 
+    @Test fun preservesAllSitesAndLiveEntriesInFortyNineSiteSingleWarehouse() {
+        // Synthetic scale fixture matching the observed structure, not a bundled provider config.
+        val json = buildString {
+            append("""{"spider":"https://example.org/adapter.jar","sites":[""")
+            for (index in 0..48) {
+                if (index != 0) append(',')
+                val api = if (index < 3) "https://example.org/cms$index" else "csp_Test$index"
+                append("""{"name":"演示站点$index","type":3,"api":"$api"}""")
+            }
+            append("""],"lives":[""")
+            for (index in 0..5) {
+                if (index != 0) append(',')
+                append("""{"name":"演示直播$index","url":"https://example.org/live$index.m3u"}""")
+            }
+            append("]}")
+        }
+        val decoded = TvBoxWrappedConfig.extract(wrappedJson(json))
+        assertNotNull(decoded)
+        val parsed = TvBoxConfigParser.parse(decoded!!, "http://www.饭太硬.net/tv") as TvBoxConfig.Single
+        assertEquals(49, parsed.sites.size)
+        assertEquals(3, parsed.sites.count { it.apiUrl != null })
+        assertEquals(46, parsed.sites.count { it.needsAdapter })
+        assertEquals("演示站点48", parsed.sites.last().name)
+        assertEquals(6, parsed.lives.size)
+        assertTrue(parsed.hasExternalEngine)
+    }
+
     @Test fun stripsCommentsButPreservesSlashesWithinQuotedUrls() {
         val json = """{"sites":[/* a site */{"name":"A","api":"https://api.example.org/test//v1"}],
           // removed

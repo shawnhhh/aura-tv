@@ -295,10 +295,15 @@ class HerrinUiSmokeTest {
         MockWebServer().use { server ->
             server.start()
             val singleUrl = server.url("/single.json")
+            val sites = buildString {
+                append("""{"sites":[{"name":"影视菜单演示","api":"csp_Demo"}""")
+                for (i in 1..48) append(""",{"name":"站点$i","api":"csp_Site$i"}""")
+                append("]}")
+            }
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
                 .setBody("""{"urls":[{"name":"自建演示仓","url":"$singleUrl"}]}"""))
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
-                .setBody("""{"sites":[{"name":"影视菜单演示","api":"csp_Demo"}]}"""))
+                .setBody(sites))
             focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
@@ -330,7 +335,16 @@ class HerrinUiSmokeTest {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓", substring = true) }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("tvbox-site-preview"))
-            compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示")
+            compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示", substring = true)
+            settings.performScrollToNode(hasTestTag("tvbox-site-capabilities"))
+            compose.onNodeWithTag("tvbox-site-capabilities").assertTextContains("49 个站点需要 Spider", substring = true)
+            settings.performScrollToNode(hasTestTag("tvbox-sites-toggle"))
+            compose.onNodeWithTag("tvbox-sites-toggle").performClick()
+            settings.performScrollToNode(hasTestTag("tvbox-site-48"))
+            compose.onNodeWithTag("tvbox-site-48").assertTextContains("站点48", substring = true)
+            compose.onNodeWithTag("tvbox-site-48").performClick()
+            settings.performScrollToNode(hasTestTag("tvbox-status"))
+            compose.onNodeWithTag("tvbox-status").assertTextContains("没有安全执行引擎", substring = true)
             assertEquals(2, server.requestCount)
             capture("settings-tvbox-multiwarehouse")
         }
