@@ -18,11 +18,17 @@ GitHub Actions `HERRIN Android Debug` 在 PR 和开发分支 push 时构建。�
 构建成功后，在该次运行页面 Artifacts 下载 `HERRIN-debug-apk`，解压得到 `app-debug.apk`。
 Artifact 保留 14 天；需登录 GitHub。仅 debug 签名，不需要生产签名或密钥。
 
-## M4.1 TVBox 多仓安全预览（独立开发分支）
+## M4.2 TVBox 直播与标准影视 JSON 接口（Draft 开发分支）
+
+在 M4.1 多仓/单仓配置之上：可直接解析单仓 `lives[].channels`，或手动导入 M3U、TVBox TXT 与内嵌直播 JSON；将已授权频道保存在应用私有存储中供下次启动使用。配置 JSON 经校验后按 URL 缓存，远端变成图片/报错时只回退到**同 URL** 已验证的旧 JSON；用户也可手动粘贴从旧 TVBox 备份的 JSON 并绑定到来源地址。可以对 `sites[].api` 为直接 HTTP(S) 地址的**标准 CMS JSON** 尝试读取影片列表与自带 HTTPS 播放线路。
+
+不包括任意 TVBox Spider/JAR/JS 插件、加密配置或私有采集协议的执行；不保证任意 TVBox 源均可播放。特别是 [M4.2 兼容说明](docs/M4_2_TVBOX_IPTV_AND_CMS.md) 中的饭太硬地址，曾从外部实测返回 JPEG 图片，不是可以解析的配置。当前用户在别的 TVBox 上继续看，很可能与历史缓存或不同网络返回结果有关，不能凭图片逆向恢复 JSON。
+
+## M4.1 TVBox 多仓安全预览（基础能力）
 
 **设置 → TVBox 多仓 / 单仓配置**，可粘贴 TVBox `urls` 多仓入口并用遥控器选择单仓；也可直接粘贴包含 `sites`、`lives` 的单仓 JSON。显示站点名称、直播组名称及需要独立适配器的提示。检测到明确的 HTTPS M3U 链接时，可手动导入现有直播模块。HTTP 链接需要本次手动授权，应用不会自动打开上次使用的仓库。详见 [M4.1 兼容范围与测试](docs/M4_1_TVBOX_MULTIWAREHOUSE.md)。
 
-**兼容范围有限**：现阶段只解析 TVBox JSON 的安全元数据；不运行远端 Spider/JAR/JS，不自动爬取影视站，不代表配置中的所有影视源都能检索或播放。
+**兼容范围有限**：M4.1 仅解析 TVBox JSON 元数据；M4.2 增加直播数据与标准 CMS JSON 直连，仍不运行第三方 Spider/JAR/JS。
 
 ## M1 / M1.6 功能
 

@@ -1,5 +1,6 @@
 package tv.herrin.app
 
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -10,15 +11,19 @@ import java.net.HttpURLConnection
 import java.net.IDN
 import java.net.URI
 import java.net.URL
+import java.io.File
+import java.security.MessageDigest
 
 /** TVBox metadata is untrusted: no Spider, JAR, JavaScript or site API is executed. */
 internal data class TvBoxWarehouse(val name: String, val url: String)
-internal data class TvBoxSite(val name: String, val needsAdapter: Boolean)
-internal data class TvBoxLive(val name: String, val playlistUrl: String?)
+internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null)
+internal data class TvBoxLive(val name: String, val playlistUrl: String?,
+                              val sourceUrl: String? = null, val channels: List<LiveChannel> = emptyList())
 
 internal sealed interface TvBoxConfig {
-    data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int) : TvBoxConfig
-    data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean) : TvBoxConfig
+    data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
+    data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,
+                      val fromCache: Boolean = false) : TvBoxConfig
     data class HerrinCatalog(val address: String, val count: Int) : TvBoxConfig
     data class Error(val reason: String) : TvBoxConfig
 }
@@ -86,7 +91,11 @@ internal object TvBoxConfigParser {
             val sites = (0 until minOf(siteJson.length(), 300)).mapNotNull { i ->
                 siteJson.optJSONObject(i)?.let { site ->
                     val title = site.optString("name").trim().take(64)
-                    if (title.isBlank()) null else TvBoxSite(title, site.optString("api").isNotBlank())
+                    if (title.isBlank()) null else {
+                        val api = site.optString("api").trim()
+                        val direct = TvBoxUrl.normalize(api, allowHttp = true)
+                        TvBoxSite(title, api.isNotBlank() && direct == null, direct)
+                    }
                 }
             }
             val lives = (0 until minOf(liveJson.length(), 100)).mapNotNull { i ->
@@ -97,7 +106,9 @@ internal object TvBoxConfigParser {
                         val playlist = TvBoxUrl.normalize(address)?.takeIf {
                             URI(it).path.lowercase().endsWith(".m3u") || URI(it).path.lowercase().endsWith(".m3u8")
                         }
-                        TvBoxLive(title, playlist)
+                        TvBoxLive(title, playlist,
+                            sourceUrl = TvBoxUrl.normalize(address, allowHttp = true),
+                            channels = TvBoxLiveCodec.inlineChannels(live, allowHttp = true))
                     }
                 }
             }
@@ -110,12 +121,55 @@ internal object TvBoxConfigParser {
     }
 }
 
-internal class TvBoxConfigRepository {
+internal class TvBoxConfigRepository(private val context: Context? = null) {
+    private fun cacheFile(url: String): File? {
+        val directory = context?.filesDir ?: return null
+        val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return File(File(directory, "tvbox-config"), "$digest.json")
+    }
+
+    private fun cached(url: String): TvBoxConfig? = runCatching {
+        val file = cacheFile(url) ?: return@runCatching null
+        if (!file.isFile || file.length() !in 1..1_048_576) return@runCatching null
+        when (val parsed = TvBoxConfigParser.parse(file.readText(Charsets.UTF_8), url)) {
+            is TvBoxConfig.Single -> parsed.copy(fromCache = true)
+            is TvBoxConfig.Warehouses -> parsed.copy(fromCache = true)
+            else -> null
+        }
+    }.getOrNull()
+
+    private fun save(url: String, text: String) {
+        val file = cacheFile(url) ?: return
+        file.parentFile?.mkdirs()
+        val temp = File(file.parentFile, "${file.name}.tmp")
+        temp.writeText(text, Charsets.UTF_8)
+        if (!temp.renameTo(file)) {
+            file.writeText(text, Charsets.UTF_8)
+            temp.delete()
+        }
+    }
+
+    /** Explicit import from a user-controlled backup, useful when the original URL has expired. */
+    suspend fun importJson(json: String, sourceUrl: String, allowHttp: Boolean): TvBoxConfig = withContext(Dispatchers.IO) {
+        val url = TvBoxUrl.normalize(sourceUrl, allowHttp)
+            ?: return@withContext TvBoxConfig.Error("请先填写本次允许访问的 HTTP(S) 配置地址")
+        if (json.toByteArray(Charsets.UTF_8).size !in 1..1_048_576)
+            return@withContext TvBoxConfig.Error("本地 JSON 必须为 1 字节至 1 MB")
+        when (val parsed = TvBoxConfigParser.parse(json, url)) {
+            is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
+                runCatching { save(url, json) }
+                parsed
+            }
+            else -> TvBoxConfig.Error("只能缓存有效的 TVBox 单仓或多仓 JSON")
+        }
+    }
+
     suspend fun load(input: String, allowHttp: Boolean = false): TvBoxConfig = withContext(Dispatchers.IO) {
         val address = TvBoxUrl.normalize(input, allowHttp)
             ?: return@withContext TvBoxConfig.Error("只接受 HTTPS；如需读取 HTTP，请先手动开启本次授权")
         val connection = try { URL(address).openConnection() as HttpURLConnection }
-        catch (_: Exception) { return@withContext TvBoxConfig.Error("无法建立配置连接") }
+        catch (_: Exception) { return@withContext cached(address) ?: TvBoxConfig.Error("无法建立配置连接") }
         try {
             connection.connectTimeout = 8_000
             connection.readTimeout = 8_000
@@ -123,27 +177,40 @@ internal class TvBoxConfigRepository {
             connection.setRequestProperty("Accept", "application/json, text/plain")
             connection.setRequestProperty("Accept-Encoding", "identity")
             val status = connection.responseCode
-            if (status in 300..399) return@withContext TvBoxConfig.Error("配置地址发生跳转；请检查最终 HTTPS 地址后重新输入")
-            if (status !in 200..299) return@withContext TvBoxConfig.Error("配置读取失败：HTTP $status")
+            if (status in 300..399) return@withContext cached(address)
+                ?: TvBoxConfig.Error("配置地址发生跳转；请检查最终地址后重新输入")
+            if (status !in 200..299) return@withContext cached(address)
+                ?: TvBoxConfig.Error("配置读取失败：HTTP $status")
             val contentType = connection.contentType.orEmpty().lowercase()
             if (contentType.startsWith("image/") || contentType.startsWith("video/") || contentType.startsWith("text/html")) {
-                return@withContext TvBoxConfig.Error("地址返回了图片或网页，不是 TVBox JSON 配置")
+                return@withContext cached(address)
+                    ?: TvBoxConfig.Error("地址返回了图片或网页，不是 TVBox JSON 配置")
             }
             val maxBytes = 1024 * 1024
-            if (connection.contentLengthLong > maxBytes) return@withContext TvBoxConfig.Error("配置超过 1 MB 安全限制")
+            if (connection.contentLengthLong > maxBytes) return@withContext cached(address)
+                ?: TvBoxConfig.Error("配置超过 1 MB 安全限制")
             val bytes = ByteArrayOutputStream()
             connection.inputStream.use { inputStream ->
                 val buffer = ByteArray(8192)
                 while (true) {
                     val read = inputStream.read(buffer)
                     if (read == -1) break
-                    if (bytes.size() + read > maxBytes) return@withContext TvBoxConfig.Error("配置超过 1 MB 安全限制")
+                    if (bytes.size() + read > maxBytes) return@withContext cached(address)
+                        ?: TvBoxConfig.Error("配置超过 1 MB 安全限制")
                     bytes.write(buffer, 0, read)
                 }
             }
-            TvBoxConfigParser.parse(bytes.toString(Charsets.UTF_8.name()), address)
+            val json = bytes.toString(Charsets.UTF_8.name())
+            when (val parsed = TvBoxConfigParser.parse(json, address)) {
+                is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
+                    runCatching { save(address, json) }
+                    parsed
+                }
+                is TvBoxConfig.Error -> cached(address) ?: parsed
+                else -> parsed
+            }
         } catch (_: Exception) {
-            TvBoxConfig.Error("配置连接失败或读取超时；请检查源是否可用")
+            cached(address) ?: TvBoxConfig.Error("配置连接失败或读取超时；请检查源是否可用")
         } finally {
             connection.disconnect()
         }
