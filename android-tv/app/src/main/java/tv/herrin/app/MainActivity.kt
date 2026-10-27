@@ -238,6 +238,7 @@ private fun Herrin() {
     var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
     var epgProgrammes by remember { mutableStateOf<List<LiveProgramme>>(emptyList()) }
     var epgStatus by remember { mutableStateOf("未配置 XMLTV 节目单") }
+    var highlightedLiveUrl by remember { mutableStateOf<String?>(null) }
     var epgRefresh by remember { mutableIntStateOf(0) }
     var liveClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var liveRefresh by remember { mutableIntStateOf(0) }
@@ -553,9 +554,7 @@ private fun Herrin() {
                     Spacer(Modifier.height(6.dp))
                     if (category == "直播" && !isSearch) {
                         val currentGuide = remember(epgProgrammes, liveClock) {
-                            epgProgrammes.asSequence()
-                                .filter { liveClock >= it.startMs && liveClock < it.stopMs }
-                                .associateBy { it.channelId }
+                            AuthorizedXmlTv.snapshots(epgProgrammes, liveClock)
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                             Text(liveStatus, Modifier.testTag("live-status"), color = Color(0xFFCFD7E4))
@@ -585,7 +584,7 @@ private fun Herrin() {
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     contentPadding = PaddingValues(10.dp)) {
                                     itemsIndexed(visibleChannels, key = { _, item -> item.url }) { index, channel ->
-                                        val nowProgramme = currentGuide[channel.tvgId.ifBlank { channel.name }]
+                                        val nowProgramme = currentGuide[channel.tvgId.ifBlank { channel.name }]?.now
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             verticalAlignment = Alignment.CenterVertically) {
                                             TvButton(
@@ -597,7 +596,10 @@ private fun Herrin() {
                                                 modifier = Modifier.testTag("live-$index")
                                                     .focusRequester(requester("live-$index")),
                                                 reduced = reduceMotion,
-                                                onFocus = { focusId = "live-$index" }
+                                                onFocus = {
+                                                    focusId = "live-$index"
+                                                    highlightedLiveUrl = channel.url
+                                                }
                                             ) {
                                                 activeLiveChannel = channel
                                                 activeLiveIndex = index
@@ -612,6 +614,29 @@ private fun Herrin() {
                                                 liveFavorites.toggle(prefs.livePlaylistUrl, channel.url)
                                                 liveFavoriteEpoch++
                                             }
+                                        }
+                                    }
+                                }
+                                val preview = visibleChannels.firstOrNull { it.url == highlightedLiveUrl }
+                                    ?: visibleChannels.firstOrNull()
+                                val guide = preview?.let { currentGuide[it.tvgId.ifBlank { it.name }] }
+                                if (preview != null && guide != null) {
+                                    Column(Modifier.fillMaxWidth().testTag("live-guide-preview"),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Text("${preview.name} · 节目预览", fontSize = 14.sp,
+                                            color = Color(0xFFCFD7E4))
+                                        if (guide.now != null) {
+                                            Text("当前：${guide.now.title}", fontSize = 15.sp,
+                                                color = Color.White, maxLines = 1)
+                                            LinearProgressIndicator(
+                                                progress = { guide.progress ?: 0f },
+                                                modifier = Modifier.width(300.dp).height(3.dp)
+                                                    .testTag("live-guide-progress"))
+                                        }
+                                        if (guide.next != null) {
+                                            Text(if (guide.now == null) "即将播出：${guide.next.title}"
+                                                else "接下来：${guide.next.title}",
+                                                fontSize = 13.sp, color = Color(0xFFADBBD0), maxLines = 1)
                                         }
                                     }
                                 }
@@ -879,7 +904,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M2.2 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示。收藏仅保存在本机。\n可从用户提供的 HTTPS 地址读取影片元数据、加载海报与播放测试流；没有内置未授权片源。\nFongMi 接口与直播功能尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
+                        item { Text("HERRIN M3.4 Alpha · 原生 Android TV\n内置影片仍是原创虚构演示，收藏和观看记录只保存在本机。\n可使用自己授权的 HTTPS 目录、媒体与 M3U 直播列表，并配置可选 XMLTV 当前及下一档节目单。\n不内置第三方片源；FongMi 兼容层尚未接入。\n方向键移动 · 确定选择 · 返回回到上一页", lineHeight = 28.sp) }
                     } else {
                         item { Text(if (screen == "player") "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
                         item { Text("${film.year}  ·  ${film.category}  ·  原创虚构样片\n${film.synopsis}", lineHeight = 26.sp) }
