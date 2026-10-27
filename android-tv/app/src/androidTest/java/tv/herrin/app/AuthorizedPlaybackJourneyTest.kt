@@ -123,6 +123,7 @@ class AuthorizedPlaybackJourneyTest {
                     .load(server.url("/guide.xml").toString())
             } as LiveEpgResult.Ready).programmes
             assertEquals(2, channels.size)
+            assertNotEquals("Channel-switch fixture URLs must differ", channels[0].url, channels[1].url)
             assertEquals("原创建模节目", AuthorizedXmlTv.current(
                 guide, channels[0].tvgId, System.currentTimeMillis())?.title)
             ActivityScenario.launch<PlaybackTestActivity>(

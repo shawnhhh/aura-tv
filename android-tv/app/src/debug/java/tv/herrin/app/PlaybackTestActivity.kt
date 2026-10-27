@@ -12,24 +12,26 @@ import androidx.media3.exoplayer.ExoPlayer
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
     val createdPlayers = java.util.concurrent.CopyOnWriteArrayList<ExoPlayer>()
-    private var selectedFixture by mutableStateOf<String?>(null)
     val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val cueTexts = java.util.concurrent.CopyOnWriteArrayList<String>()
     // Retain a short history: the final empty cue event on ENDED must not erase
     // evidence that Media3 really decoded a WebVTT caption earlier in the clip.
     val cueHistory = java.util.concurrent.CopyOnWriteArrayList<String>()
-    /** Instrumentation-only route switch: exercises the same production player. */
-    fun switchFixture(url: String) { selectedFixture = url }
+    /** Mimic leaving one channel and opening the next in a fresh player route. */
+    fun switchFixture(url: String) {
+        intent.putExtra("fixture", url)
+        recreate()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selectedFixture = intent.getStringExtra("fixture")
         setContent {
             var showing by remember { mutableStateOf(true) }
             MaterialTheme {
                 if (showing) AuthorizedPlaybackPanel(
                     PlaybackMedia(
-                        selectedFixture ?: error("Debug playback fixture not configured"),
+                        intent.getStringExtra("fixture")
+                            ?: error("Debug playback fixture not configured"),
                         subtitles = intent.getStringExtra("subtitle")?.let {
                             listOf(AuthorizedSubtitle("zh", "简体中文测试字幕", it))
                         }.orEmpty()

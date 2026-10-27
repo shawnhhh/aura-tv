@@ -502,7 +502,17 @@ class HerrinUiSmokeTest {
                 runCatching { compose.onNodeWithTag("live-0").assertIsFocused() }.isSuccess
             }
             key(KeyEvent.KEYCODE_DPAD_RIGHT)
-            compose.onNodeWithTag("live-favorite-0").assertIsFocused()
+            // The first D-pad event can be swallowed while the TV IME is
+            // relinquishing its native window focus after Done.
+            val favoriteFocus = {
+                runCatching { compose.onNodeWithTag("live-favorite-0")
+                    .assertIsFocused() }.isSuccess
+            }
+            if (!favoriteFocus()) {
+                compose.waitForIdle()
+                key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            }
+            compose.waitUntil(5000) { favoriteFocus() }
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.onNodeWithText("★ 已收藏").assertExists()
             assertTrue("Live search must not request another playlist", server.requestCount == 1)
