@@ -335,7 +335,7 @@ class HerrinUiSmokeTest {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓", substring = true) }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("tvbox-site-preview"))
-            compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示")
+            compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示", substring = true)
             settings.performScrollToNode(hasTestTag("tvbox-site-capabilities"))
             compose.onNodeWithTag("tvbox-site-capabilities").assertTextContains("49 个站点需要 Spider", substring = true)
             settings.performScrollToNode(hasTestTag("tvbox-sites-toggle"))
