@@ -40,10 +40,17 @@ class Preferences(context: Context) : FavoritesStore {
     var liveEpgUrl: String
         get() = prefs.getString("live_epg_url", "") ?: ""
         set(value) { prefs.edit().putString("live_epg_url", value).apply() }
-    /** User-applied URL; later launches may refresh metadata, never auto-execute Spider code. */
+    /** User-applied URL. Only a matching, explicitly applied Spider JAR may auto-run again. */
     var tvBoxWarehouseUrl: String
         get() = prefs.getString("tvbox_warehouse_url", "") ?: ""
         set(value) { prefs.edit().putString("tvbox_warehouse_url", value).apply() }
+    /** Trust is scoped to the exact source URL and exact URL+MD5 JAR spec. */
+    var tvBoxTrustedSpiderRootUrl: String
+        get() = prefs.getString("tvbox_trusted_spider_root", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_trusted_spider_root", value).apply() }
+    var tvBoxTrustedSpiderJarSpec: String
+        get() = prefs.getString("tvbox_trusted_spider_jar", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_trusted_spider_jar", value).apply() }
     /** Last user-submitted live playlist URL; actual validated channels live in TvBoxLiveStore. */
     var tvBoxLiveSourceUrl: String
         get() = prefs.getString("tvbox_live_source_url", "") ?: ""

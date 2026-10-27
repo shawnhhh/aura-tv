@@ -23,6 +23,14 @@ internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val a
 internal data class TvBoxLive(val name: String, val playlistUrl: String?,
                               val sourceUrl: String? = null, val channels: List<LiveChannel> = emptyList())
 
+/** A one-tap apply can run a plugin; silent relaunch cannot trust a new JAR hash or source. */
+internal object TvBoxSpiderPolicy {
+    fun mayRun(userApplied: Boolean, source: String, jarSpec: String,
+               trustedSource: String, trustedJarSpec: String): Boolean =
+        userApplied || (source.isNotBlank() && jarSpec.isNotBlank() &&
+            source == trustedSource && jarSpec == trustedJarSpec)
+}
+
 internal sealed interface TvBoxConfig {
     data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,

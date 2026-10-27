@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TvBoxWarehousesTest {
+    @Test fun spiderOnlyAutoRunsAfterApplyOrWithExactPreviouslyTrustedJar() {
+        val source = "http://www.饭太硬.net/tv"
+        val oldJar = "https://example.org/spider.jar;md5;0123456789abcdef0123456789abcdef"
+        val newJar = "https://example.org/spider.jar;md5;fedcba9876543210fedcba9876543210"
+        assertTrue(TvBoxSpiderPolicy.mayRun(true, source, newJar, "", ""))
+        assertTrue(TvBoxSpiderPolicy.mayRun(false, source, oldJar, source, oldJar))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false, source, newJar, source, oldJar))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false, "https://another.example/tv", oldJar, source, oldJar))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false, source, oldJar, "", ""))
+    }
+
     @Test fun acceptsChineseIdnAndRejectsNonNetworkAndCredentialUrls() {
         assertEquals("http://www.xn--sss604efuw.net/tv", TvBoxUrl.normalize("http://www.饭太硬.net/tv", true))
         assertNull(TvBoxUrl.normalize("http://www.饭太硬.net/tv"))

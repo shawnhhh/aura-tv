@@ -313,8 +313,9 @@ private fun Herrin() {
     val tvBoxVodRepo = remember { TvBoxVodRepository() }
     val spiderBridge = remember(context) { TvBoxSpiderBridge(context) }
     DisposableEffect(spiderBridge) { onDispose { spiderBridge.close() } }
-    // Running a third-party DEX is a security-sensitive choice and never auto-enabled.
-    var tvBoxAllowSpider by remember { mutableStateOf(false) }
+    // Applying a source is the explicit user action that permits its Spider.
+    // On subsequent launches, auto-run only the exact previously accepted JAR+MD5.
+    var tvBoxRunSpiderAfterApply by remember { mutableStateOf(false) }
     var spiderActive by remember { mutableStateOf(false) }
     var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
     var spiderResolved by remember { mutableStateOf<PlaybackResult?>(null) }
@@ -323,8 +324,8 @@ private fun Herrin() {
     // Large pasted backups should never be marshalled into an Activity saved-state Bundle.
     var tvBoxJsonDraft by remember { mutableStateOf("") }
     var tvBoxLiveUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxLiveSourceUrl) }
-    // HTTP metadata/playlist access is user-enabled by default. Executing
-    // third-party Spider binaries continues to require separate session consent.
+    // HTTP metadata/playlist access is enabled by default; plugin execution is
+    // limited to a user-applied source or a previously pinned JAR fingerprint.
     var tvBoxAllowHttp by remember { mutableStateOf(true) }
     var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
@@ -343,6 +344,8 @@ private fun Herrin() {
     }
     LaunchedEffect(tvBoxLoadEpoch) {
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
+        val runSpiderAfterApply = tvBoxRunSpiderAfterApply
+        tvBoxRunSpiderAfterApply = false
         tvBoxStatus = "正在读取 TVBox 配置…"
         spiderActive = false
         spiderBridge.close()
@@ -371,7 +374,7 @@ private fun Herrin() {
             is TvBoxConfig.Single -> {
                 if (isRoot) tvBoxWarehouses = emptyList()
                 tvBoxSingle = result
-                tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}${if (result.wrappedInImage) "已解开图片内嵌配置；" else ""}已识别单仓：${result.sites.size} 个站点，${result.lives.size} 组直播配置；Java Spider 需本次授权，部分站点仍依赖其他运行时。"
+                tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}${if (result.wrappedInImage) "已解开图片内嵌配置；" else ""}已识别单仓：${result.sites.size} 个站点，${result.lives.size} 组直播配置；可尝试自动加载 Java Spider，其他运行时可能不兼容。"
             }
             is TvBoxConfig.HerrinCatalog -> {
                 if (isRoot) tvBoxWarehouses = emptyList()
@@ -384,6 +387,11 @@ private fun Herrin() {
             }
         }
         if (isRoot && (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty())) {
+            if (prefs.tvBoxWarehouseUrl != address) {
+                // A different root can never inherit approval of the old binary.
+                prefs.tvBoxTrustedSpiderRootUrl = ""
+                prefs.tvBoxTrustedSpiderJarSpec = ""
+            }
             prefs.tvBoxWarehouseUrl = address
             configuredTvBoxUrl = address
         }
@@ -403,6 +411,28 @@ private fun Herrin() {
                     is TvBoxVodResult.Error -> Unit
                 }
             }
+            var chosenSpider: Pair<TvBoxSite, List<Film>>? = null
+            var spiderFailure = ""
+            if (chosen == null) {
+                val config = tvBoxSingle!!
+                for (site in config.sites.filter { it.spiderApi != null }.take(3)) {
+                    val jarSpec = site.jar ?: config.spiderJar ?: continue
+                    // No silent execution of a changed or newly introduced JAR on startup.
+                    if (!TvBoxSpiderPolicy.mayRun(runSpiderAfterApply, prefs.tvBoxWarehouseUrl,
+                            jarSpec, prefs.tvBoxTrustedSpiderRootUrl,
+                            prefs.tvBoxTrustedSpiderJarSpec)) continue
+                    tvBoxStatus += "；正在自动读取 ${site.name}…"
+                    when (val result = spiderBridge.browse(site, config)) {
+                        is SpiderResult.Failure -> spiderFailure = result.message
+                        is SpiderResult.Ready -> if (result.value.isNotEmpty()) {
+                            chosenSpider = site to result.value
+                            prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
+                            prefs.tvBoxTrustedSpiderJarSpec = jarSpec
+                            break
+                        }
+                    }
+                }
+            }
             if (chosen != null) {
                 spiderActive = false
                 providerFilms = chosen.second
@@ -410,11 +440,19 @@ private fun Herrin() {
                 tvBoxVodScope = "tvbox:${chosen.first.apiUrl}"
                 filmId = chosen.second.first().id
                 tvBoxStatus += "；已自动导入 ${chosen.first.name}，首页已切换到影视源内容"
+            } else if (chosenSpider != null) {
+                spiderActive = true
+                providerFilms = chosenSpider.second
+                providerStatus = "TVBox ${chosenSpider.first.name} · ${chosenSpider.second.size} 部"
+                tvBoxVodScope = "spider:${chosenSpider.first.key}:${tvBoxSingle!!.spiderJar}"
+                filmId = chosenSpider.second.first().id
+                tvBoxStatus += "；已自动导入 ${chosenSpider.first.name}，首页已切换到真实影视内容"
             } else {
                 providerFilms = null
                 tvBoxVodScope = "tvbox:pending:$address"
-                providerStatus = "配置已导入，但标准影视接口暂未返回影片；请在首页选择站点（Spider 需单独授权）"
-                tvBoxStatus += "；标准 CMS 暂无内容，请返回首页选择影视站点"
+                providerStatus = "配置已导入，暂无可播放影视目录；可在设置重新应用影视源"
+                tvBoxStatus += "；标准 CMS 与已允许的 Spider 均未提供可用目录" +
+                    (if (spiderFailure.isNotBlank()) "（${spiderFailure.take(80)}）" else "")
             }
             // TVBox single warehouses can carry their own live channel groups.
             // Respect an independently configured live source if one exists.
@@ -656,7 +694,7 @@ private fun Herrin() {
                     verticalArrangement = Arrangement.spacedBy(13.dp)) {
                     item { TvButton("‹ 返回设置", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     item { Text("影视站点", fontSize = 34.sp, fontWeight = FontWeight.Bold) }
-                    item { Text("从已添加的影视源选择站点。标准 CMS 自动读取；Java Spider 执行第三方代码前需要你明确授权。", color = Color(0xFFBDC8D6)) }
+                    item { Text("应用影视源时已自动尝试可用站点。这里仅用于手动切换；选择 Spider 站点会运行该源的第三方插件。", color = Color(0xFFBDC8D6)) }
                     item { Text(tvBoxStatus, Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
                     if (tvBoxWarehouses.isNotEmpty()) {
                         item { Text("仓库", fontSize = 20.sp) }
@@ -668,18 +706,6 @@ private fun Herrin() {
                                 tvBoxLoadEpoch++
                             }
                         }
-                    }
-                    if (selected?.hasExternalEngine == true) {
-                        item { TvButton("运行第三方 Spider：${if (tvBoxAllowSpider) "本次已授权" else "需单独授权"}",
-                            Modifier.testTag("site-spider-consent"), reduceMotion, selected = tvBoxAllowSpider) {
-                            tvBoxAllowSpider = !tvBoxAllowSpider
-                            if (!tvBoxAllowSpider) {
-                                spiderActive = false
-                                spiderBridge.close()
-                            }
-                            tvBoxStatus = if (tvBoxAllowSpider) "已授权本次运行外部 Spider；第三方插件能以应用权限执行代码，请仅选择可信源"
-                            else "外部 Spider 授权已撤销"
-                        } }
                     }
                     itemsIndexed(selected?.sites.orEmpty()) { index, site ->
                         TvButton("${site.name}  ·  ${when {
@@ -705,7 +731,6 @@ private fun Herrin() {
                                         }
                                     }
                                 }
-                                site.spiderApi != null && !tvBoxAllowSpider -> tvBoxStatus = "请先授权运行可信第三方 Spider，再选择站点"
                                 site.spiderApi != null && selected != null -> uiScope.launch {
                                     tvBoxStatus = "正在通过 ${site.name} 加载影片…"
                                     when (val result = spiderBridge.browse(site, selected)) {
@@ -716,6 +741,8 @@ private fun Herrin() {
                                             providerStatus = "TVBox ${site.name} · ${result.value.size} 部"
                                             tvBoxVodScope = "spider:${site.key}:${selected.spiderJar}"
                                             filmId = result.value.first().id
+                                            prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
+                                            prefs.tvBoxTrustedSpiderJarSpec = site.jar ?: selected.spiderJar.orEmpty()
                                             category = "首页"
                                             screen = "browse"
                                             tvBoxStatus = "已导入 ${site.name} 的影片目录"
@@ -1246,6 +1273,7 @@ private fun Herrin() {
                             modifier = Modifier.testTag("tvbox-warehouse-load"),
                             reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
                             tvBoxSelectedName = ""
+                            tvBoxRunSpiderAfterApply = true
                             tvBoxRequest = tvBoxUrlDraft.trim() to true
                             tvBoxLoadEpoch++
                         } }
@@ -1290,7 +1318,7 @@ private fun Herrin() {
                         item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
                             color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
                         if (settingsTvBoxOnly) {
-                            item { Text("影视源将自动连接可用站点并更新首页。Java Spider 等第三方可执行插件仍需单独授权。", color = Color(0xFFBFC8D6), fontSize = 13.sp) }
+                            item { Text("点击「应用影视源」会自动尝试该源的 CMS 与 Java Spider 站点。第三方插件在应用进程中执行代码，请只添加你信任的来源；更新后的插件校验值不同则不会在下次启动时自动执行。", color = Color(0xFFE2C38B), fontSize = 13.sp, lineHeight = 19.sp) }
                             if (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty()) {
                                 item { TvButton("选择影视站点 / 仓库", modifier = Modifier.testTag("settings-source-sites"), reduced = reduceMotion) {
                                     screen = "sites"
@@ -1325,22 +1353,8 @@ private fun Herrin() {
                             item { Text("${if (tvBoxSelectedName.isBlank()) "当前单仓" else tvBoxSelectedName} · ${preview.sites.size} 个影视站点", fontSize = 18.sp) }
                             item { Text(preview.sites.take(15).joinToString("  ·  ") { it.name }.ifBlank { "未提供站点条目" },
                                 modifier = Modifier.testTag("tvbox-site-preview"), lineHeight = 24.sp) }
-                            item { Text("${directCount} 个 HTTP(S) CMS 接口；${adapterCount} 个站点需要 Spider/JS。Java csp_* 可单独授权尝试加载，成功识别配置仍不等于可播放。",
+                            item { Text("${directCount} 个 HTTP(S) CMS 接口；${adapterCount} 个站点需要 Spider/JS。主动应用影视源会自动尝试 Java csp_*，成功识别配置仍不等于可播放。",
                                 modifier = Modifier.testTag("tvbox-site-capabilities"), lineHeight = 23.sp) }
-                            if (preview.hasExternalEngine) {
-                                item { TvButton("本次允许运行外部 Spider：${if (tvBoxAllowSpider) "已授权" else "未授权"}",
-                                    modifier = Modifier.testTag("tvbox-spider-consent"),
-                                    selected = tvBoxAllowSpider, reduced = reduceMotion) {
-                                    tvBoxAllowSpider = !tvBoxAllowSpider
-                                    if (!tvBoxAllowSpider) {
-                                        spiderActive = false
-                                        spiderBridge.close()
-                                    }
-                                    tvBoxStatus = if (tvBoxAllowSpider)
-                                        "本次已授权：外部 JAR 将执行第三方代码，可能访问本机数据或网络；仅加载你信任的来源。关闭应用后授权失效。"
-                                    else "已撤销外部 Spider 授权；运行实例已停止"
-                                } }
-                            }
                             item { TvButton(if (tvBoxShowAllSites) "收起完整站点列表" else "查看全部 ${preview.sites.size} 个影视站点",
                                 modifier = Modifier.testTag("tvbox-sites-toggle"), reduced = reduceMotion) {
                                 tvBoxShowAllSites = !tvBoxShowAllSites
@@ -1355,7 +1369,7 @@ private fun Herrin() {
                                     }}", modifier = Modifier.testTag("tvbox-site-$index"), reduced = reduceMotion) {
                                         tvBoxStatus = when {
                                             site.apiUrl != null -> "${site.name} 是 HTTP(S) 入口；请使用上方「浏览 ${site.name}」尝试标准 CMS JSON。"
-                                            site.spiderApi != null -> "${site.name} 使用 Java Spider；请打开上方本次授权，再点击下方浏览按钮。"
+                                            site.spiderApi != null -> "${site.name} 使用 Java Spider；应用影视源时会自动尝试，或点击下方浏览按钮。"
                                             site.needsAdapter -> "${site.name} 需要不属于 Java csp_* 的其他插件，当前不能执行。"
                                             else -> "${site.name} 未声明 HTTP(S) 影视接口，暂无可用的内容加载方式。"
                                         }
@@ -1396,23 +1410,21 @@ private fun Herrin() {
                                     itemsIndexed(spiderSites) { index, site ->
                                         TvButton("浏览 ${site.name}", modifier = Modifier.testTag("tvbox-spider-$index"),
                                             reduced = reduceMotion) {
-                                            if (!tvBoxAllowSpider) {
-                                                tvBoxStatus = "请先单独允许本次运行第三方 Spider；它是可执行代码，必须信任来源"
-                                            } else {
-                                                uiScope.launch {
-                                                    tvBoxStatus = "正在核验 JAR 并通过 ${site.name} 读取影视…"
-                                                    when (val loaded = spiderBridge.browse(site, preview)) {
-                                                        is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${loaded.message}"
-                                                        is SpiderResult.Ready -> {
-                                                            spiderActive = true
-                                                            providerFilms = loaded.value
-                                                            providerStatus = "TVBox Spider ${site.name} · ${loaded.value.size} 部"
-                                                            tvBoxVodScope = "spider:${site.key}:${preview.spiderJar}"
-                                                            filmId = loaded.value.first().id
-                                                            category = "首页"
-                                                            screen = "browse"
-                                                            tvBoxStatus = "已读取 ${loaded.value.size} 部；打开详情获取选集，选择线路后解析播放"
-                                                        }
+                                            uiScope.launch {
+                                                tvBoxStatus = "正在核验 JAR 并通过 ${site.name} 读取影视…"
+                                                when (val loaded = spiderBridge.browse(site, preview)) {
+                                                    is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${loaded.message}"
+                                                    is SpiderResult.Ready -> {
+                                                        spiderActive = true
+                                                        providerFilms = loaded.value
+                                                        providerStatus = "TVBox Spider ${site.name} · ${loaded.value.size} 部"
+                                                        tvBoxVodScope = "spider:${site.key}:${preview.spiderJar}"
+                                                        filmId = loaded.value.first().id
+                                                        prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
+                                                        prefs.tvBoxTrustedSpiderJarSpec = site.jar ?: preview.spiderJar.orEmpty()
+                                                        category = "首页"
+                                                        screen = "browse"
+                                                        tvBoxStatus = "已读取 ${loaded.value.size} 部；打开详情获取选集，选择线路后解析播放"
                                                     }
                                                 }
                                             }

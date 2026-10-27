@@ -108,6 +108,7 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-live-direct-url"))
         compose.onNodeWithTag("tvbox-live-direct-url").assertIsDisplayed()
         compose.onNodeWithTag("tvbox-http-consent").assertDoesNotExist()
+        compose.onNodeWithTag("tvbox-spider-consent").assertDoesNotExist()
         compose.onNodeWithTag("tvbox-import-json").assertDoesNotExist()
         compose.onNodeWithTag("config-media-url").assertDoesNotExist()
         capture("compact-settings-two-inputs")
@@ -185,7 +186,7 @@ http://example.org/live/channel.m3u8
             server.start()
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
                 .setBody("""{"sites":[{"name":"第三方测试站","api":"csp_Demo"}],
-                    "spider":"https://example.org/spider.jar;md5;0123456789abcdef0123456789abcdef"}"""))
+                    "spider":"https://example.org/spider.jar"}"""))
             focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
@@ -195,7 +196,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.waitUntil(10000) {
                 runCatching { compose.onNodeWithTag("tvbox-status")
-                    .assertTextContains("标准 CMS 暂无内容", substring = true) }.isSuccess
+                    .assertTextContains("均未提供可用目录", substring = true) }.isSuccess
             }
             settings.performScrollToNode(hasTestTag("settings-home"))
             compose.onNodeWithTag("settings-home").performClick()
@@ -206,7 +207,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("settings-list")
                 .performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
-            compose.onNodeWithTag("site-spider-consent").assertExists()
+            compose.onNodeWithTag("site-spider-consent").assertDoesNotExist()
             compose.onNodeWithTag("site-select-0").assertExists()
             assertEquals(1, server.requestCount)
         }
@@ -456,8 +457,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-site-48").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.onNodeWithTag("tvbox-status").assertTextContains("Java Spider", substring = true)
-            settings.performScrollToNode(hasTestTag("tvbox-spider-consent"))
-            compose.onNodeWithTag("tvbox-spider-consent").assertTextContains("未授权", substring = true)
+            compose.onNodeWithTag("tvbox-spider-consent").assertDoesNotExist()
             assertEquals(2, server.requestCount)
             capture("settings-tvbox-multiwarehouse")
         }
