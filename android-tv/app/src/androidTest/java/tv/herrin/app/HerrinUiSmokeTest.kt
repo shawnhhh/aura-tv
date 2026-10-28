@@ -93,6 +93,7 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-advanced").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("screen-first"))
+        compose.onNodeWithTag("screen-first").assertIsFocused()
     }
     private fun capture(label: String) {
         // PixelCopy synchronizes the rendered root before the device screenshot (not just semantics).

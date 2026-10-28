@@ -596,6 +596,15 @@ private fun Herrin() {
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
     val settingsListState = rememberLazyListState()
+    LaunchedEffect(settingsTvBoxOnly) {
+        if (screen == "settings" && !settingsTvBoxOnly) {
+            // Expanding the deep diagnostics form replaces the compact list.
+            // Its old scroll offset and the removed button must not strand focus.
+            settingsListState.scrollToItem(0)
+            withFrameNanos { }
+            runCatching { requester("screen-first").requestFocus() }
+        }
+    }
     var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
     var transferringSettingsFocus by remember { mutableStateOf(false) }
     fun moveCompactSettingsFocus(target: String) {
@@ -1945,6 +1954,7 @@ private fun LiveTvSurface(
         }
     }
     val groupRequester = remember { FocusRequester() }
+    val groupListState = rememberLazyListState()
     val closeRequester = remember { FocusRequester() }
     val favoritesRequester = remember { FocusRequester() }
     val searchToggleRequester = remember { FocusRequester() }
@@ -1956,6 +1966,9 @@ private fun LiveTvSurface(
     val channelTarget = channelRequesters.getOrNull(selectedChannelIndex)
     LaunchedEffect(drawerOpen) {
         if (drawerOpen) {
+            val selectedGroupIndex = ((drawerGroup?.let { groups.indexOf(it) } ?: -1) + 1)
+                .coerceAtLeast(0)
+            groupListState.scrollToItem(selectedGroupIndex)
             if (visible.isNotEmpty()) channelListState.scrollToItem(selectedChannelIndex)
             withFrameNanos { }
             runCatching { (channelTarget ?: groupRequester).requestFocus() }
@@ -1986,7 +1999,8 @@ private fun LiveTvSurface(
                     .background(Color(0xDD111A26)).padding(12.dp)) {
                     Text("分组", fontWeight = FontWeight.Bold, fontSize = 20.sp,
                         color = Color.White, modifier = Modifier.padding(9.dp))
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    LazyColumn(state = groupListState,
+                        verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         item {
                             TvButton("全部频道", Modifier.testTag("live-drawer-all")
                                 .focusProperties { right = channelTarget ?: closeRequester }
