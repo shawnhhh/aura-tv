@@ -141,6 +141,7 @@ class HerrinUiSmokeTest {
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
+        dismissEditorIme() // Finish any native TV IME handoff before traversing the next button.
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-load").assertIsFocused()
         focus("settings-source-sites")
@@ -149,6 +150,7 @@ class HerrinUiSmokeTest {
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
+        dismissEditorIme()
         key(KeyEvent.KEYCODE_DPAD_UP)
         compose.onNodeWithTag("settings-source-sites").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)

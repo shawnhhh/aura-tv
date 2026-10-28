@@ -1478,6 +1478,21 @@ private fun Herrin() {
                         }
                         item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
+                                .onPreviewKeyEvent { event ->
+                                    if (!settingsTvBoxOnly || event.type != KeyEventType.KeyDown) false
+                                    else {
+                                        val target = when (event.nativeKeyEvent.keyCode) {
+                                            android.view.KeyEvent.KEYCODE_DPAD_UP -> "screen-first"
+                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> "tvbox-warehouse-load"
+                                            else -> null
+                                        }
+                                        if (target == null) false else {
+                                            keyboard?.hide()
+                                            moveCompactSettingsFocus(target)
+                                            true
+                                        }
+                                    }
+                                }
                                 .then(if (settingsTvBoxOnly) Modifier.focusProperties {
                                     up = requester("screen-first")
                                     down = requester("tvbox-warehouse-load")
@@ -1536,6 +1551,21 @@ private fun Herrin() {
                         item { Text("直播源", fontSize = 22.sp) }
                         item { OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
+                                .onPreviewKeyEvent { event ->
+                                    if (!settingsTvBoxOnly || event.type != KeyEventType.KeyDown) false
+                                    else {
+                                        val target = when (event.nativeKeyEvent.keyCode) {
+                                            android.view.KeyEvent.KEYCODE_DPAD_UP -> lastMovieSettingsAction
+                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> "tvbox-live-direct-load"
+                                            else -> null
+                                        }
+                                        if (target == null) false else {
+                                            keyboard?.hide()
+                                            moveCompactSettingsFocus(target)
+                                            true
+                                        }
+                                    }
+                                }
                                 .then(if (settingsTvBoxOnly) Modifier.focusProperties {
                                     up = requester(lastMovieSettingsAction)
                                     down = requester("tvbox-live-direct-load")
