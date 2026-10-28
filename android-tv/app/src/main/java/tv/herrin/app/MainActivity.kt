@@ -842,8 +842,11 @@ private fun Herrin() {
                     films.isNotEmpty() -> "play"
                     else -> null
                 }?.let { requester(it) }
-                val visibleFirstIndex = railState.layoutInfo.visibleItemsInfo.firstOrNull()?.index
-                    ?: railState.firstVisibleItemIndex
+                // Never observe LazyRow.layoutInfo during composition: each
+                // layout pass invalidates it, leaving Compose perpetually busy.
+                val visibleFirstIndex by remember(railState) {
+                    derivedStateOf { railState.firstVisibleItemIndex }
+                }
                 val firstPosterTarget = railFilms.getOrNull(visibleFirstIndex)
                     ?.let { requester("card-${it.id}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
