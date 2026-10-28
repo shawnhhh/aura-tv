@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Enabled explicitly by adb setprop log.tag.HerrinRemote DEBUG in diagnostics. */
 internal object RemoteTrace {
@@ -606,8 +607,21 @@ private fun Herrin() {
                     .firstOrNull { it.index == fromIndex }?.offset?.coerceAtLeast(0) ?: 0
                 // Keep the destination at approximately the same horizontal screen
                 // position. LazyRow may not have composed an off-screen target yet.
-                if (reduceMotion) to.scrollToItem(index, -sourceOffset)
-                else to.animateScrollToItem(index, -sourceOffset)
+                val alreadyAligned = to.layoutInfo.visibleItemsInfo.any {
+                    it.index == index && it.offset - sourceOffset in -24..24
+                }
+                if (!alreadyAligned) {
+                    if (reduceMotion) to.scrollToItem(index, -sourceOffset)
+                    else {
+                        // Some TV Compose versions cannot settle an unattainable
+                        // edge offset. Bound the animation and finish deterministically.
+                        val reached = withTimeoutOrNull(1100) {
+                            to.animateScrollToItem(index, -sourceOffset)
+                            true
+                        } ?: false
+                        if (!reached) to.scrollToItem(index, -sourceOffset)
+                    }
+                }
                 val target = "$prefix${destination[index].id}"
                 repeat(3) {
                     withFrameNanos { }
