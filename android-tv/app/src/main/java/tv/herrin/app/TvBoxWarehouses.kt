@@ -31,6 +31,36 @@ internal object TvBoxSpiderPolicy {
             source == trustedSource && jarSpec == trustedJarSpec)
 }
 
+/**
+ * Prefer a previously successful TVBox site on the next launch. Preference is
+ * pinned to the applied root and the exact site API/JAR identity, and must NOT
+ * replace the independent Spider execution approval check.
+ */
+internal object TvBoxAutoSites {
+    fun identity(site: TvBoxSite, defaultJar: String?): String {
+        val value = listOf(site.key, site.apiUrl.orEmpty(), site.spiderApi.orEmpty(),
+            if (site.spiderApi != null) site.jar ?: defaultJar.orEmpty() else "")
+            .joinToString("\u0000")
+        return MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    fun candidates(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
+        val direct = config.sites.filter { it.apiUrl != null }.take(8)
+        val spider = config.sites.filter { it.spiderApi != null }
+            .sortedBy { site ->
+                if (listOf("云盘", "片单", "预告", "音乐").any { site.name.contains(it) }) 1 else 0
+            }.take(12)
+        val preferred = config.sites.firstOrNull {
+            (it.apiUrl != null || it.spiderApi != null) &&
+                identity(it, config.spiderJar) == preferredId
+        }
+        return (listOfNotNull(preferred) + direct + spider)
+            .distinctBy { identity(it, config.spiderJar) }
+    }
+}
+
 internal sealed interface TvBoxConfig {
     data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,

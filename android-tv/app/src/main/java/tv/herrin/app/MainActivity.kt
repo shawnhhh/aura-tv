@@ -362,45 +362,38 @@ private fun Herrin() {
         if (settingsTvBoxOnly && tvBoxSingle != null) {
             // Import must activate an actual catalog, not just display 49 names
             // under Settings while the home page stays on the demo collection.
-            val directSites = tvBoxSingle!!.sites.filter { it.apiUrl != null }
+            val config = tvBoxSingle!!
+            val savedSite = prefs.tvBoxLastWorkingSiteId.takeIf {
+                prefs.tvBoxLastWorkingRootUrl == prefs.tvBoxWarehouseUrl
+            }.orEmpty()
+            val candidates = TvBoxAutoSites.candidates(config, savedSite)
             var chosen: Pair<TvBoxSite, List<Film>>? = null
-            for (site in directSites.take(8)) {
-                when (val loaded = tvBoxVodRepo.load(site, allowHttp = true)) {
-                    is TvBoxVodResult.Ready -> {
-                        if (loaded.films.isNotEmpty()) {
+            var chosenSpider = false
+            var spiderFailure = ""
+            for (site in candidates) {
+                if (site.apiUrl != null) {
+                    when (val loaded = tvBoxVodRepo.load(site, allowHttp = true)) {
+                        is TvBoxVodResult.Ready -> if (loaded.films.isNotEmpty()) {
                             chosen = site to loaded.films
                             break
                         }
+                        is TvBoxVodResult.Error -> Unit
                     }
-                    is TvBoxVodResult.Error -> Unit
-                }
-            }
-            var chosenSpider: Pair<TvBoxSite, List<Film>>? = null
-            var spiderFailure = ""
-            if (chosen == null) {
-                val config = tvBoxSingle!!
-                // The first entries in many TVBox bundles are account/cloud
-                // management sites, not playable video catalogs. Explore later
-                // candidates instead of giving up after the first three.
-                val candidates = config.sites.filter { it.spiderApi != null }
-                    .sortedBy { site ->
-                        if (site.name.contains("云盘") || site.name.contains("片单") ||
-                            site.name.contains("预告") || site.name.contains("音乐")) 1 else 0
-                    }.take(12)
-                for (site in candidates) {
+                } else if (site.spiderApi != null) {
                     val jarSpec = site.jar ?: config.spiderJar ?: continue
                     // No silent execution of a changed or newly introduced JAR on startup.
                     if (!TvBoxSpiderPolicy.mayRun(runSpiderAfterApply, prefs.tvBoxWarehouseUrl,
                             jarSpec, prefs.tvBoxTrustedSpiderRootUrl,
                             prefs.tvBoxTrustedSpiderJarSpec)) continue
-                    tvBoxStatus += "；正在自动读取 ${site.name}…"
+                    tvBoxStatus = "正在自动读取 ${site.name} 的影视目录…"
                     when (val result = spiderBridge.browse(site, config)) {
                         is SpiderResult.Failure -> {
                             spiderFailure = result.message
                             Log.w("HerrinCatVod", "站点 ${site.key}: ${result.message}")
                         }
                         is SpiderResult.Ready -> if (result.value.isNotEmpty()) {
-                            chosenSpider = site to result.value
+                            chosen = site to result.value
+                            chosenSpider = true
                             prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
                             prefs.tvBoxTrustedSpiderJarSpec = jarSpec
                             break
@@ -409,20 +402,17 @@ private fun Herrin() {
                 }
             }
             if (chosen != null) {
-                spiderActive = false
+                prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(chosen.first, config.spiderJar)
+            }
+            if (chosen != null) {
+                spiderActive = chosenSpider
                 providerFilms = chosen.second
                 providerStatus = "TVBox ${chosen.first.name} · ${chosen.second.size} 部"
-                tvBoxVodScope = "tvbox:${chosen.first.apiUrl}"
+                tvBoxVodScope = if (chosenSpider) "spider:${chosen.first.key}:${chosen.first.jar ?: config.spiderJar}"
+                    else "tvbox:${chosen.first.apiUrl}"
                 filmId = chosen.second.first().id
                 tvBoxStatus += "；已自动导入 ${chosen.first.name}，首页已切换到影视源内容"
-                vodImportFeedback = "成功"
-            } else if (chosenSpider != null) {
-                spiderActive = true
-                providerFilms = chosenSpider.second
-                providerStatus = "TVBox ${chosenSpider.first.name} · ${chosenSpider.second.size} 部"
-                tvBoxVodScope = "spider:${chosenSpider.first.key}:${tvBoxSingle!!.spiderJar}"
-                filmId = chosenSpider.second.first().id
-                tvBoxStatus += "；已自动导入 ${chosenSpider.first.name}，首页已切换到真实影视内容"
                 vodImportFeedback = "成功"
             } else {
                 providerFilms = null
@@ -809,6 +799,8 @@ private fun Herrin() {
                                         is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${result.reason}"
                                         is TvBoxVodResult.Ready -> {
                                             spiderActive = false
+                                            prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                                            prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, selected?.spiderJar)
                                             providerFilms = result.films
                                             providerStatus = "TVBox ${site.name} · ${result.films.size} 部"
                                             tvBoxVodScope = "tvbox:${site.apiUrl}"
@@ -825,6 +817,8 @@ private fun Herrin() {
                                         is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${result.message}"
                                         is SpiderResult.Ready -> {
                                             spiderActive = true
+                                            prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                                            prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, selected.spiderJar)
                                             providerFilms = result.value
                                             providerStatus = "TVBox ${site.name} · ${result.value.size} 部"
                                             tvBoxVodScope = "spider:${site.key}:${selected.spiderJar}"
@@ -1652,6 +1646,8 @@ private fun Herrin() {
                                                     is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${loaded.reason}"
                                                     is TvBoxVodResult.Ready -> {
                                                         spiderActive = false
+                                                        prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                                                        prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, preview.spiderJar)
                                                         providerFilms = loaded.films
                                                         providerStatus = "TVBox ${site.name} · ${loaded.films.size} 部（标准 CMS JSON）"
                                                         tvBoxVodScope = "tvbox:${site.apiUrl}"
@@ -1679,6 +1675,8 @@ private fun Herrin() {
                                                     is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${loaded.message}"
                                                     is SpiderResult.Ready -> {
                                                         spiderActive = true
+                                                        prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                                                        prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, preview.spiderJar)
                                                         providerFilms = loaded.value
                                                         providerStatus = "TVBox Spider ${site.name} · ${loaded.value.size} 部"
                                                         tvBoxVodScope = "spider:${site.key}:${preview.spiderJar}"

@@ -51,6 +51,13 @@ class Preferences(context: Context) : FavoritesStore {
     var tvBoxTrustedSpiderJarSpec: String
         get() = prefs.getString("tvbox_trusted_spider_jar", "") ?: ""
         set(value) { prefs.edit().putString("tvbox_trusted_spider_jar", value).apply() }
+    /** Optimization hint only: never grants permission to execute a changed Spider JAR. */
+    var tvBoxLastWorkingRootUrl: String
+        get() = prefs.getString("tvbox_last_working_root", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_last_working_root", value).apply() }
+    var tvBoxLastWorkingSiteId: String
+        get() = prefs.getString("tvbox_last_working_site_id", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_last_working_site_id", value).apply() }
     /** Last user-submitted live playlist URL; actual validated channels live in TvBoxLiveStore. */
     var tvBoxLiveSourceUrl: String
         get() = prefs.getString("tvbox_live_source_url", "") ?: ""
