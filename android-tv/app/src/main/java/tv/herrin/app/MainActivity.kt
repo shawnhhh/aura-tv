@@ -139,6 +139,7 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
  * The white button focus remains instantaneous and unique; only this subtle underline
  * glides when users reverse D-pad direction or hold a repeat key.
  */
+/** Compact D-pad navigation: focused pill alone marks the active target. */
 @Composable
 private fun TvNavTabs(
     category: String,
@@ -150,62 +151,18 @@ private fun TvNavTabs(
     onSelect: (String) -> Unit
 ) {
     val categories = remember { listOf("首页", "电影", "剧集", "动漫", "直播", "我的") }
-    val measured = remember { mutableStateMapOf<String, NavPillBounds>() }
-    val focusedTab = focusId.removePrefix("nav-")
-        .takeIf { !isSearch && focusId.startsWith("nav-") && it in categories }
-    var lastFocusedTab by remember { mutableStateOf(categories.first()) }
-    LaunchedEffect(focusedTab) {
-        if (focusedTab != null) lastFocusedTab = focusedTab
-    }
-    val trackTarget = navTrackBounds(measured[focusedTab ?: lastFocusedTab] ?: NavPillBounds(0f, 0f))
-    // No layout remeasurement on animation frames: only this tiny Canvas redraws.
-    val motionSpec = if (reducedMotion) snap<Float>() else spring(dampingRatio = 0.90f, stiffness = 580f)
-    val trackX by animateFloatAsState(trackTarget.leftPx, motionSpec, label = "nav-glide-x")
-    val trackWidth by animateFloatAsState(trackTarget.widthPx, motionSpec, label = "nav-glide-width")
-    val trackAlpha by animateFloatAsState(
-        if (focusedTab != null && measured.containsKey(focusedTab)) 1f else 0f,
-        if (reducedMotion) snap() else tween(durationMillis = 100),
-        label = "nav-glide-visibility"
-    )
-    Column(
-        Modifier.width(IntrinsicSize.Max)
-            .background(Color(0xE910131A), RoundedCornerShape(50.dp))
+    Row(
+        Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
             .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
-            .padding(horizontal = 5.dp, vertical = 4.dp)
+            .padding(horizontal = 5.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            categories.forEach { cat ->
-                TvButton(
-                    cat,
-                    Modifier.testTag("nav-$cat")
-                        .onGloballyPositioned { coordinates ->
-                            val now = NavPillBounds(
-                                coordinates.positionInParent().x, coordinates.size.width.toFloat()
-                            )
-                            if (measured[cat] != now) measured[cat] = now
-                        }
-                        .focusRequester(requester("nav-$cat")),
-                    reducedMotion, category == cat && !isSearch,
-                    quiet = true, onFocus = { onFocus("nav-$cat") }
-                ) { onSelect(cat) }
-            }
-        }
-        Canvas(Modifier.fillMaxWidth().height(4.dp).testTag("nav-motion-track")) {
-            if (trackAlpha > 0f && trackWidth > 0f) {
-                val glowHeight = 3.dp.toPx()
-                drawRoundRect(
-                    Color(0xFF94B6E5).copy(alpha = 0.56f * trackAlpha),
-                    topLeft = Offset(trackX, 0f),
-                    size = Size(trackWidth, glowHeight),
-                    cornerRadius = CornerRadius(glowHeight / 2f)
-                )
-                drawRoundRect(
-                    Color.White.copy(alpha = trackAlpha),
-                    topLeft = Offset(trackX + trackWidth * 0.15f, 0f),
-                    size = Size(trackWidth * 0.70f, 1.6.dp.toPx()),
-                    cornerRadius = CornerRadius(1.dp.toPx())
-                )
-            }
+        categories.forEach { cat ->
+            TvButton(cat,
+                Modifier.testTag("nav-$cat").focusRequester(requester("nav-$cat")),
+                reducedMotion, category == cat && !isSearch,
+                quiet = true, onFocus = { onFocus("nav-$cat") }
+            ) { onSelect(cat) }
         }
     }
 }
@@ -1316,6 +1273,11 @@ private fun Herrin() {
                                 tvBoxRequest = tvBoxUrlDraft.trim() to true
                                 tvBoxLoadEpoch++
                             }
+                            if (settingsTvBoxOnly) {
+                                Spacer(Modifier.width(12.dp))
+                                TvButton("选择影视点", modifier = Modifier.testTag("settings-source-sites"),
+                                    reduced = reduceMotion, onFocus = { keyboard?.hide() }) { screen = "sites" }
+                            }
                             Spacer(Modifier.weight(1f))
                             if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
                                 Text(vodImportFeedback, Modifier.testTag("vod-apply-feedback"),
@@ -1371,10 +1333,6 @@ private fun Herrin() {
                                         }
                                     }
                                 }
-                            }
-                            if (settingsTvBoxOnly) {
-                                TvButton("选择影视点", modifier = Modifier.testTag("settings-source-sites"),
-                                    reduced = reduceMotion) { screen = "sites" }
                             }
                             Spacer(Modifier.weight(1f))
                             if (settingsTvBoxOnly && liveImportFeedback.isNotBlank()) {
