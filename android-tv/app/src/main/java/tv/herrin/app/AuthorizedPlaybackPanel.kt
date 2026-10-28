@@ -69,6 +69,7 @@ fun AuthorizedPlaybackPanel(
     onPlaybackProgress: (positionMs: Long, durationMs: Long, finished: Boolean) -> Unit = { _, _, _ -> },
     isLive: Boolean = false,
     onLiveMenu: () -> Unit = {},
+    focusRestoreEpoch: Int = 0,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -164,7 +165,9 @@ fun AuthorizedPlaybackPanel(
             delay(1_000)
         }
     }
-    LaunchedEffect(player) { initialControl.requestFocus() }
+    // Closing a live channel drawer removes its focused node. Restore the
+    // player anchor so the very next Left/OK opens the menu without a dead press.
+    LaunchedEffect(player, focusRestoreEpoch) { initialControl.requestFocus() }
     DisposableEffect(player, lifecycle) {
         val session = MediaSession.Builder(context, player).build()
         val observer = LifecycleEventObserver { _, event ->

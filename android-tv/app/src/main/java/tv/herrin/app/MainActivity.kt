@@ -595,6 +595,30 @@ private fun Herrin() {
         if (currentLines.isEmpty()) "independent-test" else line)
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
+    val settingsListState = rememberLazyListState()
+    var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
+    var transferringSettingsFocus by remember { mutableStateOf(false) }
+    fun moveCompactSettingsFocus(target: String) {
+        val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
+        if (transferringSettingsFocus) return
+        // Ordinary adjacent transitions stay synchronous and respond to a single D-pad press.
+        if (settingsListState.layoutInfo.visibleItemsInfo.any { it.index == itemIndex } &&
+            runCatching { requester(target).requestFocus() }.getOrDefault(false)) return
+        transferringSettingsFocus = true
+        uiScope.launch {
+            try {
+                // Explicitly compose distant rows first; requesting an unattached field
+                // otherwise drops the press on smaller television viewports.
+                withTimeoutOrNull(1_100) {
+                    settingsListState.animateScrollToItem(itemIndex)
+                } ?: settingsListState.scrollToItem(itemIndex)
+                withFrameNanos { }
+                runCatching { requester(target).requestFocus() }
+            } finally {
+                transferringSettingsFocus = false
+            }
+        }
+    }
     var transferringPosterFocus by remember { mutableStateOf(false) }
     fun transferPosterFocus(from: LazyListState, to: LazyListState,
                             fromIndex: Int, destination: List<Film>, prefix: String) {
@@ -1312,10 +1336,30 @@ private fun Herrin() {
                         },
                         onBack = { screen = "detail" }
                     )
-                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize().background(Color(0xAA080B10)),
+                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
+                    .background(Color(0xAA080B10))
+                    .onPreviewKeyEvent { event ->
+                        if (screen != "settings" || !settingsTvBoxOnly ||
+                            event.type != KeyEventType.KeyDown) false
+                        else {
+                            val code = event.nativeKeyEvent.keyCode
+                            val target = when (code) {
+                                android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                    TvFocusRoutes.compactSettingsNeighbor(focusId, false, lastMovieSettingsAction)
+                                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                                    TvFocusRoutes.compactSettingsNeighbor(focusId, true, lastMovieSettingsAction)
+                                else -> null
+                            }
+                            if (target == null) false else {
+                                moveCompactSettingsFocus(target)
+                                true
+                            }
+                        }
+                    }, state = settingsListState,
                     contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
                     verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
-                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
+                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
+                        reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() } }
                     if (screen == "settings") {
                         item { Text(if (settingsTvBoxOnly) "设置 · 内容来源" else "高级设置", fontSize = 32.sp) }
                         if (!settingsTvBoxOnly) {
@@ -1413,12 +1457,19 @@ private fun Herrin() {
                         }
                         item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
-                                .onFocusChanged { configInputFocused = it.isFocused },
+                                .focusRequester(requester("tvbox-warehouse-url"))
+                                .onFocusChanged { configInputFocused = it.isFocused;
+                                    if (it.isFocused) focusId = "tvbox-warehouse-url" },
                             label = { Text("影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址") }, singleLine = true) }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             TvButton(if (settingsTvBoxOnly) "应用影视源" else "读取配置",
-                                modifier = Modifier.testTag("tvbox-warehouse-load"),
-                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                                modifier = Modifier.testTag("tvbox-warehouse-load")
+                                    .focusRequester(requester("tvbox-warehouse-load")),
+                                reduced = reduceMotion, onFocus = {
+                                    focusId = "tvbox-warehouse-load"
+                                    lastMovieSettingsAction = "tvbox-warehouse-load"
+                                    keyboard?.hide()
+                                }) {
                                 tvBoxSelectedName = ""
                                 tvBoxRunSpiderAfterApply = true
                                 vodImportFeedback = "读取中…"
@@ -1427,8 +1478,13 @@ private fun Herrin() {
                             }
                             if (settingsTvBoxOnly) {
                                 Spacer(Modifier.width(12.dp))
-                                TvButton("选择影视点", modifier = Modifier.testTag("settings-source-sites"),
-                                    reduced = reduceMotion, onFocus = { keyboard?.hide() }) { screen = "sites" }
+                                TvButton("选择影视点", modifier = Modifier.testTag("settings-source-sites")
+                                    .focusRequester(requester("settings-source-sites")),
+                                    reduced = reduceMotion, onFocus = {
+                                        focusId = "settings-source-sites"
+                                        lastMovieSettingsAction = "settings-source-sites"
+                                        keyboard?.hide()
+                                    }) { screen = "sites" }
                             }
                             Spacer(Modifier.weight(1f))
                             if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
@@ -1455,13 +1511,19 @@ private fun Herrin() {
                         item { Text("直播源", fontSize = 22.sp) }
                         item { OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
-                                .onFocusChanged { configInputFocused = it.isFocused },
+                                .focusRequester(requester("tvbox-live-direct-url"))
+                                .onFocusChanged { configInputFocused = it.isFocused;
+                                    if (it.isFocused) focusId = "tvbox-live-direct-url" },
                             label = { Text("直播源 · M3U / TXT / TVBox HTTP(S) 地址") }, singleLine = true) }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton(if (settingsTvBoxOnly) "应用直播源" else "导入直播源并打开直播",
-                                modifier = Modifier.testTag("tvbox-live-direct-load"),
-                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                                modifier = Modifier.testTag("tvbox-live-direct-load")
+                                    .focusRequester(requester("tvbox-live-direct-load")),
+                                reduced = reduceMotion, onFocus = {
+                                    focusId = "tvbox-live-direct-load"
+                                    keyboard?.hide()
+                                }) {
                                 val source = tvBoxLiveUrlDraft.trim()
                                 liveImportFeedback = "读取中…"
                                 uiScope.launch {
@@ -1499,11 +1561,16 @@ private fun Herrin() {
                                 color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
                         }
                         if (settingsTvBoxOnly) {
-                            item { TvButton("返回首页", modifier = Modifier.testTag("settings-home"), reduced = reduceMotion) {
+                            item { TvButton("返回首页", modifier = Modifier.testTag("settings-home")
+                                .focusRequester(requester("settings-home")), reduced = reduceMotion,
+                                onFocus = { focusId = "settings-home" }) {
                                 category = "首页"; screen = "browse"
                             } }
-                            item { TvButton("高级工具与诊断", modifier = Modifier.testTag("settings-advanced"), reduced = reduceMotion) {
+                            item { TvButton("高级工具与诊断", modifier = Modifier.testTag("settings-advanced")
+                                .focusRequester(requester("settings-advanced")), reduced = reduceMotion,
+                                onFocus = { focusId = "settings-advanced" }) {
                                 settingsTvBoxOnly = false
+                                focusId = "screen-first"
                             } }
                         }
                         if (!settingsTvBoxOnly) {
@@ -1864,6 +1931,8 @@ private fun LiveTvSurface(
     reduced: Boolean
 ) {
     var drawerOpen by remember { mutableStateOf(false) }
+    var playerFocusEpoch by remember { mutableIntStateOf(0) }
+    fun closeDrawer() { drawerOpen = false; playerFocusEpoch++ }
     var drawerGroup by remember { mutableStateOf<String?>(null) }
     var favoriteOnly by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
@@ -1876,11 +1945,20 @@ private fun LiveTvSurface(
         }
     }
     val groupRequester = remember { FocusRequester() }
-    val selectedChannelRequester = remember { FocusRequester() }
-    LaunchedEffect(drawerOpen, drawerGroup) {
+    val closeRequester = remember { FocusRequester() }
+    val favoritesRequester = remember { FocusRequester() }
+    val searchToggleRequester = remember { FocusRequester() }
+    val searchFieldRequester = remember { FocusRequester() }
+    val channelRequesters = remember(visible) { visible.map { FocusRequester() } }
+    val channelListState = rememberLazyListState()
+    val selectedChannelIndex = visible.indexOfFirst { it.url == selected.url }
+        .takeIf { it >= 0 } ?: 0
+    val channelTarget = channelRequesters.getOrNull(selectedChannelIndex)
+    LaunchedEffect(drawerOpen) {
         if (drawerOpen) {
+            if (visible.isNotEmpty()) channelListState.scrollToItem(selectedChannelIndex)
             withFrameNanos { }
-            runCatching { selectedChannelRequester.requestFocus() }
+            runCatching { (channelTarget ?: groupRequester).requestFocus() }
                 .onFailure { runCatching { groupRequester.requestFocus() } }
         }
     }
@@ -1889,7 +1967,8 @@ private fun LiveTvSurface(
             media = PlaybackMedia(selected.url),
             isLive = true,
             onLiveMenu = { drawerOpen = true },
-            onBack = { if (drawerOpen) drawerOpen = false else onBack() }
+            focusRestoreEpoch = playerFocusEpoch,
+            onBack = { if (drawerOpen) closeDrawer() else onBack() }
         )
         if (!drawerOpen) {
             Column(Modifier.align(Alignment.BottomStart).padding(28.dp)
@@ -1902,15 +1981,7 @@ private fun LiveTvSurface(
             }
         } else {
             Row(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(630.dp)
-                .background(Color(0xF208101B)).testTag("live-channel-drawer")
-                .onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown &&
-                        event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
-                        // Right at the group edge moves into channels by normal
-                        // focus search; Right from an already selected channel closes.
-                        false
-                    } else false
-                }) {
+                .background(Color(0xF208101B)).testTag("live-channel-drawer")) {
                 Column(Modifier.width(165.dp).fillMaxHeight()
                     .background(Color(0xDD111A26)).padding(12.dp)) {
                     Text("分组", fontWeight = FontWeight.Bold, fontSize = 20.sp,
@@ -1918,12 +1989,15 @@ private fun LiveTvSurface(
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         item {
                             TvButton("全部频道", Modifier.testTag("live-drawer-all")
-                                .focusRequester(groupRequester), reduced,
+                                .focusProperties { right = channelTarget ?: closeRequester }
+                                .then(if (drawerGroup == null) Modifier.focusRequester(groupRequester) else Modifier), reduced,
                                 selected = drawerGroup == null) { drawerGroup = null }
                         }
                         itemsIndexed(groups) { index, group ->
                             TvButton(group.ifBlank { "未分组" },
-                                Modifier.testTag("live-drawer-group-$index"), reduced,
+                                Modifier.testTag("live-drawer-group-$index")
+                                    .focusProperties { right = channelTarget ?: closeRequester }
+                                    .then(if (group == drawerGroup) Modifier.focusRequester(groupRequester) else Modifier), reduced,
                                 selected = group == drawerGroup) { drawerGroup = group }
                         }
                     }
@@ -1933,42 +2007,65 @@ private fun LiveTvSurface(
                         verticalAlignment = Alignment.CenterVertically) {
                     Text("频道 · ${visible.size}", fontWeight = FontWeight.SemiBold,
                             color = Color.White, fontSize = 19.sp)
-                        TvButton("收起", Modifier.testTag("live-drawer-close"), reduced, quiet = true) {
-                            drawerOpen = false
+                        TvButton("收起", Modifier.testTag("live-drawer-close")
+                            .focusProperties { left = favoritesRequester; down = searchToggleRequester }
+                            .focusRequester(closeRequester), reduced, quiet = true) {
+                            closeDrawer()
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TvButton(if (favoriteOnly) "全部" else "★ 收藏",
-                            Modifier.testTag("live-drawer-favorites"), reduced,
+                            Modifier.testTag("live-drawer-favorites")
+                                .focusProperties {
+                                    down = if (searchOpen) searchFieldRequester else channelTarget ?: groupRequester
+                                }.focusRequester(favoritesRequester), reduced,
                             selected = favoriteOnly, quiet = true) { favoriteOnly = !favoriteOnly }
                         TvButton(if (searchOpen) "取消查找" else "⌕ 查找",
-                            Modifier.testTag("live-drawer-search-toggle"), reduced, quiet = true) {
+                            Modifier.testTag("live-drawer-search-toggle")
+                                .focusProperties {
+                                    up = closeRequester
+                                    down = if (searchOpen) searchFieldRequester else channelTarget ?: groupRequester
+                                }.focusRequester(searchToggleRequester), reduced, quiet = true) {
                             searchOpen = !searchOpen
                             if (!searchOpen) searchText = ""
                         }
                     }
                     if (searchOpen) {
                         OutlinedTextField(searchText, { searchText = it.take(40) },
-                            Modifier.fillMaxWidth().testTag("live-drawer-search-input"),
+                            Modifier.fillMaxWidth().testTag("live-drawer-search-input")
+                                .focusProperties {
+                                    up = searchToggleRequester
+                                    down = channelTarget ?: groupRequester
+                                }.focusRequester(searchFieldRequester),
                             label = { Text("频道名称 / tvg-id") }, singleLine = true)
                     }
                     Spacer(Modifier.height(12.dp))
                     if (visible.isEmpty()) Text("当前筛选没有频道", color = Color(0xFFBDC8D6),
                         modifier = Modifier.testTag("live-drawer-empty"))
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LazyColumn(state = channelListState,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         itemsIndexed(visible, key = { _, channel -> channel.url }) { index, channel ->
                             Row(verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                 TvButton(channel.name,
                                     Modifier.weight(1f).testTag("live-drawer-channel-$index")
-                                        .then(if (index == 0) Modifier.focusRequester(selectedChannelRequester)
-                                            else Modifier), reduced,
+                                        .focusProperties {
+                                            left = groupRequester
+                                            if (index == 0) up = if (searchOpen) searchFieldRequester
+                                                else searchToggleRequester
+                                        }
+                                        .focusRequester(channelRequesters[index]), reduced,
                                     selected = selected.url == channel.url) {
                                     onChannel(channel)
-                                    drawerOpen = false
+                                    closeDrawer()
                                 }
                                 TvButton(if (favorites.contains(favoriteScope, channel.url)) "★" else "☆",
-                                    Modifier.testTag("live-drawer-favorite-$index"), reduced,
+                                    Modifier.testTag("live-drawer-favorite-$index")
+                                        .focusProperties {
+                                            left = channelRequesters[index]
+                                            if (index == 0) up = if (searchOpen) searchFieldRequester
+                                                else searchToggleRequester
+                                        }, reduced,
                                     quiet = true) {
                                     favorites.toggle(favoriteScope, channel.url)
                                     favoriteVersion++
