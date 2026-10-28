@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -591,6 +592,34 @@ private fun Herrin() {
         if (currentLines.isEmpty()) "independent-test" else line)
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
+    var transferringPosterFocus by remember { mutableStateOf(false) }
+    fun transferPosterFocus(from: LazyListState, to: LazyListState,
+                            fromIndex: Int, destination: List<Film>, prefix: String) {
+        if (transferringPosterFocus || destination.isEmpty()) return
+        transferringPosterFocus = true
+        uiScope.launch {
+            try {
+                val index = fromIndex.coerceIn(0, destination.lastIndex)
+                val sourceOffset = from.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == fromIndex }?.offset?.coerceAtLeast(0) ?: 0
+                // Keep the destination at approximately the same horizontal screen
+                // position. LazyRow may not have composed an off-screen target yet.
+                if (reduceMotion) to.scrollToItem(index, -sourceOffset)
+                else to.animateScrollToItem(index, -sourceOffset)
+                val target = "$prefix${destination[index].id}"
+                repeat(3) {
+                    withFrameNanos { }
+                    if (runCatching { requester(target).requestFocus() }.getOrDefault(false)) {
+                        RemoteTrace.event("RAIL transfer target=$target x=$sourceOffset")
+                        return@launch
+                    }
+                }
+                RemoteTrace.event("RAIL target unattached=$target")
+            } finally {
+                transferringPosterFocus = false
+            }
+        }
+    }
     fun details(f: Film) {
         RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen")
         filmId = f.id
@@ -787,13 +816,20 @@ private fun Herrin() {
                     else emptyList()
                 val railFilms = if (watched.isNotEmpty()) watched else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
+                val recommendedFilms = if (!isSearch && category == "首页") films.asReversed() else emptyList()
+                val recommendState = railStates.getValue("recommend")
+                val suggestions = listOf("轨道", "潮汐", "群山", "星夜", "清空")
                 val headerDownTarget = when {
                     isSearch -> "search-input"
-                    category == "直播" -> "live-config"
+                    category == "直播" -> if (liveChannels.isEmpty()) "live-config" else "live-group-all"
+                    sourceConfigured && films.isEmpty() -> null
                     films.isNotEmpty() -> "play"
                     else -> null
                 }?.let { requester(it) }
-                val firstPosterTarget = railFilms.firstOrNull()?.let { requester("card-${it.id}") }
+                val visibleFirstIndex = railState.layoutInfo.visibleItemsInfo.firstOrNull()?.index
+                    ?: railState.firstVisibleItemIndex
+                val firstPosterTarget = railFilms.getOrNull(visibleFirstIndex)
+                    ?.let { requester("card-${it.id}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
                 Column(Modifier.fillMaxSize().graphicsLayer {
                     alpha = sceneReveal.value
@@ -836,21 +872,25 @@ private fun Herrin() {
                     if (isSearch) {
                         Text(if (providerFilms == null) "搜索 · 离线演示片库" else "搜索 · 当前授权目录", fontSize = 24.sp)
                         OutlinedTextField(query, { query = it }, Modifier.testTag("search-input")
+                            .focusProperties { down = requester("search-filter-全部") }
                             .focusRequester(requester("search-input"))
                             .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event("INPUT focus=${it.isFocused}") }
                             .fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SearchDiscovery.categories.forEach { option ->
+                            SearchDiscovery.categories.forEachIndexed { index, option ->
                                 TvButton(option,
                                     modifier = Modifier.testTag("search-filter-$option")
+                                        .focusProperties { down = requester("search-suggest-${suggestions[index.coerceAtMost(suggestions.lastIndex)]}") }
                                         .focusRequester(requester("search-filter-$option")),
                                     selected = searchCategory == option, reduced = reduceMotion, quiet = true,
                                     onFocus = { focusId = "search-filter-$option" }
                                 ) { searchCategory = option }
                             }
                             TvButton(if (searchNewestFirst) "排序：最新优先" else "排序：目录顺序",
-                                modifier = Modifier.testTag("search-sort").focusRequester(requester("search-sort")),
+                                modifier = Modifier.testTag("search-sort")
+                                    .focusProperties { down = requester("search-suggest-清空") }
+                                    .focusRequester(requester("search-sort")),
                                 selected = searchNewestFirst, reduced = reduceMotion, quiet = true,
                                 onFocus = { focusId = "search-sort" }
                             ) { searchNewestFirst = !searchNewestFirst }
@@ -860,8 +900,16 @@ private fun Herrin() {
                             fontSize = 12.sp, color = Color(0xFFC4CDDC))
                         // An on-screen keyboard also permits search without a hardware keyboard or IME.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("轨道", "潮汐", "群山", "星夜", "清空").forEach { word ->
-                                TvButton(word, reduced = reduceMotion) { query = if (word == "清空") "" else word }
+                            suggestions.forEachIndexed { index, word ->
+                                TvButton(word, modifier = Modifier.testTag("search-suggest-$word")
+                                    .focusProperties {
+                                        up = requester(if (index == suggestions.lastIndex)
+                                            "search-sort" else "search-filter-${SearchDiscovery.categories[index]}")
+                                        if (firstPosterTarget != null) down = firstPosterTarget
+                                    }.focusRequester(requester("search-suggest-$word")),
+                                    reduced = reduceMotion, onFocus = { focusId = "search-suggest-$word" }) {
+                                    query = if (word == "清空") "" else word
+                                }
                             }
                         }
                         Spacer(Modifier.weight(1f))
@@ -939,7 +987,8 @@ private fun Herrin() {
                             Text(epgStatus, Modifier.testTag("live-epg-status"),
                                 color = Color(0xFFADBBD0), fontSize = 12.sp)
                             if (liveChannels.isEmpty()) {
-                                TvButton("设置授权直播列表", modifier = Modifier.testTag("live-config"),
+                                TvButton("设置授权直播列表", modifier = Modifier.testTag("live-config")
+                                    .focusRequester(requester("live-config")),
                                     reduced = reduceMotion, onFocus = { focusId = "live-config" }) {
                                     screen = "settings"
                                 }
@@ -1155,7 +1204,7 @@ private fun Herrin() {
                     }
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        items(railFilms, key = { it.id }) { item ->
+                        itemsIndexed(railFilms, key = { _, item -> item.id }) { index, item ->
                             // Runs after this lazy item's focus target is attached, including Back from detail.
                             LaunchedEffect(item.id) {
                                 if (isSearch && focusId == "card-${item.id}") {
@@ -1163,8 +1212,25 @@ private fun Herrin() {
                                     RemoteTrace.event("RESTORE search card=${item.id} attached")
                                 }
                             }
+                            val homeRail = !isSearch && category == "首页" && recommendedFilms.isNotEmpty()
                             Poster(item, Modifier.testTag("card-${item.id}")
-                                .then(if (!isSearch && category != "直播") Modifier.focusProperties { up = requester("play") } else Modifier)
+                                .focusProperties {
+                                    up = requester(when {
+                                        isSearch -> "search-suggest-${suggestions[index.coerceAtMost(suggestions.lastIndex)]}"
+                                        index == 0 -> "play"
+                                        else -> "details"
+                                    })
+                                    down = if (homeRail) requester("recommend-${recommendedFilms[index.coerceAtMost(recommendedFilms.lastIndex)].id}")
+                                        else FocusRequester.Cancel
+                                }
+                                .onPreviewKeyEvent { event ->
+                                    if (homeRail && event.type == KeyEventType.KeyDown &&
+                                        event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                                        transferPosterFocus(railState, recommendState, index,
+                                            recommendedFilms, "recommend-")
+                                        true
+                                    } else false
+                                }
                                 .focusRequester(requester("card-${item.id}")), reduceMotion,
                                 onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) },
                                 progress = if (!isSearch && category == "首页") {
@@ -1184,10 +1250,22 @@ private fun Herrin() {
                             Text("HERRIN PICKS", fontSize = 11.sp, letterSpacing = 1.6.sp, color = Color(0xFFB6BBC5))
                         }
                         Spacer(Modifier.height(5.dp))
-                        LazyRow(state = railStates.getValue("recommend"), contentPadding = PaddingValues(10.dp),
+                        LazyRow(state = recommendState, contentPadding = PaddingValues(10.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(films.asReversed(), key = { it.id }) { item ->
+                            itemsIndexed(recommendedFilms, key = { _, item -> item.id }) { index, item ->
                                 Poster(item, Modifier.testTag("recommend-${item.id}")
+                                    .focusProperties {
+                                        up = requester("card-${railFilms[index.coerceAtMost(railFilms.lastIndex)].id}")
+                                        down = FocusRequester.Cancel
+                                    }
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyDown &&
+                                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
+                                            transferPosterFocus(recommendState, railState, index,
+                                                railFilms, "card-")
+                                            true
+                                        } else false
+                                    }
                                     .focusRequester(requester("recommend-${item.id}")), reduceMotion,
                                     onFocus = { filmId = item.id; focusId = "recommend-${item.id}" },
                                     onClick = { details(item) })

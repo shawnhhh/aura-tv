@@ -149,6 +149,36 @@ class HerrinUiSmokeTest {
             .onFirst().assertExists()
         capture("poster-fixed-size-focused")
     }
+    @Test fun homeDpadDownAndUpKeepTheSameColumnAcrossBothPosterShelves() {
+        focus("card-orbit")
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.waitUntil(10000) {
+            runCatching { compose.onNodeWithTag("recommend-blue").assertIsFocused() }.isSuccess
+        }
+        key(KeyEvent.KEYCODE_DPAD_UP)
+        compose.waitUntil(10000) {
+            runCatching { compose.onNodeWithTag("card-orbit").assertIsFocused() }.isSuccess
+        }
+        focus("card-tide")
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.waitUntil(10000) {
+            runCatching { compose.onNodeWithTag("recommend-return").assertIsFocused() }.isSuccess
+        }
+        capture("poster-cross-rail-vertical-focus")
+    }
+    @Test fun searchFilterDpadDownReachesSuggestionsAndResultAndUpReturns() {
+        focus("search")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("search-filter-全部").assertIsDisplayed()
+        focus("search-filter-全部")
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("search-suggest-轨道").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("card-orbit").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_UP)
+        compose.onNodeWithTag("search-suggest-轨道").assertIsFocused()
+        capture("search-vertical-focus")
+    }
     @Test fun applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab() {
         MockWebServer().use { server ->
             server.start()
