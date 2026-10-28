@@ -10,5 +10,8 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Third-party Spider execution is isolated for crash containment, not a privilege sandbox. -->
+        <service android:name=".TvBoxSpiderService" android:process=":spider"
+            android:exported="false" android:stopWithTask="true" />
     </application>
 </manifest>

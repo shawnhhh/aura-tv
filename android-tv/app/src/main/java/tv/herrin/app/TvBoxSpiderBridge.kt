@@ -25,7 +25,7 @@ import java.util.zip.ZipFile
 
 /**
  * GPL-3.0 CatVod adapter. The SDK source is vendored from FongMi/TV@123cc08.
- * User-supplied executable JARs are NEVER fetched or invoked without session opt-in.
+ * User-supplied executable JARs are only run following an explicit source application.
  * External code runs with application permissions: see docs/CATVOD_GPL.md.
  */
 internal sealed interface SpiderResult<out T> {
@@ -217,7 +217,7 @@ internal object SpiderFailureDetails {
     }
 }
 
-internal class TvBoxSpiderBridge(private val context: Context) {
+internal class TvBoxSpiderWorker(private val context: Context) {
     private var active: Spider? = null
     private var activeKey: String? = null
 
