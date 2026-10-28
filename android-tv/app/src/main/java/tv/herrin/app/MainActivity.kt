@@ -2156,9 +2156,7 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxWidth().weight(1f).testTag("poster-image-${film.id}"),
                 contentAlignment = Alignment.Center) {
-                // A TVBox vod_pic may be portrait. Fit it entirely within the
-                // fixed artwork viewport instead of cropping its top/bottom.
-                FilmArtwork(film, Modifier.fillMaxSize(), ContentScale.Fit)
+                PosterArtwork(film, Modifier.fillMaxSize(), reduced)
             }
             Row(Modifier.fillMaxWidth().height(29.dp)
                 .background(Color(0xF0121822))
