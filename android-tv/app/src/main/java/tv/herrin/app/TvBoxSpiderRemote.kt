@@ -87,6 +87,44 @@ internal object SpiderIpc {
 
     fun error(message: String): JSONObject = JSONObject()
         .put("ok", false).put("message", message.take(250))
+
+    fun playback(media: PlaybackMedia): JSONObject = JSONObject().put("ok", true)
+        .put("uri", media.uri)
+        .put("headers", JSONObject(media.headers))
+        .put("subs", JSONArray().apply {
+            media.subtitles.take(6).forEach { subtitle ->
+                put(JSONObject().put("lang", subtitle.language)
+                    .put("name", subtitle.title).put("url", subtitle.uri)
+                    .put("format", "text/vtt"))
+            }
+        })
+
+    fun readPlayback(response: JSONObject, allowHttp: Boolean): PlaybackResult {
+        val url = TvBoxUrl.normalize(response.optString("uri"), allowHttp)
+            ?: return PlaybackResult.Unavailable("Spider 播放地址无效")
+        val headersObj = response.optJSONObject("headers") ?: JSONObject()
+        val headers = buildMap {
+            val keys = headersObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = headersObj.optString(key)
+                if (key.matches(Regex("[A-Za-z0-9-]{1,60}")) && value.length <= 2_048 &&
+                    !value.contains('\r') && !value.contains('\n')) put(key, value)
+            }
+        }
+        val subs = response.optJSONArray("subs") ?: JSONArray()
+        val subtitles = (0 until minOf(6, subs.length())).mapNotNull { index ->
+            val track = subs.optJSONObject(index) ?: return@mapNotNull null
+            val trackUrl = TvBoxUrl.normalize(track.optString("url"), allowHttp)
+                ?: return@mapNotNull null
+            if (!trackUrl.substringBefore('?').lowercase().endsWith(".vtt") &&
+                track.optString("format") != "text/vtt") return@mapNotNull null
+            val lang = track.optString("lang").trim().lowercase()
+            if (!lang.matches(Regex("[a-z]{2,3}(-[a-z0-9]{2,8})*"))) return@mapNotNull null
+            AuthorizedSubtitle(lang, track.optString("name").take(64), trackUrl)
+        }
+        return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles))
+    }
 }
 
 /**
@@ -135,9 +173,7 @@ class TvBoxSpiderService : Service() {
                                     request.optInt("episode"), request.optString("line"),
                                     request.optBoolean("allowHttp"))
                                 when (result) {
-                                    is PlaybackResult.Ready -> JSONObject().put("ok", true)
-                                        .put("uri", result.media.uri)
-                                        .put("headers", JSONObject(result.media.headers))
+                                    is PlaybackResult.Ready -> SpiderIpc.playback(result.media)
                                     is PlaybackResult.Unavailable -> SpiderIpc.error(result.reason)
                                 }
                             }
@@ -287,17 +323,7 @@ internal class TvBoxSpiderBridge(context: Context) {
         return when (val response = request(SpiderIpc.PLAY, payload)) {
             is SpiderResult.Failure -> PlaybackResult.Unavailable(response.message)
             is SpiderResult.Ready -> try {
-                val url = TvBoxUrl.normalize(response.value.getString("uri"), allowHttp)
-                    ?: return PlaybackResult.Unavailable("Spider 播放地址无效")
-                val headersObj = response.value.optJSONObject("headers") ?: JSONObject()
-                val headers = buildMap {
-                    val keys = headersObj.keys()
-                    while (keys.hasNext()) {
-                        val key = keys.next()
-                        put(key, headersObj.optString(key))
-                    }
-                }
-                PlaybackResult.Ready(PlaybackMedia(url, headers))
+                SpiderIpc.readPlayback(response.value, allowHttp)
             } catch (error: Exception) {
                 PlaybackResult.Unavailable("Spider 播放信息无效：" + error.message.orEmpty())
             }

@@ -40,8 +40,40 @@ class TvBoxSpiderBridgeTest {
              "vod_play_url":"第一集${'$'}token-A#第二集${'$'}token-B${'$'}${'$'}${'$'}正片${'$'}opaque-id"}]}""", film)
         assertEquals(2, detailed.playbackEpisodes.size)
         assertEquals("token-A", detailed.playbackEpisodes[0].lines[0].uri)
+        assertEquals("第一集", detailed.playbackEpisodes[0].title)
+        assertEquals("第二集", detailed.playbackEpisodes[1].title)
         assertEquals("opaque-id", detailed.playbackEpisodes[0].lines[1].uri)
         assertEquals("B", detailed.playbackEpisodes[0].lines[1].title)
+    }
+
+    @Test fun `spider detail enriches missing poster and metadata without changing opaque identifiers`() {
+        val original = SpiderVodCodec.listing("""{"list":[{"vod_id":"opaque-3","vod_name":"真实影视"}]}""", site).single()
+        assertEquals(null, original.artworkUrl)
+        val enriched = SpiderVodCodec.detail("""{"list":[{
+            "vod_pic":"https://images.example.org/actual-cover.webp",
+            "vod_year":"2026", "vod_remarks":"更新至十二集", "type_name":"电视剧",
+            "vod_play_from":"原画", "vod_play_url":"第一集${'$'}token?sig=a${'$'}b#第二集${'$'}token-2"
+        }]}""", original)
+        assertEquals("opaque-3", enriched.spiderVodId)
+        assertEquals("https://images.example.org/actual-cover.webp", enriched.artworkUrl)
+        assertEquals("2026", enriched.year)
+        assertEquals("更新至十二集", enriched.subtitle)
+        assertEquals("剧集", enriched.category)
+        assertEquals("第一集", enriched.playbackEpisodes[0].title)
+        assertEquals("token?sig=a${'$'}b", enriched.playbackEpisodes[0].lines.single().uri)
+        assertEquals("第二集", enriched.playbackEpisodes[1].title)
+    }
+
+    @Test fun `invalid detail artwork cannot replace a verified listing poster`() {
+        val original = SpiderVodCodec.listing("""{"list":[{
+            "vod_id":"1", "vod_name":"影片", "vod_pic":"https://images.example.org/original.jpg"
+        }]}""", site).single()
+        val enriched = SpiderVodCodec.detail("""{"list":[{
+            "vod_pic":"javascript:alert(1)", "vod_play_url":"only-opaque-id"
+        }]}""", original)
+        assertEquals(original.artworkUrl, enriched.artworkUrl)
+        assertEquals("第 1 集", enriched.playbackEpisodes.single().title)
+        assertEquals("only-opaque-id", enriched.playbackEpisodes.single().lines.single().uri)
     }
 
     @Test fun `player result accepts media url and bounded playback headers`() {
@@ -52,6 +84,48 @@ class TvBoxSpiderBridgeTest {
         assertEquals("https://video.example/movie.m3u8", media.uri)
         assertEquals("https://example.org/", media.headers["Referer"])
         assertFalse(media.headers.containsKey("Bad Header"))
+    }
+
+    @Test fun `player supports CatVod quality pairs and WebVTT sidecar subtitles`() {
+        val result = SpiderVodCodec.player("""{
+            "parse":0,
+            "url":["不支持","javascript:alert(1)","高清","https://media.example.org/hi.m3u8"],
+            "subs":[
+              {"url":"https://media.example.org/zh.vtt","name":"简体中文","lang":"zh-CN","format":"text/vtt"},
+              {"url":"https://media.example.org/sub.srt","name":"不支持格式","lang":"en","format":"application/x-subrip"},
+              {"url":"file:///private.vtt","name":"本地不可用","lang":"en","format":"text/vtt"}
+            ]
+        }""", false)
+        assertTrue(result is PlaybackResult.Ready)
+        val media = (result as PlaybackResult.Ready).media
+        assertEquals("https://media.example.org/hi.m3u8", media.uri)
+        assertEquals(1, media.subtitles.size)
+        assertEquals("zh-cn", media.subtitles.single().language)
+        assertEquals("简体中文", media.subtitles.single().title)
+        val acrossProcess = SpiderIpc.readPlayback(SpiderIpc.playback(media), false)
+        assertEquals(media, (acrossProcess as PlaybackResult.Ready).media)
+    }
+
+    @Test fun `player selects preferred URL object quality with safe fallback`() {
+        val chosen = SpiderVodCodec.player("""{
+            "parse":0, "url":{"values":[
+                {"n":"低画质","v":"http://video.example/low.m3u8"},
+                {"n":"高清","v":"https://video.example/hd.m3u8"}
+            ],"position":0}
+        }""", false)
+        assertEquals("https://video.example/hd.m3u8", (chosen as PlaybackResult.Ready).media.uri)
+        val withHttp = SpiderVodCodec.player("""{
+            "url":{"values":[
+                {"n":"低画质","v":"http://video.example/low.m3u8"},
+                {"n":"高清","v":"https://video.example/hd.m3u8"}
+            ],"position":0}
+        }""", true)
+        assertEquals("http://video.example/low.m3u8", (withHttp as PlaybackResult.Ready).media.uri)
+    }
+
+    @Test fun `browser parsing flags block web parse even with direct-looking URL`() {
+        assertTrue(SpiderVodCodec.player("""{"jx":1,"url":"https://example.org/watch"}""", false)
+            is PlaybackResult.Unavailable)
     }
 
     @Test fun `player result cannot silently pass web page or http without consent`() {

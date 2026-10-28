@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -57,30 +58,45 @@ internal object SpiderVodCodec {
             ?: error("Spider 详情缺少 list[0]")
         val flags = item.optString("vod_play_from").split("$$$").take(8)
         val episodes = linkedMapOf<Int, MutableList<PlaybackLine>>()
+        val episodeTitles = linkedMapOf<Int, String>()
         item.optString("vod_play_url").split("$$$").take(8).forEachIndexed { lineIndex, playlist ->
             val flag = flags.getOrNull(lineIndex).orEmpty().ifBlank { "线路 ${lineIndex + 1}" }.take(80)
             playlist.split('#').take(99).forEachIndexed { index, entry ->
-                val opaqueId = entry.substringAfter('$', if ('$' in entry) "" else entry).trim()
+                val separator = entry.indexOf('$')
+                val episodeName = if (separator >= 0) entry.substring(0, separator).trim() else ""
+                val opaqueId = (if (separator >= 0) entry.substring(separator + 1) else entry).trim()
                 if (opaqueId.isNotEmpty() && opaqueId.length <= 2_048) {
+                    if (episodeName.isNotEmpty() && index + 1 !in episodeTitles)
+                        episodeTitles[index + 1] = episodeName.replace(Regex("<[^>]*>"), " ").take(80)
                     episodes.getOrPut(index + 1) { mutableListOf() }.add(
                         PlaybackLine("spider-$lineIndex", flag, opaqueId))
                 }
             }
         }
         val playback = episodes.map { (number, lines) ->
-            PlaybackEpisode(number, "第 $number 集", lines)
+            PlaybackEpisode(number, episodeTitles[number]?.takeIf { it.isNotBlank() }
+                ?: "第 $number 集", lines)
         }
+        val detailedCategory = item.optString("type_name").trim()
         return film.copy(
             synopsis = item.optString("vod_content").replace(Regex("<[^>]*>"), " ").take(1200)
                 .ifBlank { film.synopsis },
+            year = item.optString("vod_year").trim().take(10).ifBlank { film.year },
+            subtitle = item.optString("vod_remarks").trim().take(80).ifBlank { film.subtitle },
+            category = if (detailedCategory.isNotBlank()) TvBoxCategories.topLevel(detailedCategory)
+                else film.category,
+            artworkUrl = TvBoxUrl.normalize(item.optString("vod_pic"), allowHttp = true)
+                ?: film.artworkUrl,
             episodes = maxOf(1, playback.size), playbackEpisodes = playback)
     }
 
     fun player(json: String, allowHttp: Boolean): PlaybackResult {
         val data = JSONObject(json)
-        if (data.optInt("parse", 0) != 0)
+        if (data.optInt("parse", 0) != 0 || data.optInt("jx", 0) != 0)
             return PlaybackResult.Unavailable("此线路返回网页解析请求，尚不能交给 Media3 直接播放")
-        val uri = TvBoxUrl.normalize(data.optString("url"), allowHttp)
+        val uri = playerUrls(data.opt("url")).firstNotNullOfOrNull {
+            TvBoxUrl.normalize(it, allowHttp)
+        }
             ?: return PlaybackResult.Unavailable("Spider 没有返回本次授权的 HTTP(S) 直链")
         val header = data.optJSONObject("header") ?: data.optJSONObject("headers")
         val headers = buildMap {
@@ -95,7 +111,40 @@ internal object SpiderVodCodec {
                 }
             }
         }
-        return PlaybackResult.Ready(PlaybackMedia(uri, headers))
+        val tracks = data.optJSONArray("subs") ?: JSONArray()
+        val subtitles = (0 until minOf(tracks.length(), 6)).mapNotNull { index ->
+            val track = tracks.optJSONObject(index) ?: return@mapNotNull null
+            val rawUrl = track.optString("url")
+            val subtitleUrl = TvBoxUrl.normalize(rawUrl, allowHttp) ?: return@mapNotNull null
+            // This Media3 panel currently configures WebVTT only. Do not pass
+            // SRT/ASS tracks to a VTT decoder and report them as working.
+            val format = track.optString("format").lowercase()
+            if (format.isNotBlank() && format != "text/vtt" &&
+                format != "application/octet-stream") return@mapNotNull null
+            if (!subtitleUrl.substringBefore('?').lowercase().endsWith(".vtt") && format != "text/vtt")
+                return@mapNotNull null
+            val lang = track.optString("lang").trim().lowercase().ifBlank { "und" }
+            if (!lang.matches(Regex("[a-z]{2,3}(-[a-z0-9]{2,8})*"))) return@mapNotNull null
+            val name = track.optString("name").trim().take(64).ifBlank { "字幕 ${index + 1}" }
+            AuthorizedSubtitle(lang, name, subtitleUrl)
+        }
+        return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles))
+    }
+
+    /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */
+    private fun playerUrls(raw: Any?): List<String> = when (raw) {
+        is String -> listOf(raw)
+        is JSONArray -> (1 until raw.length() step 2).map { raw.optString(it) }
+        is JSONObject -> {
+            val choices = raw.optJSONArray("values") ?: JSONArray()
+            val urls = (0 until minOf(choices.length(), 20)).mapNotNull {
+                choices.optJSONObject(it)?.optString("v")
+            }
+            val selected = raw.optInt("position", 0)
+            if (selected in urls.indices) listOf(urls[selected]) + urls.filterIndexed { i, _ -> i != selected }
+            else urls
+        }
+        else -> emptyList()
     }
 }
 
