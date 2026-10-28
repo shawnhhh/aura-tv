@@ -143,12 +143,7 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
     }
 }
 
-/**
- * A continuous, non-focusable motion track follows the *real measured* tab positions.
- * The white button focus remains instantaneous and unique; only this subtle underline
- * glides when users reverse D-pad direction or hold a repeat key.
- */
-/** Compact D-pad navigation: focused pill alone marks the active target. */
+/** Native D-pad focus stays instant; the understated underline glides between tab centers. */
 @Composable
 private fun TvNavTabs(
     category: String,
@@ -161,21 +156,49 @@ private fun TvNavTabs(
     onSelect: (String) -> Unit
 ) {
     val categories = remember { listOf("首页", "电影", "剧集", "动漫", "直播", "我的") }
-    Row(
+    val measuredCenters = remember { mutableStateMapOf<String, Float>() }
+    var focusedTab by remember { mutableStateOf<String?>(null) }
+    val center by animateFloatAsState(
+        targetValue = measuredCenters[focusedTab ?: category] ?: 0f,
+        animationSpec = if (reducedMotion) snap() else spring(
+            dampingRatio = 0.91f, stiffness = 510f), label = "nav-underline-position")
+    Box(
         Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
             .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
-            .padding(horizontal = 5.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+            .onFocusChanged { if (!it.hasFocus) focusedTab = null }
+            .padding(horizontal = 5.dp, vertical = 4.dp)
     ) {
-        categories.forEach { cat ->
-            TvButton(cat,
-                Modifier.testTag("nav-$cat")
-                    .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
-                        else Modifier)
-                    .focusRequester(requester("nav-$cat")),
-                reducedMotion, category == cat && !isSearch,
-                quiet = true, onFocus = { onFocus("nav-$cat") }
-            ) { onSelect(cat) }
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            categories.forEach { cat ->
+                TvButton(cat,
+                    Modifier.testTag("nav-$cat")
+                        .onGloballyPositioned { coordinates ->
+                            val value = coordinates.positionInParent().x + coordinates.size.width / 2f
+                            if (measuredCenters[cat] != value) measuredCenters[cat] = value
+                        }
+                        .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
+                            else Modifier)
+                        .focusRequester(requester("nav-$cat")),
+                    reducedMotion, category == cat && !isSearch,
+                    quiet = true, onFocus = {
+                        focusedTab = cat
+                        onFocus("nav-$cat")
+                    }
+                ) { onSelect(cat) }
+            }
+        }
+        // Paint above the row without adding another focusable element or moving hit boxes.
+        Canvas(Modifier.matchParentSize().testTag("nav-motion-track")) {
+            if (measuredCenters.isNotEmpty()) {
+                val lineWidth = 27.dp.toPx()
+                val lineHeight = 2.dp.toPx()
+                drawRoundRect(
+                    color = Color(0xCCE7EDF6),
+                    topLeft = Offset(center - lineWidth / 2f, size.height - lineHeight),
+                    size = Size(lineWidth, lineHeight),
+                    cornerRadius = CornerRadius(lineHeight / 2f)
+                )
+            }
         }
     }
 }
@@ -547,10 +570,14 @@ private fun Herrin() {
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val reduceMotion = reduced || systemReduced
     var splash by rememberSaveable { mutableStateOf(true) }
+    // Keep the finished H mark above the first home frames while it dissolves;
+    // removing it before the hero is drawn causes a visible black flash.
+    var splashExiting by remember { mutableStateOf(false) }
+    val homeVisible = !splash || splashExiting
     val sceneReveal = remember { Animatable(0f) }
     var hasEnteredHome by remember { mutableStateOf(false) }
-    LaunchedEffect(splash, screen, category, reduceMotion) {
-        if (splash) {
+    LaunchedEffect(homeVisible, screen, category, reduceMotion) {
+        if (!homeVisible) {
             sceneReveal.snapTo(0f)
         } else {
             val firstEntrance = !hasEnteredHome
@@ -716,7 +743,7 @@ private fun Herrin() {
     }
     BackHandler(splash || screen != "browse" || category != "首页") {
         when {
-            splash -> splash = false
+            splash -> splashExiting = true
             screen == "browse" && category == "直播" &&
                 liveSearchExpanded && liveSearchEditorFocused -> finishLiveSearchInput()
             else -> back()
@@ -746,7 +773,7 @@ private fun Herrin() {
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
         // Defer decoding and drawing the large hero until after splash: loading the
         // artwork underneath an opaque splash causes avoidable startup frame stalls.
-        if (!splash && (!sourceConfigured || films.isNotEmpty())) {
+        if (homeVisible && (!sourceConfigured || films.isNotEmpty())) {
             Crossfade(targetState = film, animationSpec = if (reduceMotion) tween(0)
                 else tween(360, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
                 FilmArtwork(hero, Modifier.fillMaxSize())
@@ -761,9 +788,7 @@ private fun Herrin() {
                 0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
             )))
         }
-        if (splash) {
-            Splash(reduceMotion) { splash = false }
-        } else when (screen) {
+        if (homeVisible) when (screen) {
             "live-player" -> {
                 val selected = activeLiveChannel
                 if (selected != null) {
@@ -1945,6 +1970,27 @@ private fun Herrin() {
                 }
             }
         }
+        if (splash) {
+            SplashExitCurtain(reduceMotion, splashExiting,
+                onReady = { splashExiting = true }, onFinished = { splash = false })
+        }
+    }
+}
+
+/** The static H remains on top until the destination has had time to render. */
+@Composable
+internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
+                               onReady: () -> Unit, onFinished: () -> Unit) {
+    val opacity = remember { Animatable(1f) }
+    LaunchedEffect(exiting, reduced) {
+        if (exiting) {
+            if (reduced) opacity.snapTo(0f)
+            else opacity.animateTo(0f, tween(460, easing = FastOutSlowInEasing))
+            onFinished()
+        }
+    }
+    Box(Modifier.fillMaxSize().testTag("splash-curtain").graphicsLayer { alpha = opacity.value }) {
+        Splash(reduced, onReady)
     }
 }
 

@@ -42,7 +42,11 @@ class HerrinUiSmokeTest {
     }
     @Before fun awaitHome() {
         compose.waitUntil(10000) {
-            runCatching { compose.onNodeWithTag("details").assertIsDisplayed() }.isSuccess
+            runCatching {
+                compose.onNodeWithTag("details").assertIsDisplayed()
+                // Do not inject a remote event into the brief branded exit overlay.
+                compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            }.isSuccess
         }
         compose.waitForIdle()
     }
@@ -113,6 +117,15 @@ class HerrinUiSmokeTest {
         chunks.forEachIndexed { index, chunk ->
             android.util.Log.i("HerrinEvidence", "TREE $label $index/${chunks.size} $chunk")
         }
+    }
+    @Test fun navigationMotionTrackDoesNotStealRemoteFocus() {
+        compose.onNodeWithTag("nav-motion-track").assertExists()
+        focus("nav-首页")
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("nav-电影").assertIsFocused()
+        compose.onNodeWithTag("nav-motion-track").assertIsNotFocused()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithText("精选电影 · 演示片库").assertIsDisplayed()
     }
     @Test fun homeHeaderKeepsCompactSettingsAndExactlyTwoSourceInputs() {
         // The approved compact header has one row and no standalone source button.
