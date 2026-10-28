@@ -1506,8 +1506,19 @@ private fun Herrin() {
                                 modifier = Modifier.testTag("tvbox-warehouse-load")
                                     .focusRequester(requester("tvbox-warehouse-load")),
                                 reduced = reduceMotion, onFocus = {
-                                    focusId = "tvbox-warehouse-load"
-                                    lastMovieSettingsAction = "tvbox-warehouse-load"
+                                    if (settingsTvBoxOnly && focusId == "tvbox-live-direct-url" &&
+                                        lastMovieSettingsAction == "settings-source-sites") {
+                                        // Some TV IMEs skip Compose's Up override when they
+                                        // release text focus. Native search then lands on the
+                                        // left button; restore the prior right-hand column.
+                                        uiScope.launch {
+                                            withFrameNanos { }
+                                            runCatching { requester("settings-source-sites").requestFocus() }
+                                        }
+                                    } else {
+                                        focusId = "tvbox-warehouse-load"
+                                        lastMovieSettingsAction = "tvbox-warehouse-load"
+                                    }
                                     keyboard?.hide()
                                 }) {
                                 tvBoxSelectedName = ""
