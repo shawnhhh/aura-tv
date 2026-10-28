@@ -39,6 +39,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -179,6 +180,7 @@ private fun TvNavTabs(
 }
 
 @Composable
+@OptIn(ExperimentalComposeUiApi::class)
 private fun Herrin() {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -609,7 +611,7 @@ private fun Herrin() {
                 val target = "$prefix${destination[index].id}"
                 repeat(3) {
                     withFrameNanos { }
-                    if (runCatching { requester(target).requestFocus() }.getOrDefault(false)) {
+                    if (runCatching { requester(target).requestFocus() }.isSuccess) {
                         RemoteTrace.event("RAIL transfer target=$target x=$sourceOffset")
                         return@launch
                     }
