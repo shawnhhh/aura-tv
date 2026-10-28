@@ -1,6 +1,7 @@
 package tv.herrin.app
 
 import android.os.Bundle
+import android.os.SystemClock
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.util.Log
@@ -370,14 +371,39 @@ private fun Herrin() {
             var chosen: Pair<TvBoxSite, List<Film>>? = null
             var chosenSpider = false
             var spiderFailure = ""
-            for (site in candidates) {
+            var spiderCrashed = false
+            var scanBudgetExceeded = false
+            val scanStarted = SystemClock.elapsedRealtime()
+            var cmsElapsed = 0L
+            val hasRunnableSpider = candidates.any { site ->
+                val jar = site.jar ?: config.spiderJar
+                site.spiderApi != null && jar != null && TvBoxSpiderPolicy.mayRun(
+                    runSpiderAfterApply, prefs.tvBoxWarehouseUrl, jar,
+                    prefs.tvBoxTrustedSpiderRootUrl, prefs.tvBoxTrustedSpiderJarSpec)
+            }
+            for ((candidateIndex, site) in candidates.withIndex()) {
+                val elapsed = SystemClock.elapsedRealtime() - scanStarted
+                if (elapsed >= TvBoxAutoScanPolicy.TOTAL_BUDGET_MS) {
+                    scanBudgetExceeded = true
+                    break
+                }
+                val timeout = TvBoxAutoScanPolicy.timeoutMs(
+                    elapsed, cmsElapsed, hasRunnableSpider, spider = site.spiderApi != null)
+                    ?: continue
                 if (site.apiUrl != null) {
-                    when (val loaded = tvBoxVodRepo.load(site, allowHttp = true)) {
+                    vodImportFeedback = "探测 ${candidateIndex + 1}/${candidates.size}"
+                    tvBoxStatus = "正在试读 ${site.name}（${candidateIndex + 1}/${candidates.size}）…"
+                    val cmsStart = SystemClock.elapsedRealtime()
+                    val loaded = withTimeoutOrNull(timeout) {
+                        tvBoxVodRepo.load(site, allowHttp = true)
+                    }
+                    cmsElapsed += SystemClock.elapsedRealtime() - cmsStart
+                    when (loaded) {
                         is TvBoxVodResult.Ready -> if (loaded.films.isNotEmpty()) {
                             chosen = site to loaded.films
                             break
                         }
-                        is TvBoxVodResult.Error -> Unit
+                        else -> Unit
                     }
                 } else if (site.spiderApi != null) {
                     val jarSpec = site.jar ?: config.spiderJar ?: continue
@@ -385,11 +411,17 @@ private fun Herrin() {
                     if (!TvBoxSpiderPolicy.mayRun(runSpiderAfterApply, prefs.tvBoxWarehouseUrl,
                             jarSpec, prefs.tvBoxTrustedSpiderRootUrl,
                             prefs.tvBoxTrustedSpiderJarSpec)) continue
-                    tvBoxStatus = "正在自动读取 ${site.name} 的影视目录…"
-                    when (val result = spiderBridge.browse(site, config)) {
+                    vodImportFeedback = "探测 ${candidateIndex + 1}/${candidates.size}"
+                    tvBoxStatus = "正在尝试 Spider ${site.name}（${candidateIndex + 1}/${candidates.size}）…"
+                    val result = withTimeoutOrNull(timeout) { spiderBridge.browse(site, config) }
+                    when (result) {
                         is SpiderResult.Failure -> {
                             spiderFailure = result.message
                             Log.w("HerrinCatVod", "站点 ${site.key}: ${result.message}")
+                            if (TvBoxAutoScanPolicy.isSpiderProcessCrash(result.message)) {
+                                spiderCrashed = true
+                                break
+                            }
                         }
                         is SpiderResult.Ready -> if (result.value.isNotEmpty()) {
                             chosen = site to result.value
@@ -398,6 +430,7 @@ private fun Herrin() {
                             prefs.tvBoxTrustedSpiderJarSpec = jarSpec
                             break
                         }
+                        null -> spiderFailure = "Spider ${site.name} 响应超时"
                     }
                 }
             }
@@ -405,6 +438,9 @@ private fun Herrin() {
                 prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
                 prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(chosen.first, config.spiderJar)
             }
+            if (chosen == null && !spiderCrashed &&
+                SystemClock.elapsedRealtime() - scanStarted >= TvBoxAutoScanPolicy.TOTAL_BUDGET_MS)
+                scanBudgetExceeded = true
             if (chosen != null) {
                 spiderActive = chosenSpider
                 providerFilms = chosen.second
@@ -418,9 +454,18 @@ private fun Herrin() {
                 providerFilms = null
                 tvBoxVodScope = "tvbox:pending:$address"
                 providerStatus = "配置已导入，暂无可播放影视目录；可在设置重新应用影视源"
-                tvBoxStatus += "；标准 CMS 与已允许的 Spider 均未提供可用目录" +
-                    (if (spiderFailure.isNotBlank()) "（${spiderFailure.take(80)}）" else "")
-                vodImportFeedback = "未获取到影片"
+                if (spiderCrashed) {
+                    tvBoxStatus = "配置读取成功，但 Spider 子进程异常退出。已停止自动重试以保护电视；可打开「选择影视点」尝试其他站点。"
+                    vodImportFeedback = "插件崩溃"
+                } else if (scanBudgetExceeded) {
+                    tvBoxStatus = "配置读取成功，但自动检索已达到限时；请打开「选择影视点」手动尝试其他站点。" +
+                        (if (spiderFailure.isNotBlank()) "最近失败：${spiderFailure.take(90)}" else "")
+                    vodImportFeedback = "检索超时"
+                } else {
+                    tvBoxStatus += "；标准 CMS 与已允许的 Spider 均未提供可用目录" +
+                        (if (spiderFailure.isNotBlank()) "（${spiderFailure.take(80)}）" else "")
+                    vodImportFeedback = "未获取到影片"
+                }
             }
             // TVBox single warehouses can carry their own live channel groups.
             // Respect an independently configured live source if one exists.
@@ -1495,10 +1540,17 @@ private fun Herrin() {
                             if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
                                 Text(vodImportFeedback, Modifier.testTag("vod-apply-feedback"),
                                     color = if (vodImportFeedback == "成功") Color(0xFF85D9B5)
-                                    else if (vodImportFeedback.contains("失败") || vodImportFeedback.contains("未获取")) Color(0xFFF2A5A5)
+                                    else if (vodImportFeedback.contains("失败") || vodImportFeedback.contains("未获取") ||
+                                        vodImportFeedback.contains("崩溃") || vodImportFeedback.contains("超时")) Color(0xFFF2A5A5)
                                     else Color(0xFFC4D3E7), fontSize = 14.sp)
                             }
                         } }
+                        if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
+                            item { Text(tvBoxStatus, Modifier.testTag("compact-tvbox-status"),
+                                color = if (vodImportFeedback.contains("崩溃") || vodImportFeedback.contains("超时"))
+                                    Color(0xFFF2A5A5) else Color(0xFFCFD7E4),
+                                lineHeight = 21.sp, fontSize = 14.sp) }
+                        }
                         if (!settingsTvBoxOnly) {
                         item { OutlinedTextField(tvBoxJsonDraft, { tvBoxJsonDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-import-json")

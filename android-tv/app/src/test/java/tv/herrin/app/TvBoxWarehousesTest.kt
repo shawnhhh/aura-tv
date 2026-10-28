@@ -4,6 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TvBoxWarehousesTest {
+    @Test fun autoProbeReservesTimeForSpiderAfterSeveralCmsTimeouts() {
+        assertEquals(6_000L, TvBoxAutoScanPolicy.timeoutMs(0, 0, true, false))
+        assertEquals(3_000L, TvBoxAutoScanPolicy.timeoutMs(9_000, 9_000, true, false))
+        assertNull(TvBoxAutoScanPolicy.timeoutMs(12_000, 12_000, true, false))
+        assertEquals(20_000L, TvBoxAutoScanPolicy.timeoutMs(12_000, 12_000, true, true))
+        assertEquals(5_000L, TvBoxAutoScanPolicy.timeoutMs(40_000, 12_000, true, true))
+        assertNull(TvBoxAutoScanPolicy.timeoutMs(45_000, 12_000, true, true))
+    }
+
+    @Test fun autoProbeWithoutSpiderUsesCmsBudgetWithoutRepeatedNativeCrash() {
+        assertEquals(6_000L, TvBoxAutoScanPolicy.timeoutMs(20_000, 20_000, false, false))
+        assertTrue(TvBoxAutoScanPolicy.isSpiderProcessCrash("站点：Spider 子进程异常退出；主界面仍可使用"))
+        assertFalse(TvBoxAutoScanPolicy.isSpiderProcessCrash("Spider 下载返回 HTTP 404"))
+        assertFalse(TvBoxAutoScanPolicy.isSpiderProcessCrash("Spider 网络读取超时"))
+    }
+
     @Test fun lastWorkingSpiderSiteIsTriedBeforeSlowCmsSites() {
         val cms = (1..9).map { TvBoxSite("CMS $it", false,
             apiUrl = "https://example.org/cms/$it", key = "cms$it") }

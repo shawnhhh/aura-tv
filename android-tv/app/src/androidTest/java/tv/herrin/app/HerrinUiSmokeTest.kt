@@ -321,6 +321,11 @@ http://example.org/live/channel.m3u8
                 runCatching { compose.onNodeWithTag("vod-apply-feedback")
                     .assertTextEquals("未获取到影片") }.isSuccess
             }
+            // A failed auto-import must show an actionable reason on the compact
+            // TV settings page, not only a status hidden in Advanced Settings.
+            settings.performScrollToNode(hasTestTag("compact-tvbox-status"))
+            compose.onNodeWithTag("compact-tvbox-status")
+                .assertTextContains("均未提供可用目录", substring = true)
             settings.performScrollToNode(hasTestTag("settings-home"))
             compose.onNodeWithTag("settings-home").performClick()
             compose.onNodeWithTag("source-empty-title").assertIsDisplayed()

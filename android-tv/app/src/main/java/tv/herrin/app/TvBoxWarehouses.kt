@@ -61,6 +61,28 @@ internal object TvBoxAutoSites {
     }
 }
 
+/** Avoid leaving the TV's Apply button showing “读取中” after many dead sources. */
+internal object TvBoxAutoScanPolicy {
+    const val TOTAL_BUDGET_MS = 45_000L
+    private const val CMS_BUDGET_WITH_SPIDER_MS = 12_000L
+    private const val CMS_SINGLE_MS = 6_000L
+    private const val SPIDER_SINGLE_MS = 20_000L
+
+    /** Null means skip this candidate; the caller can continue to Spider or finish. */
+    fun timeoutMs(elapsedMs: Long, cmsElapsedMs: Long, hasSpider: Boolean,
+                  spider: Boolean): Long? {
+        val remaining = TOTAL_BUDGET_MS - elapsedMs.coerceAtLeast(0)
+        if (remaining <= 0) return null
+        val cap = if (spider) SPIDER_SINGLE_MS else minOf(CMS_SINGLE_MS,
+            (if (hasSpider) CMS_BUDGET_WITH_SPIDER_MS else TOTAL_BUDGET_MS) - cmsElapsedMs.coerceAtLeast(0))
+        return minOf(remaining, cap).takeIf { it > 0 }
+    }
+
+    /** A dead native/plugin process should not be launched repeatedly in one scan. */
+    fun isSpiderProcessCrash(message: String): Boolean =
+        message.contains("Spider 子进程异常退出")
+}
+
 internal sealed interface TvBoxConfig {
     data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,
