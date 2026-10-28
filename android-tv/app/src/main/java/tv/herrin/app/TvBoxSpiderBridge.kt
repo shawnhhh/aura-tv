@@ -45,9 +45,10 @@ internal object SpiderVodCodec {
                 title = title, subtitle = vod.optString("vod_remarks").take(80),
                 category = TvBoxCategories.topLevel(vod.optString("type_name")),
                 year = vod.optString("vod_year").take(10),
-                synopsis = vod.optString("vod_content").replace(Regex("<[^>]*>"), " ").take(1200),
+                synopsis = SourceText.synopsis(vod.optString("vod_content")),
                 artwork = R.drawable.photofilm_orbit,
                 artworkUrl = TvBoxUrl.normalize(vod.optString("vod_pic"), allowHttp = true),
+                backdropUrl = SourceArtwork.backdrop(vod, allowHttp = true),
                 spiderVodId = id)
         }
     }
@@ -78,7 +79,7 @@ internal object SpiderVodCodec {
         }
         val detailedCategory = item.optString("type_name").trim()
         return film.copy(
-            synopsis = item.optString("vod_content").replace(Regex("<[^>]*>"), " ").take(1200)
+            synopsis = SourceText.synopsis(item.optString("vod_content"))
                 .ifBlank { film.synopsis },
             year = item.optString("vod_year").trim().take(10).ifBlank { film.year },
             subtitle = item.optString("vod_remarks").trim().take(80).ifBlank { film.subtitle },
@@ -86,16 +87,27 @@ internal object SpiderVodCodec {
                 else film.category,
             artworkUrl = TvBoxUrl.normalize(item.optString("vod_pic"), allowHttp = true)
                 ?: film.artworkUrl,
+            backdropUrl = SourceArtwork.backdrop(item, allowHttp = true) ?: film.backdropUrl,
             episodes = maxOf(1, playback.size), playbackEpisodes = playback)
     }
 
     fun player(json: String, allowHttp: Boolean): PlaybackResult {
         val data = JSONObject(json)
-        if (data.optInt("parse", 0) != 0 || data.optInt("jx", 0) != 0)
-            return PlaybackResult.Unavailable("此线路返回网页解析请求，尚不能交给 Media3 直接播放")
-        val uri = playerUrls(data.opt("url")).firstNotNullOfOrNull {
+        val options = playerUrls(data.opt("url")).mapNotNull {
             TvBoxUrl.normalize(it, allowHttp)
+        }.distinct().take(8)
+        val needsWebParser = data.optInt("parse", 0) != 0 || data.optInt("jx", 0) != 0
+        // A provider occasionally sets parse=1 even while returning a direct
+        // media file. Accept an actual manifest/file URL; never open a web
+        // parsing page, sniff a browser, or invoke an unknown third-party JX.
+        val playable = if (!needsWebParser) options else options.filter {
+            it.substringBefore('?').substringBefore('#').lowercase().let { path ->
+                path.endsWith(".m3u8") || path.endsWith(".mp4") || path.endsWith(".mpd")
+            }
         }
+        if (needsWebParser && playable.isEmpty())
+            return PlaybackResult.Unavailable("此线路需要网页解析器，请切换返回直链的授权线路")
+        val uri = playable.firstOrNull()
             ?: return PlaybackResult.Unavailable("Spider 没有返回本次授权的 HTTP(S) 直链")
         val header = data.optJSONObject("header") ?: data.optJSONObject("headers")
         val headers = buildMap {
@@ -127,7 +139,8 @@ internal object SpiderVodCodec {
             val name = track.optString("name").trim().take(64).ifBlank { "字幕 ${index + 1}" }
             AuthorizedSubtitle(lang, name, subtitleUrl)
         }
-        return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles))
+        return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles,
+            alternateUris = playable.drop(1), allowHttpRedirects = allowHttp))
     }
 
     /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */

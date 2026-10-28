@@ -212,10 +212,12 @@ class HerrinUiSmokeTest {
         compose.waitUntil(10000) {
             runCatching { compose.onNodeWithTag("recommend-blue").assertIsFocused() }.isSuccess
         }
+        compose.onNodeWithTag("recommend-blue").assertIsDisplayed()
         key(KeyEvent.KEYCODE_DPAD_UP)
         compose.waitUntil(10000) {
             runCatching { compose.onNodeWithTag("card-orbit").assertIsFocused() }.isSuccess
         }
+        compose.onNodeWithTag("card-orbit").assertIsDisplayed()
         focus("card-tide")
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.waitUntil(10000) {

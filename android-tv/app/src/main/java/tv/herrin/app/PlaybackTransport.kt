@@ -6,6 +6,12 @@ import androidx.media3.common.TrackSelectionOverride
 
 /** Focusable Android TV controls call these operations; never infer a stream URL. */
 object PlaybackTransport {
+    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+
+    fun nextSpeed(current: Float): Float {
+        val currentIndex = speeds.indexOfFirst { kotlin.math.abs(it - current) < 0.01f }
+        return speeds[(currentIndex + 1).coerceAtLeast(0) % speeds.size]
+    }
     data class Option(
         val groupIndex: Int, val trackIndex: Int, val label: String,
         val selected: Boolean

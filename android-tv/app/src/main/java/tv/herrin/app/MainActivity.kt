@@ -26,6 +26,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
@@ -559,6 +562,7 @@ private fun Herrin() {
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
     var activeLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
     var activeLiveIndex by remember { mutableIntStateOf(-1) }
+    var pendingLiveLines by remember { mutableStateOf<LiveChannelChoice?>(null) }
     LaunchedEffect(liveChannels, category, screen) {
         if (category == "直播" && screen == "browse" && liveChannels.isNotEmpty()) {
             if (activeLiveChannel?.url !in liveChannels.map { it.url })
@@ -898,6 +902,8 @@ private fun Herrin() {
                 val railState = railStates.getValue(if (isSearch) "search" else category)
                 val recommendedFilms = if (!isSearch && category == "首页") films.asReversed() else emptyList()
                 val recommendState = railStates.getValue("recommend")
+                val browseScroll = rememberScrollState()
+                LaunchedEffect(category) { browseScroll.scrollTo(0) }
                 val suggestions = listOf("轨道", "潮汐", "群山", "星夜", "清空")
                 val headerDownTarget = when {
                     isSearch -> "search-input"
@@ -914,10 +920,10 @@ private fun Herrin() {
                 val firstPosterTarget = railFilms.getOrNull(visibleFirstIndex)
                     ?.let { requester("card-${it.id}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
-                Column(Modifier.fillMaxSize().graphicsLayer {
+                Column(Modifier.fillMaxSize().testTag("browse-scroll").graphicsLayer {
                     alpha = sceneReveal.value
                     translationY = (1f - sceneReveal.value) * sceneLift
-                }.padding(horizontal = 40.dp, vertical = 14.dp)) {
+                }.verticalScroll(browseScroll).padding(horizontal = 40.dp, vertical = 14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(Modifier.size(34.dp).border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
@@ -995,7 +1001,7 @@ private fun Herrin() {
                                 }
                             }
                         }
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(8.dp))
                     } else if (category == "直播") {
                         // A live TV rail must not inherit the movie hero's tall
                         // spacer, poster synopsis and demo-play actions: those
@@ -1007,14 +1013,14 @@ private fun Herrin() {
                             fontSize = 13.sp, color = Color(0xFFBDC8D6))
                         Spacer(Modifier.height(18.dp))
                     } else if (sourceConfigured && films.isEmpty()) {
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(135.dp))
                         Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.testTag("source-empty-title"))
                         Text(providerStatus + "；请进入设置选择站点", fontSize = 15.sp, lineHeight = 23.sp,
                             color = Color(0xFFCDD8E6), modifier = Modifier.testTag("source-empty-status"))
                         Spacer(Modifier.height(24.dp))
                     } else {
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(132.dp))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(Modifier.width(18.dp).height(2.dp).background(Color.White))
                             Text(if (providerFilms == null) "HERRIN  ·  ORIGINAL PREMIERE" else "HERRIN  ·  USER CATALOG", fontSize = 12.sp, letterSpacing = 2.sp,
@@ -1173,7 +1179,7 @@ private fun Herrin() {
                                     liveChannels, resolvedGroup, showFavoriteChannelsOnly,
                                     liveSearchQuery, liveFavoriteScope, liveFavoriteEpoch
                                 ) {
-                                    LiveChannelDiscovery.visible(liveChannels, resolvedGroup,
+                                    LiveChannelDiscovery.groupedVisible(liveChannels, resolvedGroup,
                                         showFavoriteChannelsOnly, query = liveSearchQuery) { channel ->
                                         liveFavorites.contains(liveFavoriteScope, channel.url)
                                     }
@@ -1183,7 +1189,7 @@ private fun Herrin() {
                                     // An old rail offset can hide a newly filtered first result.
                                     liveChannelRailState.scrollToItem(0)
                                 }
-                                Text("${if (liveSearchQuery.isBlank()) "显示" else "匹配"} ${visibleChannels.size} / ${liveChannels.size} 个频道",
+                                Text("${if (liveSearchQuery.isBlank()) "显示" else "匹配"} ${visibleChannels.size} / ${LiveChannelDiscovery.choices(liveChannels).size} 个频道 · 同名频道合并线路",
                                     modifier = Modifier.testTag("live-filter-status"),
                                     color = Color(0xFFADBBD0), fontSize = 12.sp)
                                 if (visibleChannels.isEmpty()) {
@@ -1199,7 +1205,8 @@ private fun Herrin() {
                                 LazyRow(state = liveChannelRailState,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     contentPadding = PaddingValues(10.dp)) {
-                                    itemsIndexed(visibleChannels, key = { _, item -> item.url }) { index, channel ->
+                                    itemsIndexed(visibleChannels, key = { _, item -> item.first.url }) { index, choice ->
+                                        val channel = choice.first
                                         val nowProgramme = currentGuide[channel.tvgId.ifBlank { channel.name }]?.now
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             verticalAlignment = Alignment.CenterVertically) {
@@ -1207,6 +1214,7 @@ private fun Herrin() {
                                                 buildString {
                                                     if (channel.group.isNotBlank()) append("${channel.group} · ")
                                                     append(channel.name)
+                                                    if (choice.options.size > 1) append("  ·  ${choice.options.size} 条线路")
                                                     if (nowProgramme != null) append("  ·  正在播出：${nowProgramme.title}")
                                                 },
                                                 modifier = Modifier.testTag("live-$index")
@@ -1217,19 +1225,26 @@ private fun Herrin() {
                                                     highlightedLiveUrl = channel.url
                                                 }
                                             ) {
-                                                activeLiveChannel = channel
-                                                activeLiveIndex = index
-                                                screen = "live-player"
+                                                if (choice.options.size > 1) pendingLiveLines = choice
+                                                else {
+                                                    activeLiveChannel = channel
+                                                    activeLiveIndex = liveChannels.indexOfFirst { it.url == channel.url }
+                                                    screen = "live-player"
+                                                }
                                             }
                                             TvButton(
-                                                if (liveFavorites.contains(liveFavoriteScope, channel.url))
+                                                if (choice.options.any { liveFavorites.contains(liveFavoriteScope, it.url) })
                                                     "★ 已收藏" else "☆ 收藏",
                                                 modifier = Modifier.testTag("live-favorite-$index")
                                                     .focusRequester(requester("live-favorite-$index")),
                                                 reduced = reduceMotion, quiet = true,
                                                 onFocus = { focusId = "live-favorite-$index" }
                                             ) {
-                                                liveFavorites.toggle(liveFavoriteScope, channel.url)
+                                                val saved = choice.options.filter {
+                                                    liveFavorites.contains(liveFavoriteScope, it.url)
+                                                }
+                                                if (saved.isEmpty()) liveFavorites.toggle(liveFavoriteScope, channel.url)
+                                                else saved.forEach { liveFavorites.toggle(liveFavoriteScope, it.url) }
                                                 liveFavoriteEpoch++
                                             }
                                         }
@@ -1259,8 +1274,9 @@ private fun Herrin() {
                                         }
                                     }
                                 }
-                                val preview = visibleChannels.firstOrNull { it.url == highlightedLiveUrl }
-                                    ?: visibleChannels.firstOrNull()
+                                val preview = visibleChannels.firstOrNull { choice ->
+                                    choice.options.any { it.url == highlightedLiveUrl }
+                                }?.first ?: visibleChannels.firstOrNull()?.first
                                 val guide = preview?.let { currentGuide[it.tvgId.ifBlank { it.name }] }
                                 if (preview != null && guide != null) {
                                     Column(Modifier.fillMaxWidth().testTag("live-guide-preview"),
@@ -1309,8 +1325,12 @@ private fun Herrin() {
                                 .onPreviewKeyEvent { event ->
                                     if (homeRail && event.type == KeyEventType.KeyDown &&
                                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                                        transferPosterFocus(railState, recommendState, index,
-                                            recommendedFilms, "recommend-")
+                                        uiScope.launch {
+                                            if (reduceMotion) browseScroll.scrollTo(browseScroll.maxValue)
+                                            else browseScroll.animateScrollTo(browseScroll.maxValue)
+                                            transferPosterFocus(railState, recommendState, index,
+                                                recommendedFilms, "recommend-")
+                                        }
                                         true
                                     } else false
                                 }
@@ -1344,8 +1364,12 @@ private fun Herrin() {
                                     .onPreviewKeyEvent { event ->
                                         if (event.type == KeyEventType.KeyDown &&
                                             event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                                            transferPosterFocus(recommendState, railState, index,
-                                                railFilms, "card-")
+                                            uiScope.launch {
+                                                if (reduceMotion) browseScroll.scrollTo(0)
+                                                else browseScroll.animateScrollTo(0)
+                                                transferPosterFocus(recommendState, railState, index,
+                                                    railFilms, "card-")
+                                            }
                                             true
                                         } else false
                                     }
@@ -1355,6 +1379,28 @@ private fun Herrin() {
                             }
                         }
                     }
+                }
+                pendingLiveLines?.takeIf { category == "直播" }?.let { choice ->
+                    AlertDialog(
+                        onDismissRequest = { pendingLiveLines = null },
+                        title = { Text("${choice.name} · 选择播放线路") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                choice.options.forEachIndexed { index, channel ->
+                                    TvButton("线路 ${index + 1}${if (channel.url == activeLiveChannel?.url) " · 当前" else ""}",
+                                        modifier = Modifier.testTag("live-line-$index"), reduced = reduceMotion) {
+                                        activeLiveChannel = channel
+                                        activeLiveIndex = liveChannels.indexOfFirst { it.url == channel.url }
+                                        pendingLiveLines = null
+                                        screen = "live-player"
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { pendingLiveLines = null }) { Text("取消") }
+                        }
+                    )
                 }
             }
             "detail", "player", "settings" -> {
@@ -1907,7 +1953,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.8 Alpha · 原生 Android TV\n直播默认全屏，按左键或确定键从左侧选择分组和频道。\n影视、直播配置都在设置首页；高级工具中可查看解析错误。\n外部 Spider 可执行不受信任的代码，请仅用于可信源；部分受保护插件及网页解析线路仍可能无法兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.19 Alpha · 原生 Android TV\n直播同名节目合并，点击后选择线路；影视选集直接播放，播放器支持倍速。\n影视、直播配置都在设置首页；高级工具中可查看解析错误。\n外部 Spider 可执行不受信任的代码，请仅用于可信源；部分受保护插件及网页解析线路仍可能无法兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
                     } else {
                         item { Text(if (screen == "player" && !spiderActive) "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
@@ -1928,7 +1974,7 @@ private fun Herrin() {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 TvButton(when {
                                     spiderActive && film.playbackEpisodes.isEmpty() -> "等待 Spider 选集"
-                                    spiderActive -> "▶ 解析并播放"
+                                    spiderActive -> "▶ 播放当前集"
                                     film.playbackEpisodes.isEmpty() -> "▶ 播放演示"
                                     else -> "▶ 播放授权片源"
                                 }, selected = true, reduced = reduceMotion) {
@@ -1952,11 +1998,15 @@ private fun Herrin() {
                             }
                             item { Text(if (film.playbackEpisodes.isEmpty()) "演示选集" else "授权选集",
                                 fontSize = 20.sp) }
-                            item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (film.playbackEpisodes.isEmpty()) {
                                     (1..film.episodes).forEach { n ->
                                         TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n"), reduced = reduceMotion,
-                                            selected = episode == n) { episode = n }
+                                            selected = episode == n) {
+                                            episode = n
+                                            screen = "player"
+                                        }
                                     }
                                 } else {
                                     film.playbackEpisodes.forEach { entry ->
@@ -1965,20 +2015,22 @@ private fun Herrin() {
                                             reduced = reduceMotion, selected = episode == entry.number) {
                                             episode = entry.number
                                             line = entry.lines.first().id
+                                            screen = "player"
                                         }
                                     }
                                 }
                             } }
-                            item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (currentLines.isEmpty()) {
                                     listOf("演示线路 A", "演示线路 B").forEach { name ->
                                         TvButton(name, modifier = Modifier.testTag("line-$name"),
-                                            reduced = reduceMotion, selected = line == name) { line = name }
+                                            reduced = reduceMotion, selected = line == name) { line = name; screen = "player" }
                                     }
                                 } else {
                                     currentLines.forEach { option ->
                                         TvButton(option.title, modifier = Modifier.testTag("line-${option.id}"), reduced = reduceMotion,
-                                            selected = line == option.id) { line = option.id }
+                                            selected = line == option.id) { line = option.id; screen = "player" }
                                     }
                                 }
                             } }
@@ -2023,8 +2075,9 @@ private fun LiveTvSurface(
     reduced: Boolean
 ) {
     var drawerOpen by remember { mutableStateOf(false) }
+    var linePicker by remember { mutableStateOf<LiveChannelChoice?>(null) }
     var playerFocusEpoch by remember { mutableIntStateOf(0) }
-    fun closeDrawer() { drawerOpen = false; playerFocusEpoch++ }
+    fun closeDrawer() { linePicker = null; drawerOpen = false; playerFocusEpoch++ }
     var drawerGroup by remember { mutableStateOf<String?>(null) }
     var favoriteOnly by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
@@ -2032,7 +2085,7 @@ private fun LiveTvSurface(
     var favoriteVersion by remember { mutableIntStateOf(0) }
     val groups = remember(channels) { LiveChannelDiscovery.groups(channels) }
     val visible = remember(channels, drawerGroup, favoriteOnly, searchText, favoriteVersion) {
-        LiveChannelDiscovery.visible(channels, drawerGroup, favoriteOnly, searchText) {
+        LiveChannelDiscovery.groupedVisible(channels, drawerGroup, favoriteOnly, searchText) {
             favorites.contains(favoriteScope, it.url)
         }
     }
@@ -2044,7 +2097,7 @@ private fun LiveTvSurface(
     val searchFieldRequester = remember { FocusRequester() }
     val channelRequesters = remember(visible) { visible.map { FocusRequester() } }
     val channelListState = rememberLazyListState()
-    val selectedChannelIndex = visible.indexOfFirst { it.url == selected.url }
+    val selectedChannelIndex = visible.indexOfFirst { choice -> choice.options.any { it.url == selected.url } }
         .takeIf { it >= 0 } ?: 0
     val channelTarget = channelRequesters.getOrNull(selectedChannelIndex)
     LaunchedEffect(drawerOpen) {
@@ -2058,13 +2111,24 @@ private fun LiveTvSurface(
                 .onFailure { runCatching { groupRequester.requestFocus() } }
         }
     }
+    val firstLineRequester = remember { FocusRequester() }
+    LaunchedEffect(linePicker) {
+        if (linePicker != null) {
+            withFrameNanos { }
+            runCatching { firstLineRequester.requestFocus() }
+        }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("live-fullscreen")) {
         AuthorizedPlaybackPanel(
             media = PlaybackMedia(selected.url),
             isLive = true,
             onLiveMenu = { drawerOpen = true },
             focusRestoreEpoch = playerFocusEpoch,
-            onBack = { if (drawerOpen) closeDrawer() else onBack() }
+            onBack = { when {
+                linePicker != null -> linePicker = null
+                drawerOpen -> closeDrawer()
+                else -> onBack()
+            } }
         )
         if (!drawerOpen) {
             Column(Modifier.align(Alignment.BottomStart).padding(28.dp)
@@ -2102,7 +2166,8 @@ private fun LiveTvSurface(
                 Column(Modifier.weight(1f).fillMaxHeight().padding(12.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
-                    Text("频道 · ${visible.size}", fontWeight = FontWeight.SemiBold,
+                    Text(if (linePicker == null) "频道 · ${visible.size}" else "选择线路",
+                            fontWeight = FontWeight.SemiBold,
                             color = Color.White, fontSize = 19.sp)
                         TvButton("收起", Modifier.testTag("live-drawer-close")
                             .focusProperties { left = favoritesRequester; down = searchToggleRequester }
@@ -2110,7 +2175,7 @@ private fun LiveTvSurface(
                             closeDrawer()
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (linePicker == null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TvButton(if (favoriteOnly) "全部" else "★ 收藏",
                             Modifier.testTag("live-drawer-favorites")
                                 .focusProperties {
@@ -2127,7 +2192,7 @@ private fun LiveTvSurface(
                             if (!searchOpen) searchText = ""
                         }
                     }
-                    if (searchOpen) {
+                    if (searchOpen && linePicker == null) {
                         OutlinedTextField(searchText, { searchText = it.take(40) },
                             Modifier.fillMaxWidth().testTag("live-drawer-search-input")
                                 .focusProperties {
@@ -2137,14 +2202,32 @@ private fun LiveTvSurface(
                             label = { Text("频道名称 / tvg-id") }, singleLine = true)
                     }
                     Spacer(Modifier.height(12.dp))
-                    if (visible.isEmpty()) Text("当前筛选没有频道", color = Color(0xFFBDC8D6),
+                    if (visible.isEmpty() && linePicker == null) Text("当前筛选没有频道", color = Color(0xFFBDC8D6),
                         modifier = Modifier.testTag("live-drawer-empty"))
-                    LazyColumn(state = channelListState,
+                    if (linePicker != null) {
+                        val choice = linePicker!!
+                        Text("${choice.name} · ${choice.options.size} 条可用线路", color = Color(0xFFCFD7E4))
+                        TvButton("‹ 返回频道", Modifier.testTag("live-drawer-back-to-channels"), reduced) {
+                            linePicker = null
+                        }
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            itemsIndexed(choice.options, key = { _, line -> line.url }) { index, channel ->
+                                TvButton("线路 ${index + 1}${if (selected.url == channel.url) " · 正在播放" else ""}",
+                                    Modifier.testTag("live-drawer-line-$index")
+                                        .then(if (index == 0) Modifier.focusRequester(firstLineRequester) else Modifier),
+                                    reduced, selected = selected.url == channel.url) {
+                                    onChannel(channel)
+                                    closeDrawer()
+                                }
+                            }
+                        }
+                    } else LazyColumn(state = channelListState,
                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        itemsIndexed(visible, key = { _, channel -> channel.url }) { index, channel ->
+                        itemsIndexed(visible, key = { _, choice -> choice.first.url }) { index, choice ->
+                            val channel = choice.first
                             Row(verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                TvButton(channel.name,
+                                TvButton("${choice.name}${if (choice.options.size > 1) " · ${choice.options.size} 线路 ›" else ""}",
                                     Modifier.weight(1f).testTag("live-drawer-channel-$index")
                                         .focusProperties {
                                             left = groupRequester
@@ -2152,11 +2235,11 @@ private fun LiveTvSurface(
                                                 else searchToggleRequester
                                         }
                                         .focusRequester(channelRequesters[index]), reduced,
-                                    selected = selected.url == channel.url) {
-                                    onChannel(channel)
-                                    closeDrawer()
+                                    selected = choice.options.any { it.url == selected.url }) {
+                                    if (choice.options.size > 1) linePicker = choice
+                                    else { onChannel(channel); closeDrawer() }
                                 }
-                                TvButton(if (favorites.contains(favoriteScope, channel.url)) "★" else "☆",
+                                TvButton(if (choice.options.any { favorites.contains(favoriteScope, it.url) }) "★" else "☆",
                                     Modifier.testTag("live-drawer-favorite-$index")
                                         .focusProperties {
                                             left = channelRequesters[index]
@@ -2164,7 +2247,9 @@ private fun LiveTvSurface(
                                                 else searchToggleRequester
                                         }, reduced,
                                     quiet = true) {
-                                    favorites.toggle(favoriteScope, channel.url)
+                                    val saved = choice.options.filter { favorites.contains(favoriteScope, it.url) }
+                                    if (saved.isEmpty()) favorites.toggle(favoriteScope, channel.url)
+                                    else saved.forEach { favorites.toggle(favoriteScope, it.url) }
                                     favoriteVersion++
                                 }
                             }

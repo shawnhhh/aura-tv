@@ -129,11 +129,30 @@ class TvBoxSpiderBridgeTest {
             ],"position":0}
         }""", true)
         assertEquals("http://video.example/low.m3u8", (withHttp as PlaybackResult.Ready).media.uri)
+        assertEquals(listOf("https://video.example/hd.m3u8"), withHttp.media.alternateUris)
+        assertTrue(withHttp.media.allowHttpRedirects)
+        val decoded = SpiderIpc.readPlayback(SpiderIpc.playback(withHttp.media), true)
+        assertEquals(withHttp.media, (decoded as PlaybackResult.Ready).media)
+    }
+
+    @Test fun `source summaries remove literal HTML entities`() {
+        assertEquals("灵境行者 改编动画 & 原创",
+            SourceText.synopsis("<p>灵境行者&nbsp;&amp;nbsp;改编动画 &amp; 原创</p>"))
+    }
+
+    @Test fun `prefer explicitly supplied high resolution backdrop`() {
+        val film = SpiderVodCodec.listing("""{"list":[{"vod_id":"x","vod_name":"影片",
+            "vod_pic":"https://site.example/cover.jpg",
+            "vod_pic_slide":"https://site.example/hero.jpg"}]}""", site).single()
+        assertEquals("https://site.example/hero.jpg", film.backdropUrl)
     }
 
     @Test fun `browser parsing flags block web parse even with direct-looking URL`() {
         assertTrue(SpiderVodCodec.player("""{"jx":1,"url":"https://example.org/watch"}""", false)
             is PlaybackResult.Unavailable)
+        assertEquals("https://media.example.org/film.m3u8",
+            (SpiderVodCodec.player("""{"parse":1,"url":"https://media.example.org/film.m3u8"}""", false)
+                as PlaybackResult.Ready).media.uri)
     }
 
     @Test fun `player result cannot silently pass web page or http without consent`() {

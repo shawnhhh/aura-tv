@@ -7,6 +7,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -42,13 +44,30 @@ import java.security.MessageDigest
 /** Copyright-safe fallback artwork is bundled, even when external provider images are unavailable. */
 @Composable
 fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
-    val poster = rememberAuthorizedPoster(film)
+    val poster = rememberAuthorizedPoster(film, hero = true)
     val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
         animationSpec = tween(280), label = "poster-fade-in")
-    Image(painterResource(film.artwork), film.title, modifier, contentScale = contentScale)
-    if (poster != null) {
-        Image(poster.asImageBitmap(), film.title, modifier.alpha(posterAlpha),
-            contentScale = contentScale)
+    val hasExternalImage = film.artworkUrl != null || film.backdropUrl != null
+    Box(modifier, contentAlignment = Alignment.CenterEnd) {
+        if (!hasExternalImage) Image(painterResource(film.artwork), film.title,
+            Modifier.fillMaxSize(), contentScale = contentScale)
+        else Box(Modifier.fillMaxSize().background(Brush.linearGradient(
+            listOf(Color(0xFF1D2B40), Color(0xFF060910), Color(0xFF111827)))))
+        if (poster != null) {
+            val bitmap = poster.asImageBitmap()
+            if (poster.width >= 960 && poster.width.toFloat() / poster.height >= 1.28f) {
+                // A real wide backdrop can safely fill the television viewport.
+                Image(bitmap, film.title, Modifier.fillMaxSize().alpha(posterAlpha),
+                    contentScale = ContentScale.Crop)
+            } else {
+                // Do not magnify a 300px portrait into a 4K wallpaper. Give it a
+                // blurred cinematic background and a sharp, aspect-preserving foreground.
+                Image(bitmap, null, Modifier.fillMaxSize().blur(32.dp).alpha(0.38f * posterAlpha),
+                    contentScale = ContentScale.Crop)
+                Image(bitmap, film.title, Modifier.fillMaxWidth(0.58f).fillMaxHeight(0.90f)
+                    .alpha(0.72f * posterAlpha), contentScale = ContentScale.Fit)
+            }
+        }
     }
 }
 
@@ -94,14 +113,16 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
 }
 
 @Composable
-private fun rememberAuthorizedPoster(film: Film): Bitmap? {
+private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap? {
     val context = LocalContext.current
-    var poster by remember(film.artworkUrl, film.id) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(film.artworkUrl, film.id) {
+    val url = if (hero) film.backdropUrl ?: film.artworkUrl else film.artworkUrl
+    var poster by remember(url, film.id, hero) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(url, film.id, hero) {
         poster = withContext(Dispatchers.IO) {
-            runCatching { film.artworkUrl?.let {
+            runCatching { url?.let {
                 AuthorizedPosterCache(context).load(it,
-                    allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null)
+                    allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null,
+                    hero = hero)
             } }.getOrNull()
         }
     }
@@ -113,7 +134,7 @@ class AuthorizedPosterCache(
     private val context: Context,
     private val openConnection: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection }
 ) {
-    fun load(raw: String, allowHttp: Boolean = false): Bitmap? {
+    fun load(raw: String, allowHttp: Boolean = false, hero: Boolean = false): Bitmap? {
         // TVBox allows plain HTTP posters. Only explicitly imported TVBox
         // catalogs may take this path; legacy catalog posters remain HTTPS-only.
         val url = (if (allowHttp) TvBoxUrl.normalize(raw, true) else AuthorizedUrls.https(raw))
@@ -124,7 +145,7 @@ class AuthorizedPosterCache(
         val file = File(dir, "$key.img")
         val existing = file.takeIf { it.isFile && it.length() in 1..4_000_000 }
         if (existing != null) {
-            val bitmap = decode(existing.readBytes())
+            val bitmap = decode(existing.readBytes(), hero)
             if (bitmap != null) return bitmap
             existing.delete() // A damaged cached image must not permanently suppress network recovery.
         }
@@ -149,7 +170,7 @@ class AuthorizedPosterCache(
                 }
             }
             val bytes = data.toByteArray()
-            val bitmap = decode(bytes) ?: return null
+            val bitmap = decode(bytes, hero) ?: return null
             dir.mkdirs()
             if (dir.listFiles()?.size ?: 0 > 50) {
                 dir.listFiles()?.sortedBy { it.lastModified() }?.take(10)?.forEach { it.delete() }
@@ -159,16 +180,19 @@ class AuthorizedPosterCache(
         } finally { connection.disconnect() }
     }
 
-    private fun decode(bytes: ByteArray): Bitmap? {
+    private fun decode(bytes: ByteArray, hero: Boolean): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth < 1 || bounds.outHeight < 1 ||
             bounds.outWidth > 10000 || bounds.outHeight > 10000) return null
         var sample = 1
-        while (bounds.outWidth / sample > 1280 || bounds.outHeight / sample > 720) sample *= 2
+        val maxWidth = if (hero) 2560 else 1280
+        val maxHeight = if (hero) 1440 else 720
+        while (bounds.outWidth / sample > maxWidth || bounds.outHeight / sample > maxHeight) sample *= 2
         return BitmapFactory.decodeByteArray(
             bytes, 0, bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = Bitmap.Config.RGB_565 }
+            BitmapFactory.Options().apply { inSampleSize = sample
+                inPreferredConfig = if (hero) Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565 }
         )
     }
 }

@@ -29,8 +29,9 @@ internal object TvBoxVodCodec {
                 subtitle = item.optString("vod_remarks").take(80),
                 category = TvBoxCategories.topLevel(item.optString("type_name")),
                 year = item.optString("vod_year").take(10),
-                synopsis = item.optString("vod_content").replace(Regex("<[^>]*>"), " ").take(1200),
+                synopsis = SourceText.synopsis(item.optString("vod_content")),
                 artwork = R.drawable.photofilm_orbit, artworkUrl = artwork,
+                backdropUrl = SourceArtwork.backdrop(item, allowHttp),
                 episodes = maxOf(1, episodes.size), playbackEpisodes = episodes)
         }
     }

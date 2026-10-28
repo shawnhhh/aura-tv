@@ -34,7 +34,8 @@ class PlaybackTestActivity : ComponentActivity() {
                             ?: error("Debug playback fixture not configured"),
                         subtitles = intent.getStringExtra("subtitle")?.let {
                             listOf(AuthorizedSubtitle("zh", "简体中文测试字幕", it))
-                        }.orEmpty()
+                        }.orEmpty(),
+                        alternateUris = intent.getStringExtra("alternate")?.let { listOf(it) }.orEmpty()
                     ),
                     onPlayer = {
                         player = it

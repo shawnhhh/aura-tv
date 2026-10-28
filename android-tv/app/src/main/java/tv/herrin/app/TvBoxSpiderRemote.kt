@@ -59,7 +59,8 @@ internal object SpiderIpc {
         return JSONObject().put("id", film.id).put("title", film.title)
             .put("subtitle", film.subtitle).put("category", film.category)
             .put("year", film.year).put("synopsis", film.synopsis)
-            .put("artworkUrl", film.artworkUrl ?: "").put("episodes", film.episodes)
+            .put("artworkUrl", film.artworkUrl ?: "")
+            .put("backdropUrl", film.backdropUrl ?: "").put("episodes", film.episodes)
             .put("vodId", film.spiderVodId ?: "").put("playback", episodes)
     }
 
@@ -81,6 +82,7 @@ internal object SpiderIpc {
             artwork = R.drawable.photofilm_orbit,
             episodes = obj.optInt("episodes", 1),
             artworkUrl = obj.optString("artworkUrl").takeIf { it.isNotBlank() },
+            backdropUrl = obj.optString("backdropUrl").takeIf { it.isNotBlank() },
             playbackEpisodes = episodes,
             spiderVodId = obj.optString("vodId").takeIf { it.isNotBlank() })
     }
@@ -90,6 +92,8 @@ internal object SpiderIpc {
 
     fun playback(media: PlaybackMedia): JSONObject = JSONObject().put("ok", true)
         .put("uri", media.uri)
+        .put("alternates", JSONArray(media.alternateUris.take(7)))
+        .put("allowHttpRedirects", media.allowHttpRedirects)
         .put("headers", JSONObject(media.headers))
         .put("subs", JSONArray().apply {
             media.subtitles.take(6).forEach { subtitle ->
@@ -123,7 +127,12 @@ internal object SpiderIpc {
             if (!lang.matches(Regex("[a-z]{2,3}(-[a-z0-9]{2,8})*"))) return@mapNotNull null
             AuthorizedSubtitle(lang, track.optString("name").take(64), trackUrl)
         }
-        return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles))
+        val alternatives = response.optJSONArray("alternates") ?: JSONArray()
+        val urls = (0 until minOf(alternatives.length(), 7)).mapNotNull { index ->
+            TvBoxUrl.normalize(alternatives.optString(index), allowHttp)
+        }.filter { it != url }.distinct()
+        return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
+            response.optBoolean("allowHttpRedirects") && allowHttp))
     }
 }
 
