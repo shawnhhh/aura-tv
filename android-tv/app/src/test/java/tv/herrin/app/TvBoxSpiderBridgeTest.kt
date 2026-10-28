@@ -1,5 +1,6 @@
 package tv.herrin.app
 
+import com.github.catvod.utils.RuntimeModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,6 +14,13 @@ class TvBoxSpiderBridgeTest {
         val nested = InvocationTargetException(IllegalStateException("guard initialization unavailable"))
         assertEquals("IllegalStateException：guard initialization unavailable",
             SpiderFailureDetails.message(nested))
+    }
+
+    @Test fun `optional init follows reference loader but still requires installed runtimes`() {
+        val harmless = InvocationTargetException(IllegalStateException("optional bootstrap unavailable"))
+        assertEquals(null, SpiderInitPolicy.blocking(harmless))
+        val missing = RuntimeModule.MissingException(RuntimeModule.QUICKJS)
+        assertEquals(missing, SpiderInitPolicy.blocking(InvocationTargetException(missing)))
     }
 
     @Test fun `site metadata retains external jar and extension without execution`() {

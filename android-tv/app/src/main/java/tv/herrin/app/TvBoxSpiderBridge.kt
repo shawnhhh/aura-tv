@@ -1,6 +1,5 @@
 package tv.herrin.app
 
-import android.app.Activity
 import android.content.Context
 import com.fongmi.quickjs.host.Host
 import com.github.catvod.Runtime
@@ -345,6 +344,14 @@ internal object SpiderFailureDetails {
     }
 }
 
+/** FongMi's optional Init hook logs ordinary exceptions; runtime absence is fatal. */
+internal object SpiderInitPolicy {
+    fun blocking(error: Throwable): Throwable? = when (error) {
+        is VirtualMachineError, is ThreadDeath -> error
+        else -> RuntimeModule.MissingException.find(error)
+    }
+}
+
 internal class TvBoxSpiderWorker(private val context: Context) {
     private var active: Spider? = null
     private var activeKey: String? = null
@@ -363,50 +370,69 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         val key = "${jar.hashCode()}:${site.key}"
         val spider = if (key == activeKey) active!! else {
             close()
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DOWNLOAD)
             val file = SpiderJarCache.obtain(context, jar)
             Runtime.set(context.applicationContext)
-            Runtime.setActivity { context as? Activity }
+            // An isolated Service cannot provide the foreground Activity from
+            // the main process. Do not pretend the Application is an Activity.
+            Runtime.setActivity { null }
             Runtime.setToast { android.util.Log.i("HerrinCatVod", it.take(150)) }
-            // Match FongMi's JarLoader: protected Spider packs may extract native
-            // libraries beside the verified JAR, and runtime-owned classes must
-            // resolve through the CatVod SDK's delegated Spider class loader.
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.NATIVE)
+            // Extract ABI-matched JNI only to the DEX search directory. FongMi's
+            // JarLoader does NOT eagerly System.load() an arbitrary JAR asset;
+            // its own Init or Spider may decide when to load native code.
             val native = SpiderJarCache.nativeLibrary(context, file)
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.LOADER)
             val loader = DexClassLoader(file.absolutePath, file.parentFile!!.absolutePath,
                 native?.parentFile?.absolutePath ?: file.parentFile!!.absolutePath,
                 RuntimeModule.getSpiderClassLoader())
-            // Guarded legacy jars may use JNI_OnLoad registration before Init.init.
-            // The extracted binary is inside the already MD5-verified jar.
-            if (native != null) runCatching { System.load(native.absolutePath) }
-                .onFailure { android.util.Log.w("HerrinCatVod", "guard preload: ${SpiderFailureDetails.message(it)}") }
-            runCatching {
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.INITIALIZER)
+            val initFailure = runCatching {
                 val initializer = loader.loadClass("com.github.catvod.spider.Init")
                 initializer.getMethod("init", Context::class.java).invoke(null, context)
-            }.onFailure { if (it !is ClassNotFoundException) throw it }
+            }.exceptionOrNull()
+            if (initFailure != null && initFailure !is ClassNotFoundException) {
+                // Match FongMi JarLoader.invokeInit(): optional bootstrap errors
+                // are logged, except a missing required runtime must be surfaced.
+                SpiderInitPolicy.blocking(initFailure)?.let { throw it }
+                android.util.Log.w("HerrinCatVod", "optional Init: ${SpiderFailureDetails.message(initFailure)}")
+            }
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
             val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi.removePrefix("csp_")}")
             (spiderClass.getDeclaredConstructor().newInstance() as Spider).apply {
                 siteKey = site.key
                 net = Net(Host.NONE, site.key)
                 local = Local(site.key)
+                SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
                 init(context, site.extension)
             }.also { active = it; activeKey = key }
         }
-        SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
+        SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
+        val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
             spider.categoryContent(id, "1", false, hashMapOf())
         }
+        SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
+        films
     }
 
     suspend fun details(film: Film): SpiderResult<Film> = attempt {
+        SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DETAILS)
         val spider = active ?: error("站点 Spider 尚未加载")
         val vodId = film.spiderVodId ?: error("该影片不属于 Spider 站点")
-        SpiderVodCodec.detail(spider.detailContent(listOf(vodId)), film)
+        SpiderVodCodec.detail(spider.detailContent(listOf(vodId)), film).also {
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
+        }
     }
 
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
         return when (val result = attempt {
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
-            SpiderVodCodec.player(spider.playerContent(selected.title, selected.uri, emptyList()), allowHttp)
+            SpiderVodCodec.player(spider.playerContent(selected.title, selected.uri, emptyList()), allowHttp).also {
+                SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
+            }
         }) {
             is SpiderResult.Ready -> result.value
             is SpiderResult.Failure -> PlaybackResult.Unavailable(result.message)

@@ -241,7 +241,9 @@ internal class TvBoxSpiderBridge(context: Context) {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             remote = null
-            val error = "Spider 子进程异常退出；主界面仍可使用"
+            val stage = SpiderStartupTrace.recent(app)
+            val error = "Spider 子进程异常退出" +
+                (if (stage == null) "" else "，最后阶段：$stage") + "；主界面仍可使用"
             waitingForBind.forEach { it.completeExceptionally(IllegalStateException(error)) }
             waitingForBind.clear()
             pending.values.forEach { it.complete(SpiderIpc.error(error).toString()) }
