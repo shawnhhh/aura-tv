@@ -612,7 +612,7 @@ private fun Herrin() {
         if (transferringSettingsFocus) return
         // Ordinary adjacent transitions stay synchronous and respond to a single D-pad press.
         if (settingsListState.layoutInfo.visibleItemsInfo.any { it.index == itemIndex } &&
-            runCatching { requester(target).requestFocus() }.getOrDefault(false)) return
+            runCatching { requester(target).requestFocus() }.isSuccess) return
         transferringSettingsFocus = true
         uiScope.launch {
             try {
