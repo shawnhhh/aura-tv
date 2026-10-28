@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -24,7 +27,7 @@ import java.security.MessageDigest
 
 /** Copyright-safe fallback artwork is bundled, even when external provider images are unavailable. */
 @Composable
-fun FilmArtwork(film: Film, modifier: Modifier) {
+fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
     val context = LocalContext.current
     var poster by remember(film.artworkUrl) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(film.artworkUrl) {
@@ -35,10 +38,12 @@ fun FilmArtwork(film: Film, modifier: Modifier) {
             } }.getOrNull()
         }
     }
-    if (poster == null) {
-        Image(painterResource(film.artwork), film.title, modifier, contentScale = ContentScale.Crop)
-    } else {
-        Image(poster!!.asImageBitmap(), film.title, modifier, contentScale = ContentScale.Crop)
+    val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
+        animationSpec = tween(280), label = "poster-fade-in")
+    Image(painterResource(film.artwork), film.title, modifier, contentScale = contentScale)
+    if (poster != null) {
+        Image(poster!!.asImageBitmap(), film.title, modifier.alpha(posterAlpha),
+            contentScale = contentScale)
     }
 }
 

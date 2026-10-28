@@ -11,9 +11,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -108,17 +110,21 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
     val focusedScale = if (quiet) 1.028f else 1.042f
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduced) focusedScale else 1f,
-        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.87f, stiffness = 1100f),
+        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.84f, stiffness = 460f),
         label = "tv-pill-focus-scale"
     )
     val liftPx = with(LocalDensity.current) { 2.dp.toPx() }
     // A selected episode/line is persistent state, not a second white focus pill.
-    val fill = when {
+    val targetFill = when {
         focused -> Color.White
         selected -> Color(0xFF344B68)
         quiet -> Color.Transparent
         else -> Color(0x99343840)
     }
+    val fill by animateColorAsState(targetFill, if (reduced) snap() else tween(190),
+        label = "tv-pill-fill")
+    val contentColor by animateColorAsState(if (focused) Color(0xFF111318) else Color.White,
+        if (reduced) snap() else tween(190), label = "tv-pill-content")
     Box(modifier
         .graphicsLayer {
             scaleX = scale
@@ -130,7 +136,7 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
             if (focused) Color.White else if (selected) Color(0xFF7C9BBC) else Color.Transparent, shape)
         .clip(shape).background(fill)
         .clickable(onClick = onClick).padding(horizontal = if (quiet) 13.dp else 16.dp, vertical = if (quiet) 8.dp else 11.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = if (focused) Color(0xFF111318) else Color.White, fontSize = 14.sp)
+        Text(label, color = contentColor, fontSize = 14.sp)
     }
 }
 
@@ -146,6 +152,7 @@ private fun TvNavTabs(
     isSearch: Boolean,
     focusId: String,
     reducedMotion: Boolean,
+    downTarget: FocusRequester?,
     requester: (String) -> FocusRequester,
     onFocus: (String) -> Unit,
     onSelect: (String) -> Unit
@@ -159,7 +166,10 @@ private fun TvNavTabs(
     ) {
         categories.forEach { cat ->
             TvButton(cat,
-                Modifier.testTag("nav-$cat").focusRequester(requester("nav-$cat")),
+                Modifier.testTag("nav-$cat")
+                    .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
+                        else Modifier)
+                    .focusRequester(requester("nav-$cat")),
                 reducedMotion, category == cat && !isSearch,
                 quiet = true, onFocus = { onFocus("nav-$cat") }
             ) { onSelect(cat) }
@@ -533,6 +543,22 @@ private fun Herrin() {
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val reduceMotion = reduced || systemReduced
     var splash by rememberSaveable { mutableStateOf(true) }
+    val sceneReveal = remember { Animatable(0f) }
+    var hasEnteredHome by remember { mutableStateOf(false) }
+    LaunchedEffect(splash, screen, category, reduceMotion) {
+        if (splash) {
+            sceneReveal.snapTo(0f)
+        } else {
+            val firstEntrance = !hasEnteredHome
+            sceneReveal.snapTo(if (firstEntrance || reduceMotion) {
+                if (reduceMotion) 1f else 0f
+            } else 0.72f)
+            if (!reduceMotion) sceneReveal.animateTo(1f, tween(
+                durationMillis = if (firstEntrance) 460 else 260,
+                easing = FastOutSlowInEasing))
+            hasEnteredHome = true
+        }
+    }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val film = films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
     LaunchedEffect(screen, filmId, spiderActive) {
@@ -643,7 +669,10 @@ private fun Herrin() {
         // Defer decoding and drawing the large hero until after splash: loading the
         // artwork underneath an opaque splash causes avoidable startup frame stalls.
         if (!splash && (!sourceConfigured || films.isNotEmpty())) {
-            FilmArtwork(film, Modifier.fillMaxSize())
+            Crossfade(targetState = film, animationSpec = if (reduceMotion) tween(0)
+                else tween(360, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
+                FilmArtwork(hero, Modifier.fillMaxSize())
+            }
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
                 0.0f to Color(0xF905080D), 0.32f to Color(0xD9060A11),
@@ -758,7 +787,18 @@ private fun Herrin() {
                     else emptyList()
                 val railFilms = if (watched.isNotEmpty()) watched else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
-                Column(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 14.dp)) {
+                val headerDownTarget = when {
+                    isSearch -> "search-input"
+                    category == "直播" -> "live-config"
+                    films.isNotEmpty() -> "play"
+                    else -> null
+                }?.let { requester(it) }
+                val firstPosterTarget = railFilms.firstOrNull()?.let { requester("card-${it.id}") }
+                val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
+                Column(Modifier.fillMaxSize().graphicsLayer {
+                    alpha = sceneReveal.value
+                    translationY = (1f - sceneReveal.value) * sceneLift
+                }.padding(horizontal = 40.dp, vertical = 14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(Modifier.size(34.dp).border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
@@ -767,7 +807,8 @@ private fun Herrin() {
                             }
                             Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
                         }
-                        TvNavTabs(category, isSearch, focusId, reduceMotion, { id -> requester(id) },
+                        TvNavTabs(category, isSearch, focusId, reduceMotion, headerDownTarget,
+                            { id -> requester(id) },
                             onFocus = { focusId = it }) { selected ->
                             category = selected
                             if (selected == "直播" && liveChannels.isNotEmpty()) {
@@ -778,9 +819,13 @@ private fun Herrin() {
                             } else screen = "browse"
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TvButton("搜索", Modifier.testTag("search").focusRequester(requester("search")), reduceMotion, quiet = true,
+                            TvButton("搜索", Modifier.testTag("search")
+                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
+                                .focusRequester(requester("search")), reduceMotion, quiet = true,
                                 onFocus = { focusId = "search" }) { screen = "search" }
-                            TvButton("设置", Modifier.testTag("settings").focusRequester(requester("settings")), reduceMotion,
+                            TvButton("设置", Modifier.testTag("settings")
+                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
+                                .focusRequester(requester("settings")), reduceMotion,
                                 quiet = true, onFocus = { focusId = "settings" }) {
                                 settingsTvBoxOnly = true
                                 screen = "settings"
@@ -790,7 +835,10 @@ private fun Herrin() {
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
                         Text(if (providerFilms == null) "搜索 · 离线演示片库" else "搜索 · 当前授权目录", fontSize = 24.sp)
-                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input").onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event("INPUT focus=${it.isFocused}") }.fillMaxWidth().padding(vertical = 8.dp),
+                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input")
+                            .focusRequester(requester("search-input"))
+                            .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event("INPUT focus=${it.isFocused}") }
+                            .fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SearchDiscovery.categories.forEach { option ->
@@ -855,7 +903,9 @@ private fun Herrin() {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton(if (providerFilms == null) "▶ 播放演示" else if (film.playbackEpisodes.isNotEmpty()) "▶ 播放" else "查看选集",
                                 selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },
-                                modifier = Modifier.testTag("play").focusRequester(requester("play"))) {
+                                modifier = Modifier.testTag("play")
+                                    .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
+                                    .focusRequester(requester("play"))) {
                                 if (providerFilms != null && film.playbackEpisodes.isEmpty()) details(film)
                                 else {
                                     returnScreen = "browse"
@@ -864,7 +914,10 @@ private fun Herrin() {
                                     screen = "player"
                                 }
                             }
-                            TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" }, modifier = Modifier.testTag("details").focusRequester(requester("details"))) { details(film) }
+                            TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" },
+                                modifier = Modifier.testTag("details")
+                                    .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
+                                    .focusRequester(requester("details"))) { details(film) }
                         }
                         Spacer(Modifier.height(12.dp))
                     }
@@ -1110,7 +1163,9 @@ private fun Herrin() {
                                     RemoteTrace.event("RESTORE search card=${item.id} attached")
                                 }
                             }
-                            Poster(item, Modifier.testTag("card-${item.id}").focusRequester(requester("card-${item.id}")), reduceMotion,
+                            Poster(item, Modifier.testTag("card-${item.id}")
+                                .then(if (!isSearch && category != "直播") Modifier.focusProperties { up = requester("play") } else Modifier)
+                                .focusRequester(requester("card-${item.id}")), reduceMotion,
                                 onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) },
                                 progress = if (!isSearch && category == "首页") {
                                     item.playbackEpisodes.asSequence().flatMap { part ->
@@ -1833,18 +1888,23 @@ private fun LiveTvSurface(
 @Composable
 private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: () -> Unit, onClick: () -> Unit, progress: Float? = null) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.075f else 1f,
-        tween(if (reduced) 0 else 190), label = "poster")
+    // Keep artwork dimensions fixed. Enlarging the whole focus target used to
+    // crop neighboring cards and made TV posters appear to change size.
+    val lift by animateFloatAsState(if (focused && !reduced) 2.5f else 0f,
+        if (reduced) snap() else tween(200, easing = FastOutSlowInEasing),
+        label = "poster-focus-lift")
+    val stroke by animateColorAsState(if (focused) Color(0xFFF6F7FA) else Color(0x665E6A78),
+        if (reduced) snap() else tween(190), label = "poster-focus-outline")
     val shape = RoundedCornerShape(13.dp)
+    val liftPx = with(LocalDensity.current) { 1.dp.toPx() }
     Box(modifier.width(217.dp).height(116.dp)
-        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .graphicsLayer { translationY = -lift * liftPx }
         .onFocusChanged {
             focused = it.isFocused
             RemoteTrace.event("POSTER ${film.id} focus=$focused")
             if (it.isFocused) onFocus()
         }
-        .border(if (focused) 2.dp else 1.dp,
-            if (focused) Color.White else Color(0x665E6A78), shape)
+        .border(if (focused) 2.dp else 1.dp, stroke, shape)
         .clip(shape).background(Color(0xFF101821))
         .onPreviewKeyEvent { event ->
             // Keep native Compose clickable as the single source of key activation.
@@ -1852,15 +1912,21 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
             false
         }
         .clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
-        FilmArtwork(film, Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-            0.0f to Color.Transparent, 0.45f to Color(0x1C06090E), 1f to Color(0xE9000409)
-        )))
-        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Text(film.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                color = Color.White, maxLines = 1)
-            Text("${film.year}   ·   ${film.category}", fontSize = 10.sp,
-                letterSpacing = 1.sp, color = Color(0xFFD3D8E1))
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().weight(1f).testTag("poster-image-${film.id}"),
+                contentAlignment = Alignment.Center) {
+                // A TVBox vod_pic may be portrait. Fit it entirely within the
+                // fixed artwork viewport instead of cropping its top/bottom.
+                FilmArtwork(film, Modifier.fillMaxSize(), ContentScale.Fit)
+            }
+            Row(Modifier.fillMaxWidth().height(29.dp)
+                .background(Color(0xF0121822))
+                .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text(film.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
+                Text(film.year, fontSize = 10.sp, color = Color(0xFFD3D8E1), maxLines = 1)
+            }
         }
         if (progress != null) {
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)
@@ -1881,16 +1947,20 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
 @Composable
 internal fun Splash(reduced: Boolean, done: () -> Unit) {
     val collapse = remember { Animatable(0f) }
+    val reveal = remember { Animatable(0f) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(reduced) {
         focus.requestFocus()
         if (reduced) { done(); return@LaunchedEffect }
-        delay(450)
-        collapse.animateTo(5f, tween(durationMillis = 1800, easing = LinearEasing))
+        // A gentle wordmark reveal precedes a staggered, eased collapse to H.
+        // Total is roughly 2.7 s, with no sudden full-screen replacement.
+        reveal.animateTo(1f, tween(durationMillis = 380, easing = FastOutSlowInEasing))
+        delay(150)
+        collapse.animateTo(1f, tween(durationMillis = 1550, easing = FastOutSlowInEasing))
         delay(650)
         done()
     }
-    val collapsed by remember { derivedStateOf { collapse.value >= 5f } }
+    val collapsed by remember { derivedStateOf { collapse.value >= 0.999f } }
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080B10))
         .testTag("splash").focusRequester(focus)
         .onPreviewKeyEvent { event ->
@@ -1903,18 +1973,28 @@ internal fun Splash(reduced: Boolean, done: () -> Unit) {
                 true
             } else false
         }.focusable(), contentAlignment = Alignment.Center) {
-        // One GPU-layer-only collapse animation; no per-letter width animation or
-        // repeated Row remeasurement. H travels to the true screen center.
+        Canvas(Modifier.size(330.dp)) {
+            drawCircle(Brush.radialGradient(listOf(
+                Color(0x1DFFFFFF).copy(alpha = 0.11f * collapse.value), Color.Transparent)),
+                radius = size.minDimension / 2f)
+        }
+        // All movement is in GPU layers; H settles at the true center without
+        // relayout. Trailing letters fade in reverse order as the mark closes.
         val cell = minOf(94.dp, (maxWidth - 80.dp) / 6)
         val stepPx = with(LocalDensity.current) { cell.toPx() }
         "HERRIN".forEachIndexed { index, letter ->
             if (index == 0 || !collapsed) {
                 Text(letter.toString(), modifier = Modifier.width(cell).graphicsLayer {
                     val progress = collapse.value
-                    translationX = (index - (5f - progress) / 2f) * stepPx
-                    alpha = if (index == 0) 1f else (6f - index - progress).coerceIn(0f, 1f)
+                    translationX = (index - (5f - 5f * progress) / 2f) * stepPx
+                    alpha = if (index == 0) 1f else reveal.value *
+                        (1f - ((5f * progress - (5f - index)) / 1.1f).coerceIn(0f, 1f))
+                    if (index == 0) {
+                        scaleX = 1f + 0.035f * progress
+                        scaleY = scaleX
+                    }
                 }, textAlign = TextAlign.Center, fontSize = (cell.value * 0.91f).sp,
-                    fontWeight = FontWeight.SemiBold, color = Color.White)
+                    fontWeight = FontWeight.Medium, color = Color.White)
             }
         }
     }

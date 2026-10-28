@@ -131,6 +131,22 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("settings").assertIsDisplayed()
     }
+    @Test fun homeDpadDownMovesFromNavigationToHeroThenFirstPoster() {
+        focus("nav-首页")
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("play").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("card-orbit").assertIsFocused()
+
+        focus("details")
+        val before = compose.onNodeWithTag("card-orbit").fetchSemanticsNode().boundsInRoot
+        focus("card-orbit")
+        val after = compose.onNodeWithTag("card-orbit").fetchSemanticsNode().boundsInRoot
+        assertTrue("Focused poster width must remain stable", abs(before.width - after.width) < 0.5f)
+        assertTrue("Focused poster height must remain stable", abs(before.height - after.height) < 0.5f)
+        compose.onNodeWithTag("poster-image-orbit").assertExists()
+        capture("poster-fixed-size-focused")
+    }
     @Test fun applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab() {
         MockWebServer().use { server ->
             server.start()

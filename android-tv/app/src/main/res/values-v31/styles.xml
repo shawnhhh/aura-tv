@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.Herrin" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@drawable/launch_backdrop</item>
+        <item name="android:windowSplashScreenBackground">#080B10</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_h</item>
+        <item name="android:colorAccent">#FFFFFF</item>
+    </style>
+</resources>
