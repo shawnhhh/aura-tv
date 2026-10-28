@@ -607,18 +607,6 @@ private fun Herrin() {
     }
     var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
     var transferringSettingsFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(screen, settingsTvBoxOnly, focusId) {
-        if (screen == "settings" && settingsTvBoxOnly &&
-            (focusId == "tvbox-warehouse-url" || focusId == "tvbox-live-direct-url")) {
-            // Moving through a TV form with D-pad must not silently hand all
-            // subsequent arrows to the IME. Hide it on *initial focus only*;
-            // pressing OK inside the already focused editor can reopen it.
-            keyboard?.hide()
-            withFrameNanos { }
-            keyboard?.hide()
-            inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
-        }
-    }
     fun moveCompactSettingsFocus(target: String) {
         val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
         if (transferringSettingsFocus) return
@@ -1476,49 +1464,29 @@ private fun Herrin() {
                         if (!settingsTvBoxOnly) {
                             item { Text("支持 urls 多仓、sites/lives 单仓、内嵌直播、M3U 与 TVBox TXT。Java csp_* Spider 可在本次明确授权后尝试加载与解析；JS/Python、网页二次解析及部分受保护插件仍可能不兼容。失效的配置接口可从本机已缓存的有效 JSON 回退。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
                         }
-                        item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
-                            Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
-                                .onPreviewKeyEvent { event ->
-                                    if (!settingsTvBoxOnly || event.type != KeyEventType.KeyDown) false
-                                    else {
-                                        val target = when (event.nativeKeyEvent.keyCode) {
-                                            android.view.KeyEvent.KEYCODE_DPAD_UP -> "screen-first"
-                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> "tvbox-warehouse-load"
-                                            else -> null
-                                        }
-                                        if (target == null) false else {
-                                            keyboard?.hide()
-                                            moveCompactSettingsFocus(target)
-                                            true
-                                        }
-                                    }
-                                }
-                                .then(if (settingsTvBoxOnly) Modifier.focusProperties {
-                                    up = requester("screen-first")
-                                    down = requester("tvbox-warehouse-load")
-                                } else Modifier)
-                                .focusRequester(requester("tvbox-warehouse-url"))
-                                .onFocusChanged { configInputFocused = it.hasFocus;
-                                    if (it.hasFocus) focusId = "tvbox-warehouse-url" },
-                            label = { Text("影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址") }, singleLine = true) }
+                        item {
+                            if (settingsTvBoxOnly) TvSourceInput(
+                                tvBoxUrlDraft, { tvBoxUrlDraft = it },
+                                "影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址",
+                                fieldTag = "tvbox-warehouse-url", navTag = "tvbox-warehouse-nav",
+                                navRequester = requester("tvbox-warehouse-url"),
+                                editRequester = requester("tvbox-warehouse-editor"),
+                                onNavFocus = { focusId = "tvbox-warehouse-url"; configInputFocused = false },
+                                onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-warehouse-editor" },
+                                onMoveUp = { moveCompactSettingsFocus("screen-first") },
+                                onMoveDown = { moveCompactSettingsFocus("tvbox-warehouse-load") }
+                            ) else OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
+                                Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
+                                    .onFocusChanged { configInputFocused = it.isFocused },
+                                label = { Text("影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址") }, singleLine = true)
+                        }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             TvButton(if (settingsTvBoxOnly) "应用影视源" else "读取配置",
                                 modifier = Modifier.testTag("tvbox-warehouse-load")
                                     .focusRequester(requester("tvbox-warehouse-load")),
                                 reduced = reduceMotion, onFocus = {
-                                    if (settingsTvBoxOnly && focusId == "tvbox-live-direct-url" &&
-                                        lastMovieSettingsAction == "settings-source-sites") {
-                                        // Some TV IMEs skip Compose's Up override when they
-                                        // release text focus. Native search then lands on the
-                                        // left button; restore the prior right-hand column.
-                                        uiScope.launch {
-                                            withFrameNanos { }
-                                            runCatching { requester("settings-source-sites").requestFocus() }
-                                        }
-                                    } else {
-                                        focusId = "tvbox-warehouse-load"
-                                        lastMovieSettingsAction = "tvbox-warehouse-load"
-                                    }
+                                    focusId = "tvbox-warehouse-load"
+                                    lastMovieSettingsAction = "tvbox-warehouse-load"
                                     keyboard?.hide()
                                 }) {
                                 tvBoxSelectedName = ""
@@ -1560,31 +1528,22 @@ private fun Herrin() {
                         } }
                         }
                         item { Text("直播源", fontSize = 22.sp) }
-                        item { OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
-                            Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
-                                .onPreviewKeyEvent { event ->
-                                    if (!settingsTvBoxOnly || event.type != KeyEventType.KeyDown) false
-                                    else {
-                                        val target = when (event.nativeKeyEvent.keyCode) {
-                                            android.view.KeyEvent.KEYCODE_DPAD_UP -> lastMovieSettingsAction
-                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> "tvbox-live-direct-load"
-                                            else -> null
-                                        }
-                                        if (target == null) false else {
-                                            keyboard?.hide()
-                                            moveCompactSettingsFocus(target)
-                                            true
-                                        }
-                                    }
-                                }
-                                .then(if (settingsTvBoxOnly) Modifier.focusProperties {
-                                    up = requester(lastMovieSettingsAction)
-                                    down = requester("tvbox-live-direct-load")
-                                } else Modifier)
-                                .focusRequester(requester("tvbox-live-direct-url"))
-                                .onFocusChanged { configInputFocused = it.hasFocus;
-                                    if (it.hasFocus) focusId = "tvbox-live-direct-url" },
-                            label = { Text("直播源 · M3U / TXT / TVBox HTTP(S) 地址") }, singleLine = true) }
+                        item {
+                            if (settingsTvBoxOnly) TvSourceInput(
+                                tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
+                                "直播源 · M3U / TXT / TVBox HTTP(S) 地址",
+                                fieldTag = "tvbox-live-direct-url", navTag = "tvbox-live-direct-nav",
+                                navRequester = requester("tvbox-live-direct-url"),
+                                editRequester = requester("tvbox-live-direct-editor"),
+                                onNavFocus = { focusId = "tvbox-live-direct-url"; configInputFocused = false },
+                                onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-live-direct-editor" },
+                                onMoveUp = { moveCompactSettingsFocus(lastMovieSettingsAction) },
+                                onMoveDown = { moveCompactSettingsFocus("tvbox-live-direct-load") }
+                            ) else OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
+                                Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
+                                    .onFocusChanged { configInputFocused = it.isFocused },
+                                label = { Text("直播源 · M3U / TXT / TVBox HTTP(S) 地址") }, singleLine = true)
+                        }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton(if (settingsTvBoxOnly) "应用直播源" else "导入直播源并打开直播",

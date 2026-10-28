@@ -137,20 +137,18 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("screen-first").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-warehouse-url").assertIsFocused()
+        compose.onNodeWithTag("tvbox-warehouse-nav").assertIsFocused()
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
-        dismissEditorIme() // Finish any native TV IME handoff before traversing the next button.
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-load").assertIsFocused()
         focus("settings-source-sites")
         key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-live-direct-url").assertIsFocused()
+        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
-        dismissEditorIme()
         key(KeyEvent.KEYCODE_DPAD_UP)
         compose.onNodeWithTag("settings-source-sites").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
@@ -163,6 +161,20 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_DPAD_UP)
         compose.onNodeWithTag("settings-home").assertIsFocused()
         capture("settings-two-source-vertical-focus")
+    }
+    @Test fun compactSettingsOnlyOpenTextEditorAfterRemoteOk() {
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("tvbox-warehouse-nav")
+        compose.onNodeWithTag("tvbox-warehouse-url").assertIsNotFocused()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.waitUntil(5000) {
+            runCatching { compose.onNodeWithTag("tvbox-warehouse-url").assertIsFocused() }.isSuccess
+        }
+        compose.onNodeWithTag("tvbox-warehouse-url")
+            .performTextReplacement("http://example.org/authorized.json")
+        compose.onNodeWithTag("tvbox-warehouse-url")
+            .assertTextContains("http://example.org/authorized.json")
     }
     @Test fun homeDpadDownMovesFromNavigationToHeroThenFirstPoster() {
         focus("nav-首页")
