@@ -70,6 +70,22 @@ class HerrinUiSmokeTest {
         compose.onNodeWithText(text).assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_CENTER)
     }
+    private fun dismissEditorIme() {
+        // On Android TV, performTextReplacement does not guarantee that a
+        // keyboard window is open. Sending BACK unconditionally can therefore
+        // leave Settings instead of dismissing an IME, making save tests flaky.
+        compose.activity.runOnUiThread {
+            val input = compose.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                as android.view.inputmethod.InputMethodManager
+            input.hideSoftInputFromWindow(compose.activity.window.decorView.windowToken, 0)
+        }
+        compose.waitForIdle()
+        if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
+            !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
+        }
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+        compose.onNodeWithTag("settings-list").assertExists()
+    }
     private fun advancedSettings() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -342,18 +358,14 @@ http://example.org/live/channel.m3u8
         advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
         compose.onNodeWithTag("config-media-url").performTextReplacement("http://invalid.example/test.mp4")
-        key(KeyEvent.KEYCODE_BACK) // dismiss IME
-        // Android TV may still route CENTER to the closing IME window for a few frames.
-        // Await the real OS window hand-off, then inject an actual D-pad CENTER (no performClick).
-        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+        dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
         activate("保存媒体配置")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存失败：链接必须是合法 HTTPS 地址"))
         compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").assertIsDisplayed()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
         compose.onNodeWithTag("config-media-url").performTextReplacement("https://media.example.org/authorized.mp4")
-        key(KeyEvent.KEYCODE_BACK)
-        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+        dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
         activate("保存媒体配置")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("配置已保存；测试流只会在手动进入演示播放页时使用"))
