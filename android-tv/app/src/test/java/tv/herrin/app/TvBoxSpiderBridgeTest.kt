@@ -59,4 +59,36 @@ class TvBoxSpiderBridgeTest {
         assertTrue(SpiderVodCodec.player("""{"parse":0,"url":"http://example.org/film.mp4"}""", false) is PlaybackResult.Unavailable)
         assertTrue(SpiderVodCodec.player("""{"parse":0,"url":"http://example.org/film.mp4"}""", true) is PlaybackResult.Ready)
     }
+
+    @Test fun `catalog fallback visits film categories after empty home and failed category`() {
+        val visited = mutableListOf<String>()
+        val films = SpiderCatalogBrowser.browse(site,
+            home = { """{"class":[{"type_id":"1","type_name":"片单"},
+                {"type_id":"2","type_name":"电视剧"},{"type_id":"3","type_name":"电影"}]}""" },
+            homeVideos = { "" }, category = { id ->
+                visited += id
+                if (id == "2") throw IllegalStateException("分类暂不可用")
+                if (id == "3") """{"list":[{"vod_id":"film-3","vod_name":"真实目录条目"}]}"""
+                else """{"list":[]}"""
+            })
+        assertEquals(listOf("2", "3"), visited)
+        assertEquals("film-3", films.single().spiderVodId)
+    }
+
+    @Test fun `catalog fallback survives first home exception`() {
+        val films = SpiderCatalogBrowser.browse(site,
+            home = { filter ->
+                if (filter) throw IllegalArgumentException("home filter unsupported")
+                """{"list":[{"vod_id":"backup","vod_name":"备用首页"}]}"""
+            }, homeVideos = { "" }, category = { error("not needed") })
+        assertEquals("备用首页", films.single().title)
+    }
+
+    @Test fun `native guard filename matches ABI specific library name`() {
+        assertEquals("assets/ftyguard_v8.so", SpiderNativeLibraryPlan.assetForAbi("arm64-v8a"))
+        assertEquals("assets/ftyguard_v7.so", SpiderNativeLibraryPlan.assetForAbi("armeabi-v7a"))
+        assertEquals(null, SpiderNativeLibraryPlan.assetForAbi("x86_64"))
+        assertEquals("libftyguard_v8.so",
+            SpiderNativeLibraryPlan.filenameForAsset("assets/ftyguard_v8.so"))
+    }
 }

@@ -99,6 +99,71 @@ internal object SpiderVodCodec {
     }
 }
 
+/** A bounded catalog fallback for plugins whose home page has categories but no films. */
+internal object SpiderCatalogBrowser {
+    private const val MAX_CATEGORIES = 6
+
+    fun browse(site: TvBoxSite, home: (Boolean) -> String, homeVideos: () -> String,
+               category: (String) -> String): List<Film> {
+        val failures = mutableListOf<String>()
+        val categories = linkedMapOf<String, String>()
+
+        fun attempt(label: String, block: () -> String): List<Film> {
+            val payload = try { block() }
+            catch (error: Exception) {
+                failures += "$label：${SpiderFailureDetails.message(error).take(90)}"
+                return emptyList()
+            } catch (error: LinkageError) {
+                failures += "$label：${SpiderFailureDetails.message(error).take(90)}"
+                return emptyList()
+            }
+            if (payload.isBlank()) return emptyList()
+            return try {
+                val root = JSONObject(payload)
+                val groups = root.optJSONArray("class")
+                if (groups != null) for (index in 0 until minOf(groups.length(), 80)) {
+                    val group = groups.optJSONObject(index) ?: continue
+                    val id = group.optString("type_id").trim().take(128)
+                    if (id.isNotBlank()) categories.putIfAbsent(id,
+                        group.optString("type_name").take(80))
+                }
+                SpiderVodCodec.listing(payload, site)
+            } catch (error: Exception) {
+                failures += "$label：返回内容不是有效影视 JSON"
+                emptyList()
+            }
+        }
+
+        attempt("首页", { home(true) }).takeIf { it.isNotEmpty() }?.let { return it }
+        attempt("首页推荐", homeVideos).takeIf { it.isNotEmpty() }?.let { return it }
+        // TVBox plugins differ on whether a filtered home call exposes a catalog.
+        attempt("首页无筛选", { home(false) }).takeIf { it.isNotEmpty() }?.let { return it }
+
+        val preferred = listOf("电影", "剧", "动漫", "综艺", "影视", "短剧")
+        val ordered = categories.entries.sortedBy { entry ->
+            if (preferred.any { entry.value.contains(it) }) 0 else 1
+        }
+        for ((id, name) in ordered.take(MAX_CATEGORIES)) {
+            attempt("分类 ${name.ifBlank { id }.take(24)}", { category(id) })
+                .takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        val reason = failures.take(3).joinToString("；").take(250)
+        error(if (reason.isNotEmpty()) "Spider 无影片；$reason" else
+            "Spider 首页及 ${minOf(categories.size, MAX_CATEGORIES)} 个分类均无影片")
+    }
+}
+
+internal object SpiderNativeLibraryPlan {
+    fun assetForAbi(abi: String): String? = when {
+        abi.startsWith("arm64") -> "assets/ftyguard_v8.so"
+        abi.startsWith("armeabi") -> "assets/ftyguard_v7.so"
+        else -> null
+    }
+
+    // DexClassLoader's native library lookup requires the lib*.so basename.
+    fun filenameForAsset(asset: String): String = "lib${asset.substringAfterLast('/')}"
+}
+
 /** Verifies the remote DEX container's declared MD5 before any class loading. */
 internal object SpiderJarCache {
     private const val MAX_JAR_BYTES = 16 * 1024 * 1024
@@ -178,19 +243,19 @@ internal object SpiderJarCache {
     /** Some older protected CatVod packs ship JNI under assets rather than lib/<abi>. */
     fun nativeLibrary(context: Context, jar: File): File? {
         val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
-        val entryName = when {
-            abi.startsWith("arm64") -> "assets/ftyguard_v8.so"
-            abi.startsWith("armeabi") -> "assets/ftyguard_v7.so"
-            else -> return null // Never feed ARM machine code to an x86 emulator.
-        }
+        val entryName = SpiderNativeLibraryPlan.assetForAbi(abi)
+            ?: return null // Never feed ARM machine code to an x86 emulator.
         return ZipFile(jar).use { zip ->
             val entry = zip.getEntry(entryName) ?: return@use null
             require(entry.size in 1..(512 * 1024L)) { "Spider native library size invalid" }
             val folder = File(context.codeCacheDir, "herrin-spider-native/${jar.nameWithoutExtension}")
             check(folder.isDirectory || folder.mkdirs()) { "无法创建 Spider native 缓存" }
-            val target = File(folder, "libftyguard.so")
-            if (target.length() == entry.size && target.canRead()) return@use target
-            val tmp = File(folder, "libftyguard.tmp")
+            val target = File(folder, SpiderNativeLibraryPlan.filenameForAsset(entryName))
+            // An equal-size stale/corrupted cache must not bypass the verified JAR.
+            val expectedHash = zip.getInputStream(entry).use(::sha256)
+            if (target.length() == entry.size && target.canRead() &&
+                target.inputStream().use(::sha256).contentEquals(expectedHash)) return@use target
+            val tmp = File(folder, "${target.name}.tmp")
             zip.getInputStream(entry).use { input ->
                 FileOutputStream(tmp).use { output ->
                     val count = input.copyTo(output, 8192)
@@ -201,8 +266,22 @@ internal object SpiderJarCache {
             if (target.exists()) check(target.delete()) { "无法更新 Spider native 缓存" }
             check(tmp.renameTo(target)) { "无法保存 Spider native library" }
             check(target.setReadOnly()) { "无法锁定 Spider native library" }
+            check(target.inputStream().use(::sha256).contentEquals(expectedHash)) {
+                "Spider native library integrity mismatch"
+            }
             target
         }
+    }
+
+    private fun sha256(input: java.io.InputStream): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+        return digest.digest()
     }
 }
 
@@ -262,20 +341,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 init(context, site.extension)
             }.also { active = it; activeKey = key }
         }
-        val home = spider.homeContent(true)
-        // Some FongMi plugins deliberately return no home JSON and only expose
-        // homeVideoContent or a category list. Do not abort before those fallbacks.
-        fun tryListing(payload: String): List<Film> = runCatching {
-            SpiderVodCodec.listing(payload, site)
-        }.getOrDefault(emptyList())
-        val films = tryListing(home).ifEmpty { tryListing(spider.homeVideoContent()) }
-        if (films.isEmpty()) {
-            val classes = runCatching { JSONObject(home).optJSONArray("class") }.getOrNull()
-            val first = classes?.optJSONObject(0)?.optString("type_id").orEmpty()
-            if (first.isBlank()) error("Spider 首页没有可浏览的影片或分类")
-            tryListing(spider.categoryContent(first, "1", false, hashMapOf()))
-                .ifEmpty { error("Spider 分类没有返回影片") }
-        } else films
+        SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
+            spider.categoryContent(id, "1", false, hashMapOf())
+        }
     }
 
     suspend fun details(film: Film): SpiderResult<Film> = attempt {
