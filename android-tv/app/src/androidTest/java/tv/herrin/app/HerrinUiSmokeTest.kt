@@ -118,12 +118,11 @@ class HerrinUiSmokeTest {
             android.util.Log.i("HerrinEvidence", "TREE $label $index/${chunks.size} $chunk")
         }
     }
-    @Test fun navigationMotionTrackDoesNotStealRemoteFocus() {
-        compose.onNodeWithTag("nav-motion-track").assertExists()
+    @Test fun navigationChangesPillsWithoutReintroducingUnderline() {
+        compose.onNodeWithTag("nav-motion-track").assertDoesNotExist()
         focus("nav-首页")
         key(KeyEvent.KEYCODE_DPAD_RIGHT)
         compose.onNodeWithTag("nav-电影").assertIsFocused()
-        compose.onNodeWithTag("nav-motion-track").assertIsNotFocused()
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("精选电影 · 演示片库").assertIsDisplayed()
     }

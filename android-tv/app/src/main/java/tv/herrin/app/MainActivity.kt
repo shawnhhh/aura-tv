@@ -47,13 +47,8 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -143,7 +138,7 @@ private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Bool
     }
 }
 
-/** Native D-pad focus stays instant; the understated underline glides between tab centers. */
+/** Compact D-pad navigation: focused pill alone marks the active target. */
 @Composable
 private fun TvNavTabs(
     category: String,
@@ -156,49 +151,21 @@ private fun TvNavTabs(
     onSelect: (String) -> Unit
 ) {
     val categories = remember { listOf("首页", "电影", "剧集", "动漫", "直播", "我的") }
-    val measuredCenters = remember { mutableStateMapOf<String, Float>() }
-    var focusedTab by remember { mutableStateOf<String?>(null) }
-    val center by animateFloatAsState(
-        targetValue = measuredCenters[focusedTab ?: category] ?: 0f,
-        animationSpec = if (reducedMotion) snap() else spring(
-            dampingRatio = 0.91f, stiffness = 510f), label = "nav-underline-position")
-    Box(
+    Row(
         Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
             .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
-            .onFocusChanged { if (!it.hasFocus) focusedTab = null }
-            .padding(horizontal = 5.dp, vertical = 4.dp)
+            .padding(horizontal = 5.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            categories.forEach { cat ->
-                TvButton(cat,
-                    Modifier.testTag("nav-$cat")
-                        .onGloballyPositioned { coordinates ->
-                            val value = coordinates.positionInParent().x + coordinates.size.width / 2f
-                            if (measuredCenters[cat] != value) measuredCenters[cat] = value
-                        }
-                        .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
-                            else Modifier)
-                        .focusRequester(requester("nav-$cat")),
-                    reducedMotion, category == cat && !isSearch,
-                    quiet = true, onFocus = {
-                        focusedTab = cat
-                        onFocus("nav-$cat")
-                    }
-                ) { onSelect(cat) }
-            }
-        }
-        // Paint above the row without adding another focusable element or moving hit boxes.
-        Canvas(Modifier.matchParentSize().testTag("nav-motion-track")) {
-            if (measuredCenters.isNotEmpty()) {
-                val lineWidth = 27.dp.toPx()
-                val lineHeight = 2.dp.toPx()
-                drawRoundRect(
-                    color = Color(0xCCE7EDF6),
-                    topLeft = Offset(center - lineWidth / 2f, size.height - lineHeight),
-                    size = Size(lineWidth, lineHeight),
-                    cornerRadius = CornerRadius(lineHeight / 2f)
-                )
-            }
+        categories.forEach { cat ->
+            TvButton(cat,
+                Modifier.testTag("nav-$cat")
+                    .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
+                        else Modifier)
+                    .focusRequester(requester("nav-$cat")),
+                reducedMotion, category == cat && !isSearch,
+                quiet = true, onFocus = { onFocus("nav-$cat") }
+            ) { onSelect(cat) }
         }
     }
 }
