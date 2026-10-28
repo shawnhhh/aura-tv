@@ -169,7 +169,7 @@ class TvBoxSpiderService : Service() {
     override fun onBind(intent: Intent?): IBinder = incoming.binder
 
     override fun onDestroy() {
-        if (this::worker.isInitialized) worker.close()
+        worker.close()
         scope.cancel()
         super.onDestroy()
     }
@@ -316,6 +316,7 @@ internal class TvBoxSpiderBridge(context: Context) {
             if (bound) runCatching { app.unbindService(connection) }
             bound = false
             remote = null
+            closed = false // A later "应用影视源" starts a new bound session.
         }
     }
 }
