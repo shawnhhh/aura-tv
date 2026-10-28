@@ -144,8 +144,9 @@ class HerrinUiSmokeTest {
         val after = compose.onNodeWithTag("card-orbit").fetchSemanticsNode().boundsInRoot
         assertTrue("Focused poster width must remain stable", abs(before.width - after.width) < 0.5f)
         assertTrue("Focused poster height must remain stable", abs(before.height - after.height) < 0.5f)
-        // The parent poster is clickable and merges child semantics by default.
-        compose.onNodeWithTag("poster-image-orbit", useUnmergedTree = true).assertExists()
+        // Clickable parents merge child semantics; a film may appear in both shelves.
+        compose.onAllNodesWithTag("poster-image-orbit", useUnmergedTree = true)
+            .onFirst().assertExists()
         capture("poster-fixed-size-focused")
     }
     @Test fun applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab() {
