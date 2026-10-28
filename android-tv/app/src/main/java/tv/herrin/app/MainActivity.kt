@@ -607,6 +607,18 @@ private fun Herrin() {
     }
     var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
     var transferringSettingsFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(screen, settingsTvBoxOnly, focusId) {
+        if (screen == "settings" && settingsTvBoxOnly &&
+            (focusId == "tvbox-warehouse-url" || focusId == "tvbox-live-direct-url")) {
+            // Moving through a TV form with D-pad must not silently hand all
+            // subsequent arrows to the IME. Hide it on *initial focus only*;
+            // pressing OK inside the already focused editor can reopen it.
+            keyboard?.hide()
+            withFrameNanos { }
+            keyboard?.hide()
+            inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
+        }
+    }
     fun moveCompactSettingsFocus(target: String) {
         val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
         if (transferringSettingsFocus) return
@@ -1466,9 +1478,13 @@ private fun Herrin() {
                         }
                         item { OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
+                                .then(if (settingsTvBoxOnly) Modifier.focusProperties {
+                                    up = requester("screen-first")
+                                    down = requester("tvbox-warehouse-load")
+                                } else Modifier)
                                 .focusRequester(requester("tvbox-warehouse-url"))
-                                .onFocusChanged { configInputFocused = it.isFocused;
-                                    if (it.isFocused) focusId = "tvbox-warehouse-url" },
+                                .onFocusChanged { configInputFocused = it.hasFocus;
+                                    if (it.hasFocus) focusId = "tvbox-warehouse-url" },
                             label = { Text("影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址") }, singleLine = true) }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             TvButton(if (settingsTvBoxOnly) "应用影视源" else "读取配置",
@@ -1520,9 +1536,13 @@ private fun Herrin() {
                         item { Text("直播源", fontSize = 22.sp) }
                         item { OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
+                                .then(if (settingsTvBoxOnly) Modifier.focusProperties {
+                                    up = requester(lastMovieSettingsAction)
+                                    down = requester("tvbox-live-direct-load")
+                                } else Modifier)
                                 .focusRequester(requester("tvbox-live-direct-url"))
-                                .onFocusChanged { configInputFocused = it.isFocused;
-                                    if (it.isFocused) focusId = "tvbox-live-direct-url" },
+                                .onFocusChanged { configInputFocused = it.hasFocus;
+                                    if (it.hasFocus) focusId = "tvbox-live-direct-url" },
                             label = { Text("直播源 · M3U / TXT / TVBox HTTP(S) 地址") }, singleLine = true) }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {

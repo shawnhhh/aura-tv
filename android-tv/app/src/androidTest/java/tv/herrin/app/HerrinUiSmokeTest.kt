@@ -138,11 +138,17 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("screen-first").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-url").assertIsFocused()
+        if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
+            !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
+        }
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-load").assertIsFocused()
         focus("settings-source-sites")
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-live-direct-url").assertIsFocused()
+        if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
+            !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
+        }
         key(KeyEvent.KEYCODE_DPAD_UP)
         compose.onNodeWithTag("settings-source-sites").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
