@@ -803,7 +803,34 @@ private fun Herrin() {
     LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch) {
         spiderResolved = null
         if (spiderActive && screen == "player") {
-            spiderStatus = "正在通过 Spider 解析播放线路…"
+            // Load missing episode metadata IN the full-screen loading surface.
+            // Do not bounce a film-card click to a technical Spider detail page.
+            if (film.playbackEpisodes.isEmpty() && film.spiderVodId != null) {
+                when (val detailed = spiderBridge.details(film)) {
+                    is SpiderResult.Ready -> {
+                        providerFilms = providerFilms?.map {
+                            if (it.id == film.id) detailed.value else it
+                        }
+                        val first = detailed.value.playbackEpisodes.firstOrNull()
+                        val option = first?.lines?.firstOrNull()
+                        if (first == null || option == null) {
+                            spiderResolved = PlaybackResult.Unavailable("没有可用选集")
+                            return@LaunchedEffect
+                        }
+                        // Episode/line state changes restart this effect with the
+                        // newly loaded Film, avoiding a double playerContent call.
+                        if (episode != first.number || line != option.id) {
+                            episode = first.number
+                            line = option.id
+                            return@LaunchedEffect
+                        }
+                    }
+                    is SpiderResult.Failure -> {
+                        spiderResolved = PlaybackResult.Unavailable(detailed.message)
+                        return@LaunchedEffect
+                    }
+                }
+            }
             spiderResolved = spiderBridge.play(film, episode, line, tvBoxAllowHttp)
             spiderStatus = when (val result = spiderResolved) {
                 is PlaybackResult.Ready -> "播放地址已解析，正在准备播放器"
@@ -1781,7 +1808,24 @@ private fun Herrin() {
                                     } else false
                                 }
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { details(item) },
+                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" },
+                                onClick = {
+                                    // Customer catalog: one OK opens playback. A
+                                    // long-form details view remains reachable via
+                                    // the hero's separate "详情" action.
+                                    if (providerFilms != null && showCatalog.groupFor(item.id) == null) {
+                                        filmId = item.id
+                                        val first = item.playbackEpisodes.firstOrNull()
+                                        val option = first?.lines?.firstOrNull()
+                                        if (first != null && option != null) {
+                                            episode = first.number
+                                            line = option.id
+                                            screen = "player"
+                                        } else if (spiderActive && item.spiderVodId != null) {
+                                            screen = "player"
+                                        } else details(item)
+                                    } else details(item)
+                                },
                                 progress = if (!isSearch && category == "首页") {
                                     showCatalog.watchProgress(item) { source, part, option ->
                                         watchHistory.load(catalogScope, source.id, part.number, option.id)
@@ -2612,7 +2656,7 @@ private fun Herrin() {
                                     showGroup != null && groupSection?.episodes?.isNotEmpty() == true ->
                                         "▶ 播放 第${groupSection.number}季 第${groupSection.episodes.first().number}集"
                                     showGroup != null -> "正在读取多季选集"
-                                    spiderActive && film.playbackEpisodes.isEmpty() -> "等待 Spider 选集"
+                                    spiderActive && film.playbackEpisodes.isEmpty() -> "正在获取选集"
                                     seasonResume != null ->
                                         "▶ 继续播放 第${seasonResume.entry.season}季 第${seasonResume.entry.number}集 ${formatSeasonClock(seasonResume.position.positionMs)}"
                                     seasonLayout != null && detailSeasonEntries.isNotEmpty() ->
