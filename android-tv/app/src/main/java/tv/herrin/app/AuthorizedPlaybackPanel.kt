@@ -81,6 +81,7 @@ fun AuthorizedPlaybackPanel(
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val danmaku = rememberDanmakuSettings()
     var errorMessage by remember(media) { mutableStateOf<String?>(null) }
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
     var uiEpoch by remember(media) { mutableIntStateOf(0) }
@@ -381,6 +382,8 @@ fun AuthorizedPlaybackPanel(
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
+        if (!isLive) Media3DanmakuOverlay(player, media.uri, media.danmakuSources,
+            danmaku.value, Modifier.fillMaxSize())
         val hasDecodedVideo = (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 0
         if (isLive) {
             // A tiny focus anchor lets DPAD_LEFT/OK open the channel drawer while
@@ -510,6 +513,7 @@ fun AuthorizedPlaybackPanel(
                     }
                 }
             }
+            DanmakuControls(danmaku.value, { danmaku.value = it })
         }
     }
 }

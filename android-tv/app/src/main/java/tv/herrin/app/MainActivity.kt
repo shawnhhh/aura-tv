@@ -648,7 +648,9 @@ private fun Herrin() {
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
-    val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.title}" }
+    val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
+    var metadataForceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var metadataCorrection by remember { mutableStateOf<Film?>(null) }
     var metadataScanDone by remember { mutableIntStateOf(0) }
     var metadataScanTotal by remember { mutableIntStateOf(0) }
     LaunchedEffect(catalogScope) {
@@ -665,7 +667,7 @@ private fun Herrin() {
             coroutineScope {
                 batch.forEach { original ->
                     launch(Dispatchers.IO) {
-                        val info = runCatching { metadataResolver.lookup(original, metadataToken) }
+                        val info = runCatching { metadataResolver.lookup(original, metadataToken, forceRefresh = original.id in metadataForceIds) }
                             .getOrNull()
                         withContext(Dispatchers.Main.immediate) {
                             if (info != null) {
@@ -675,6 +677,7 @@ private fun Herrin() {
                                     else current
                                 }
                             }
+                            metadataForceIds = metadataForceIds - original.id
                             metadataScanDone++
                         }
                     }
@@ -2187,6 +2190,7 @@ private fun Herrin() {
                                 TvButton("重新刮削",
                                     modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
                                     if (metadataToken.isNotBlank()) {
+                                        metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataRescanEpoch++
                                         tmdbSettingsStatus = "正在重新匹配当前影视点的元数据"
@@ -2598,6 +2602,16 @@ private fun Herrin() {
                                 if (displayFilm.directors.isNotEmpty()) append("\n导演 / 主创：").append(displayFilm.directors.joinToString(" · "))
                             }, lineHeight = 25.sp, modifier = Modifier.testTag("detail-metadata"))
                         } }
+                        if (providerFilms != null) item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TvButton("纠正影片资料", Modifier.testTag("metadata-correct")) { metadataCorrection = film }
+                                TvButton("重新刮削本片", Modifier.testTag("metadata-rescrape-film")) {
+                                    metadataForceIds = setOf(film.id)
+                                    providerFilms = providerFilms?.map { if (it.id == film.id) FilmMetadataEnrichment.restore(it) else it }
+                                    metadataRescanEpoch++
+                                }
+                            }
+                        }
                         item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("画质与音效", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
                             val spec = verifiedStreams[streamEvidenceKey]
@@ -2855,6 +2869,16 @@ private fun Herrin() {
                     }
                 }
             }
+        }
+        metadataCorrection?.let { original ->
+            MetadataCorrectionDialog(original, metadataResolver.manualMatch(original),
+                onConfirm = { match ->
+                    metadataResolver.setManualMatch(original, match)
+                    metadataForceIds = setOf(original.id)
+                    providerFilms = providerFilms?.map { if (it.id == original.id) FilmMetadataEnrichment.restore(it) else it }
+                    metadataRescanEpoch++
+                    metadataCorrection = null
+                }, onDismiss = { metadataCorrection = null })
         }
         if (splash) {
             SplashExitCurtain(reduceMotion, splashExiting,
