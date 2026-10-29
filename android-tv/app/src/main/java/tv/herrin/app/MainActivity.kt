@@ -328,6 +328,7 @@ private fun Herrin() {
     var tvBoxRunSpiderAfterApply by remember { mutableStateOf(false) }
     var spiderActive by remember { mutableStateOf(false) }
     var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
+    var playerRetryEpoch by remember { mutableIntStateOf(0) }
     var spiderResolved by remember { mutableStateOf<PlaybackResult?>(null) }
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
@@ -799,7 +800,7 @@ private fun Herrin() {
             else -> ""
         }
     }
-    LaunchedEffect(screen, film.id, episode, line, spiderActive) {
+    LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch) {
         spiderResolved = null
         if (spiderActive && screen == "player") {
             spiderStatus = "正在通过 Spider 解析播放线路…"
@@ -1870,6 +1871,31 @@ private fun Herrin() {
                             screen = "detail"
                         }
                     )
+                } else if (screen == "player") {
+                    // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
+                    val unavailable = spiderResolved as? PlaybackResult.Unavailable
+                    Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
+                        .testTag("player-startup-surface"),
+                        contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            if (unavailable == null) {
+                                CircularProgressIndicator(color = Color.White,
+                                    modifier = Modifier.size(40.dp))
+                                Text("正在打开影片…", fontSize = 21.sp,
+                                    modifier = Modifier.testTag("player-startup-label"))
+                            } else {
+                                Text("暂时无法播放", fontSize = 24.sp,
+                                    modifier = Modifier.testTag("player-startup-error"))
+                                Text("请重试，或返回选集切换播放线路。",
+                                    color = Color(0xFFBCCADB), fontSize = 16.sp)
+                                TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
+                                    reduced = reduceMotion) { playerRetryEpoch++ }
+                            }
+                            TvButton("返回选集", modifier = Modifier.testTag("player-startup-back"),
+                                reduced = reduceMotion) { screen = "detail" }
+                        }
+                    }
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
                     .onPreviewKeyEvent { event ->
@@ -2559,7 +2585,7 @@ private fun Herrin() {
                                 modifier = Modifier.testTag("group-detail-status"),
                                 color = Color(0xFFE1C58C), fontSize = 14.sp)
                         }
-                        if (spiderActive) item { Text(spiderStatus, color = Color(0xFFE2C38B), modifier = Modifier.testTag("spider-status")) }
+                        // Third-party playback resolution stays internal, not on the movie details UI.
                         if (!spiderActive && film.cmsVodId != null && cmsDetailStatus.isNotBlank())
                             item { Text(cmsDetailStatus, color = Color(0xFFE2C38B),
                                 modifier = Modifier.testTag("cms-detail-status")) }
