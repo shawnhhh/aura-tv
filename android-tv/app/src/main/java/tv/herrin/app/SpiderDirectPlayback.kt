@@ -26,8 +26,15 @@ internal object SpiderDirectPlayback {
             path.endsWith(".mp4") -> PlaybackFormatRetry.MP4
             else -> return null
         }
+        // A site-level Cookie/Authorization can be scoped to its catalog host.
+        // A direct media URL may use a different CDN origin. In fallback mode
+        // never forward those secrets; only public playback hints are allowed.
+        val safeHeaders = site.headers.filterKeys { name ->
+            name.equals("User-Agent", ignoreCase = true) ||
+                name.equals("Referer", ignoreCase = true)
+        }
         return PlaybackResult.Ready(PlaybackMedia(
-            uri = url, headers = site.headers, allowHttpRedirects = allowHttp,
+            uri = url, headers = safeHeaders, allowHttpRedirects = allowHttp,
             declaredMime = mime
         ))
     }
