@@ -52,13 +52,13 @@ class M423DetailsAndQualityTest {
         assertEquals(listOf("4K", "Dolby Vision", "Dolby Atmos"), MediaQuality.verified(
             SelectedTrackEvidence("video/dolby-vision", 3840, 2160, 6),
             SelectedTrackEvidence("audio/eac3-joc")).labels())
-        assertEquals(listOf("1080p", "HDR (PQ)"), MediaQuality.verified(
+        assertEquals(listOf("1080p", "HDR (PQ)", "Dolby Audio"), MediaQuality.verified(
             SelectedTrackEvidence("video/hevc", 1920, 1080, 6),
             SelectedTrackEvidence("audio/eac3")).labels())
         assertEquals(listOf("720p", "HDR (HLG)"), MediaQuality.verified(
             SelectedTrackEvidence("video/hevc", 1280, 720, 7), null).labels())
         assertFalse(MediaQuality.verified(null, null).isKnown)
-        assertFalse(MediaQuality.verified(null, SelectedTrackEvidence("audio/eac3")).isKnown)
+        assertTrue(MediaQuality.verified(null, SelectedTrackEvidence("audio/eac3")).isKnown)
     }
 
     @Test fun `claimed media specs stay separate from selected track evidence`() {
