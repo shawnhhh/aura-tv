@@ -328,6 +328,7 @@ private fun Herrin() {
     var tvBoxRunSpiderAfterApply by remember { mutableStateOf(false) }
     var spiderActive by remember { mutableStateOf(false) }
     var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
+    var playerRetryEpoch by remember { mutableIntStateOf(0) }
     var spiderResolved by remember { mutableStateOf<PlaybackResult?>(null) }
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
@@ -799,11 +800,40 @@ private fun Herrin() {
             else -> ""
         }
     }
-    LaunchedEffect(screen, film.id, episode, line, spiderActive) {
+    LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch) {
         spiderResolved = null
         if (spiderActive && screen == "player") {
-            spiderStatus = "正在通过 Spider 解析播放线路…"
-            spiderResolved = spiderBridge.play(film, episode, line, tvBoxAllowHttp)
+            var playableFilm = film
+            // Load missing episode metadata IN the full-screen loading surface.
+            // Do not bounce a film-card click to a technical Spider detail page.
+            if (film.playbackEpisodes.isEmpty() && film.spiderVodId != null) {
+                when (val detailed = spiderBridge.details(film)) {
+                    is SpiderResult.Ready -> {
+                        playableFilm = detailed.value
+                        providerFilms = providerFilms?.map {
+                            if (it.id == film.id) detailed.value else it
+                        }
+                        val first = detailed.value.playbackEpisodes.firstOrNull()
+                        val option = first?.lines?.firstOrNull()
+                        if (first == null || option == null) {
+                            spiderResolved = PlaybackResult.Unavailable("没有可用选集")
+                            return@LaunchedEffect
+                        }
+                        // Episode/line state changes restart this effect with the
+                        // newly loaded Film, avoiding a double playerContent call.
+                        if (episode != first.number || line != option.id) {
+                            episode = first.number
+                            line = option.id
+                            return@LaunchedEffect
+                        }
+                    }
+                    is SpiderResult.Failure -> {
+                        spiderResolved = PlaybackResult.Unavailable(detailed.message)
+                        return@LaunchedEffect
+                    }
+                }
+            }
+            spiderResolved = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp)
             spiderStatus = when (val result = spiderResolved) {
                 is PlaybackResult.Ready -> "播放地址已解析，正在准备播放器"
                 is PlaybackResult.Unavailable -> result.reason
@@ -984,6 +1014,31 @@ private fun Herrin() {
         line = f.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
         returnScreen = screen
         screen = "detail"
+    }
+    fun openMovie(item: Film) {
+        // Catalog artwork is now the primary "play" action, as on consumer TVs.
+        // Grouped seasons retain a details/season-picker entry.
+        if (providerFilms == null || showCatalog.groupFor(item.id) != null) {
+            details(item)
+            return
+        }
+        filmId = item.id
+        val first = item.playbackEpisodes.firstOrNull()
+        val option = first?.lines?.firstOrNull()
+        when {
+            first != null && option != null -> {
+                episode = first.number
+                line = option.id
+                screen = "player"
+            }
+            spiderActive && item.spiderVodId != null -> {
+                // Resolve missing episodes while the fullscreen loader is shown.
+                episode = 1
+                line = "pending"
+                screen = "player"
+            }
+            else -> details(item)
+        }
     }
     fun selectDetailSeason(seasonNumber: Int) {
         val section = seasonLayout?.sections?.firstOrNull { it.number == seasonNumber } ?: return
@@ -1227,7 +1282,7 @@ private fun Herrin() {
                                 reduceMotion, onFocus = {
                                     filmId = candidate.id
                                     focusId = "facet-result-${displayKey(candidate)}"
-                                }, onClick = { details(candidate) })
+                                }, onClick = { openMovie(candidate) })
                         }
                     }
                 }
@@ -1780,7 +1835,7 @@ private fun Herrin() {
                                     } else false
                                 }
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { details(item) },
+                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { openMovie(item) },
                                 progress = if (!isSearch && category == "首页") {
                                     showCatalog.watchProgress(item) { source, part, option ->
                                         watchHistory.load(catalogScope, source.id, part.number, option.id)
@@ -1818,7 +1873,7 @@ private fun Herrin() {
                                     }
                                     .focusRequester(requester("recommend-${displayKey(item)}")), reduceMotion,
                                     onFocus = { filmId = item.id; focusId = "recommend-${displayKey(item)}" },
-                                    onClick = { details(item) })
+                                    onClick = { openMovie(item) })
                             }
                         }
                     }
@@ -1870,6 +1925,33 @@ private fun Herrin() {
                             screen = "detail"
                         }
                     )
+                } else if (screen == "player") {
+                    // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
+                    val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable || !spiderActive
+                    Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
+                        .testTag("player-startup-surface"),
+                        contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            if (!playbackUnavailable) {
+                                CircularProgressIndicator(color = Color.White,
+                                    modifier = Modifier.size(40.dp))
+                                Text("正在打开影片…", fontSize = 21.sp,
+                                    modifier = Modifier.testTag("player-startup-label"))
+                            } else {
+                                Text("暂时无法播放", fontSize = 24.sp,
+                                    modifier = Modifier.testTag("player-startup-error"))
+                                Text("请重试，或返回选集切换播放线路。",
+                                    color = Color(0xFFBCCADB), fontSize = 16.sp)
+                                if (spiderActive) {
+                                    TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
+                                        reduced = reduceMotion) { playerRetryEpoch++ }
+                                }
+                            }
+                            TvButton("返回选集", modifier = Modifier.testTag("player-startup-back"),
+                                reduced = reduceMotion) { screen = "detail" }
+                        }
+                    }
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
                     .onPreviewKeyEvent { event ->
@@ -2559,7 +2641,7 @@ private fun Herrin() {
                                 modifier = Modifier.testTag("group-detail-status"),
                                 color = Color(0xFFE1C58C), fontSize = 14.sp)
                         }
-                        if (spiderActive) item { Text(spiderStatus, color = Color(0xFFE2C38B), modifier = Modifier.testTag("spider-status")) }
+                        // Third-party playback resolution stays internal, not on the movie details UI.
                         if (!spiderActive && film.cmsVodId != null && cmsDetailStatus.isNotBlank())
                             item { Text(cmsDetailStatus, color = Color(0xFFE2C38B),
                                 modifier = Modifier.testTag("cms-detail-status")) }
@@ -2586,7 +2668,7 @@ private fun Herrin() {
                                     showGroup != null && groupSection?.episodes?.isNotEmpty() == true ->
                                         "▶ 播放 第${groupSection.number}季 第${groupSection.episodes.first().number}集"
                                     showGroup != null -> "正在读取多季选集"
-                                    spiderActive && film.playbackEpisodes.isEmpty() -> "等待 Spider 选集"
+                                    spiderActive && film.playbackEpisodes.isEmpty() -> "正在获取选集"
                                     seasonResume != null ->
                                         "▶ 继续播放 第${seasonResume.entry.season}季 第${seasonResume.entry.number}集 ${formatSeasonClock(seasonResume.position.positionMs)}"
                                     seasonLayout != null && detailSeasonEntries.isNotEmpty() ->
