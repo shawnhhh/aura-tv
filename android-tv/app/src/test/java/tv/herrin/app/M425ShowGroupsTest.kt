@@ -69,6 +69,21 @@ class M425ShowGroupsTest {
         assertNotEquals(before, ShowCatalog.build(listOf(a, b), "scope2").groups.single().key)
     }
 
+    @Test fun memberIdentityChangesOnNewSourceButNotOnMetadataOrEpisodeEnrichment() {
+        val a = film("a", "原创剧 第一季", tmdb = 777)
+        val b = film("b", "原创剧 第二季", tmdb = 777)
+        val initial = ShowCatalog.build(listOf(a, b), "scope").groups.single()
+        val refreshed = ShowCatalog.build(listOf(b.copy(year = "2026", episodes = listOf(
+            ep(2, "02", line("b", "备用", "b2")))), a.copy(year = "2026")), "scope").groups.single()
+        assertEquals(initial.key, refreshed.key)
+        assertEquals(initial.memberIds, refreshed.memberIds)
+        val added = ShowCatalog.build(listOf(a, b, film("c", "原创剧 第三季", tmdb = 777)),
+            "scope").groups.single()
+        assertEquals(initial.key, added.key)
+        assertNotEquals(initial.memberIds, added.memberIds)
+        assertEquals(listOf("a", "b", "c"), added.memberIds)
+    }
+
     @Test fun exactSharedTmdbIdAllowsOtherLanguageAliasButDifferentIdsNeverMerge() {
         val a = film("a", "原名 第1季", tmdb = 777)
         val b = film("b", "Original Title S02", tmdb = 777)

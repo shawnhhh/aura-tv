@@ -14,6 +14,9 @@ internal data class ShowGroup(
     val members: List<ShowMember>,
     val tmdbTvId: Int?
 ) {
+    /** Stable detail-fetch effect identity: changes only when source members change. */
+    val memberIds: List<String> get() = members.map { it.film.id }.sorted()
+
     val representative: Film get() = members.sortedWith(
         compareByDescending<ShowMember> { it.film.metadataSource == "TMDB" }
             .thenByDescending { !it.film.backdropUrl.isNullOrBlank() }

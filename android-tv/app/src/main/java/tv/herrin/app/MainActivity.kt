@@ -754,7 +754,8 @@ private fun Herrin() {
     // A catalog listing often has no playbackEpisodes until ac=detail/Spider
     // details. Resolve ONLY the selected show's members, on demand, bounded,
     // cancellable when leaving this detail or changing the active source.
-    LaunchedEffect(screen, showGroup?.key, spiderActive, activeCmsSite?.apiUrl, catalogScope) {
+    LaunchedEffect(screen, showGroup?.key, showGroup?.memberIds,
+        spiderActive, activeCmsSite?.apiUrl, catalogScope) {
         val selected = showGroup
         if (screen != "detail" || selected == null || providerFilms == null) return@LaunchedEffect
         val pending = GroupSeasonIndex.detailsNeeded(selected, maxMembers = 8)
