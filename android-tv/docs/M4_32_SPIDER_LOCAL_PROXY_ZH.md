@@ -24,6 +24,8 @@
 ### Android TV instrumentation
 `SpiderLocalProxyPlaybackTest` 使用真实 CatVod `Spider.getProxyUrl()` 生成的本地地址，模拟 Java Spider.proxy 返回**应用原创 MP4**，让 Media3 的真实播放器下载、解码并输出视频帧，再在屏幕「查看实播状态」中确认首帧。**它需要独立集成分支 CI 成功才可宣称自动化验收通过**。
 
+新增第二条电视模拟器测试：用 Java Spider `getProxyUrl()` 产出**无扩展名 HLS 代理地址**，插件侧返回原创 HLS 清单及 TS 分段；模拟 Media3 最初把 URL 当 progressive 后按既有解析错误规则重试 HLS，必须最终获取分段并解码出帧。这针对 TVBox Spider 返回 `/proxy` 而 URL 不带 `.m3u8` 的常见兼容边界。
+
 ## 目前仍未完成的真机条件
 
 - 真实 TCL T7L Ultra 的 ARM/JNI Spider JAR 及来源访问权限、实际 HTTP 状态仍需要同机验证。
