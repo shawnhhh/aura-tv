@@ -41,6 +41,7 @@ internal object SpiderDirectPlayback {
 
     fun eligibleFailure(message: String): Boolean =
         message.contains("Spider 子进程异常退出") ||
+            message.contains("Spider 操作超时") ||
             message.contains("Spider 服务响应超时") ||
             message.contains("Spider 服务已断开")
 }
