@@ -255,11 +255,16 @@ class HerrinUiSmokeTest {
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.waitUntil(15000) {
                 runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("成功") }.isSuccess
+                    .assertTextEquals("已导入配置") }.isSuccess
             }
-            settings.performScrollToNode(hasTestTag("settings-home"))
-            compose.onNodeWithTag("settings-home").performClick()
-            compose.onAllNodesWithText("远端电影").onFirst().assertIsDisplayed()
+            assertEquals(1, server.requestCount)
+            settings.performScrollToNode(hasTestTag("settings-source-sites"))
+            compose.onNodeWithTag("settings-source-sites").performClick()
+            compose.onNodeWithTag("site-select-0").performClick()
+            compose.waitUntil(15000) {
+                runCatching { compose.onAllNodesWithText("远端电影")
+                    .onFirst().assertIsDisplayed() }.isSuccess
+            }
             compose.onNodeWithTag("source-switch-site").assertDoesNotExist()
             focus("nav-电影"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.onNodeWithTag("source-switch-site").assertDoesNotExist()
@@ -321,13 +326,13 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.waitUntil(10000) {
                 runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("未获取到影片") }.isSuccess
+                    .assertTextEquals("已导入配置") }.isSuccess
             }
             // A failed auto-import must show an actionable reason on the compact
             // TV settings page, not only a status hidden in Advanced Settings.
             settings.performScrollToNode(hasTestTag("compact-tvbox-status"))
             compose.onNodeWithTag("compact-tvbox-status")
-                .assertTextContains("均未提供可用目录", substring = true)
+                .assertTextContains("无需逐个检测", substring = true)
             settings.performScrollToNode(hasTestTag("settings-home"))
             compose.onNodeWithTag("settings-home").performClick()
             compose.onNodeWithTag("source-empty-title").assertIsDisplayed()
