@@ -474,7 +474,19 @@ internal class TvBoxSpiderBridge(context: Context) {
         val payload = JSONObject().put("film", SpiderIpc.film(film))
             .put("episode", episode).put("line", line).put("allowHttp", allowHttp)
         return when (val response = request(SpiderIpc.PLAY, payload)) {
-            is SpiderResult.Failure -> PlaybackResult.Unavailable(response.message)
+            is SpiderResult.Failure -> {
+                // The source has ALREADY supplied a direct HTTP(S) media URL.
+                // If the Java Spider crashed resolving it again, try that exact
+                // URL; never infer a URL from an opaque episode identifier.
+                val appliedSite = if (SpiderDirectPlayback.eligibleFailure(response.message)) {
+                    runCatching {
+                        lastBrowse?.let { SpiderIpc.readSite(JSONObject(it).getJSONObject("site")) }
+                    }.getOrNull()
+                } else null
+                appliedSite?.let {
+                    SpiderDirectPlayback.resolve(film, episode, line, it, allowHttp)
+                } ?: PlaybackResult.Unavailable(response.message)
+            }
             is SpiderResult.Ready -> try {
                 SpiderIpc.readPlayback(response.value, allowHttp)
             } catch (error: Exception) {
