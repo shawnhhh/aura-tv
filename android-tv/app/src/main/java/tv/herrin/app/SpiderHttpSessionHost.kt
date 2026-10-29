@@ -10,7 +10,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * Replaces Host.NONE for network calls that explicitly enable cookies. OkHttp's
  * Cookie parser enforces host/domain, path, expiry and Secure matching.
  *
- * Deliberately not WebView/JS auth: no Activity, login UI, persistent browser
+ * Deliberately not browser/JS auth: no Activity, login UI, persistent browser
  * profile or cross-site shared cookie jar is created in the :spider process.
  * Values are never logged, saved on disk or reported back to the UI.
  */
@@ -48,7 +48,7 @@ internal class SpiderHttpSessionHost : Host {
     }
 
     // CatVod's network callback uses the cookie methods. Returning an OS agent
-    // is only a hint to Spider code asking Host directly, not a WebView browser.
+    // is only a hint to Spider code asking Host directly, not a browser.
     override fun getUserAgent(): String =
         System.getProperty("http.agent")?.take(256).orEmpty()
 
