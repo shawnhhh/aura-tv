@@ -11,6 +11,16 @@ class PlaybackFormatRetryTest {
         assertNull(PlaybackFormatRetry.initialMime("https://media.test/play?id=abc"))
     }
 
+    @Test fun sourceDeclaredManifestMimeIsNormalizedAndUntrustedMimeIsIgnored() {
+        assertEquals(PlaybackFormatRetry.HLS, PlaybackFormatRetry.declaredMime("application/vnd.apple.mpegurl"))
+        assertEquals(PlaybackFormatRetry.HLS, PlaybackFormatRetry.declaredMime("application/x-mpegURL; charset=utf-8"))
+        assertEquals(PlaybackFormatRetry.HLS, PlaybackFormatRetry.declaredMime("m3u8"))
+        assertEquals(PlaybackFormatRetry.DASH, PlaybackFormatRetry.declaredMime("application/dash+xml"))
+        assertNull(PlaybackFormatRetry.declaredMime("text/html"))
+        assertNull(PlaybackFormatRetry.declaredMime("https://example.test/manifest.m3u8"))
+        assertNull(PlaybackFormatRetry.declaredMime(null))
+    }
+
     @Test fun extensionlessPlaylistTriesHlsThenDashOnlyForParsingErrors() {
         val uri = "https://media.test/vod?id=123"
         assertEquals(PlaybackFormatRetry.HLS, PlaybackFormatRetry.nextMime(uri, null, 3003))
