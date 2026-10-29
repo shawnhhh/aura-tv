@@ -383,8 +383,14 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = attempt {
-        val spiderApi = requireNotNull(site.spiderApi) { "站点不是 Java csp_* 类型" }
-        val jar = site.jar ?: config.spiderJar ?: error("配置没有 Spider JAR")
+        val spiderApi = site.spiderApi ?: run {
+            close()
+            error("站点不是 Java csp_* 类型")
+        }
+        val jar = site.jar ?: config.spiderJar ?: run {
+            close()
+            error("配置没有 Spider JAR")
+        }
         val key = SpiderRuntimeCompat.sessionKey(jar, site)
         val spider = if (key == activeKey) active!! else {
             close()

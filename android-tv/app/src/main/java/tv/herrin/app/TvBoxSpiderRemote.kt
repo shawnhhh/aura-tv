@@ -17,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -262,7 +263,9 @@ class TvBoxSpiderService : Service() {
         try { worker.close() }
         finally {
             terminate.cancel(false)
-            watchdog.shutdownNow()
+            // Keep an in-flight operation's deadline alive if cancellation was
+            // ignored in JNI. Normal cancellation completes and stops the timer.
+            scope.coroutineContext[Job]?.invokeOnCompletion { watchdog.shutdownNow() }
             super.onDestroy()
         }
     }
@@ -362,27 +365,38 @@ internal class TvBoxSpiderBridge(context: Context) {
     // last successful site once before a detail/play operation; never loop retries.
     private suspend fun request(operation: Int, payload: JSONObject): SpiderResult<JSONObject> =
         requests.withLock {
-            if (operation != SpiderIpc.BROWSE && lastBrowse == null)
-                return@withLock SpiderResult.Failure("Spider 站点尚未就绪，请重新应用站点")
-            if (operation != SpiderIpc.BROWSE && lastBrowse != null && hydratedGeneration != generation) {
-                when (val restored = sendRequest(SpiderIpc.BROWSE, JSONObject(lastBrowse!!))) {
-                    is SpiderResult.Failure -> return@withLock restored
-                    is SpiderResult.Ready -> hydratedGeneration = generation
-                }
-            }
             val startedGeneration = generation
-            sendRequest(operation, payload).also { result ->
-                if (operation == SpiderIpc.BROWSE) {
-                    if (result is SpiderResult.Ready && startedGeneration == generation) {
-                        lastBrowse = payload.toString()
+            val remembered = lastBrowse
+            if (operation != SpiderIpc.BROWSE && remembered == null)
+                return@withLock SpiderResult.Failure("Spider 站点尚未就绪，请重新应用站点")
+            if (operation != SpiderIpc.BROWSE && remembered != null && hydratedGeneration != generation) {
+                when (val restored = sendRequest(SpiderIpc.BROWSE, JSONObject(remembered))) {
+                    is SpiderResult.Failure -> return@withLock restored
+                    is SpiderResult.Ready -> {
+                        if (startedGeneration != generation)
+                            return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
                         hydratedGeneration = generation
-                    } else {
-                        // A failed source switch cannot resurrect the previous source.
-                        lastBrowse = null
-                        hydratedGeneration = -1
                     }
                 }
             }
+            if (operation == SpiderIpc.BROWSE) {
+                lastBrowse = null
+                hydratedGeneration = -1
+            }
+            val result = sendRequest(operation, payload)
+            if (startedGeneration != generation && result is SpiderResult.Ready)
+                return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
+            if (operation == SpiderIpc.BROWSE) {
+                if (result is SpiderResult.Ready) {
+                    lastBrowse = payload.toString()
+                    hydratedGeneration = generation
+                } else {
+                    // A failed source switch cannot resurrect the previous source.
+                    lastBrowse = null
+                    hydratedGeneration = -1
+                }
+            }
+            result
         }
 
     private suspend fun sendRequest(operation: Int, payload: JSONObject): SpiderResult<JSONObject> = try {

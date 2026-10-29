@@ -13,6 +13,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.Process
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.async
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -45,6 +46,20 @@ class SpiderRuntimeCompatIpcTest {
         } finally { client.close() }
     }
 
+    @Test fun closingAnInFlightCallReleasesItAndRejectsItsDelayedResponse() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = RecordingContext(instrumentation.targetContext, holdFirst = true)
+        val client = TvBoxSpiderBridge(context)
+        try {
+            val pending = async { client.browse(site, config) }
+            withTimeout(5_000) { context.received.await() }
+            client.close()
+            assertTrue(withTimeout(5_000) { pending.await() } is SpiderResult.Failure)
+            assertEquals("synthetic", (client.browse(site, config) as SpiderResult.Failure).message)
+            assertEquals(2, context.registrations.size)
+        } finally { client.close() }
+    }
+
     @Test fun serviceUsesAnotherProcessAndRebindsAfterItsDeath() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = DeathRecordingContext(instrumentation.targetContext)
@@ -52,12 +67,12 @@ class SpiderRuntimeCompatIpcTest {
         try {
             assertTrue(client.browse(site, config) is SpiderResult.Failure)
             val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val process = manager.runningAppProcesses.first { it.processName == "${context.packageName}:spider" }
+            val process = manager.runningAppProcesses.orEmpty().first { it.processName == "${context.packageName}:spider" }
             assertNotEquals(Process.myPid(), process.pid)
             Process.killProcess(process.pid)
             withTimeout(10_000) { context.disconnected.await() }
             assertTrue(client.browse(site, config) is SpiderResult.Failure)
-            val replacement = manager.runningAppProcesses.first {
+            val replacement = manager.runningAppProcesses.orEmpty().first {
                 it.processName == "${context.packageName}:spider" && it.pid != process.pid
             }
             assertNotEquals("A fresh service process must be bound", process.pid, replacement.pid)
@@ -88,12 +103,20 @@ class SpiderRuntimeCompatIpcTest {
         }
     }
 
-    private class RecordingContext(base: Context) : ContextWrapper(base) {
+    private class RecordingContext(base: Context, private val holdFirst: Boolean = false) : ContextWrapper(base) {
+        val received = CompletableDeferred<Unit>()
+        private var calls = 0
         val registrations = mutableListOf<ServiceConnection>()
         var unbinds = 0
         override fun getApplicationContext(): Context = this
         private var firstReply: Pair<Messenger, Int>? = null
         private val server = Messenger(Handler(Looper.getMainLooper()) { request ->
+            calls++
+            received.complete(Unit)
+            if (holdFirst && calls == 1) {
+                firstReply = request.replyTo to request.arg1
+                return@Handler true
+            }
             // A delayed reply from the previous session must not complete the new request.
             firstReply?.let { (reply, oldId) ->
                 reply.send(Message.obtain(null, request.what).apply {
