@@ -27,6 +27,24 @@ class M434SpiderPlaybackRecoveryTest {
         assertEquals(null, SpiderDirectPlayback.resolve(movie, 1, "other", site, false))
     }
 
+    @Test fun fallbackDoesNotLeakSiteCookieOrAuthorizationToMediaCdn() {
+        val withSecrets = site.copy(headers = mapOf(
+            "User-Agent" to "HERRIN-Test/1.0",
+            "Referer" to "https://licensed.example/",
+            "Cookie" to "private-session=never-share",
+            "Authorization" to "Bearer never-share"
+        ))
+        val linked = SpiderVodCodec.detail(
+            """{"list":[{"vod_play_from":"高清","vod_play_url":"正片$https://media.licensed.example/movie.mp4"}]}""",
+            SpiderVodCodec.listing(
+                """{"list":[{"vod_id":"m","vod_name":"测试"}]}""", withSecrets).single())
+        val media = SpiderDirectPlayback.resolve(linked, 1, "spider-0", withSecrets, false)!!.media
+        assertEquals("HERRIN-Test/1.0", media.headers["User-Agent"])
+        assertEquals("https://licensed.example/", media.headers["Referer"])
+        assertFalse(media.headers.keys.any { it.equals("Cookie", true) ||
+            it.equals("Authorization", true) })
+    }
+
     @Test fun fallbackRejectsOpaqueBrowserScriptWrongSiteAndUnapprovedHttp() {
         val opaque = film("opaque:some-provider-id")
         assertNull(SpiderDirectPlayback.resolve(opaque, 1, "spider-0", site, false))
