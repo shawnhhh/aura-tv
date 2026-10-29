@@ -65,14 +65,15 @@ internal object TvVisibleFrameEvidence {
         var illuminated = 0
         var colored = 0
         val colors = HashSet<Int>()
-        // 16 x 12 small samples inside the middle of the video surface;
-        // HERRIN buttons and status text are positioned at the top edge.
+        // 16 x 12 samples in the unobscured upper-middle video surface.
+        // Exclude both the top diagnostics and bottom transport/danmaku controls:
+        // their colored buttons must never qualify a black video as visible.
         for (y in 0 until 12) {
             for (x in 0 until 16) {
                 val px = bitmap.getPixel(
                     (bitmap.width * (0.30 + (x + 0.5) * 0.40 / 16)).toInt()
                         .coerceIn(0, bitmap.width - 1),
-                    (bitmap.height * (0.26 + (y + 0.5) * 0.49 / 12)).toInt()
+                    (bitmap.height * (0.22 + (y + 0.5) * 0.28 / 12)).toInt()
                         .coerceIn(0, bitmap.height - 1)
                 )
                 val r = Color.red(px)

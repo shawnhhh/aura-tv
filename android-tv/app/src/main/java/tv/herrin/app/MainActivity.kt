@@ -733,7 +733,7 @@ private fun Herrin() {
             spiderStatus = "正在读取 ${film.title} 的详情和选集…"
             when (val loaded = spiderBridge.details(film)) {
                 is SpiderResult.Ready -> {
-                    providerFilms = providerFilms?.map { if (it.id == film.id) loaded.value else it }
+                    providerFilms = providerFilms?.map { if (it.id == film.id) FilmMetadataEnrichment.mergeSourceDetails(it, loaded.value) else it }
                     spiderStatus = if (loaded.value.playbackEpisodes.isEmpty()) "该影片没有可用选集" else "已加载选集，请选择播放"
                 }
                 is SpiderResult.Failure -> spiderStatus = loaded.message
@@ -750,7 +750,7 @@ private fun Herrin() {
             cmsDetailStatus = "正在读取 ${film.title} 的完整选集…"
             when (val result = tvBoxVodRepo.details(site, film, tvBoxAllowHttp)) {
                 is TvBoxVodDetailResult.Ready -> {
-                    providerFilms = providerFilms?.map { if (it.id == film.id) result.film else it }
+                    providerFilms = providerFilms?.map { if (it.id == film.id) FilmMetadataEnrichment.mergeSourceDetails(it, result.film) else it }
                     cmsDetailStatus = if (result.film.playbackEpisodes.isEmpty())
                         "该节点未提供可直接播放的媒体地址" else "已取得完整选集"
                 }
@@ -777,7 +777,7 @@ private fun Herrin() {
                 when (loaded) {
                     is SpiderResult.Ready -> if (loaded.value.id == current.id &&
                         loaded.value.playbackEpisodes.isNotEmpty()) {
-                        providerFilms = providerFilms?.map { if (it.id == current.id) loaded.value else it }
+                        providerFilms = providerFilms?.map { if (it.id == current.id) FilmMetadataEnrichment.mergeSourceDetails(it, loaded.value) else it }
                     }
                     is SpiderResult.Failure -> groupDetailStatus = "${current.title.take(24)}：${loaded.message.take(55)}"
                     null -> groupDetailStatus = "${current.title.take(24)}：选集读取超时"
@@ -789,7 +789,7 @@ private fun Herrin() {
                 when (loaded) {
                     is TvBoxVodDetailResult.Ready -> if (loaded.film.id == current.id &&
                         loaded.film.playbackEpisodes.isNotEmpty()) {
-                        providerFilms = providerFilms?.map { if (it.id == current.id) loaded.film else it }
+                        providerFilms = providerFilms?.map { if (it.id == current.id) FilmMetadataEnrichment.mergeSourceDetails(it, loaded.film) else it }
                     }
                     is TvBoxVodDetailResult.Error -> groupDetailStatus = "${current.title.take(24)}：${loaded.reason.take(55)}"
                     null -> groupDetailStatus = "${current.title.take(24)}：选集读取超时"
@@ -816,7 +816,7 @@ private fun Herrin() {
                     is SpiderResult.Ready -> {
                         playableFilm = detailed.value
                         providerFilms = providerFilms?.map {
-                            if (it.id == film.id) detailed.value else it
+                            if (it.id == film.id) FilmMetadataEnrichment.mergeSourceDetails(it, detailed.value) else it
                         }
                         val first = detailed.value.playbackEpisodes.firstOrNull()
                         val option = first?.lines?.firstOrNull()
