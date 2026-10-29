@@ -420,9 +420,7 @@ private fun Herrin() {
             }.orEmpty()
             // TVBox-style import must not probe all third-party plugins.
             // Restore at most the previously selected site on startup.
-            val candidates = TvBoxAutoSites.candidates(config, savedSite)
-                .filter { savedSite.isNotBlank() &&
-                    TvBoxAutoSites.identity(it, config.spiderJar) == savedSite }.take(1)
+            val candidates = TvBoxAutoSites.resumeOnly(config, savedSite)
             var chosen: Pair<TvBoxSite, List<Film>>? = null
             var chosenSpider = false
             var spiderFailure = ""
