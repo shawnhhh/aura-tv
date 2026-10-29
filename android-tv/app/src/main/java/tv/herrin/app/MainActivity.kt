@@ -1948,6 +1948,7 @@ private fun Herrin() {
                 } else if (screen == "player") {
                     // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
                     val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable || !spiderActive
+                    val offlineDemonstration = !sourceConfigured && !spiderActive && film.playbackEpisodes.isEmpty()
                     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
                         .testTag("player-startup-surface"),
                         contentAlignment = Alignment.Center) {
@@ -1959,9 +1960,11 @@ private fun Herrin() {
                                 Text("正在打开影片…", fontSize = 21.sp,
                                     modifier = Modifier.testTag("player-startup-label"))
                             } else {
-                                Text("暂时无法播放", fontSize = 24.sp,
-                                    modifier = Modifier.testTag("player-startup-error"))
-                                Text("请重试，或返回选集切换播放线路。",
+                                Text(if (offlineDemonstration) "播放演示" else "暂时无法播放", fontSize = 24.sp,
+                                    modifier = Modifier.testTag(if (offlineDemonstration) "player-demo-status" else "player-startup-error"))
+                                Text(if (offlineDemonstration)
+                                    "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
+                                    else "请重试，或返回选集切换播放线路。",
                                     color = Color(0xFFBCCADB), fontSize = 16.sp)
                                 if (spiderActive) {
                                     TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
