@@ -108,7 +108,13 @@ class PlaybackDiagnosticsIntegrationTest {
         fixtures { server, _ ->
             launch(server, "/mp4").use { scenario ->
                 frames(scenario)
-                compose.onNodeWithTag("player-quality-label").assertExists()
+                // The overlay may auto-hide during slow CI decoding; re-open
+                // it using the actual remote instead of depending on timing.
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("player-quality-label").assertExists() }.isSuccess
+                }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
                 compose.waitUntil(8_000) {
                     runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
