@@ -29,7 +29,13 @@ class PlaybackTestActivity : ComponentActivity() {
             var showing by remember { mutableStateOf(true) }
             MaterialTheme {
                 if (showing) AuthorizedPlaybackPanel(
-                    PlaybackMedia(
+                    intent.getStringExtra("spiderJson")?.let { json ->
+                        // Debug-only acceptance path: use the same strict Spider
+                        // result decoder/headers as production, no plugin/JAR execution.
+                        (SpiderVodCodec.player(json, allowHttp = false)
+                            as? PlaybackResult.Ready)?.media
+                            ?: error("Debug Spider fixture was not a licensed direct stream")
+                    } ?: PlaybackMedia(
                         intent.getStringExtra("fixture")
                             ?: error("Debug playback fixture not configured"),
                         subtitles = intent.getStringExtra("subtitle")?.let {

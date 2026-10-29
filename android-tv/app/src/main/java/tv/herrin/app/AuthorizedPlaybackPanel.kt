@@ -53,6 +53,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.common.Tracks
@@ -91,6 +92,7 @@ fun AuthorizedPlaybackPanel(
         PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime)
     }
     val candidates = retries.candidates
+    val journey = remember(media) { PlaybackJourneyTrace() }
     fun itemFor(uri: String, candidateIndex: Int, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
         if (media.subtitles.isNotEmpty()) {
             setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
@@ -104,13 +106,18 @@ fun AuthorizedPlaybackPanel(
         (mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))?.let(::setMimeType)
     }.build()
     val player = remember(media) {
+        journey.begin(0, candidates.size, android.os.SystemClock.elapsedRealtime())
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(12_000)
             .setDefaultRequestProperties(media.headers)
         val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
-        ExoPlayer.Builder(context).setMediaSourceFactory(factory).build().apply {
+        // If a vendor MediaCodec fails initialization, try another compatible
+        // system decoder before declaring the selected source unplayable.
+        // Retain Android's hardware-first pipeline and HDR output behavior.
+        val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        ExoPlayer.Builder(context, renderers).setMediaSourceFactory(factory).build().apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             setHandleAudioBecomingNoisy(true)
@@ -119,12 +126,23 @@ fun AuthorizedPlaybackPanel(
                 override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                     uiEpoch++
                 }
-                override fun onTracksChanged(tracks: Tracks) { uiEpoch++ }
+                override fun onTracksChanged(tracks: Tracks) {
+                    journey.onTracks(
+                        tracks.groups.any { group -> group.type == C.TRACK_TYPE_VIDEO &&
+                            (0 until group.length).any { group.isTrackSelected(it) } },
+                        tracks.groups.any { group -> group.type == C.TRACK_TYPE_AUDIO &&
+                            (0 until group.length).any { group.isTrackSelected(it) } })
+                    uiEpoch++
+                }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
-                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { uiEpoch++ }
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
+                    uiEpoch++
+                }
                 override fun onPlaybackStateChanged(state: Int) {
                     playbackState = state
+                    journey.onState(state, android.os.SystemClock.elapsedRealtime())
                     uiEpoch++
                 }
                 override fun onPlayerError(error: PlaybackException) {
@@ -132,12 +150,16 @@ fun AuthorizedPlaybackPanel(
                         PlaybackFailureHints.causes(error)
                             .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                             .firstOrNull()?.responseCode)
+                    journey.onFailure(PlaybackFailureHints.category(error.errorCodeName, httpStatus))
                     val next = retries.next(error.errorCode, httpStatus)
                     if (next != null) {
                         // Retry only the exact provider-supplied URLs. The session owns
                         // both the per-address MIME and a finite monotonic retry budget.
                         val recoveryPositionMs = currentPosition.coerceAtLeast(0L)
                         activeVariant = next.candidateIndex
+                        journey.begin(next.candidateIndex, candidates.size,
+                            android.os.SystemClock.elapsedRealtime(),
+                            videoDecoderCounters?.renderedOutputBufferCount ?: 0)
                         errorMessage = null
                         setMediaItem(itemFor(next.uri, next.candidateIndex, next.mime))
                         if (!isLive && recoveryPositionMs > 0L) seekTo(recoveryPositionMs)
@@ -165,6 +187,10 @@ fun AuthorizedPlaybackPanel(
     fun retryPlayback() {
         val resumePosition = player.currentPosition.coerceAtLeast(0L)
         val first = retries.restart()
+        journey.clearPreviousFailure()
+        journey.begin(first.candidateIndex, candidates.size,
+            android.os.SystemClock.elapsedRealtime(),
+            player.videoDecoderCounters?.renderedOutputBufferCount ?: 0)
         activeVariant = first.candidateIndex
         errorMessage = null
         player.setMediaItem(itemFor(first.uri, first.candidateIndex, first.mime))
@@ -176,6 +202,8 @@ fun AuthorizedPlaybackPanel(
         var tick = 0
         while (true) {
             delay(500)
+            journey.onFrames(player.videoDecoderCounters?.renderedOutputBufferCount ?: 0,
+                android.os.SystemClock.elapsedRealtime())
             shownPosition = player.currentPosition.coerceAtLeast(0L)
             shownDuration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
             tick++
@@ -325,6 +353,11 @@ fun AuthorizedPlaybackPanel(
                     PlaybackTransport.options(player, C.TRACK_TYPE_TEXT).size,
                     errorMessage), color = Color(0xFFDBE8F9),
                     modifier = Modifier.testTag("player-verification-status"))
+                Text(journey.summary(android.os.SystemClock.elapsedRealtime()),
+                    color = Color(0xFFDCE7FC),
+                    modifier = Modifier.testTag("player-journey-status"))
+                Text("阶段状态仅反映 Media3 的运行证据；不等同于 TCL 面板 HDR 或杜比音效实际输出。",
+                    color = Color(0xFFADBBD0))
                 Text("这是解码器出帧与丢帧计数，不代表电视面板刷新率或界面帧率。",
                     color = Color(0xFFADBBD0))
             }
