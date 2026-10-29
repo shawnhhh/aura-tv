@@ -53,7 +53,18 @@ class SpiderLoopbackProxyTest {
             assertEquals(403, request(path + "?do=jar&siteKey=private-site").responseCode)
             assertEquals(403, request(proxy.url.replace("private-site", "wrong-site")).responseCode)
             assertEquals(403, request(proxy.url.replace("do=jar", "do=anything")).responseCode)
-            assertEquals(400, request(proxy.url, origin = "https://attacker.test").responseCode)
+            // Java HttpURLConnection can silently filter Origin. Send actual
+            // HTTP header bytes so the guard itself is tested reliably.
+            Socket("127.0.0.1", proxy.port).use { socket ->
+                socket.soTimeout = 2_000
+                val target = proxy.url.substringAfter("127.0.0.1:" + proxy.port)
+                val wire = "GET " + target + " HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1:" + proxy.port + "\r\n" +
+                    "Origin: https://attacker.test\r\n\r\n"
+                socket.getOutputStream().write(wire.toByteArray(StandardCharsets.US_ASCII))
+                val statusLine = socket.getInputStream().bufferedReader().readLine()
+                assertTrue(statusLine.startsWith("HTTP/1.1 400"))
+            }
             val post = request(proxy.url)
             post.requestMethod = "POST"
             post.doOutput = true
