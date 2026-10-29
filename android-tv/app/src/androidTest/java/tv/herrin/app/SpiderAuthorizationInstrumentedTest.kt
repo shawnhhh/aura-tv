@@ -51,7 +51,7 @@ class SpiderAuthorizationInstrumentedTest {
             compose.onNodeWithTag("spider-authorization-qr").assertIsDisplayed()
             compose.onNodeWithTag("spider-authorization-action-0").assertIsFocused()
             val manager = inst.targetContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            assertTrue(manager.runningAppProcesses.orEmpty().any { it.processName.endsWith(":spider-auth-test") && it.pid != android.os.Process.myPid() })
+            assertTrue(manager.runningAppProcesses.orEmpty().any { it.processName.endsWith(":spider_auth_test") && it.pid != android.os.Process.myPid() })
             inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
             val status = withTimeout(10_000) { result.await() } as SpiderResult.Failure
             assertEquals("mock-authorized", status.message)
