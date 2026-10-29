@@ -1015,6 +1015,31 @@ private fun Herrin() {
         returnScreen = screen
         screen = "detail"
     }
+    fun openMovie(item: Film) {
+        // Catalog artwork is now the primary "play" action, as on consumer TVs.
+        // Grouped seasons retain a details/season-picker entry.
+        if (providerFilms == null || showCatalog.groupFor(item.id) != null) {
+            details(item)
+            return
+        }
+        filmId = item.id
+        val first = item.playbackEpisodes.firstOrNull()
+        val option = first?.lines?.firstOrNull()
+        when {
+            first != null && option != null -> {
+                episode = first.number
+                line = option.id
+                screen = "player"
+            }
+            spiderActive && item.spiderVodId != null -> {
+                // Resolve missing episodes while the fullscreen loader is shown.
+                episode = 1
+                line = "pending"
+                screen = "player"
+            }
+            else -> details(item)
+        }
+    }
     fun selectDetailSeason(seasonNumber: Int) {
         val section = seasonLayout?.sections?.firstOrNull { it.number == seasonNumber } ?: return
         detailSelectedSeason = seasonNumber
@@ -1257,7 +1282,7 @@ private fun Herrin() {
                                 reduceMotion, onFocus = {
                                     filmId = candidate.id
                                     focusId = "facet-result-${displayKey(candidate)}"
-                                }, onClick = { details(candidate) })
+                                }, onClick = { openMovie(candidate) })
                         }
                     }
                 }
@@ -1810,24 +1835,7 @@ private fun Herrin() {
                                     } else false
                                 }
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" },
-                                onClick = {
-                                    // Customer catalog: one OK opens playback. A
-                                    // long-form details view remains reachable via
-                                    // the hero's separate "详情" action.
-                                    if (providerFilms != null && showCatalog.groupFor(item.id) == null) {
-                                        filmId = item.id
-                                        val first = item.playbackEpisodes.firstOrNull()
-                                        val option = first?.lines?.firstOrNull()
-                                        if (first != null && option != null) {
-                                            episode = first.number
-                                            line = option.id
-                                            screen = "player"
-                                        } else if (spiderActive && item.spiderVodId != null) {
-                                            screen = "player"
-                                        } else details(item)
-                                    } else details(item)
-                                },
+                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { openMovie(item) },
                                 progress = if (!isSearch && category == "首页") {
                                     showCatalog.watchProgress(item) { source, part, option ->
                                         watchHistory.load(catalogScope, source.id, part.number, option.id)
@@ -1865,7 +1873,7 @@ private fun Herrin() {
                                     }
                                     .focusRequester(requester("recommend-${displayKey(item)}")), reduceMotion,
                                     onFocus = { filmId = item.id; focusId = "recommend-${displayKey(item)}" },
-                                    onClick = { details(item) })
+                                    onClick = { openMovie(item) })
                             }
                         }
                     }
