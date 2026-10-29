@@ -22,7 +22,9 @@ internal data class EnrichedArtwork(
     val posterUrl: String?, val backdropUrl: String?,
     val synopsis: String? = null, val year: String? = null,
     val rating: Double? = null, val genres: List<String> = emptyList(),
-    val category: String? = null, val originalTitle: String? = null
+    val category: String? = null, val originalTitle: String? = null,
+    val actors: List<String> = emptyList(), val directors: List<String> = emptyList(),
+    val regions: List<String> = emptyList()
 )
 
 internal object ArtworkTitle {
@@ -47,8 +49,62 @@ internal data class ArtworkSearchCandidate(
     val names: List<String>, val year: Int?, val posterPath: String?, val backdropPath: String?,
     val synopsis: String = "", val rating: Double? = null,
     val voteCount: Int = 0, val genreIds: List<Int> = emptyList(),
-    val originalTitle: String? = null
+    val originalTitle: String? = null, val tmdbId: Int? = null
 )
+
+/** Only TMDB's explicitly supplied place and credit fields are accepted. */
+internal data class TmdbCredits(
+    val actors: List<String> = emptyList(),
+    val directors: List<String> = emptyList(),
+    val regions: List<String> = emptyList()
+)
+
+internal object TmdbCreditsParser {
+    fun parse(json: String?, type: String): TmdbCredits {
+        val root = runCatching { JSONObject(json ?: return TmdbCredits()) }.getOrNull()
+            ?: return TmdbCredits()
+        fun names(items: JSONArray?, cap: Int, predicate: (JSONObject) -> Boolean = { true }): List<String> {
+            if (items == null) return emptyList()
+            return (0 until minOf(items.length(), 150)).mapNotNull { index ->
+                val item = items.optJSONObject(index) ?: return@mapNotNull null
+                item.optString("name").trim().take(60)
+                    .takeIf { predicate(item) && it.isNotBlank() }
+            }.distinct().take(cap)
+        }
+        val credits = root.optJSONObject("credits")
+        val actors = names(credits?.optJSONArray("cast"), 8)
+        val crew = names(credits?.optJSONArray("crew"), 5) {
+            it.optString("job").equals("Director", true)
+        }
+        val creators = if (type == "tv") names(root.optJSONArray("created_by"), 5)
+            else emptyList()
+        val directors = (creators + crew).distinct().take(5)
+        val regions = if (type == "tv") {
+            val list = root.optJSONArray("origin_country") ?: JSONArray()
+            (0 until minOf(list.length(), 12)).mapNotNull { index ->
+                val code = list.optString(index).uppercase(Locale.ROOT)
+                code.takeIf { it.matches(Regex("[A-Z]{2}")) }
+            }.distinct().take(5).map(TmdbRegionNames::label)
+        } else {
+            val list = root.optJSONArray("production_countries") ?: JSONArray()
+            (0 until minOf(list.length(), 12)).mapNotNull { index ->
+                val place = list.optJSONObject(index) ?: return@mapNotNull null
+                val code = place.optString("iso_3166_1").uppercase(Locale.ROOT)
+                code.takeIf { it.matches(Regex("[A-Z]{2}")) }
+            }.distinct().take(5).map(TmdbRegionNames::label)
+        }
+        return TmdbCredits(actors, directors, regions)
+    }
+}
+
+internal object TmdbRegionNames {
+    private val names = mapOf("CN" to "中国大陆", "HK" to "中国香港",
+        "TW" to "中国台湾", "MO" to "中国澳门", "US" to "美国",
+        "GB" to "英国", "JP" to "日本", "KR" to "韩国", "FR" to "法国",
+        "DE" to "德国", "IT" to "意大利", "ES" to "西班牙", "CA" to "加拿大",
+        "AU" to "澳大利亚", "IN" to "印度", "TH" to "泰国")
+    fun label(code: String): String = names[code] ?: code
+}
 
 internal object ArtworkMatch {
     /** Exact canonical title only. Ambiguous sequels/remakes must fall back to source artwork. */
@@ -94,7 +150,9 @@ internal class ArtworkMetadataResolver(
             "剧集", "电视剧", "动漫", "动画", "综艺" -> "tv"
             else -> return null
         }
-        val key = hash("$category|$queryTitle|${film.year}|${hash(token)}")
+        // Upgrade M4.21 artwork-only cache keys: older positive entries have no
+        // cast/director/origin data and must not mask the new detail lookup for 14 days.
+        val key = hash("credits-v2|$category|$queryTitle|${film.year}|${hash(token)}")
         val file = File(cacheRoot, "$key.json")
         if (file.isFile && file.length() in 1..8192) {
             val parsed = runCatching { JSONObject(file.readText()) }.getOrNull()
@@ -126,6 +184,14 @@ internal class ArtworkMetadataResolver(
                 ?: return null
             val candidate = ArtworkMatch.best(queryTitle, film.year, candidates(results, category))
                 ?: run { cacheNegative(file); return null }
+            // One official detail request also returns cast/crew and explicit origin countries.
+            // If it fails, the already-validated artwork result still works independently.
+            val detail = candidate.tmdbId?.let { tmdbId ->
+                val url = "https://api.themoviedb.org/3/$category/$tmdbId" +
+                    "?append_to_response=credits&language=zh-CN"
+                val response = runCatching { fetcher.load(url, token) }.getOrNull()
+                TmdbCreditsParser.parse(response, category)
+            } ?: TmdbCredits()
             val synopsis = candidate.synopsis.trim().take(1300).takeIf { it.isNotBlank() }
             val rating = candidate.rating?.takeIf { it.isFinite() && it in 0.0..10.0 &&
                 candidate.voteCount >= 10 }
@@ -135,7 +201,7 @@ internal class ArtworkMetadataResolver(
             val picture = EnrichedArtwork(
                 image("w780", candidate.posterPath), image("original", candidate.backdropPath),
                 synopsis, candidate.year?.toString(), rating, genres, classified,
-                candidate.originalTitle?.take(160)
+                candidate.originalTitle?.take(160), detail.actors, detail.directors, detail.regions
             )
             if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null) return null
             persist(file, JSONObject().put("poster", picture.posterUrl ?: "")
@@ -145,7 +211,10 @@ internal class ArtworkMetadataResolver(
                 .put("rating", picture.rating ?: JSONObject.NULL)
                 .put("genres", JSONArray(picture.genres))
                 .put("category", picture.category ?: "")
-                .put("originalTitle", picture.originalTitle ?: ""))
+                .put("originalTitle", picture.originalTitle ?: "")
+                .put("actors", JSONArray(picture.actors))
+                .put("directors", JSONArray(picture.directors))
+                .put("regions", JSONArray(picture.regions)))
             return picture
         } finally {
             networkLimit.release()
@@ -169,6 +238,12 @@ internal class ArtworkMetadataResolver(
         val rating = if (obj.has("rating") && !obj.isNull("rating"))
             obj.optDouble("rating", Double.NaN).takeIf { it.isFinite() && it in 0.0..10.0 }
             else null
+        fun cachedNames(key: String, max: Int): List<String> {
+            val entries = obj.optJSONArray(key) ?: return emptyList()
+            return (0 until minOf(entries.length(), max)).mapNotNull { index ->
+                entries.optString(index).trim().take(60).takeIf { it.isNotBlank() }
+            }.distinct()
+        }
         val result = EnrichedArtwork(
             obj.optString("poster").takeIf { isTmdbImage(it) },
             obj.optString("backdrop").takeIf { isTmdbImage(it) },
@@ -179,7 +254,8 @@ internal class ArtworkMetadataResolver(
                 genreItems.optString(index).takeIf { it.isNotBlank() }?.take(20)
             },
             obj.optString("category").takeIf { it in listOf("电影", "剧集", "动漫", "综艺", "纪录片") },
-            obj.optString("originalTitle").takeIf { it.isNotBlank() }?.take(160)
+            obj.optString("originalTitle").takeIf { it.isNotBlank() }?.take(160),
+            cachedNames("actors", 8), cachedNames("directors", 5), cachedNames("regions", 5)
         )
         return result.takeIf { it.posterUrl != null || it.backdropUrl != null || it.synopsis != null }
     }
@@ -205,7 +281,8 @@ internal class ArtworkMetadataResolver(
                 genreIds = (0 until minOf(genres.length(), 15))
                     .map { genres.optInt(it, -1) }.filter { it > 0 },
                 originalTitle = obj.optString(if (category == "movie")
-                    "original_title" else "original_name").takeIf { it.isNotBlank() }
+                    "original_title" else "original_name").takeIf { it.isNotBlank() },
+                tmdbId = obj.optInt("id", -1).takeIf { it > 0 }
             )
         }
         return result
@@ -215,13 +292,14 @@ internal class ArtworkMetadataResolver(
         private val networkLimit = Semaphore(3)
         private val rejectedTokens = ConcurrentHashMap<String, Long>()
         private val pathPattern = Regex("^/[a-zA-Z0-9_./-]+\\.(?:jpg|jpeg|png|webp)$")
-        private fun acceptablePath(path: String) = pathPattern.matches(path) && ".." !in path
+        private fun acceptablePath(path: String) = pathPattern.matches(path) &&
+            ".." !in path && "//" !in path && "/./" !in path
         private fun image(size: String, path: String?) = path?.takeIf { acceptablePath(it) }
             ?.let { "https://image.tmdb.org/t/p/$size$it" }
         private fun isTmdbImage(url: String): Boolean = runCatching {
             val uri = java.net.URI(url)
             uri.scheme == "https" && uri.host == "image.tmdb.org" && uri.rawUserInfo == null &&
-                uri.path.startsWith("/t/p/") && ".." !in uri.path
+                uri.path.startsWith("/t/p/") && ".." !in uri.path && "//" !in uri.path
         }.getOrDefault(false)
         private fun hash(value: String): String = MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }

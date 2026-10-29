@@ -466,6 +466,21 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("nav-我的").assertIsFocused()
         capture("favorites-empty")
     }
+    @Test fun metadataFacetsNavigateByRemoteIntoAutoScrolledMoviePoster() {
+        focus("facets")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("facet-screen").assertExists()
+        compose.onNodeWithTag("facet-coverage").assertExists()
+        focus("facet-region-all")
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("facet-result-orbit").assertIsFocused()
+        compose.onNodeWithTag("facet-result-orbit").assertIsDisplayed()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithText("最后的轨道").assertExists()
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("facet-screen").assertExists()
+        capture("metadata-facet-dpad")
+    }
     @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
         advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
@@ -484,6 +499,9 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithText("配置已保存；测试流只会在手动进入演示播放页时使用").assertIsDisplayed()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("重新同步目录"))
         activate("重新同步目录")
+        // LazyColumn does not compose its off-screen status row until scrolled into view.
+        compose.onNodeWithTag("settings-list")
+            .performScrollToNode(hasText("当前使用离线演示目录"))
         compose.onNodeWithText("当前使用离线演示目录").assertExists()
         capture("media-settings-saved")
         compose.activityRule.scenario.recreate()

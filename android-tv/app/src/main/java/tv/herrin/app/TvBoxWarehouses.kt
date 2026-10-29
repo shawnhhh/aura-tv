@@ -196,9 +196,9 @@ internal object TvBoxConfigParser {
             }
             val spider = root.optString("spider").takeIf { it.isNotBlank() }
             val flagsJson = root.optJSONArray("flags") ?: JSONArray()
-            val flags = (0 until minOf(flagsJson.length(), 32)).mapNotNull { index ->
+            val flags = (0 until minOf(flagsJson.length(), 128)).mapNotNull { index ->
                 flagsJson.optString(index).trim().take(80).takeIf { it.isNotBlank() }
-            }.distinct()
+            }.distinct().take(32)
             return TvBoxConfig.Single(sites, lives, spider != null || sites.any { it.needsAdapter },
                 spiderJar = spider, vipFlags = flags)
         }

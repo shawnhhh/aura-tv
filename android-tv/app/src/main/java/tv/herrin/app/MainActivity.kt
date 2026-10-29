@@ -178,6 +178,42 @@ private fun TvNavTabs(
     }
 }
 
+/** Lazy chip rows retain native D-pad horizontal scroll and never demand a pointer. */
+@Composable
+private fun FacetRail(
+    caption: String,
+    key: String,
+    options: List<String>,
+    selected: String?,
+    reduced: Boolean,
+    downTarget: FocusRequester? = null,
+    onFocus: (String) -> Unit,
+    onSelect: (String?) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text("$caption · ${options.size} 项", fontSize = 17.sp,
+            color = Color(0xFFE8EDF5), fontWeight = FontWeight.Medium)
+        LazyRow(Modifier.testTag("facet-rail-$key"),
+            contentPadding = PaddingValues(horizontal = 5.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            item(key = "all") {
+                TvButton("全部", Modifier.testTag("facet-$key-all")
+                    .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
+                        else Modifier), reduced,
+                    selected = selected == null, quiet = true,
+                    onFocus = { onFocus("facet-$key-all") }) { onSelect(null) }
+            }
+            itemsIndexed(options, key = { _, name -> name }) { index, name ->
+                TvButton(name, Modifier.testTag("facet-$key-$index")
+                    .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
+                        else Modifier), reduced,
+                    selected = selected == name, quiet = true,
+                    onFocus = { onFocus("facet-$key-$index") }) { onSelect(name) }
+            }
+        }
+    }
+}
+
 @Composable
 @OptIn(ExperimentalComposeUiApi::class)
 private fun Herrin() {
@@ -558,6 +594,14 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    var facetsReturnScreen by rememberSaveable { mutableStateOf("browse") }
+    var facetActor by rememberSaveable { mutableStateOf<String?>(null) }
+    var facetDirector by rememberSaveable { mutableStateOf<String?>(null) }
+    var facetRegion by rememberSaveable { mutableStateOf<String?>(null) }
+    var facetYear by rememberSaveable { mutableStateOf<String?>(null) }
+    var facetCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    val facetSelection = FilmFacetSelection(facetActor, facetDirector, facetRegion, facetYear,
+        facetCategory)
     LaunchedEffect(category, screen) {
         if (category == "直播" && screen == "browse") {
             while (true) {
@@ -593,21 +637,33 @@ private fun Herrin() {
     }
     val metadataToken = prefs.tmdbReadToken
     val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.title}" }
+    var metadataScanDone by remember { mutableIntStateOf(0) }
+    var metadataScanTotal by remember { mutableIntStateOf(0) }
+    LaunchedEffect(catalogScope) {
+        facetActor = null; facetDirector = null; facetRegion = null
+        facetYear = null; facetCategory = null
+    }
     LaunchedEffect(catalogScope, catalogIdentity, metadataToken) {
+        val eligible = providerFilms.orEmpty().take(80)
+        metadataScanTotal = eligible.size
+        metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
         if (metadataToken.isBlank()) return@LaunchedEffect
-        val unprocessed = providerFilms.orEmpty().take(80).filter { it.metadataSource != "TMDB" }
+        val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
         for (batch in unprocessed.chunked(3)) {
             coroutineScope {
                 batch.forEach { original ->
                     launch(Dispatchers.IO) {
                         val info = runCatching { metadataResolver.lookup(original, metadataToken) }
-                            .getOrNull() ?: return@launch
+                            .getOrNull()
                         withContext(Dispatchers.Main.immediate) {
-                            providerFilms = providerFilms?.map { current ->
-                                if (current.id == original.id && current.metadataSource != "TMDB")
-                                    FilmMetadataEnrichment.apply(current, info)
-                                else current
+                            if (info != null) {
+                                providerFilms = providerFilms?.map { current ->
+                                    if (current.id == original.id && current.metadataSource != "TMDB")
+                                        FilmMetadataEnrichment.apply(current, info)
+                                    else current
+                                }
                             }
+                            metadataScanDone++
                         }
                     }
                 }
@@ -640,6 +696,7 @@ private fun Herrin() {
         }
     }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
+    val facetResultState = rememberLazyListState()
     val film = films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
     LaunchedEffect(screen, filmId, spiderActive) {
         if (spiderActive && screen == "detail" && film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
@@ -794,6 +851,11 @@ private fun Herrin() {
             "player" -> screen = "detail"
             "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
             "detail" -> screen = returnScreen
+            "facets" -> {
+                focusId = "facets"
+                pendingToolbarFocus = "facets"
+                screen = facetsReturnScreen
+            }
             "search", "settings" -> {
                 val target = if (screen == "settings") "settings" else "search"
                 pendingToolbarFocus = target
@@ -825,6 +887,7 @@ private fun Herrin() {
             val id = when (screen) {
                 "browse" -> pendingToolbarFocus ?: focusId
                 "search" -> focusId
+                "facets" -> if (focusId.startsWith("facet-result-")) focusId else "screen-first"
                 else -> "screen-first"
             }
             // A lazy search result attaches after its parent. Its item effect restores focus below.
@@ -874,6 +937,74 @@ private fun Herrin() {
                     )
                 } else {
                     Text("当前未选中直播频道", Modifier.padding(50.dp))
+                }
+            }
+            "facets" -> {
+                val matches = FilmFacetFilters.results(films, facetSelection)
+                val facetsScroll = rememberScrollState()
+                val metadataMatched = films.count { it.metadataSource == "TMDB" }
+                Column(Modifier.fillMaxSize().testTag("facet-screen")
+                    .verticalScroll(facetsScroll)
+                    .background(Color(0xE7080B10))
+                    .padding(horizontal = 46.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+                        TvButton("‹ 返回", Modifier.testTag("screen-first")
+                            .focusRequester(requester("screen-first")), reduceMotion,
+                            onFocus = { focusId = "screen-first" }) { back() }
+                        Text("智能资料筛选", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                        TvButton("重置所有条件", Modifier.testTag("facet-reset"), reduceMotion,
+                            selected = !facetSelection.isEmpty,
+                            onFocus = { focusId = "facet-reset" }) {
+                            facetActor = null; facetDirector = null; facetRegion = null
+                            facetYear = null; facetCategory = null
+                        }
+                    }
+                    Text("演员、导演、地区、首映年份及分类可组合筛选。影片播放仍直接使用原影视源。",
+                        fontSize = 14.sp, color = Color(0xFFC4CDDB))
+                    Text(when {
+                        providerFilms == null && sourceConfigured -> "影视源目录加载中，暂无可筛选影片"
+                        metadataToken.isBlank() -> "未配置 TMDB：可按源内年份/分类筛选；演员、导演、地区需在高级设置中配置 Token"
+                        metadataScanDone < metadataScanTotal -> "资料匹配中 $metadataScanDone/$metadataScanTotal；当前结果仅包含已取得的资料，尚非完整扫描"
+                        metadataScanTotal < films.size -> "本轮已检查前 $metadataScanTotal/${films.size} 部；其余影片尚未刮削，主创/地区结果可能不完整"
+                        else -> "本轮已检查 $metadataScanDone/${films.size} 部，成功匹配 $metadataMatched 部；未匹配作品不会被猜测归类"
+                    }, Modifier.testTag("facet-coverage"), fontSize = 13.sp,
+                        color = Color(0xFFE8CDA0))
+                    FacetRail("分类", "category", FilmFacetFilters.categories(films), facetCategory,
+                        reduceMotion, onFocus = { focusId = it }, onSelect = { facetCategory = it })
+                    FacetRail("年份", "year", FilmFacetFilters.years(films), facetYear,
+                        reduceMotion, onFocus = { focusId = it }, onSelect = { facetYear = it })
+                    FacetRail("演员", "actor", FilmFacetFilters.actors(films), facetActor,
+                        reduceMotion, onFocus = { focusId = it }, onSelect = { facetActor = it })
+                    FacetRail("导演 / 主创", "director", FilmFacetFilters.directors(films), facetDirector,
+                        reduceMotion, onFocus = { focusId = it }, onSelect = { facetDirector = it })
+                    FacetRail("国家 / 地区", "region", FilmFacetFilters.regions(films), facetRegion,
+                        reduceMotion,
+                        downTarget = matches.firstOrNull()?.let { requester("facet-result-${it.id}") },
+                        onFocus = { focusId = it }, onSelect = { facetRegion = it })
+                    Text("筛选结果 · ${matches.size} 部${if (metadataScanDone < metadataScanTotal && metadataToken.isNotBlank()) " · 更新中" else ""}",
+                        Modifier.testTag("facet-result-count"), fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold)
+                    if (matches.isEmpty()) {
+                        Text("当前没有符合全部条件的影片。可点击某一行「全部」或重置条件。",
+                            Modifier.testTag("facet-no-results"), color = Color(0xFFBEC8D7))
+                    } else LazyRow(Modifier.testTag("facet-results"), state = facetResultState,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        items(matches, key = { it.id }) { candidate ->
+                            LaunchedEffect(candidate.id) {
+                                if (focusId == "facet-result-${candidate.id}")
+                                    runCatching { requester("facet-result-${candidate.id}").requestFocus() }
+                            }
+                            Poster(candidate, Modifier.testTag("facet-result-${candidate.id}")
+                                .focusRequester(requester("facet-result-${candidate.id}")),
+                                reduceMotion, onFocus = {
+                                    filmId = candidate.id
+                                    focusId = "facet-result-${candidate.id}"
+                                }, onClick = { details(candidate) })
+                        }
+                    }
                 }
             }
             "sites" -> {
@@ -1012,6 +1143,14 @@ private fun Herrin() {
                                 .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
                                 .focusRequester(requester("search")), reduceMotion, quiet = true,
                                 onFocus = { focusId = "search" }) { screen = "search" }
+                            TvButton("筛选", Modifier.testTag("facets")
+                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
+                                .focusRequester(requester("facets")), reduceMotion, quiet = true,
+                                onFocus = { focusId = "facets" }) {
+                                facetsReturnScreen = screen
+                                focusId = "screen-first"
+                                screen = "facets"
+                            }
                             TvButton("设置", Modifier.testTag("settings")
                                 .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
                                 .focusRequester(requester("settings")), reduceMotion,
@@ -2063,7 +2202,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.21 Alpha · 原生 Android TV\n影视播放源只提供播放线路，外部元数据独立补充海报、中文简介、TMDB 评分与自动分类。\n在高级设置配置个人 TMDB API Token 后启用；不自动采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.22 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、主创、地区与影片分类。\n影视首页右上角「筛选」可按演员、导演、地区及年份组合筛选。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
                     } else {
                         item { Text(if (screen == "player" && !spiderActive) "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
@@ -2071,6 +2210,9 @@ private fun Herrin() {
                             append(film.year).append("  ·  ").append(film.category)
                             FilmMetadataEnrichment.ratingLabel(film)?.let { append("  ·  ").append(it) }
                             if (film.genres.isNotEmpty()) append("\n类型：").append(film.genres.joinToString(" · "))
+                            if (film.actors.isNotEmpty()) append("\n主演：").append(film.actors.take(6).joinToString(" · "))
+                            if (film.directors.isNotEmpty()) append("\n导演 / 主创：").append(film.directors.joinToString(" · "))
+                            if (film.regions.isNotEmpty()) append("\n国家 / 地区：").append(film.regions.joinToString(" · "))
                             append("\n").append(film.synopsis)
                             if (film.metadataSource == "TMDB") append("\n资料来源：TMDB；播放线路仍来自你添加的影视源")
                         }, lineHeight = 26.sp, modifier = Modifier.testTag("detail-metadata")) }
