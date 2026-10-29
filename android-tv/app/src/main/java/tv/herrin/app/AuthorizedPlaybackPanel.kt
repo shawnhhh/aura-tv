@@ -356,6 +356,10 @@ fun AuthorizedPlaybackPanel(
             true
         } else false
     }) {
+        // A PlayerView owns its native video surface and key handlers for one
+        // player. Replacing media must replace that surface too: the outgoing
+        // decoder can still be detaching while Compose installs the new player.
+        key(player) {
         AndroidView(
             factory = { ctx -> object : PlayerView(ctx) {
                 // Native PlayerView otherwise consumes the first Back to hide its controller.
@@ -384,12 +388,12 @@ fun AuthorizedPlaybackPanel(
                 keepScreenOn = true
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 setPadding(0, 0, 0, 0)
-                this.player = player
             } },
             update = { it.player = player },
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
+        }
         if (!isLive) Media3DanmakuOverlay(player, media.uri, media.danmakuSources,
             danmaku.value, Modifier.fillMaxSize())
         val hasDecodedVideo = (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 0

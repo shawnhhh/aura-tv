@@ -55,13 +55,23 @@ class PlaybackSessionIsolationTest {
                 it.progressEvents.clear()
                 it.switchFixtureInPlace(incomingUri)
             }
-            compose.waitUntil(20_000) {
-                var switchedAndDecoded = false
-                scenario.onActivity {
-                    switchedAndDecoded = it.player !== outgoingPlayer && outgoingPlayer.isReleased &&
-                        (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3
+            var handoffState = "not observed"
+            try {
+                compose.waitUntil(20_000) {
+                    var switchedAndDecoded = false
+                    scenario.onActivity {
+                        val current = it.player
+                        val frames = current.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                        handoffState = "samePlayer=${current === outgoingPlayer}, " +
+                            "outgoingReleased=${outgoingPlayer.isReleased}, state=${current.playbackState}, " +
+                            "playWhenReady=${current.playWhenReady}, frames=$frames, " +
+                            "error=${current.playerError?.errorCodeName}, created=${it.createdPlayers.size}"
+                        switchedAndDecoded = current !== outgoingPlayer && outgoingPlayer.isReleased && frames > 3
+                    }
+                    switchedAndDecoded
                 }
-                switchedAndDecoded
+            } catch (timeout: androidx.compose.ui.test.ComposeTimeoutException) {
+                throw AssertionError("Media handoff did not release and decode: $handoffState", timeout)
             }
             compose.waitUntil(10_000) {
                 var newSessionReported = false
