@@ -33,6 +33,7 @@ internal object FilmMetadataEnrichment {
         runtimeMinutes = metadata.runtimeMinutes ?: original.runtimeMinutes,
         people = metadata.people.ifEmpty { original.people },
         metadataSource = "TMDB",
+        tmdbTvId = metadata.tmdbTvId,
         originalDisplay = original.originalDisplay ?: FilmDisplayOrigin(
             original.subtitle, original.synopsis, original.category, original.year, original.artworkUrl,
             original.backdropUrl, original.genres, original.ratingValue, original.ratingProvider,
@@ -49,7 +50,7 @@ internal object FilmMetadataEnrichment {
             actors = saved.actors, directors = saved.directors, regions = saved.regions,
             releaseDate = saved.releaseDate, runtimeMinutes = saved.runtimeMinutes,
             people = saved.people,
-            metadataSource = null, originalDisplay = null)
+            metadataSource = null, originalDisplay = null, tmdbTvId = null)
     }
 
     fun ratingLabel(film: Film): String? = film.ratingValue

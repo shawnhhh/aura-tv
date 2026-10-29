@@ -619,6 +619,10 @@ private fun Herrin() {
     var searchNewestFirst by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
+    var detailSelectedSeason by rememberSaveable { mutableIntStateOf(0) }
+    var restoreSeasonFocus by remember { mutableStateOf(false) }
+    val detailSeasonLines = remember { mutableStateMapOf<Int, String>() }
+    val detailSeasonEpisodeNumbers = remember { mutableStateMapOf<Int, Int>() }
     var activeLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
     var activeLiveIndex by remember { mutableIntStateOf(-1) }
     var pendingLiveLines by remember { mutableStateOf<LiveChannelChoice?>(null) }
@@ -745,6 +749,36 @@ private fun Herrin() {
     }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
     val currentLines = currentEpisode?.lines.orEmpty()
+    val seasonLayout = remember(film.id, film.playbackEpisodes) { SeasonEpisodes.fromFilm(film) }
+    val seasonResume = seasonLayout?.let { layout ->
+        SeasonPlayback.latest(layout) { sourceNumber, lineId ->
+            watchHistory.load(catalogScope, film.id, sourceNumber, lineId)
+        }
+    }
+    val detailSeason = seasonLayout?.sections?.firstOrNull {
+        it.number == detailSelectedSeason
+    } ?: seasonLayout?.sections?.firstOrNull {
+        it.number == seasonResume?.entry?.season
+    } ?: seasonLayout?.sections?.lastOrNull()
+    val detailSeasonEntries = detailSeason?.episodes.orEmpty()
+    val detailSeasonSource = detailSeasonEntries.firstOrNull { entry ->
+        entry.source.number == episode && entry.lines.any { it.id == line }
+    }
+    val displayedLines = (detailSeasonSource ?: detailSeasonEntries.firstOrNull())?.lines ?: currentLines
+    val detailSeasonRowState = remember(film.id, detailSeason?.number) { LazyListState() }
+    var seasonOfficialEpisodes by remember(film.id, film.tmdbTvId, detailSeason?.number, metadataToken) {
+        mutableStateOf<Map<Int, TmdbEpisodeDisplay>>(emptyMap())
+    }
+    LaunchedEffect(film.id, film.tmdbTvId, detailSeason?.number, metadataToken) {
+        val seasonNumber = detailSeason?.number
+        seasonOfficialEpisodes = if (film.metadataSource == "TMDB" &&
+            film.tmdbTvId != null && seasonNumber != null && metadataToken.isNotBlank()) {
+            withContext(Dispatchers.IO) {
+                TmdbSeasonEpisodes(java.io.File(context.cacheDir, "tmdb-artwork"),
+                    NetworkArtworkFetcher).lookup(film.tmdbTvId, seasonNumber, metadataToken)
+            }
+        } else emptyMap()
+    }
     val streamEvidenceKey = "$catalogScope|$catalogRefresh|${film.id}|$episode|$line|" +
         currentLines.firstOrNull { it.id == line }?.uri.orEmpty()
     val resume = watchHistory.load(catalogScope, film.id, episode,
@@ -829,10 +863,50 @@ private fun Herrin() {
         RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen")
         cmsDetailStatus = ""
         filmId = f.id
+        detailSelectedSeason = 0
+        restoreSeasonFocus = false
+        detailSeasonLines.clear()
+        detailSeasonEpisodeNumbers.clear()
         episode = f.playbackEpisodes.firstOrNull()?.number ?: 1
         line = f.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
         returnScreen = screen
         screen = "detail"
+    }
+    fun selectDetailSeason(seasonNumber: Int) {
+        val section = seasonLayout?.sections?.firstOrNull { it.number == seasonNumber } ?: return
+        detailSelectedSeason = seasonNumber
+        val entry = section.episodes.firstOrNull {
+            it.source.number == detailSeasonEpisodeNumbers[seasonNumber]
+        } ?: section.episodes.first()
+        episode = entry.source.number
+        line = entry.preferredLine(detailSeasonLines[seasonNumber]).id
+    }
+    fun playSeasonEpisode(entry: SeasonEpisode, preferredLineId: String? = detailSeasonLines[entry.season]) {
+        val chosen = entry.preferredLine(preferredLineId)
+        val request = SeasonPlayback.target(film, entry, chosen)
+        detailSelectedSeason = entry.season
+        detailSeasonEpisodeNumbers[entry.season] = entry.source.number
+        detailSeasonLines[entry.season] = chosen.id
+        episode = request.episode
+        line = request.line
+        restoreSeasonFocus = true
+        screen = "player"
+    }
+    LaunchedEffect(screen, film.id, detailSeason?.number, restoreSeasonFocus) {
+        if (screen == "detail" && restoreSeasonFocus && detailSeasonEntries.isNotEmpty()) {
+            val focusIndex = detailSeasonEntries.indexOfFirst {
+                it.source.number == episode && it.lines.any { option -> option.id == line }
+            }.coerceAtLeast(0)
+            detailSeasonRowState.scrollToItem(focusIndex)
+            repeat(3) {
+                withFrameNanos { }
+                if (runCatching { requester("season-card-${detailSeason!!.number}-$focusIndex").requestFocus() }.isSuccess) {
+                    restoreSeasonFocus = false
+                    return@LaunchedEffect
+                }
+            }
+            restoreSeasonFocus = false
+        }
     }
     // Hiding an IME window alone does not release the TV IME's served input connection.
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
@@ -853,7 +927,7 @@ private fun Herrin() {
     }
     fun back() {
         when (screen) {
-            "player" -> screen = "detail"
+            "player" -> { restoreSeasonFocus = seasonLayout != null; screen = "detail" }
             "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
             "detail" -> screen = returnScreen
             "facets" -> {
@@ -1640,7 +1714,7 @@ private fun Herrin() {
                             watchHistory.update(catalogScope, film.id, episode, historyLine,
                                 position, duration, finished)
                         },
-                        onBack = { screen = "detail" }
+                        onBack = { restoreSeasonFocus = seasonLayout != null; screen = "detail" }
                     )
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
@@ -2210,7 +2284,7 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.23 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、演职员头像、上映日期、片长与影片分类。\n影视首页右上角「筛选」可按 TMDB 评分、演员、导演、地区及年份组合筛选。\n详情页媒体规格严格区分影视源标称与播放器已识别格式，未知内容播放后再识别。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.24 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、演职员头像、上映日期、片长与影片分类。\n影视首页右上角「筛选」可按 TMDB 评分、演员、导演、地区及年份组合筛选。\n明确识别至少两季时，详情页显示季切换及统一16:9单集卡；选集按确定直接进入原播放器。\n详情页媒体规格严格区分影视源标称与播放器已识别格式，未知内容播放后再识别。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
                     } else {
                         item { Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -2249,14 +2323,6 @@ private fun Herrin() {
                                 color = Color(0xFFBCE2EF), fontSize = 17.sp)
                             Text("规格以实际选中媒体轨道为依据，不代表电视已成功硬解或面板最终输出；未知时不猜测。",
                                 color = Color(0xFF8FA3B9), fontSize = 13.sp)
-                        } }
-                        item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                            Text(film.synopsis.ifBlank { "暂未取得可靠剧情简介" },
-                                modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
-                                color = Color(0xFFE1E8F2))
-                            if (film.metadataSource == "TMDB") Text("资料由 TMDB 提供；播放线路由你添加的影视源提供。",
-                                fontSize = 13.sp, color = Color(0xFF9BAEC2))
                         } }
                         if (film.people.isNotEmpty()) item {
                             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -2303,11 +2369,18 @@ private fun Herrin() {
                                 }
                                 Text(status, fontSize = 20.sp)
                             }
-                            item { TvButton("返回详情", reduced = reduceMotion) { screen = "detail" } }
+                            item { TvButton("返回详情", reduced = reduceMotion) {
+                                restoreSeasonFocus = seasonLayout != null
+                                screen = "detail"
+                            } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 TvButton(when {
                                     spiderActive && film.playbackEpisodes.isEmpty() -> "等待 Spider 选集"
+                                    seasonResume != null ->
+                                        "▶ 继续播放 第${seasonResume.entry.season}季 第${seasonResume.entry.number}集 ${formatSeasonClock(seasonResume.position.positionMs)}"
+                                    seasonLayout != null && detailSeasonEntries.isNotEmpty() ->
+                                        "▶ 播放 第${detailSeason!!.number}季 第${(detailSeasonSource ?: detailSeasonEntries.first()).number}集"
                                     resume != null && resume.positionMs > 0L ->
                                         "▶ 继续播放 ${resume.positionMs / 60000}:${"%02d".format(resume.positionMs / 1000 % 60)}"
                                     spiderActive -> "▶ 播放当前集"
@@ -2316,6 +2389,10 @@ private fun Herrin() {
                                 }, selected = true, reduced = reduceMotion) {
                                     if (spiderActive && film.playbackEpisodes.isEmpty())
                                         spiderStatus = "Spider 尚未返回播放选集，请稍后重试或选择其他站点"
+                                    else if (seasonResume != null)
+                                        playSeasonEpisode(seasonResume.entry, seasonResume.line.id)
+                                    else if (seasonLayout != null && detailSeasonEntries.isNotEmpty())
+                                        playSeasonEpisode(detailSeasonSource ?: detailSeasonEntries.first())
                                     else screen = "player"
                                 }
                                 TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
@@ -2323,7 +2400,7 @@ private fun Herrin() {
                                     favorites = prefs.idsFor(catalogScope)
                                 }
                             } }
-                            if (resume != null) {
+                            if (resume != null && seasonLayout == null) {
                                 item { Text("继续播放 · 已观看 ${resume.positionMs / 1000} 秒 / ${resume.durationMs / 1000} 秒",
                                     fontSize = 17.sp, color = Color(0xFFD4E6FD)) }
                                 item { TvButton("从头播放", reduced = reduceMotion) {
@@ -2332,41 +2409,71 @@ private fun Herrin() {
                                     screen = "player"
                                 } }
                             }
-                            item { Text(if (film.playbackEpisodes.isEmpty()) "演示选集" else "授权选集",
-                                fontSize = 20.sp) }
-                            item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (film.playbackEpisodes.isEmpty()) {
-                                    (1..film.episodes).forEach { n ->
-                                        TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n"), reduced = reduceMotion,
-                                            selected = episode == n) {
-                                            episode = n
-                                            screen = "player"
-                                        }
-                                    }
-                                } else {
-                                    film.playbackEpisodes.forEach { entry ->
-                                        TvButton("第 ${entry.number} 集 · ${entry.title}",
-                                            modifier = Modifier.testTag("episode-${entry.number}"),
-                                            reduced = reduceMotion, selected = episode == entry.number) {
-                                            episode = entry.number
-                                            line = entry.lines.first().id
-                                            screen = "player"
-                                        }
-                                    }
+                            if (seasonLayout != null && detailSeason != null) {
+                                item {
+                                    SeasonBrowser(seasonLayout, detailSeason,
+                                        detailSeasonRowState, seasonOfficialEpisodes,
+                                        reduced = reduceMotion,
+                                        currentlyPlayingEpisode = episode,
+                                        currentlyPlayingLine = line,
+                                        history = { entry -> entry.lines.asSequence().mapNotNull { option ->
+                                            watchHistory.load(catalogScope, film.id,
+                                                entry.source.number, option.id)
+                                        }.maxByOrNull { it.updatedAtMs } },
+                                        onSeasonSelect = ::selectDetailSeason,
+                                        onEpisodeFocus = { entry ->
+                                            detailSeasonEpisodeNumbers[entry.season] = entry.source.number
+                                        }, onPlay = { entry -> playSeasonEpisode(entry) })
                                 }
+                            } else {
+                                item { Text(if (film.playbackEpisodes.isEmpty()) "演示选集" else "授权选集",
+                                    fontSize = 20.sp) }
+                                item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (film.playbackEpisodes.isEmpty()) {
+                                        (1..film.episodes).forEach { n ->
+                                            TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n"), reduced = reduceMotion,
+                                                selected = episode == n) {
+                                                episode = n
+                                                screen = "player"
+                                            }
+                                        }
+                                    } else {
+                                        film.playbackEpisodes.forEach { entry ->
+                                            TvButton("第 ${entry.number} 集 · ${entry.title}",
+                                                modifier = Modifier.testTag("episode-${entry.number}"),
+                                                reduced = reduceMotion, selected = episode == entry.number) {
+                                                episode = entry.number
+                                                line = entry.lines.first().id
+                                                screen = "player"
+                                            }
+                                        }
+                                    }
+                                } }
+                            }
+                            item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                                Text(film.synopsis.ifBlank { "暂未取得可靠剧情简介" },
+                                    modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
+                                    color = Color(0xFFE1E8F2))
+                                if (film.metadataSource == "TMDB") Text("资料由 TMDB 提供；播放线路由你添加的影视源提供。",
+                                    fontSize = 13.sp, color = Color(0xFF9BAEC2))
                             } }
                             item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (currentLines.isEmpty()) {
+                                if (displayedLines.isEmpty()) {
                                     listOf("演示线路 A", "演示线路 B").forEach { name ->
                                         TvButton(name, modifier = Modifier.testTag("line-$name"),
                                             reduced = reduceMotion, selected = line == name) { line = name; screen = "player" }
                                     }
                                 } else {
-                                    currentLines.forEach { option ->
+                                    displayedLines.forEach { option ->
                                         TvButton(option.title, modifier = Modifier.testTag("line-${option.id}"), reduced = reduceMotion,
-                                            selected = line == option.id) { line = option.id; screen = "player" }
+                                            selected = line == option.id) {
+                                            line = option.id
+                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
+                                            screen = "player"
+                                        }
                                     }
                                 }
                             } }
@@ -2378,6 +2485,78 @@ private fun Herrin() {
         if (splash) {
             SplashExitCurtain(reduceMotion, splashExiting,
                 onReady = { splashExiting = true }, onFinished = { splash = false })
+        }
+    }
+}
+
+/**
+ * Native D-pad season selector; publicly testable in instrumentation with synthetic,
+ * user-authorized entries. Never changes a playback URL or synthesizes a missing season.
+ */
+@Composable
+internal fun SeasonBrowser(
+    layout: SeasonLayout,
+    active: SeasonSection,
+    rowState: LazyListState,
+    officialEpisodes: Map<Int, TmdbEpisodeDisplay>,
+    reduced: Boolean,
+    currentlyPlayingEpisode: Int,
+    currentlyPlayingLine: String,
+    history: (SeasonEpisode) -> WatchPosition?,
+    onSeasonSelect: (Int) -> Unit,
+    onEpisodeFocus: (SeasonEpisode) -> Unit,
+    onPlay: (SeasonEpisode) -> Unit
+) {
+    val uiScope = rememberCoroutineScope()
+    val focusers = remember { mutableMapOf<String, FocusRequester>() }
+    fun focusAt(key: String): FocusRequester = focusers.getOrPut(key) { FocusRequester() }
+    Column(Modifier.fillMaxWidth().testTag("season-browser"),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            layout.sections.forEach { section ->
+                TvButton("第${section.number}季",
+                    Modifier.testTag("season-tab-${section.number}")
+                        .focusRequester(focusAt("season-tab-${section.number}"))
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown &&
+                                event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                                onSeasonSelect(section.number)
+                                uiScope.launch {
+                                    rowState.scrollToItem(0)
+                                    repeat(3) {
+                                        withFrameNanos { }
+                                        if (runCatching {
+                                                focusAt("season-card-${section.number}-0").requestFocus()
+                                            }.isSuccess) return@launch
+                                    }
+                                }
+                                true
+                            } else false
+                        },
+                    reduced = reduced, selected = section.number == active.number,
+                    onFocus = { onSeasonSelect(section.number) }) {
+                    onSeasonSelect(section.number)
+                }
+            }
+        }
+        Text("第${active.number}季 · ${active.episodes.size} 集可选",
+            color = Color(0xFFCAD7E6), fontSize = 16.sp)
+        LazyRow(Modifier.testTag("season-cards"), state = rowState,
+            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            itemsIndexed(active.episodes,
+                key = { _, entry -> "${entry.season}-${entry.number}-${entry.source.number}" }) { index, entry ->
+                SeasonEpisodeCard(entry, officialEpisodes[entry.number], history(entry),
+                    selected = currentlyPlayingEpisode == entry.source.number &&
+                        entry.lines.any { it.id == currentlyPlayingLine },
+                    reduced = reduced,
+                    modifier = Modifier.testTag("season-card-${entry.season}-$index")
+                        .focusRequester(focusAt("season-card-${entry.season}-$index"))
+                        .focusProperties { up = focusAt("season-tab-${entry.season}") },
+                    onFocus = { onEpisodeFocus(entry) },
+                    onClick = { onPlay(entry) })
+            }
         }
     }
 }

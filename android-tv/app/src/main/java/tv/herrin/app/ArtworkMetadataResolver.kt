@@ -25,7 +25,8 @@ internal data class EnrichedArtwork(
     val category: String? = null, val originalTitle: String? = null,
     val actors: List<String> = emptyList(), val directors: List<String> = emptyList(),
     val regions: List<String> = emptyList(), val releaseDate: String? = null,
-    val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList()
+    val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList(),
+    val tmdbTvId: Int? = null
 )
 
 internal object ArtworkTitle {
@@ -198,7 +199,7 @@ internal class ArtworkMetadataResolver(
         // Upgrade M4.21 artwork-only cache keys: older positive entries have no
         // cast/director/origin data and must not mask the new detail lookup for 14 days.
         // The previous cache has cast names but not portrait/roles or release/runtime.
-        val key = hash("detail-v3|$category|$queryTitle|${film.year}|${hash(token)}")
+        val key = hash("detail-v4|$category|$queryTitle|${film.year}|${hash(token)}")
         val file = File(cacheRoot, "$key.json")
         if (file.isFile && file.length() in 1..8192) {
             val parsed = runCatching { JSONObject(file.readText()) }.getOrNull()
@@ -248,7 +249,8 @@ internal class ArtworkMetadataResolver(
                 image("w780", candidate.posterPath), image("original", candidate.backdropPath),
                 synopsis, candidate.year?.toString(), rating, genres, classified,
                 candidate.originalTitle?.take(160), detail.actors, detail.directors, detail.regions,
-                detail.releaseDate ?: candidate.releaseDate, detail.runtimeMinutes, detail.people
+                detail.releaseDate ?: candidate.releaseDate, detail.runtimeMinutes, detail.people,
+                if (category == "tv") candidate.tmdbId else null
             )
             if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null) return null
             persist(file, JSONObject().put("poster", picture.posterUrl ?: "")
@@ -264,6 +266,7 @@ internal class ArtworkMetadataResolver(
                 .put("regions", JSONArray(picture.regions))
                 .put("releaseDate", picture.releaseDate ?: "")
                 .put("runtimeMinutes", picture.runtimeMinutes ?: JSONObject.NULL)
+                .put("tmdbTvId", picture.tmdbTvId ?: JSONObject.NULL)
                 .put("people", JSONArray().apply { picture.people.forEach { person ->
                     put(JSONObject().put("name", person.name).put("role", person.role)
                         .put("portrait", person.portraitUrl ?: ""))
@@ -320,7 +323,8 @@ internal class ArtworkMetadataResolver(
                         person.optString("portrait").takeIf { it.startsWith("https://image.tmdb.org/t/p/w185/") &&
                             TmdbPortraits.url(it.substringAfter("/w185")) == it })
                 }
-            }
+            },
+            obj.optInt("tmdbTvId", 0).takeIf { it > 0 }
         )
         return result.takeIf { it.posterUrl != null || it.backdropUrl != null || it.synopsis != null }
     }
@@ -374,7 +378,7 @@ internal class ArtworkMetadataResolver(
 
 private class ArtworkAuthenticationFailure : Exception()
 
-private object NetworkArtworkFetcher : ArtworkJsonFetcher {
+internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
     override fun load(url: String, readAccessToken: String): String? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 3500
