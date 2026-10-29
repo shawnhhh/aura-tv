@@ -32,7 +32,8 @@ class PlaybackTestActivity : ComponentActivity() {
                     intent.getStringExtra("spiderJson")?.let { json ->
                         // Debug-only acceptance path: use the same strict Spider
                         // result decoder/headers as production, no plugin/JAR execution.
-                        (SpiderVodCodec.player(json, allowHttp = false)
+                        (SpiderVodCodec.player(json,
+                            allowHttp = intent.getBooleanExtra("spiderAllowHttp", false))
                             as? PlaybackResult.Ready)?.media
                             ?: error("Debug Spider fixture was not a licensed direct stream")
                     } ?: PlaybackMedia(
