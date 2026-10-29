@@ -134,7 +134,8 @@ internal object SpiderVodCodec {
             AuthorizedSubtitle(lang, name, subtitleUrl)
         }
         return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles,
-            alternateUris = playable.drop(1), allowHttpRedirects = allowHttp))
+            alternateUris = playable.drop(1), allowHttpRedirects = allowHttp,
+            declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format"))))
     }
 
     /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */

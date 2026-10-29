@@ -11,6 +11,18 @@ internal object PlaybackFormatRetry {
     const val HLS = "application/x-mpegURL"
     const val DASH = "application/dash+xml"
 
+    /** Only supported manifest formats from a trusted source result can override URL sniffing. */
+    fun declaredMime(value: String?): String? = when (value?.trim()?.lowercase()?.substringBefore(';')) {
+        "application/x-mpegurl", "application/vnd.apple.mpegurl", "hls", "m3u8" -> HLS
+        "application/dash+xml", "dash", "mpd" -> DASH
+        else -> null
+    }
+
+    /** The format declared for a primary URL must not leak onto unrelated backup URLs. */
+    fun candidateMime(uri: String, candidateIndex: Int, primaryDeclaredMime: String?): String? =
+        if (candidateIndex == 0) declaredMime(primaryDeclaredMime) ?: initialMime(uri)
+        else initialMime(uri)
+
     fun initialMime(uri: String): String? {
         val withoutFragment = uri.substringBefore('#').lowercase()
         val path = withoutFragment.substringBefore('?')

@@ -104,6 +104,7 @@ internal object SpiderIpc {
         .put("uri", media.uri)
         .put("alternates", JSONArray(media.alternateUris.take(7)))
         .put("allowHttpRedirects", media.allowHttpRedirects)
+        .put("declaredMime", media.declaredMime ?: "")
         .put("headers", JSONObject(media.headers))
         .put("subs", JSONArray().apply {
             media.subtitles.take(6).forEach { subtitle ->
@@ -142,7 +143,8 @@ internal object SpiderIpc {
             TvBoxUrl.normalize(alternatives.optString(index), allowHttp)
         }.filter { it != url }.distinct()
         return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
-            response.optBoolean("allowHttpRedirects") && allowHttp))
+            response.optBoolean("allowHttpRedirects") && allowHttp,
+            declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime"))))
     }
 }
 

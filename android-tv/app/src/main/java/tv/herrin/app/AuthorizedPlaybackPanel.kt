@@ -90,7 +90,7 @@ fun AuthorizedPlaybackPanel(
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val player = remember(media) {
         val candidates = (listOf(media.uri) + media.alternateUris).distinct().take(8)
-        fun itemFor(uri: String, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
+        fun itemFor(uri: String, candidateIndex: Int, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
             if (media.subtitles.isNotEmpty()) {
                 setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
                     MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
@@ -100,7 +100,7 @@ fun AuthorizedPlaybackPanel(
                         .build()
                 })
             }
-            (mimeOverride ?: PlaybackFormatRetry.initialMime(uri))?.let(::setMimeType)
+            (mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))?.let(::setMimeType)
         }.build()
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
@@ -127,13 +127,14 @@ fun AuthorizedPlaybackPanel(
                 }
                 override fun onPlayerError(error: PlaybackException) {
                     val alternateMime = PlaybackFormatRetry.nextMime(
-                        candidates[activeVariant], overrideMime, error.errorCode)
+                        candidates[activeVariant], overrideMime ?: PlaybackFormatRetry.candidateMime(
+                            candidates[activeVariant], activeVariant, media.declaredMime), error.errorCode)
                     if (alternateMime != null) {
                         // Same source, no scraping: Media3 may have interpreted
                         // an extensionless HLS playlist as a progressive file.
                         overrideMime = alternateMime
                         errorMessage = null
-                        setMediaItem(itemFor(candidates[activeVariant], alternateMime))
+                        setMediaItem(itemFor(candidates[activeVariant], activeVariant, alternateMime))
                         prepare()
                         play()
                     } else if (PlaybackFormatRetry.retryNextSource(error.errorCode) &&
@@ -144,20 +145,22 @@ fun AuthorizedPlaybackPanel(
                         activeVariant++
                         overrideMime = null
                         errorMessage = null
-                        setMediaItem(itemFor(candidates[activeVariant]))
+                        setMediaItem(itemFor(candidates[activeVariant], activeVariant))
                         prepare()
                         play()
                     } else {
                         val httpStatus = generateSequence(error.cause) { it.cause }
                             .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                             .firstOrNull()?.responseCode
-                        errorMessage = playbackErrorMessage(error.errorCodeName) +
-                            "（${error.errorCodeName}${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
-                            "; 线路 ${activeVariant + 1}/${candidates.size}）"
+                        errorMessage = playbackErrorMessage(error.errorCodeName) + " · " +
+                            PlaybackFailureHints.hint(error.errorCodeName, httpStatus) +
+                            "（${PlaybackFailureHints.safeCode(error.errorCodeName)}" +
+                            "${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
+                            "; 地址 ${activeVariant + 1}/${candidates.size}）"
                     }
                 }
             })
-            setMediaItem(itemFor(candidates.first()))
+            setMediaItem(itemFor(candidates.first(), 0))
             if (startPositionMs > 0L) seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
             prepare()
             playWhenReady = true
