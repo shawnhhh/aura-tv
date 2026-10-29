@@ -803,11 +803,13 @@ private fun Herrin() {
     LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch) {
         spiderResolved = null
         if (spiderActive && screen == "player") {
+            var playableFilm = film
             // Load missing episode metadata IN the full-screen loading surface.
             // Do not bounce a film-card click to a technical Spider detail page.
             if (film.playbackEpisodes.isEmpty() && film.spiderVodId != null) {
                 when (val detailed = spiderBridge.details(film)) {
                     is SpiderResult.Ready -> {
+                        playableFilm = detailed.value
                         providerFilms = providerFilms?.map {
                             if (it.id == film.id) detailed.value else it
                         }
@@ -831,7 +833,7 @@ private fun Herrin() {
                     }
                 }
             }
-            spiderResolved = spiderBridge.play(film, episode, line, tvBoxAllowHttp)
+            spiderResolved = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp)
             spiderStatus = when (val result = spiderResolved) {
                 is PlaybackResult.Ready -> "播放地址已解析，正在准备播放器"
                 is PlaybackResult.Unavailable -> result.reason
