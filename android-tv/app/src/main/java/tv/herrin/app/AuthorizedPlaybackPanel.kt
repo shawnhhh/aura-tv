@@ -100,7 +100,7 @@ fun AuthorizedPlaybackPanel(
                         .build()
                 })
             }
-            (mimeOverride ?: PlaybackFormatRetry.initialMime(uri))?.let(::setMimeType)
+            (mimeOverride ?: media.declaredMime ?: PlaybackFormatRetry.initialMime(uri))?.let(::setMimeType)
         }.build()
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
@@ -127,7 +127,7 @@ fun AuthorizedPlaybackPanel(
                 }
                 override fun onPlayerError(error: PlaybackException) {
                     val alternateMime = PlaybackFormatRetry.nextMime(
-                        candidates[activeVariant], overrideMime, error.errorCode)
+                        candidates[activeVariant], overrideMime ?: media.declaredMime, error.errorCode)
                     if (alternateMime != null) {
                         // Same source, no scraping: Media3 may have interpreted
                         // an extensionless HLS playlist as a progressive file.
