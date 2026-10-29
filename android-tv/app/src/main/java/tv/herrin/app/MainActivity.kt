@@ -1915,7 +1915,11 @@ private fun Herrin() {
                 val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
                     val historyLine = if (licensedMedia != null) line else "independent-test"
-                    val previous = watchHistory.load(catalogScope, film.id, episode, historyLine)
+                    // Snapshot the selected episode. A disposed player's final callback
+                    // must not read the mutable episode after the user chooses the next one.
+                    val historyEpisode = episode
+                    val previous = watchHistory.load(catalogScope, film.id, historyEpisode, historyLine)
+                    key(catalogScope, film.id, historyEpisode, historyLine) {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
                         startPositionMs = previous?.positionMs ?: 0L,
@@ -1923,7 +1927,7 @@ private fun Herrin() {
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
-                            watchHistory.update(catalogScope, film.id, episode, historyLine,
+                            watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
                                 position, duration, finished)
                         },
                         onBack = {
@@ -1932,6 +1936,7 @@ private fun Herrin() {
                             screen = "detail"
                         }
                     )
+                    }
                     if (playbackPicker != null) PlaybackSelectionDialog(
                         film, episode, line, playbackPicker == "lines",
                         onSelect = { selectedEpisode, selectedLine ->
