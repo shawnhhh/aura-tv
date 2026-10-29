@@ -24,7 +24,7 @@ internal object TvVisibleFrameEvidence {
         var visible = false
         // SurfaceView is composed asynchronously; don't equate the first
         // decoder output buffer with an immediately visible display frame.
-        repeat(8) { attempt ->
+        for (attempt in 0 until 8) {
             if (attempt > 0) SystemClock.sleep(350)
             val bitmap = inst.uiAutomation.takeScreenshot()
             if (bitmap != null) {
@@ -37,7 +37,7 @@ internal object TvVisibleFrameEvidence {
                     bitmap.recycle()
                 }
             }
-            if (visible) return@repeat
+            if (visible) break
         }
         // Shell-owned evidence survives instrumentation teardown and can be
         // pulled by android-tv/scripts/emulator_ci.sh after any test result.
