@@ -32,7 +32,24 @@ internal object TvVisibleFrameEvidence {
                     val observed = sampleCenter(bitmap)
                     if (observed.illuminated + observed.colored >
                         strongest.illuminated + strongest.colored) strongest = observed
-                    if (observed.plausible()) visible = true
+                    if (observed.plausible()) {
+                        visible = true
+                        // Only this fixed, bundled ORIGINAL MP4 fixture is exported to CI logs.
+                        // A bounded compositor thumbnail permits human inspection via the GitHub
+                        // logs connector even when artifact download hosts are unavailable.
+                        if (label == "m437-mp4-visible-frame") {
+                            val thumbnail = Bitmap.createScaledBitmap(bitmap, 480, 270, true)
+                            try {
+                                val bytes = java.io.ByteArrayOutputStream()
+                                thumbnail.compress(Bitmap.CompressFormat.JPEG, 80, bytes)
+                                val encoded = android.util.Base64.encodeToString(bytes.toByteArray(), android.util.Base64.NO_WRAP)
+                                val chunks = encoded.chunked(2800)
+                                chunks.forEachIndexed { index, data ->
+                                    android.util.Log.i("HerrinVideoEvidence", "FRAME $label ${index + 1}/${chunks.size} $data")
+                                }
+                            } finally { thumbnail.recycle() }
+                        }
+                    }
                 } finally {
                     bitmap.recycle()
                 }
