@@ -366,6 +366,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeVipFlags: List<String> = emptyList()
     private var activeSiteHeaders: Map<String, String> = emptyMap()
     private var activeHttpHost: SpiderHttpSessionHost? = null
+    private var activeLoopbackProxy: SpiderLoopbackProxy? = null
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
         withTimeoutOrNull(30_000) {
@@ -428,14 +429,23 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
             val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi.removePrefix("csp_")}")
             val created = spiderClass.getDeclaredConstructor().newInstance() as Spider
+            // CatVod Spider.getProxyUrl() needs a real, local listening port.
+            // Start it inside :spider, scoped to the active site and process.
+            val localProxy = SpiderLoopbackProxy(site.key) { params ->
+                synchronized(created) { created.proxy(params) }
+            }
+            com.github.catvod.Proxy.set(localProxy.port, localProxy.token)
             try {
                 created.siteKey = site.key
                 created.net = Net(httpHost, site.key)
                 created.local = Local(site.key)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
                 created.init(context, site.extension)
-                created.also { active = it; activeKey = key; activeHttpHost = httpHost }
+                created.also { active = it; activeKey = key; activeHttpHost = httpHost
+                    activeLoopbackProxy = localProxy }
             } catch (error: Throwable) {
+                localProxy.close()
+                com.github.catvod.Proxy.set(-1, "")
                 SpiderRuntimeCompat.dispose(created)
                 httpHost.clear()
                 throw error
@@ -480,6 +490,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     fun close() {
+        activeLoopbackProxy?.close()
+        activeLoopbackProxy = null
+        com.github.catvod.Proxy.set(-1, "")
         SpiderRuntimeCompat.dispose(active)
         active = null
         activeKey = null
