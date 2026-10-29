@@ -34,4 +34,5 @@ M4.30 已把 Spider 兼容、媒体错误分类、本地代理基础、HDR/杜�
 ## 自动验收
 - GitHub Android Debug：`scripts/check_static.py` + `testDebugUnitTest` + `lintDebug` + `assembleDebug`。
 - GitHub TV 模拟器：原有全量 instrumentation，保留视频、遥控器焦点、缓存、源与 IPTV 回归。
+- 新增 Android TV instrumentation：用应用内授权的原创 MP4 测试素材取得真实 Media3 已渲染帧，展开「查看实播状态」并验证播放器诊断标签 `player-journey-status` 显示首帧，且不会包含 URL/host/token。
 - 首帧信息默认只在用户主动展开“查看实播状态”时显示；不在后台进行采集或上传。
