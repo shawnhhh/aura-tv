@@ -78,10 +78,20 @@ fun Media3DanmakuOverlay(player: Player, mediaKey: String, sources: List<Danmaku
         mutableStateOf<List<DanmakuComment>>(emptyList())
     }
     var position by remember(player, mediaKey) { mutableLongStateOf(0) }
+    // Opt-in covers the currently offered origin. A later plugin/line cannot silently
+    // send requests to a new service while the old toggle remains on.
+    val approvedOrigin = remember(settings.enabled) {
+        if (settings.enabled) sources.firstOrNull()?.url?.let {
+            runCatching { java.net.URI(it).let { uri -> "${uri.scheme}://${uri.authority}" } }.getOrNull()
+        } else null
+    }
     LaunchedEffect(mediaKey, sources, settings.enabled, repository) {
         comments = emptyList()
         val source = sources.firstOrNull()
-        if (settings.enabled && source != null) {
+        val currentOrigin = source?.url?.let {
+            runCatching { java.net.URI(it).let { uri -> "${uri.scheme}://${uri.authority}" } }.getOrNull()
+        }
+        if (settings.enabled && source != null && currentOrigin == approvedOrigin) {
             comments = withContext(Dispatchers.IO) { repository.load(source, explicitlyEnabled = true) }
         }
     }
