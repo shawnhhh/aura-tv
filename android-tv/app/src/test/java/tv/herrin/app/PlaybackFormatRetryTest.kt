@@ -21,6 +21,20 @@ class PlaybackFormatRetryTest {
         assertNull(PlaybackFormatRetry.declaredMime(null))
     }
 
+    @Test fun sourceFormatAppliesOnlyToPrimaryUrlNotToDifferentBackup() {
+        val primary = "https://video.example.test/stream?id=1"
+        val backupMp4 = "https://cdn.example.test/fallback.mp4"
+        val backupDash = "https://cdn.example.test/fallback.mpd"
+        assertEquals(PlaybackFormatRetry.HLS,
+            PlaybackFormatRetry.candidateMime(primary, 0, "application/vnd.apple.mpegurl"))
+        assertNull(PlaybackFormatRetry.candidateMime(backupMp4, 1, PlaybackFormatRetry.HLS))
+        assertEquals(PlaybackFormatRetry.DASH,
+            PlaybackFormatRetry.candidateMime(backupDash, 1, PlaybackFormatRetry.HLS))
+        assertEquals(PlaybackFormatRetry.HLS,
+            PlaybackFormatRetry.candidateMime("https://cdn.example.test/backup.m3u8", 1,
+                PlaybackFormatRetry.DASH))
+    }
+
     @Test fun extensionlessPlaylistTriesHlsThenDashOnlyForParsingErrors() {
         val uri = "https://media.test/vod?id=123"
         assertEquals(PlaybackFormatRetry.HLS, PlaybackFormatRetry.nextMime(uri, null, 3003))
