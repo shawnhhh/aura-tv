@@ -297,6 +297,8 @@ fun AuthorizedPlaybackPanel(
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 PlaybackTransport.seekBy(player,
                     if (key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 10_000L else -10_000L)
+                // Give visual confirmation of the seek and then auto-hide.
+                controlsVisible = true
                 controlsInteractionEpoch++
             }
             true
@@ -445,7 +447,7 @@ fun AuthorizedPlaybackPanel(
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(elapsed(shownPosition), color = Color.White)
-                Text(PlayerQualityLabel.fromSize(player.videoSize.width, player.videoSize.height),
+                Text("画质：${PlayerQualityLabel.fromSize(player.videoSize.width, player.videoSize.height)}",
                     color = Color(0xFFD3E6F7), modifier = Modifier.testTag("player-quality-label"))
                 Text(elapsed(shownDuration), color = Color(0xFFD2D5DE))
             }
