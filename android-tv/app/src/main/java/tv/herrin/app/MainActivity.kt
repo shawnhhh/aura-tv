@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
 
 /** Native focusable controls work with D-pad/Enter; no pointer-only actions. */
 @Composable
-private fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
+internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
                      selected: Boolean = false, quiet: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(24.dp)
@@ -621,6 +621,9 @@ private fun Herrin() {
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
     var detailSelectedSeason by rememberSaveable { mutableIntStateOf(0) }
     var restoreSeasonFocus by remember { mutableStateOf(false) }
+    var restoreGroupFocus by remember { mutableStateOf(false) }
+    var groupFocusedCoordinates by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var bypassGroupFilmId by remember { mutableStateOf<String?>(null) }
     val detailSeasonLines = remember { mutableStateMapOf<Int, String>() }
     val detailSeasonEpisodeNumbers = remember { mutableStateMapOf<Int, Int>() }
     var activeLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
@@ -702,11 +705,23 @@ private fun Herrin() {
     }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val facetResultState = rememberLazyListState()
+    // M4.25: only the active, already-loaded catalog is grouped. This is a
+    // display projection; Film.id and the licensed playback paths stay intact.
+    val showCatalog = remember(catalogScope, films) { ShowCatalog.build(films, catalogScope) }
+    val browseFilms = remember(showCatalog, films) { showCatalog.collapse(films) }
     val film = films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
+    // Single-source fallback is deliberately presentation-only: the original
+    // Film remains the same, and legacy detail/selection paths stay usable.
+    val showGroup = showCatalog.groupFor(film.id).takeUnless {
+        screen == "detail" && film.id == bypassGroupFilmId
+    }
+    val displayFilm = showGroup?.displayFilm ?: film
+    fun displayKey(item: Film): String = showCatalog.groupFor(item.id)?.key ?: item.id
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
-    LaunchedEffect(screen, filmId, spiderActive) {
-        if (spiderActive && screen == "detail" && film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
+    LaunchedEffect(screen, filmId, spiderActive, showGroup?.key) {
+        if (showGroup == null && spiderActive && screen == "detail" &&
+            film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
             spiderStatus = "正在读取 ${film.title} 的详情和选集…"
             when (val loaded = spiderBridge.details(film)) {
                 is SpiderResult.Ready -> {
@@ -720,9 +735,9 @@ private fun Herrin() {
     // Standard CMS responses often list only title/poster on ac=detail&pg=1.
     // Like TVBox, fetch ac=detail&ids=<vod_id> only when entering that film's
     // detail surface; no stream URL is inferred from the listing itself.
-    LaunchedEffect(screen, filmId, activeCmsSite?.apiUrl) {
+    LaunchedEffect(screen, filmId, activeCmsSite?.apiUrl, showGroup?.key) {
         val site = activeCmsSite
-        if (!spiderActive && screen == "detail" && site != null &&
+        if (showGroup == null && !spiderActive && screen == "detail" && site != null &&
             film.cmsVodId != null && film.playbackEpisodes.isEmpty()) {
             cmsDetailStatus = "正在读取 ${film.title} 的完整选集…"
             when (val result = tvBoxVodRepo.details(site, film, tvBoxAllowHttp)) {
@@ -733,6 +748,52 @@ private fun Herrin() {
                 }
                 is TvBoxVodDetailResult.Error -> cmsDetailStatus = "影视详情：${result.reason}"
             }
+        }
+    }
+    var groupDetailStatus by remember { mutableStateOf("") }
+    // A catalog listing often has no playbackEpisodes until ac=detail/Spider
+    // details. Resolve ONLY the selected show's members, on demand, bounded,
+    // cancellable when leaving this detail or changing the active source.
+    LaunchedEffect(screen, showGroup?.key, spiderActive, activeCmsSite?.apiUrl, catalogScope) {
+        val selected = showGroup
+        if (screen != "detail" || selected == null || providerFilms == null) return@LaunchedEffect
+        val pending = GroupSeasonIndex.detailsNeeded(selected, maxMembers = 8)
+        groupDetailStatus = if (pending.isEmpty()) "" else "正在读取多季选集（0/${pending.size}）…"
+        for ((index, original) in pending.withIndex()) {
+            val current = providerFilms?.firstOrNull { it.id == original.id } ?: continue
+            if (current.playbackEpisodes.isNotEmpty()) continue
+            groupDetailStatus = "正在读取多季选集（${index + 1}/${pending.size}）：${current.title.take(28)}"
+            if (spiderActive && current.spiderVodId != null) {
+                val loaded = withTimeoutOrNull(3_200) { spiderBridge.details(current) }
+                when (loaded) {
+                    is SpiderResult.Ready -> if (loaded.value.id == current.id &&
+                        loaded.value.playbackEpisodes.isNotEmpty()) {
+                        providerFilms = providerFilms?.map { if (it.id == current.id) loaded.value else it }
+                    }
+                    is SpiderResult.Failure -> groupDetailStatus = "${current.title.take(24)}：${loaded.message.take(55)}"
+                    null -> groupDetailStatus = "${current.title.take(24)}：选集读取超时"
+                }
+            } else if (!spiderActive && current.cmsVodId != null && activeCmsSite != null) {
+                val loaded = withTimeoutOrNull(3_200) {
+                    tvBoxVodRepo.details(activeCmsSite!!, current, tvBoxAllowHttp)
+                }
+                when (loaded) {
+                    is TvBoxVodDetailResult.Ready -> if (loaded.film.id == current.id &&
+                        loaded.film.playbackEpisodes.isNotEmpty()) {
+                        providerFilms = providerFilms?.map { if (it.id == current.id) loaded.film else it }
+                    }
+                    is TvBoxVodDetailResult.Error -> groupDetailStatus = "${current.title.take(24)}：${loaded.reason.take(55)}"
+                    null -> groupDetailStatus = "${current.title.take(24)}：选集读取超时"
+                }
+            }
+        }
+        val remaining = selected.members.map { it.film.id }.count { id ->
+            providerFilms?.firstOrNull { it.id == id }?.playbackEpisodes.isNullOrEmpty()
+        }
+        groupDetailStatus = when {
+            remaining == 0 -> "已载入 ${selected.members.size} 个来源条目的选集"
+            remaining > 0 -> "仍有 $remaining 个条目无可用选集；请检查影视点是否提供详情或更换线路"
+            else -> ""
         }
     }
     LaunchedEffect(screen, film.id, episode, line, spiderActive) {
@@ -750,6 +811,28 @@ private fun Herrin() {
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
     val currentLines = currentEpisode?.lines.orEmpty()
     val seasonLayout = remember(film.id, film.playbackEpisodes) { SeasonEpisodes.fromFilm(film) }
+    val groupLayout = remember(showGroup) { showGroup?.let(GroupSeasonIndex::from) }
+    val unmappedGroupMembers = showGroup?.members?.filter { member ->
+        groupLayout?.sections?.any { section ->
+            section.episodes.any { entry -> entry.sources.any { it.film.id == member.film.id } }
+        } != true
+    }.orEmpty()
+    val groupResume = groupLayout?.let { layout ->
+        GroupSeasonIndex.latest(layout) { option ->
+            watchHistory.load(catalogScope, option.film.id, option.source.number, option.line.id)
+        }
+    }
+    val groupSection = groupLayout?.sections?.firstOrNull { it.number == detailSelectedSeason }
+        ?: groupLayout?.sections?.firstOrNull { it.number == groupResume?.first?.season }
+        ?: groupLayout?.sections?.firstOrNull()
+    val groupRowState = remember(showGroup?.key, groupSection?.number) { LazyListState() }
+    val groupFocusedEpisode = groupFocusedCoordinates?.let { (season, number) ->
+        groupLayout?.episode(season, number)
+    } ?: groupSection?.episodes?.firstOrNull()
+    val selectedGroupOption = groupLayout?.sections?.asSequence()?.flatMap { it.episodes.asSequence() }
+        ?.flatMap { it.sources.asSequence() }?.firstOrNull { option ->
+            option.film.id == film.id && option.source.number == episode && option.line.id == line
+        } ?: groupResume?.first
     val seasonResume = seasonLayout?.let { layout ->
         SeasonPlayback.latest(layout) { sourceNumber, lineId ->
             watchHistory.load(catalogScope, film.id, sourceNumber, lineId)
@@ -777,6 +860,18 @@ private fun Herrin() {
                 TmdbSeasonEpisodes(java.io.File(context.cacheDir, "tmdb-artwork"),
                     NetworkArtworkFetcher).lookup(film.tmdbTvId, seasonNumber, metadataToken)
             }
+        } else emptyMap()
+    }
+    var groupOfficialEpisodes by remember(showGroup?.key, showGroup?.tmdbTvId, groupSection?.number, metadataToken) {
+        mutableStateOf<Map<Int, TmdbEpisodeDisplay>>(emptyMap())
+    }
+    LaunchedEffect(screen, showGroup?.key, showGroup?.tmdbTvId, groupSection?.number, metadataToken) {
+        val id = showGroup?.tmdbTvId
+        val season = groupSection?.number
+        groupOfficialEpisodes = if (screen == "detail" && id != null && season != null &&
+            metadataToken.isNotBlank()) withContext(Dispatchers.IO) {
+            TmdbSeasonEpisodes(java.io.File(context.cacheDir, "tmdb-artwork"),
+                NetworkArtworkFetcher).lookup(id, season, metadataToken)
         } else emptyMap()
     }
     val streamEvidenceKey = "$catalogScope|$catalogRefresh|${film.id}|$episode|$line|" +
@@ -845,7 +940,7 @@ private fun Herrin() {
                         if (!reached) to.scrollToItem(index, -sourceOffset)
                     }
                 }
-                val target = "$prefix${destination[index].id}"
+                val target = "$prefix${displayKey(destination[index])}"
                 repeat(3) {
                     withFrameNanos { }
                     if (runCatching { requester(target).requestFocus() }.isSuccess) {
@@ -863,8 +958,11 @@ private fun Herrin() {
         RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen")
         cmsDetailStatus = ""
         filmId = f.id
+        bypassGroupFilmId = null
         detailSelectedSeason = 0
         restoreSeasonFocus = false
+        restoreGroupFocus = false
+        groupFocusedCoordinates = null
         detailSeasonLines.clear()
         detailSeasonEpisodeNumbers.clear()
         episode = f.playbackEpisodes.firstOrNull()?.number ?: 1
@@ -892,8 +990,32 @@ private fun Herrin() {
         restoreSeasonFocus = true
         screen = "player"
     }
+    fun selectGroupSeason(seasonNumber: Int) {
+        if (groupLayout?.sections?.none { it.number == seasonNumber } != false) return
+        if (detailSelectedSeason != seasonNumber) groupFocusedCoordinates = null
+        detailSelectedSeason = seasonNumber
+    }
+    fun playGroupSource(option: GroupPlaybackRef) {
+        val request = option.request()
+        // The player and every licensed CMS / Spider resolver read the selected
+        // original source Film. A group key is NEVER a playable Film ID.
+        filmId = request.filmId
+        episode = request.episode
+        line = request.line
+        detailSelectedSeason = option.season
+        groupFocusedCoordinates = option.season to option.number
+        restoreGroupFocus = true
+        screen = "player"
+    }
+    fun playGroupEpisode(entry: GroupEpisode) {
+        val mostRecent = entry.sources.mapNotNull { source ->
+            watchHistory.load(catalogScope, source.film.id, source.source.number, source.line.id)
+                ?.let { source to it }
+        }.maxByOrNull { it.second.updatedAtMs }?.first
+        playGroupSource(entry.preferred(mostRecent ?: selectedGroupOption))
+    }
     LaunchedEffect(screen, film.id, detailSeason?.number, restoreSeasonFocus) {
-        if (screen == "detail" && restoreSeasonFocus && detailSeasonEntries.isNotEmpty()) {
+        if (screen == "detail" && showGroup == null && restoreSeasonFocus && detailSeasonEntries.isNotEmpty()) {
             val focusIndex = detailSeasonEntries.indexOfFirst {
                 it.source.number == episode && it.lines.any { option -> option.id == line }
             }.coerceAtLeast(0)
@@ -927,9 +1049,13 @@ private fun Herrin() {
     }
     fun back() {
         when (screen) {
-            "player" -> { restoreSeasonFocus = seasonLayout != null; screen = "detail" }
+            "player" -> {
+                restoreGroupFocus = showGroup != null
+                restoreSeasonFocus = showGroup == null && seasonLayout != null
+                screen = "detail"
+            }
             "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
-            "detail" -> screen = returnScreen
+            "detail" -> { bypassGroupFilmId = null; screen = returnScreen }
             "facets" -> {
                 focusId = "facets"
                 pendingToolbarFocus = "facets"
@@ -970,7 +1096,10 @@ private fun Herrin() {
                 else -> "screen-first"
             }
             // A lazy search result attaches after its parent. Its item effect restores focus below.
-            if (screen == "search" && id.startsWith("card-") && films.any { (it.title.contains(query.trim(), ignoreCase = true) || it.subtitle.contains(query.trim(), ignoreCase = true)) && "card-${it.id}" == id })
+            if (screen == "search" && id.startsWith("card-") &&
+                showCatalog.search(query, searchCategory, searchNewestFirst).any {
+                    "card-${displayKey(it)}" == id
+                })
                 return@LaunchedEffect
             runCatching { requester(id).requestFocus() }.onSuccess {
                 pendingToolbarFocus = null
@@ -984,7 +1113,7 @@ private fun Herrin() {
         // Defer decoding and drawing the large hero until after splash: loading the
         // artwork underneath an opaque splash causes avoidable startup frame stalls.
         if (homeVisible && (!sourceConfigured || films.isNotEmpty())) {
-            Crossfade(targetState = film, animationSpec = if (reduceMotion) tween(0)
+            Crossfade(targetState = displayFilm, animationSpec = if (reduceMotion) tween(0)
                 else tween(360, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
                 FilmArtwork(hero, Modifier.fillMaxSize())
             }
@@ -1019,7 +1148,7 @@ private fun Herrin() {
                 }
             }
             "facets" -> {
-                val matches = FilmFacetFilters.results(films, facetSelection)
+                val matches = showCatalog.collapse(FilmFacetFilters.results(films, facetSelection))
                 val facetsScroll = rememberScrollState()
                 val metadataMatched = films.count { it.metadataSource == "TMDB" }
                 Column(Modifier.fillMaxSize().testTag("facet-screen")
@@ -1062,7 +1191,7 @@ private fun Herrin() {
                         reduceMotion, onFocus = { focusId = it }, onSelect = { facetRegion = it })
                     FacetRail("影片评分 · TMDB", "rating", FilmFacetFilters.ratingBands, facetRating,
                         reduceMotion,
-                        downTarget = matches.firstOrNull()?.let { requester("facet-result-${it.id}") },
+                        downTarget = matches.firstOrNull()?.let { requester("facet-result-${displayKey(it)}") },
                         onFocus = { focusId = it }, onSelect = { facetRating = it })
                     Text("筛选结果 · ${matches.size} 部${if (metadataScanDone < metadataScanTotal && metadataToken.isNotBlank()) " · 更新中" else ""}",
                         Modifier.testTag("facet-result-count"), fontSize = 22.sp,
@@ -1073,16 +1202,16 @@ private fun Herrin() {
                     } else LazyRow(Modifier.testTag("facet-results"), state = facetResultState,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        items(matches, key = { it.id }) { candidate ->
+                        items(matches, key = { displayKey(it) }) { candidate ->
                             LaunchedEffect(candidate.id) {
-                                if (focusId == "facet-result-${candidate.id}")
-                                    runCatching { requester("facet-result-${candidate.id}").requestFocus() }
+                                if (focusId == "facet-result-${displayKey(candidate)}")
+                                    runCatching { requester("facet-result-${displayKey(candidate)}").requestFocus() }
                             }
-                            Poster(candidate, Modifier.testTag("facet-result-${candidate.id}")
-                                .focusRequester(requester("facet-result-${candidate.id}")),
+                            Poster(candidate, Modifier.testTag("facet-result-${displayKey(candidate)}")
+                                .focusRequester(requester("facet-result-${displayKey(candidate)}")),
                                 reduceMotion, onFocus = {
                                     filmId = candidate.id
-                                    focusId = "facet-result-${candidate.id}"
+                                    focusId = "facet-result-${displayKey(candidate)}"
                                 }, onClick = { details(candidate) })
                         }
                     }
@@ -1165,18 +1294,21 @@ private fun Herrin() {
             }
             "browse", "search" -> {
                 val isSearch = screen == "search"
-                val filtered = if (isSearch) SearchDiscovery.results(
-                    films, query, searchCategory, searchNewestFirst
-                ) else films.filter {
-                    category == "首页" || it.category == category || category == "我的" && it.id in favorites
-                }
+                val filtered = if (isSearch) showCatalog.search(
+                    query, searchCategory, searchNewestFirst
+                ) else if (category == "我的") showCatalog.favorites(favorites)
+                else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
                 // History drives the first shelf only for films with actual saved playback.
                 // On a fresh installation the same rail shows browseable demo suggestions.
-                val watched = if (!isSearch && category == "首页") watchHistory.recent(catalogScope, filtered)
+                val watched = if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
+                    showCatalog.watchProgress(shown) { source, entry, option ->
+                        watchHistory.load(catalogScope, source.id, entry.number, option.id)
+                    }?.let { shown to it.updatedAtMs }
+                }.sortedByDescending { it.second }.map { it.first }
                     else emptyList()
                 val railFilms = if (watched.isNotEmpty()) watched else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
-                val recommendedFilms = if (!isSearch && category == "首页") films.asReversed() else emptyList()
+                val recommendedFilms = if (!isSearch && category == "首页") browseFilms.asReversed() else emptyList()
                 val recommendState = railStates.getValue("recommend")
                 val browseScroll = rememberScrollState()
                 LaunchedEffect(category) { browseScroll.scrollTo(0) }
@@ -1194,7 +1326,7 @@ private fun Herrin() {
                     derivedStateOf { railState.firstVisibleItemIndex }
                 }
                 val firstPosterTarget = railFilms.getOrNull(visibleFirstIndex)
-                    ?.let { requester("card-${it.id}") }
+                    ?.let { requester("card-${displayKey(it)}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
                 Column(Modifier.fillMaxSize().testTag("browse-scroll").graphicsLayer {
                     alpha = sceneReveal.value
@@ -1311,19 +1443,19 @@ private fun Herrin() {
                                 fontWeight = FontWeight.Medium, color = Color(0xFFE5EAF2))
                         }
                         Spacer(Modifier.height(11.dp))
-                        Text(film.title, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold,
+                        Text(displayFilm.title, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.sp, color = Color.White, lineHeight = 49.sp)
-                        Text(film.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
+                        Text(displayFilm.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
                             color = Color(0xFFE4E7EF))
                         Spacer(Modifier.height(12.dp))
-                        Text("${film.year}   ·   ${film.category}   ·   ${if (providerFilms == null) "ORIGINAL UI DEMO" else "USER-SUPPLIED CATALOG"}",
+                        Text("${displayFilm.year}   ·   ${displayFilm.category}   ·   ${if (providerFilms == null) "ORIGINAL UI DEMO" else "USER-SUPPLIED CATALOG"}",
                             fontSize = 13.sp, color = Color(0xFFF3F5F8))
-                        if (film.ratingValue != null || film.genres.isNotEmpty())
-                            Text(listOfNotNull(FilmMetadataEnrichment.ratingLabel(film),
-                                film.genres.take(3).joinToString(" · ").takeIf { it.isNotBlank() })
+                        if (displayFilm.ratingValue != null || displayFilm.genres.isNotEmpty())
+                            Text(listOfNotNull(FilmMetadataEnrichment.ratingLabel(displayFilm),
+                                displayFilm.genres.take(3).joinToString(" · ").takeIf { it.isNotBlank() })
                                 .joinToString("   ·   "), fontSize = 13.sp,
                                 color = Color(0xFFE8CDA0), modifier = Modifier.testTag("hero-metadata"))
-                        Text(film.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 6.dp),
+                        Text(displayFilm.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 6.dp),
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1332,7 +1464,7 @@ private fun Herrin() {
                                 modifier = Modifier.testTag("play")
                                     .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
                                     .focusRequester(requester("play"))) {
-                                if (providerFilms != null && film.playbackEpisodes.isEmpty()) details(film)
+                                if (showGroup != null || providerFilms != null && film.playbackEpisodes.isEmpty()) details(film)
                                 else {
                                     returnScreen = "browse"
                                     episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
@@ -1596,23 +1728,23 @@ private fun Herrin() {
                     }
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        itemsIndexed(railFilms, key = { _, item -> item.id }) { index, item ->
+                        itemsIndexed(railFilms, key = { _, item -> displayKey(item) }) { index, item ->
                             // Runs after this lazy item's focus target is attached, including Back from detail.
                             LaunchedEffect(item.id) {
-                                if (isSearch && focusId == "card-${item.id}") {
-                                    requester("card-${item.id}").requestFocus()
-                                    RemoteTrace.event("RESTORE search card=${item.id} attached")
+                                if (isSearch && focusId == "card-${displayKey(item)}") {
+                                    requester("card-${displayKey(item)}").requestFocus()
+                                    RemoteTrace.event("RESTORE search card=${displayKey(item)} attached")
                                 }
                             }
                             val homeRail = !isSearch && category == "首页" && recommendedFilms.isNotEmpty()
-                            Poster(item, Modifier.testTag("card-${item.id}")
+                            Poster(item, Modifier.testTag("card-${displayKey(item)}")
                                 .focusProperties {
                                     up = requester(when {
                                         isSearch -> "search-suggest-${suggestions[index.coerceAtMost(suggestions.lastIndex)]}"
                                         index == 0 -> "play"
                                         else -> "details"
                                     })
-                                    down = if (homeRail) requester("recommend-${recommendedFilms[index.coerceAtMost(recommendedFilms.lastIndex)].id}")
+                                    down = if (homeRail) requester("recommend-${displayKey(recommendedFilms[index.coerceAtMost(recommendedFilms.lastIndex)])}")
                                         else FocusRequester.Cancel
                                 }
                                 .onPreviewKeyEvent { event ->
@@ -1627,14 +1759,12 @@ private fun Herrin() {
                                         true
                                     } else false
                                 }
-                                .focusRequester(requester("card-${item.id}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${item.id}" }, onClick = { details(item) },
+                                .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
+                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { details(item) },
                                 progress = if (!isSearch && category == "首页") {
-                                    item.playbackEpisodes.asSequence().flatMap { part ->
-                                        part.lines.asSequence().mapNotNull { option ->
-                                            watchHistory.load(catalogScope, item.id, part.number, option.id)
-                                        }
-                                    }.maxByOrNull { it.updatedAtMs }?.fraction
+                                    showCatalog.watchProgress(item) { source, part, option ->
+                                        watchHistory.load(catalogScope, source.id, part.number, option.id)
+                                    }?.fraction
                                 } else null)
                         }
                     }
@@ -1648,10 +1778,10 @@ private fun Herrin() {
                         Spacer(Modifier.height(5.dp))
                         LazyRow(state = recommendState, contentPadding = PaddingValues(10.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            itemsIndexed(recommendedFilms, key = { _, item -> item.id }) { index, item ->
-                                Poster(item, Modifier.testTag("recommend-${item.id}")
+                            itemsIndexed(recommendedFilms, key = { _, item -> displayKey(item) }) { index, item ->
+                                Poster(item, Modifier.testTag("recommend-${displayKey(item)}")
                                     .focusProperties {
-                                        up = requester("card-${railFilms[index.coerceAtMost(railFilms.lastIndex)].id}")
+                                        up = requester("card-${displayKey(railFilms[index.coerceAtMost(railFilms.lastIndex)])}")
                                         down = FocusRequester.Cancel
                                     }
                                     .onPreviewKeyEvent { event ->
@@ -1666,8 +1796,8 @@ private fun Herrin() {
                                             true
                                         } else false
                                     }
-                                    .focusRequester(requester("recommend-${item.id}")), reduceMotion,
-                                    onFocus = { filmId = item.id; focusId = "recommend-${item.id}" },
+                                    .focusRequester(requester("recommend-${displayKey(item)}")), reduceMotion,
+                                    onFocus = { filmId = item.id; focusId = "recommend-${displayKey(item)}" },
                                     onClick = { details(item) })
                             }
                         }
@@ -1714,7 +1844,11 @@ private fun Herrin() {
                             watchHistory.update(catalogScope, film.id, episode, historyLine,
                                 position, duration, finished)
                         },
-                        onBack = { restoreSeasonFocus = seasonLayout != null; screen = "detail" }
+                        onBack = {
+                            restoreGroupFocus = showGroup != null
+                            restoreSeasonFocus = showGroup == null && seasonLayout != null
+                            screen = "detail"
+                        }
                     )
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
@@ -2284,24 +2418,25 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.24 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、演职员头像、上映日期、片长与影片分类。\n影视首页右上角「筛选」可按 TMDB 评分、演员、导演、地区及年份组合筛选。\n明确识别至少两季时，详情页显示季切换及统一16:9单集卡；选集按确定直接进入原播放器。\n详情页媒体规格严格区分影视源标称与播放器已识别格式，未知内容播放后再识别。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.25 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、演职员头像、上映日期、片长与影片分类。\n影视首页右上角「筛选」可按 TMDB 评分、演员、导演、地区及年份组合筛选。\n当前影视点内，同一作品被拆成多个季条目时可整合为统一海报、季标签和16:9单集卡；原始来源和播放线路均保留。\n跨不同影视点的内容尚未统一扫描整合；缺乏可靠季集标签时可进入原始条目。\n详情页媒体规格严格区分影视源标称与播放器已识别格式，未知内容播放后再识别。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
                     } else {
                         item { Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                            Text(if (screen == "player" && !spiderActive) "播放演示" else film.title,
+                            Text(if (screen == "player" && !spiderActive) "播放演示"
+                                else if (screen == "detail") displayFilm.title else film.title,
                                 fontSize = 38.sp, fontWeight = FontWeight.Bold)
                             Text(buildString {
-                                FilmMetadataEnrichment.ratingLabel(film)?.let { append(it).append("  ·  ") }
-                                append(film.releaseDate ?: film.year).append("  ·  ")
-                                append(film.category)
-                                film.runtimeMinutes?.let {
+                                FilmMetadataEnrichment.ratingLabel(displayFilm)?.let { append(it).append("  ·  ") }
+                                append(displayFilm.releaseDate ?: displayFilm.year).append("  ·  ")
+                                append(displayFilm.category)
+                                displayFilm.runtimeMinutes?.let {
                                     append("  ·  ")
-                                    append(if (film.category == "剧集" || film.category == "动漫") "单集约 " else "资料片长 ")
+                                    append(if (displayFilm.category == "剧集" || displayFilm.category == "动漫") "单集约 " else "资料片长 ")
                                     append(it).append(" 分钟")
                                 }
-                                if (film.genres.isNotEmpty()) append("\n类型：").append(film.genres.joinToString(" · "))
-                                if (film.regions.isNotEmpty()) append("\n国家 / 地区：").append(film.regions.joinToString(" · "))
-                                if (film.directors.isNotEmpty()) append("\n导演 / 主创：").append(film.directors.joinToString(" · "))
+                                if (displayFilm.genres.isNotEmpty()) append("\n类型：").append(displayFilm.genres.joinToString(" · "))
+                                if (displayFilm.regions.isNotEmpty()) append("\n国家 / 地区：").append(displayFilm.regions.joinToString(" · "))
+                                if (displayFilm.directors.isNotEmpty()) append("\n导演 / 主创：").append(displayFilm.directors.joinToString(" · "))
                             }, lineHeight = 25.sp, modifier = Modifier.testTag("detail-metadata"))
                         } }
                         item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2324,12 +2459,12 @@ private fun Herrin() {
                             Text("规格以实际选中媒体轨道为依据，不代表电视已成功硬解或面板最终输出；未知时不猜测。",
                                 color = Color(0xFF8FA3B9), fontSize = 13.sp)
                         } }
-                        if (film.people.isNotEmpty()) item {
+                        if (displayFilm.people.isNotEmpty()) item {
                             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                 Text("相关演职人员", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                                 LazyRow(Modifier.testTag("detail-people"),
                                     horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                                    itemsIndexed(film.people.take(10), key = { index, person ->
+                                    itemsIndexed(displayFilm.people.take(10), key = { index, person ->
                                         "$index-${person.name}" }) { index, person ->
                                         var personFocused by remember(person.name) { mutableStateOf(false) }
                                         Column(Modifier.width(122.dp)
@@ -2351,9 +2486,17 @@ private fun Herrin() {
                                     }
                                 }
                             }
-                        } else if (film.actors.isNotEmpty()) item {
-                            Text("主演：${film.actors.take(8).joinToString(" · ")}",
+                        } else if (displayFilm.actors.isNotEmpty()) item {
+                            Text("主演：${displayFilm.actors.take(8).joinToString(" · ")}",
                                 modifier = Modifier.testTag("detail-people"), color = Color(0xFFD7E0EA))
+                        }
+                        if (showGroup != null && screen == "detail") item {
+                            Text("多季整合 · 当前目录 ${showGroup.members.size} 个原始条目 · 播放仍使用原影视点",
+                                modifier = Modifier.testTag("group-detail-members"),
+                                color = Color(0xFFBFD6EF), fontSize = 15.sp)
+                            if (groupDetailStatus.isNotBlank()) Text(groupDetailStatus,
+                                modifier = Modifier.testTag("group-detail-status"),
+                                color = Color(0xFFE1C58C), fontSize = 14.sp)
                         }
                         if (spiderActive) item { Text(spiderStatus, color = Color(0xFFE2C38B), modifier = Modifier.testTag("spider-status")) }
                         if (!spiderActive && film.cmsVodId != null && cmsDetailStatus.isNotBlank())
@@ -2370,12 +2513,18 @@ private fun Herrin() {
                                 Text(status, fontSize = 20.sp)
                             }
                             item { TvButton("返回详情", reduced = reduceMotion) {
-                                restoreSeasonFocus = seasonLayout != null
+                                restoreGroupFocus = showGroup != null
+                                restoreSeasonFocus = showGroup == null && seasonLayout != null
                                 screen = "detail"
                             } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 TvButton(when {
+                                    showGroup != null && groupResume != null ->
+                                        "▶ 继续播放 第${groupResume.first.season}季 第${groupResume.first.number}集 ${formatSeasonClock(groupResume.second.positionMs)}"
+                                    showGroup != null && groupSection?.episodes?.isNotEmpty() == true ->
+                                        "▶ 播放 第${groupSection.number}季 第${groupSection.episodes.first().number}集"
+                                    showGroup != null -> "正在读取多季选集"
                                     spiderActive && film.playbackEpisodes.isEmpty() -> "等待 Spider 选集"
                                     seasonResume != null ->
                                         "▶ 继续播放 第${seasonResume.entry.season}季 第${seasonResume.entry.number}集 ${formatSeasonClock(seasonResume.position.positionMs)}"
@@ -2384,23 +2533,37 @@ private fun Herrin() {
                                     resume != null && resume.positionMs > 0L ->
                                         "▶ 继续播放 ${resume.positionMs / 60000}:${"%02d".format(resume.positionMs / 1000 % 60)}"
                                     spiderActive -> "▶ 播放当前集"
+                                    providerFilms != null && film.playbackEpisodes.isEmpty() -> "暂无可播选集"
                                     film.playbackEpisodes.isEmpty() -> "▶ 播放演示"
                                     else -> "▶ 播放授权片源"
                                 }, selected = true, reduced = reduceMotion) {
-                                    if (spiderActive && film.playbackEpisodes.isEmpty())
+                                    if (showGroup != null && groupResume != null)
+                                        playGroupSource(groupResume.first)
+                                    else if (showGroup != null && groupSection?.episodes?.isNotEmpty() == true)
+                                        playGroupEpisode(groupSection.episodes.first())
+                                    else if (showGroup != null)
+                                        groupDetailStatus = "还没有可播放选集；请等待详情返回或改选原始条目"
+                                    else if (spiderActive && film.playbackEpisodes.isEmpty())
                                         spiderStatus = "Spider 尚未返回播放选集，请稍后重试或选择其他站点"
+                                    else if (providerFilms != null && film.playbackEpisodes.isEmpty())
+                                        cmsDetailStatus = "该影视点尚未返回可播放选集；请检查来源或更换站点"
                                     else if (seasonResume != null)
                                         playSeasonEpisode(seasonResume.entry, seasonResume.line.id)
                                     else if (seasonLayout != null && detailSeasonEntries.isNotEmpty())
                                         playSeasonEpisode(detailSeasonSource ?: detailSeasonEntries.first())
                                     else screen = "player"
                                 }
-                                TvButton(if (film.id in favorites) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
-                                    prefs.toggleFor(catalogScope, film.id)
+                                val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
+                                    ?: (film.id in favorites)
+                                TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
+                                    if (showGroup == null) prefs.toggleFor(catalogScope, film.id)
+                                    else if (groupFavorited) showGroup.members.filter { it.film.id in favorites }
+                                        .forEach { prefs.toggleFor(catalogScope, it.film.id) }
+                                    else prefs.toggleFor(catalogScope, showGroup.representative.id)
                                     favorites = prefs.idsFor(catalogScope)
                                 }
                             } }
-                            if (resume != null && seasonLayout == null) {
+                            if (showGroup == null && resume != null && seasonLayout == null) {
                                 item { Text("继续播放 · 已观看 ${resume.positionMs / 1000} 秒 / ${resume.durationMs / 1000} 秒",
                                     fontSize = 17.sp, color = Color(0xFFD4E6FD)) }
                                 item { TvButton("从头播放", reduced = reduceMotion) {
@@ -2409,7 +2572,30 @@ private fun Herrin() {
                                     screen = "player"
                                 } }
                             }
-                            if (seasonLayout != null && detailSeason != null) {
+                            if (showGroup != null && groupLayout != null && groupSection != null) {
+                                item {
+                                    GroupSeasonBrowser(groupLayout, groupSection,
+                                        groupRowState, groupOfficialEpisodes,
+                                        reduced = reduceMotion,
+                                        selected = selectedGroupOption,
+                                        focusedEpisode = groupFocusedEpisode,
+                                        restoreEpisode = groupFocusedCoordinates.takeIf { restoreGroupFocus },
+                                        onRestoreFocus = { restoreGroupFocus = false },
+                                        history = { entry -> entry.sources.mapNotNull { option ->
+                                            watchHistory.load(catalogScope, option.film.id,
+                                                option.source.number, option.line.id)
+                                        }.maxByOrNull { it.updatedAtMs } },
+                                        onSeasonSelect = ::selectGroupSeason,
+                                        onEpisodeFocus = { entry ->
+                                            groupFocusedCoordinates = entry.season to entry.number
+                                        }, onEpisodePlay = ::playGroupEpisode,
+                                        onLinePlay = ::playGroupSource)
+                                }
+                            } else if (showGroup != null) {
+                                item { Text("当前原始条目没有可信的季集标记；可打开单个影视条目继续选集。",
+                                    modifier = Modifier.testTag("group-unmapped"),
+                                    color = Color(0xFFBDC8D6)) }
+                            } else if (seasonLayout != null && detailSeason != null) {
                                 item {
                                     SeasonBrowser(seasonLayout, detailSeason,
                                         detailSeasonRowState, seasonOfficialEpisodes,
@@ -2426,9 +2612,15 @@ private fun Herrin() {
                                         }, onPlay = { entry -> playSeasonEpisode(entry) })
                                 }
                             } else {
-                                item { Text(if (film.playbackEpisodes.isEmpty()) "演示选集" else "授权选集",
+                                item { Text(if (providerFilms != null && film.playbackEpisodes.isEmpty())
+                                    "原始条目 · 尚无可播放的真实选集"
+                                    else if (film.playbackEpisodes.isEmpty()) "演示选集" else "授权选集",
                                     fontSize = 20.sp) }
-                                item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                if (providerFilms != null && film.playbackEpisodes.isEmpty()) item {
+                                    Text("当前影视点未返回有效的集数或线路；不会将演示集当作真实播放地址。",
+                                        modifier = Modifier.testTag("source-no-playable-episodes"),
+                                        color = Color(0xFFD9B78A), fontSize = 14.sp)
+                                } else item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     if (film.playbackEpisodes.isEmpty()) {
                                         (1..film.episodes).forEach { n ->
@@ -2453,13 +2645,23 @@ private fun Herrin() {
                             }
                             item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                                Text(film.synopsis.ifBlank { "暂未取得可靠剧情简介" },
+                                Text(displayFilm.synopsis.ifBlank { "暂未取得可靠剧情简介" },
                                     modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
                                     color = Color(0xFFE1E8F2))
-                                if (film.metadataSource == "TMDB") Text("资料由 TMDB 提供；播放线路由你添加的影视源提供。",
+                                if (displayFilm.metadataSource == "TMDB") Text("资料由 TMDB 提供；播放线路由你添加的影视源提供。",
                                     fontSize = 13.sp, color = Color(0xFF9BAEC2))
                             } }
-                            item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            if (showGroup != null && unmappedGroupMembers.isNotEmpty()) item {
+                                GroupRawSourceChooser(unmappedGroupMembers, reduceMotion) { original ->
+                                    bypassGroupFilmId = original.id
+                                    filmId = original.id
+                                    episode = original.playbackEpisodes.firstOrNull()?.number ?: 1
+                                    line = original.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
+                                    restoreGroupFocus = false
+                                }
+                            }
+                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (displayedLines.isEmpty()) {
                                     listOf("演示线路 A", "演示线路 B").forEach { name ->
@@ -2476,7 +2678,8 @@ private fun Herrin() {
                                         }
                                     }
                                 }
-                            } }
+                                }
+                            }
                         }
                     }
                 }
