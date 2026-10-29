@@ -7,10 +7,11 @@ import com.github.catvod.net.Net
 import com.github.catvod.utils.Local
 import com.github.catvod.utils.RuntimeModule
 import dalvik.system.DexClassLoader
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -19,7 +20,6 @@ import java.lang.reflect.InvocationTargetException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import android.os.Build
 import java.util.zip.ZipFile
 
 /**
@@ -235,7 +235,10 @@ internal object SpiderJarCache {
         val folder = File(context.codeCacheDir, "herrin-spider")
         check(folder.isDirectory || folder.mkdirs()) { "无法创建 Spider 缓存目录" }
         val destination = File(folder, "$md5.jar")
-        if (destination.isFile && validJar(destination, md5)) return destination
+        if (destination.isFile && validJar(destination, md5)) {
+            check(destination.setReadOnly()) { "无法保护 Spider 缓存文件" }
+            return destination
+        }
         val temporary = File(folder, "$md5.download")
         if (temporary.exists() && !temporary.delete()) error("无法清理旧下载")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -297,7 +300,7 @@ internal object SpiderJarCache {
 
     /** Some older protected CatVod packs ship JNI under assets rather than lib/<abi>. */
     fun nativeLibrary(context: Context, jar: File): File? {
-        val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
+        val abi = SpiderRuntimeCompat.processAbi().orEmpty()
         val entryName = SpiderNativeLibraryPlan.assetForAbi(abi)
             ?: return null // Never feed ARM machine code to an x86 emulator.
         return ZipFile(jar).use { zip ->
@@ -343,19 +346,17 @@ internal object SpiderJarCache {
 internal object SpiderFailureDetails {
     /** Reflection wrappers must not hide the actual failing native/JNI dependency. */
     fun message(error: Throwable): String {
-        val causes = generateSequence(error) { current ->
-            (current as? InvocationTargetException)?.targetException ?: current.cause
-        }.take(8).toList()
-        val cause = causes.last()
-        return "${cause.javaClass.simpleName}：${cause.message.orEmpty().take(160)}"
+        return SpiderRuntimeCompat.failure(error)
     }
 }
 
 /** FongMi's optional Init hook logs ordinary exceptions; runtime absence is fatal. */
 internal object SpiderInitPolicy {
-    fun blocking(error: Throwable): Throwable? = when (error) {
-        is VirtualMachineError, is ThreadDeath -> error
-        else -> RuntimeModule.MissingException.find(error)
+    fun blocking(error: Throwable): Throwable? {
+        val fatal = generateSequence(error) {
+            (it as? InvocationTargetException)?.targetException ?: it.cause
+        }.take(8).firstOrNull { it is VirtualMachineError || it is ThreadDeath }
+        return fatal ?: RuntimeModule.MissingException.find(error)
     }
 }
 
@@ -367,7 +368,14 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeHttpHost: SpiderHttpSessionHost? = null
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
-        SpiderResult.Ready(withTimeout(30_000) { runInterruptible(Dispatchers.IO) { block() } })
+        withTimeoutOrNull(30_000) {
+            SpiderResult.Ready(runInterruptible(Dispatchers.IO) { block() })
+        } ?: run {
+            close()
+            SpiderResult.Failure("Spider 操作超时，请重新应用站点")
+        }
+    } catch (cancel: CancellationException) {
+        throw cancel
     } catch (exception: Exception) {
         SpiderResult.Failure("Spider ${SpiderFailureDetails.message(exception)}")
     } catch (error: LinkageError) {
@@ -375,9 +383,15 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = attempt {
-        val spiderApi = requireNotNull(site.spiderApi) { "站点不是 Java csp_* 类型" }
-        val jar = site.jar ?: config.spiderJar ?: error("配置没有 Spider JAR")
-        val key = "${jar.hashCode()}:${site.key}"
+        val spiderApi = site.spiderApi ?: run {
+            close()
+            error("站点不是 Java csp_* 类型")
+        }
+        val jar = site.jar ?: config.spiderJar ?: run {
+            close()
+            error("配置没有 Spider JAR")
+        }
+        val key = SpiderRuntimeCompat.sessionKey(jar, site)
         val spider = if (key == activeKey) active!! else {
             close()
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DOWNLOAD)
@@ -388,15 +402,17 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // An isolated Service cannot provide the foreground Activity from
             // the main process. Do not pretend the Application is an Activity.
             Runtime.setActivity { null }
-            Runtime.setToast { android.util.Log.i("HerrinCatVod", it.take(150)) }
+            Runtime.setToast { android.util.Log.i("HerrinCatVod", "Plugin notification suppressed") }
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.NATIVE)
             // Extract ABI-matched JNI only to the DEX search directory. FongMi's
             // JarLoader does NOT eagerly System.load() an arbitrary JAR asset;
             // its own Init or Spider may decide when to load native code.
             val native = SpiderJarCache.nativeLibrary(context, file)
+            val nativeFolder = SpiderRuntimeCompat.nativeDirectory(context, file)
+                ?: native?.parentFile
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.LOADER)
             val loader = DexClassLoader(file.absolutePath, file.parentFile!!.absolutePath,
-                native?.parentFile?.absolutePath ?: file.parentFile!!.absolutePath,
+                nativeFolder?.absolutePath ?: file.parentFile!!.absolutePath,
                 RuntimeModule.getSpiderClassLoader())
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.INITIALIZER)
             val initFailure = runCatching {
@@ -407,17 +423,23 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 // Match FongMi JarLoader.invokeInit(): optional bootstrap errors
                 // are logged, except a missing required runtime must be surfaced.
                 SpiderInitPolicy.blocking(initFailure)?.let { throw it }
-                android.util.Log.w("HerrinCatVod", "optional Init: ${SpiderFailureDetails.message(initFailure)}")
+                android.util.Log.w("HerrinCatVod", "Optional plugin initializer failed: ${initFailure.javaClass.simpleName}")
             }
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
             val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi.removePrefix("csp_")}")
-            (spiderClass.getDeclaredConstructor().newInstance() as Spider).apply {
-                siteKey = site.key
-                net = Net(httpHost, site.key)
-                local = Local(site.key)
+            val created = spiderClass.getDeclaredConstructor().newInstance() as Spider
+            try {
+                created.siteKey = site.key
+                created.net = Net(httpHost, site.key)
+                created.local = Local(site.key)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
-                init(context, site.extension)
-            }.also { active = it; activeKey = key; activeHttpHost = httpHost }
+                created.init(context, site.extension)
+                created.also { active = it; activeKey = key; activeHttpHost = httpHost }
+            } catch (error: Throwable) {
+                SpiderRuntimeCompat.dispose(created)
+                httpHost.clear()
+                throw error
+            }
         }
         // FongMi sends the root config's global VIP flags to playerContent.
         // Passing emptyList() prevented some plugins from generating the same
@@ -458,10 +480,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     fun close() {
-        runCatching { active?.destroy() }
-        runCatching { active?.net?.close() }
-        runCatching { active?.dialog?.close() }
-        runCatching { active?.js?.close() }
+        SpiderRuntimeCompat.dispose(active)
         active = null
         activeKey = null
         activeVipFlags = emptyList()

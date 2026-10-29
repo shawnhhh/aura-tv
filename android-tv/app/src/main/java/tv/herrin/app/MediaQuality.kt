@@ -1,13 +1,20 @@
 package tv.herrin.app
 
+enum class MediaEvidenceStage { SELECTED_TRACK }
+enum class MediaOutputConfirmation { UNCONFIRMED }
+
 /** Observations from Media3's *selected* playback tracks; not TMDB metadata or source-title claims. */
 data class VerifiedStreamSpec(
     val resolution: String? = null,
     val dynamicRange: String? = null,
-    val spatialAudio: String? = null
+    val spatialAudio: String? = null,
+    val dolbyAudio: String? = null
 ) {
-    val isKnown: Boolean get() = resolution != null || dynamicRange != null || spatialAudio != null
-    fun labels(): List<String> = listOfNotNull(resolution, dynamicRange, spatialAudio)
+    /** Selected metadata does not certify successful decoding or the television's output mode. */
+    val evidenceStage: MediaEvidenceStage get() = MediaEvidenceStage.SELECTED_TRACK
+    val outputConfirmation: MediaOutputConfirmation get() = MediaOutputConfirmation.UNCONFIRMED
+    val isKnown: Boolean get() = resolution != null || dynamicRange != null || spatialAudio != null || dolbyAudio != null
+    fun labels(): List<String> = listOfNotNull(resolution, dynamicRange, spatialAudio ?: dolbyAudio)
 }
 
 /** Values are extracted only after Media3 selected the corresponding track. */
@@ -42,7 +49,12 @@ internal object MediaQuality {
             else -> null
         }
         val spatial = if (audio?.mime == "audio/eac3-joc") "Dolby Atmos" else null
-        return VerifiedStreamSpec(resolution, transfer, spatial)
+        val dolbyAudio = when (DeviceMediaCapabilities.dolbyAudioKind(audio?.mime)) {
+            DolbyAudioKind.DOLBY_AUDIO -> "Dolby Audio"
+            DolbyAudioKind.DOLBY_ATMOS -> "Dolby Atmos"
+            null -> null
+        }
+        return VerifiedStreamSpec(resolution, transfer, spatial, dolbyAudio = dolbyAudio)
     }
 }
 
