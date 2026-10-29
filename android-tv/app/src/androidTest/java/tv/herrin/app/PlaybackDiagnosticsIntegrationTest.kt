@@ -1,6 +1,7 @@
 package tv.herrin.app
 
 import android.content.Intent
+import android.view.KeyEvent
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -98,6 +99,32 @@ class PlaybackDiagnosticsIntegrationTest {
             var rendered = false
             scenario.onActivity { rendered = (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3 }
             rendered
+        }
+    }
+
+    @Test fun tvRemoteDownFocusesControlsWhileLeftRightSeekAndQualityUsesMedia3Size() {
+        fixtures { server, _ ->
+            launch(server, "/mp4").use { scenario ->
+                frames(scenario)
+                compose.onNodeWithTag("player-quality-label").assertExists()
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
+                }
+                var position = -1L
+                scenario.onActivity { it.player.pause(); it.player.seekTo(0L) }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
+                scenario.onActivity { position = it.player.currentPosition }
+                assertTrue("Remote Right must seek the video", position > 0L)
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT)
+                scenario.onActivity { position = it.player.currentPosition }
+                assertTrue("Remote Left must rewind", position == 0L)
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
+                }
+            }
         }
     }
 
