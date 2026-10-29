@@ -135,7 +135,8 @@ internal object SpiderVodCodec {
         }
         return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles,
             alternateUris = playable.drop(1), allowHttpRedirects = allowHttp,
-            declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format"))))
+            declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format")),
+            danmakuSources = DanmakuProtocol.decodeSources(data.opt("danmaku"))))
     }
 
     /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */
