@@ -11,3 +11,5 @@
 原创自动测试覆盖清洗/年份/类型、MockWebServer 的真实 HTTP 请求与 Authorization header、官方资料替换、播放身份不变、恢复来源、跨 Resolver 缓存、强制重刮、手工纠错持久化与错误ID、同名歧义及网络恢复。无真实 TMDB 账户时不能声称外网 API/商业图片授权已验收。
 
 季集结构回归：统一官方标题仅影响展示，分组的季号、特别篇/OVA排除、稳定分组身份从 `originalDisplay?.title ?: film.title` 提取，原季2/3线路保持对应关系；来源季名仍可本地搜索。纠错 Resolver 构造应传当前 `catalogScope`，例如 `ArtworkMetadataResolver(cache, catalogScope = catalogScope)`，并在 scope 变化时重建 Resolver。手工匹配文件key包括scope和原始来源身份的长度前缀SHA-256，防止两个影视点重号同名串用纠错。
+
+详情请求竞态：Spider IPC 不承载 TMDB 富化字段，CMS 详情也可能携带旧的 TMDB 标记并覆写海报。因此所有详情完成回调应以列表里当前 Film 调用 `FilmMetadataEnrichment.mergeSourceDetails(current, details)`。当前已刮削时，仅接受来源的最新 episodes/playbackEpisodes，补充缺失的原始 Spider/CMS ID；展示资料和原始季标签保存不变。当前已停用刮削、旧请求仍携带 TMDB 标记时不恢复过时资料，只接收最新选集。双方均为原始来源资料时正常采用最新详情。不同 Film ID 的延迟结果直接忽略。原创回归使用真实 Spider JSON IPC 与 CMS detail codec，覆盖详情返回晚于刮削、CMS混合旧标记、停用后旧请求、来源正常更新及身份隔离。

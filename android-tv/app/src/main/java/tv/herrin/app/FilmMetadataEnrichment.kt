@@ -43,6 +43,26 @@ internal object FilmMetadataEnrichment {
             original.releaseDate, original.runtimeMinutes, original.people, original.title)
     )
 
+    /**
+     * Source detail requests can finish after TMDB matching or after the user disables it.
+     * Read the CURRENT film at completion: only the source owns episodes and playback URLs,
+     * while the current metadata choice owns display fields. Never revive a stale TMDB flag.
+     */
+    fun mergeSourceDetails(current: Film, details: Film): Film {
+        // A delayed callback from a different selection cannot replace this entry.
+        if (current.id != details.id) return current
+        if (current.metadataSource != "TMDB" && details.metadataSource != "TMDB") return details
+        // Copying the current entry also preserves originalDisplay's source season markers.
+        // If details carries an old TMDB snapshot while current is raw, keep the user's
+        // latest raw display choice; restoring that snapshot would restore obsolete data.
+        return current.copy(
+            episodes = details.episodes,
+            playbackEpisodes = details.playbackEpisodes,
+            spiderVodId = current.spiderVodId ?: details.spiderVodId,
+            cmsVodId = current.cmsVodId ?: details.cmsVodId
+        )
+    }
+
     fun restore(film: Film): Film {
         val saved = film.originalDisplay ?: return film
         return film.copy(title = saved.title ?: film.title, subtitle = saved.subtitle, synopsis = saved.synopsis, category = saved.category,
