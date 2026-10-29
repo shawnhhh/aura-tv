@@ -15,6 +15,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import okio.Buffer
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -42,6 +43,23 @@ class PlaybackDiagnosticsIntegrationTest {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     val path = request.path?.substringBefore('?').orEmpty()
                     requests.add(path)
+                    if (path.startsWith("/spider/")) {
+                        // Require CatVod playerContent headers on BOTH HLS playlist and TS requests.
+                        if (request.getHeader("Referer") != "https://authorized.example.test/library/" ||
+                            request.getHeader("User-Agent") != "HERRIN-fixture/1.0") {
+                            return MockResponse().setResponseCode(403)
+                        }
+                        val name = path.removePrefix("/spider/")
+                        val asset = when {
+                            name == "playlist" -> "synthetic-hls.m3u8"
+                            Regex("synthetic-segment-[0-9]{2}\\.ts").matches(name) -> name
+                            else -> return MockResponse().setResponseCode(404)
+                        }
+                        val mime = if (name == "playlist") "application/vnd.apple.mpegurl" else "video/mp2t"
+                        return MockResponse().setResponseCode(200)
+                            .setHeader("Content-Type", mime)
+                            .setBody(Buffer().write(inst.context.assets.open(asset).use { it.readBytes() }))
+                    }
                     if (path.startsWith("/status/"))
                         return MockResponse().setResponseCode(path.substringAfterLast('/').toInt())
                     val (asset, mime) = when (path) {
@@ -91,6 +109,32 @@ class PlaybackDiagnosticsIntegrationTest {
             assertTrue(requests.contains("/synthetic-segment-00.ts"))
             assertTrue(requests.contains("/init-stream0.m4s"))
             assertTrue(requests.contains("/chunk-stream0-00001.m4s"))
+        }
+    }
+
+    @Test fun spiderPlaybackJsonHeadersAndExtensionlessHlsDecodeRealVideoSegments() {
+        fixtures { server, requests ->
+            val playerJson = JSONObject()
+                .put("parse", 0)
+                .put("url", server.url("/spider/playlist").toString())
+                .put("format", "hls")
+                .put("header", JSONObject()
+                    .put("Referer", "https://authorized.example.test/library/")
+                    .put("User-Agent", "HERRIN-fixture/1.0"))
+                .toString()
+            val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
+                .putExtra("spiderJson", playerJson)
+            ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
+                frames(scenario)
+                assertTrue("Spider manifest must be requested", requests.contains("/spider/playlist"))
+                assertTrue("Spider segment requests must preserve the session headers",
+                    requests.any { it.startsWith("/spider/synthetic-segment-") && it.endsWith(".ts") })
+                compose.onNodeWithTag("player-verification-toggle").performClick()
+                compose.waitUntil(30_000) {
+                    runCatching { compose.onNodeWithTag("player-journey-status")
+                        .assertTextContains("已输出视频帧", substring = true) }.isSuccess
+                }
+            }
         }
     }
 
