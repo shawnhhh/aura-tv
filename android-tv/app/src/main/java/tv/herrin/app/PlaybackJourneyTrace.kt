@@ -16,6 +16,7 @@ internal class PlaybackJourneyTrace(private val stalledAfterMs: Long = 15_000L) 
     private var firstFrameAtMs: Long? = null
     private var frameBaseline = 0
     private var state = Player.STATE_IDLE
+    private var playbackRequested = true
     private var active = 0
     private var total = 1
     private var attempts = 0
@@ -33,6 +34,7 @@ internal class PlaybackJourneyTrace(private val stalledAfterMs: Long = 15_000L) 
         firstFrameAtMs = null
         frameBaseline = renderedFrames.coerceAtLeast(0)
         state = Player.STATE_IDLE
+        playbackRequested = true
         selectedVideo = false
         selectedAudio = false
         tracksKnown = false
@@ -42,8 +44,15 @@ internal class PlaybackJourneyTrace(private val stalledAfterMs: Long = 15_000L) 
 
     fun onState(playbackState: Int, nowMs: Long) {
         state = playbackState
+        if (playbackState != Player.STATE_READY) readyAtMs = null
         if (playbackState == Player.STATE_READY && readyAtMs == null)
             readyAtMs = nowMs.coerceAtLeast(startedAtMs)
+    }
+
+    fun onPlayWhenReady(shouldPlay: Boolean, nowMs: Long) {
+        if (shouldPlay && !playbackRequested && firstFrameAtMs == null &&
+            state == Player.STATE_READY) readyAtMs = nowMs.coerceAtLeast(startedAtMs)
+        playbackRequested = shouldPlay
     }
 
     fun onTracks(video: Boolean, audio: Boolean) {
@@ -88,6 +97,8 @@ internal class PlaybackJourneyTrace(private val stalledAfterMs: Long = 15_000L) 
             state == Player.STATE_ENDED -> "播放已结束（没有本次视频首帧证据）"
             state == Player.STATE_READY && selectedAudio && !selectedVideo ->
                 "已就绪，只有音频轨道（不应误判为视频黑屏）"
+            state == Player.STATE_READY && !playbackRequested ->
+                "播放已暂停，暂不判定首帧超时"
             state == Player.STATE_READY && selectedVideo &&
                 nowMs - (readyAtMs ?: startedAtMs) >= stalledAfterMs ->
                 "视频轨已就绪超过 ${stalledAfterMs / 1000L} 秒，但尚无视频出帧证据"
