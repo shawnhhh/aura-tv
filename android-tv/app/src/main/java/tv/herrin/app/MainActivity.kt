@@ -376,15 +376,10 @@ private fun Herrin() {
                 tvBoxWarehouses = result.entries
                 tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}已识别 ${result.entries.size} 个仓库${if (result.ignored > 0) "；跳过 ${result.ignored} 个无效／重复条目" else ""}。选中下方仓库可预览。"
                 if (settingsTvBoxOnly) {
-                    for (warehouse in result.entries.take(5)) {
-                        val nested = tvBoxRepository.load(warehouse.url, true)
-                        if (nested is TvBoxConfig.Single) {
-                            tvBoxSelectedName = warehouse.name
-                            tvBoxSingle = nested
-                            tvBoxStatus += "；已进入 ${warehouse.name}：${nested.sites.size} 个站点"
-                            break
-                        }
-                    }
+                    // Multi-warehouse import is metadata-only. TVBox users
+                    // choose a warehouse; downloading up to five nested
+                    // configs here was a serial startup/network bottleneck.
+                    tvBoxStatus += "；已导入仓库列表，请打开「选择影视点」按需选择仓库"
                 }
             }
             is TvBoxConfig.Single -> {
@@ -418,7 +413,9 @@ private fun Herrin() {
             val savedSite = prefs.tvBoxLastWorkingSiteId.takeIf {
                 prefs.tvBoxLastWorkingRootUrl == prefs.tvBoxWarehouseUrl
             }.orEmpty()
-            val candidates = TvBoxAutoSites.candidates(config, savedSite)
+            // TVBox-style import must not probe all third-party plugins.
+            // Restore at most the previously selected site on startup.
+            val candidates = TvBoxAutoSites.resumeOnly(config, savedSite)
             var chosen: Pair<TvBoxSite, List<Film>>? = null
             var chosenSpider = false
             var spiderFailure = ""
@@ -506,7 +503,7 @@ private fun Herrin() {
                 providerFilms = null
                 activeCmsSite = null
                 tvBoxVodScope = "tvbox:pending:$address"
-                providerStatus = "配置已导入，暂无可播放影视目录；可在设置重新应用影视源"
+                providerStatus = "已导入 ${config.sites.size} 个影视点；选择影视点后才加载影片目录"
                 if (spiderCrashed) {
                     tvBoxStatus = "配置读取成功，但 Spider 子进程异常退出。已停止自动重试以保护电视；可打开「选择影视点」尝试其他站点。"
                     vodImportFeedback = "插件崩溃"
@@ -514,8 +511,11 @@ private fun Herrin() {
                     tvBoxStatus = "配置读取成功，但自动检索已达到限时；请打开「选择影视点」手动尝试其他站点。" +
                         (if (spiderFailure.isNotBlank()) "最近失败：${spiderFailure.take(90)}" else "")
                     vodImportFeedback = "检索超时"
+                } else if (candidates.isEmpty()) {
+                    tvBoxStatus = "配置已导入 ${config.sites.size} 个影视点；无需逐个检测。请按「选择影视点」选择需要浏览的站点。"
+                    vodImportFeedback = "已导入配置"
                 } else {
-                    tvBoxStatus += "；标准 CMS 与已允许的 Spider 均未提供可用目录" +
+                    tvBoxStatus += "；上次选定的影视点没有返回可用目录" +
                         (if (spiderFailure.isNotBlank()) "（${spiderFailure.take(80)}）" else "")
                     vodImportFeedback = "未获取到影片"
                 }
@@ -643,7 +643,9 @@ private fun Herrin() {
     val metadataResolver = remember(context) {
         ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"))
     }
-    val metadataToken = prefs.tmdbReadToken
+    // Reactive token: saving a key starts matching without relaunching the app.
+    var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
+    var metadataRescanEpoch by remember { mutableIntStateOf(0) }
     val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.title}" }
     var metadataScanDone by remember { mutableIntStateOf(0) }
     var metadataScanTotal by remember { mutableIntStateOf(0) }
@@ -651,8 +653,8 @@ private fun Herrin() {
         facetActor = null; facetDirector = null; facetRegion = null
         facetYear = null; facetCategory = null; facetRating = null
     }
-    LaunchedEffect(catalogScope, catalogIdentity, metadataToken) {
-        val eligible = providerFilms.orEmpty().take(80)
+    LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch) {
+        val eligible = providerFilms.orEmpty().take(240)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
         if (metadataToken.isBlank()) return@LaunchedEffect
@@ -1237,8 +1239,13 @@ private fun Herrin() {
                     verticalArrangement = Arrangement.spacedBy(13.dp)) {
                     item { TvButton("‹ 返回设置", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     item { Text("影视站点", fontSize = 34.sp, fontWeight = FontWeight.Bold) }
-                    item { Text("应用影视源时已自动尝试可用站点。这里仅用于手动切换；选择 Spider 站点会运行该源的第三方插件。", color = Color(0xFFBDC8D6)) }
+                    item { Text("已导入全部影视点列表；不在导入时逐个启动插件。选择任意影视点后只加载该站点。Spider 站点会执行来源的第三方插件。", color = Color(0xFFBDC8D6)) }
                     item { Text(tvBoxStatus, Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
+                    item { Text("说明：影视点包含云盘扫码或弹幕插件时，可能依赖 TVBox 专有的交互页面与服务。" +
+                        "HERRIN 当前 Spider 子进程没有这些原生授权弹窗；不应把提示当成已登录。" +
+                        "请先选无需登录的合法直连站点。", color = Color(0xFFC9B98D),
+                        modifier = Modifier.testTag("source-plugin-limitations")) }
+
                     if (tvBoxWarehouses.isNotEmpty()) {
                         item { Text("仓库", fontSize = 20.sp) }
                         itemsIndexed(tvBoxWarehouses) { index, warehouse ->
@@ -2052,6 +2059,45 @@ private fun Herrin() {
                             tvBoxLoadEpoch++
                         } }
                         }
+                        if (settingsTvBoxOnly) {
+                            item { Text("智能海报墙 · TMDB",
+                                fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+                            item { Text(if (metadataToken.isBlank())
+                                "未启用自动刮削：没有配置 TMDB API Read Access Token，当前显示影视源海报。" +
+                                    "配置后自动匹配海报、背景、简介、评分和演员资料。"
+                                else "已开启 TMDB 智能刮削：已处理 $metadataScanDone/$metadataScanTotal，" +
+                                    "匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
+                                    "保留原影视源的播放地址和选集。",
+                                modifier = Modifier.testTag("compact-metadata-status"),
+                                color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
+                            item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
+                                Modifier.fillMaxWidth().testTag("compact-tmdb-token"),
+                                label = { Text("TMDB API Read Access Token（粘贴后保存）") },
+                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                TvButton("保存并开始刮削",
+                                    modifier = Modifier.testTag("compact-tmdb-save"), reduced = reduceMotion) {
+                                    val value = tmdbTokenDraft.trim()
+                                    if (value.length >= 40 && !value.any(Char::isWhitespace)) {
+                                        prefs.tmdbReadToken = value
+                                        metadataToken = value
+                                        tmdbTokenDraft = ""
+                                        metadataRescanEpoch++
+                                        tmdbSettingsStatus = "TMDB 已保存并开始匹配影视资料"
+                                    } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
+                                }
+                                TvButton("重新刮削",
+                                    modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
+                                    if (metadataToken.isNotBlank()) {
+                                        providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
+                                        metadataRescanEpoch++
+                                        tmdbSettingsStatus = "正在重新匹配当前影视点的元数据"
+                                    } else tmdbSettingsStatus = "请先配置 TMDB Token"
+                                }
+                            } }
+                            item { Text(tmdbSettingsStatus, color = Color(0xFFCFD7E4),
+                                modifier = Modifier.testTag("compact-tmdb-feedback")) }
+                        }
                         item { Text("直播源", fontSize = 22.sp) }
                         item {
                             if (settingsTvBoxOnly) TvSourceInput(
@@ -2149,7 +2195,7 @@ private fun Herrin() {
                             item { Text("${if (tvBoxSelectedName.isBlank()) "当前单仓" else tvBoxSelectedName} · ${preview.sites.size} 个影视站点", fontSize = 18.sp) }
                             item { Text(preview.sites.take(15).joinToString("  ·  ") { it.name }.ifBlank { "未提供站点条目" },
                                 modifier = Modifier.testTag("tvbox-site-preview"), lineHeight = 24.sp) }
-                            item { Text("${directCount} 个 HTTP(S) CMS 接口；${adapterCount} 个站点需要 Spider/JS。主动应用影视源会自动尝试 Java csp_*，成功识别配置仍不等于可播放。",
+                            item { Text("${directCount} 个 HTTP(S) CMS 接口；${adapterCount} 个站点需要 Spider/JS。导入时仅读取站点清单，选择影视点后才读取目录；成功识别配置仍不等于可播放。",
                                 modifier = Modifier.testTag("tvbox-site-capabilities"), lineHeight = 23.sp) }
                             item { TvButton(if (tvBoxShowAllSites) "收起完整站点列表" else "查看全部 ${preview.sites.size} 个影视站点",
                                 modifier = Modifier.testTag("tvbox-sites-toggle"), reduced = reduceMotion) {
@@ -2378,13 +2424,15 @@ private fun Herrin() {
                                 val value = tmdbTokenDraft.trim()
                                 if (value.isNotEmpty() && value.length >= 40 && !value.any(Char::isWhitespace)) {
                                     prefs.tmdbReadToken = value
+                                    metadataToken = value
                                     tmdbTokenDraft = ""
-                                    tmdbSettingsStatus = "已保存；重新打开影视页面后尝试匹配高清海报"
+                                    tmdbSettingsStatus = "已保存；正在匹配海报与影视资料"
                                 } else tmdbSettingsStatus = "请输入完整的 TMDB API Read Access Token"
                             }
                             TvButton("停用高清刮削", modifier = Modifier.testTag("tmdb-token-clear"),
                                 reduced = reduceMotion) {
                                 prefs.tmdbReadToken = ""
+                                metadataToken = ""
                                 providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                 tmdbTokenDraft = ""
                                 tmdbSettingsStatus = "已停用 TMDB 网络匹配，改用源内海报"
@@ -2646,7 +2694,13 @@ private fun Herrin() {
                                     } else {
                                         film.playbackEpisodes.forEach { entry ->
                                             TvButton("第 ${entry.number} 集 · ${entry.title}",
-                                                modifier = Modifier.testTag("episode-${entry.number}"),
+                                                modifier = Modifier.testTag("episode-${entry.number}")
+                                                    .onPreviewKeyEvent { event ->
+                                                        if (event.type == KeyEventType.KeyDown &&
+                                                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+                                                            runCatching { requester("detail-first-line").requestFocus() }.isSuccess
+                                                        else false
+                                                    },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 episode = entry.number
                                                 line = entry.lines.first().id
@@ -2655,6 +2709,31 @@ private fun Herrin() {
                                         }
                                     }
                                 } }
+                            }
+                            item { Text("播放线路 · 按方向键下键选择",
+                                modifier = Modifier.testTag("detail-line-heading"),
+                                fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (displayedLines.isEmpty()) {
+                                    listOf("演示线路 A", "演示线路 B").forEachIndexed { index, name ->
+                                        TvButton(name, modifier = Modifier.testTag("line-$name")
+                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier),
+                                            reduced = reduceMotion, selected = line == name) { line = name; screen = "player" }
+                                    }
+                                } else {
+                                    displayedLines.forEachIndexed { index, option ->
+                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}")
+                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier), reduced = reduceMotion,
+                                            selected = line == option.id) {
+                                            line = option.id
+                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
+                                            screen = "player"
+                                        }
+                                    }
+                                }
+                                }
                             }
                             item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -2673,26 +2752,7 @@ private fun Herrin() {
                                     restoreGroupFocus = false
                                 }
                             }
-                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
-                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (displayedLines.isEmpty()) {
-                                    listOf("演示线路 A", "演示线路 B").forEach { name ->
-                                        TvButton(name, modifier = Modifier.testTag("line-$name"),
-                                            reduced = reduceMotion, selected = line == name) { line = name; screen = "player" }
-                                    }
-                                } else {
-                                    displayedLines.forEach { option ->
-                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}"), reduced = reduceMotion,
-                                            selected = line == option.id) {
-                                            line = option.id
-                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
-                                            screen = "player"
-                                        }
-                                    }
-                                }
-                                }
-                            }
+
                         }
                     }
                 }

@@ -47,6 +47,15 @@ internal object TvBoxAutoSites {
             .joinToString("") { "%02x".format(it) }
     }
 
+    /** Fast resume: no broad 8+12 probe loop when a warehouse is imported. */
+    fun resumeOnly(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
+        if (preferredId.isBlank()) return emptyList()
+        return listOfNotNull(config.sites.firstOrNull {
+            (it.apiUrl != null || it.spiderApi != null) &&
+                identity(it, config.spiderJar) == preferredId
+        })
+    }
+
     fun candidates(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
         val direct = config.sites.filter { it.apiUrl != null }.take(8)
         val spider = config.sites.filter { it.spiderApi != null }
