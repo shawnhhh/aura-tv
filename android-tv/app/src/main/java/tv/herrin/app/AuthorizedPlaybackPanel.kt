@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.key
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,8 +99,11 @@ fun AuthorizedPlaybackPanel(
     var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
-    val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
-    val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
+    // Keep updates within one media session, while retaining the old session's
+    // callbacks until its DisposableEffect has persisted and released its player.
+    // A single shared State would route old onDispose progress into the new episode.
+    val latestProgressCallback by key(media) { rememberUpdatedState(onPlaybackProgress) }
+    val latestMediaSpecCallback by key(media) { rememberUpdatedState(onMediaSpecDetected) }
     val retries = remember(media) {
         PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime)
     }
