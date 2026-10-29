@@ -130,16 +130,18 @@ class MediaLoopbackProxyTest {
 
     @Test fun closeIsIdempotentReleasesListenerAndSessionsHaveDistinctTokens() {
         MockWebServer().use { server ->
-            val first = session(server)
-            val second = session(server)
-            assertNotEquals(java.net.URI(first.playbackUrl).path, java.net.URI(second.playbackUrl).path)
-            assertFalse(first.toString().contains(java.net.URI(first.playbackUrl).path))
-            val port = java.net.URI(first.playbackUrl).port
-            val url = first.playbackUrl
-            first.close(); first.close(); second.close()
-            assertTrue(first.isClosed)
-            try { Socket("127.0.0.1", port).use { fail("Listener still open") } } catch (_: java.net.ConnectException) { }
-            try { get(url).close(); fail("Session should be closed") } catch (_: java.io.IOException) { }
+            repeat(16) {
+                val first = session(server)
+                val second = session(server)
+                assertNotEquals(java.net.URI(first.playbackUrl).path, java.net.URI(second.playbackUrl).path)
+                assertFalse(first.toString().contains(java.net.URI(first.playbackUrl).path))
+                val port = java.net.URI(first.playbackUrl).port
+                val url = first.playbackUrl
+                first.close(); first.close(); second.close()
+                assertTrue(first.isClosed)
+                try { Socket("127.0.0.1", port).use { fail("Listener still open") } } catch (_: java.net.ConnectException) { }
+                try { get(url).close(); fail("Session should be closed") } catch (_: java.io.IOException) { }
+            }
         }
     }
 

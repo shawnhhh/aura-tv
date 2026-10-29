@@ -34,12 +34,13 @@ class MediaLoopbackProxy private constructor(
     private val listener = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
     private val workers = ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS, ArrayBlockingQueue(8),
         { task -> Thread(task, "herrin-media-proxy-worker").apply { isDaemon = true } })
+    private val acceptor: Thread
     private val rootId = register(policy.source)
     val playbackUrl: String get() = localUrl(rootId)
     val isClosed: Boolean get() = closed.get()
 
     init {
-        Thread({
+        acceptor = Thread({
             while (!closed.get()) {
                 val socket = try { listener.accept() } catch (_: Exception) { break }
                 sockets.add(socket)
@@ -65,6 +66,11 @@ class MediaLoopbackProxy private constructor(
         upstream.dispatcher.executorService.shutdownNow()
         upstream.connectionPool.evictAll()
         workers.shutdownNow()
+        // ServerSocket.close may defer the native listening fd close until a blocking accept exits.
+        // Joining the acceptor makes session shutdown observable before returning to the owner.
+        if (Thread.currentThread() !== acceptor) {
+            try { acceptor.join(2000) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+        }
         synchronized(resources) { resources.clear(); resourceIds.clear() }
     }
 
