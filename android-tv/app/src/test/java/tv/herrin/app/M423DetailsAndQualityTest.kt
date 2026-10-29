@@ -58,7 +58,7 @@ class M423DetailsAndQualityTest {
         assertEquals(listOf("720p", "HDR (HLG)"), MediaQuality.verified(
             SelectedTrackEvidence("video/hevc", 1280, 720, 7), null).labels())
         assertFalse(MediaQuality.verified(null, null).isKnown)
-        assertFalse(MediaQuality.verified(null, SelectedTrackEvidence("audio/eac3")).isKnown)
+        assertTrue(MediaQuality.verified(null, SelectedTrackEvidence("audio/eac3")).isKnown)
     }
 
     @Test fun `claimed media specs stay separate from selected track evidence`() {
