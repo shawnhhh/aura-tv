@@ -177,4 +177,24 @@ class M425ShowGroupsTest {
             film("u2", "Different alias", tmdb = 1000)), "scope").groups.single()
         assertTrue(GroupSeasonIndex.from(unlabeled).sections.isEmpty())
     }
+
+    @Test fun explicitSeasonsWithParenthesizedReleaseYearsKeepOriginalPlaybackRoute() {
+        assertEquals("海岸故事" to 1, ShowGroupMatcher.titleParts("海岸故事 第1季（2021）"))
+        assertEquals("海岸故事" to 2, ShowGroupMatcher.titleParts("海岸故事 (Season 2) (2024)"))
+        assertEquals("海岸故事" to 2, ShowGroupMatcher.titleParts("海岸故事 S02（2024）"))
+        assertEquals("海岸故事 第二季 特别篇" to null,
+            ShowGroupMatcher.titleParts("海岸故事 第二季 特别篇"))
+        val first = film("coast-1", "海岸故事 第一季（2021）", year = "2021",
+            episodes = listOf(ep(1, "01", line("a", "授权源A", "c1e1"))))
+        val second = film("coast-2", "海岸故事 (Season 2) (2024)", year = "2024",
+            episodes = listOf(ep(3, "03", line("b", "授权源B", "c2e3"))))
+        val catalog = ShowCatalog.build(listOf(first, second), "same-site")
+        assertEquals(1, catalog.groups.size)
+        assertEquals(1, catalog.search("Season 2", "全部", false).size)
+        val episode = GroupSeasonIndex.from(catalog.groups.single()).episode(2, 3)!!
+        assertEquals(PlaybackRequest("coast-2", 3, "b"), episode.sources.single().request())
+        val unsafe = film("coast-special", "海岸故事 第二季 特别篇")
+        assertEquals(1, ShowCatalog.build(listOf(first, second, unsafe),
+            "same-site").groups.single().members.size - 1)
+    }
 }

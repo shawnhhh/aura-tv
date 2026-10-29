@@ -74,8 +74,10 @@ internal object ShowGroupMatcher {
     private data class Candidate(val member: ShowMember, val family: String, val type: String,
                                  val explicitSeasons: Set<Int>)
 
-    private val chineseSeason = Regex("^(.+?)[\\s·._—-]*[（(]?第\\s*([0-9一二三四五六七八九十零〇两]{1,3})\\s*季[）)]?\\s*$", RegexOption.IGNORE_CASE)
-    private val englishSeason = Regex("^(.+?)[\\s·._—-]+(?:Season\\s*|S)(\\d{1,2})[）)]?\\s*$", RegexOption.IGNORE_CASE)
+    // Accept an optional parenthesized release year after a verified season suffix.
+    // Keep free-text quality/edition suffixes out: uncertain aliases stay separate.
+    private val chineseSeason = Regex("^(.+?)[\\s·._—-]*[（(]?第\\s*([0-9一二三四五六七八九十零〇两]{1,3})\\s*季[）)]?(?:\\s*[（(](?:19|20)\\d{2}[）)])?\\s*$", RegexOption.IGNORE_CASE)
+    private val englishSeason = Regex("^(.+?)[\\s·._—-]+[（(]?(?:Season\\s*|S)(\\d{1,2})[）)]?(?:\\s*[（(](?:19|20)\\d{2}[）)])?\\s*$", RegexOption.IGNORE_CASE)
     private val unsafeParts = Regex("(?:剧场版|特别篇|特别版|番外|上篇|下篇|\\b(?:OVA|OAD|SP|SPECIAL|Part\\s*[12])\\b)", RegexOption.IGNORE_CASE)
 
     private val chineseDigits = mapOf('零' to 0, '〇' to 0, '一' to 1, '二' to 2,
