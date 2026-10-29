@@ -376,15 +376,10 @@ private fun Herrin() {
                 tvBoxWarehouses = result.entries
                 tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}已识别 ${result.entries.size} 个仓库${if (result.ignored > 0) "；跳过 ${result.ignored} 个无效／重复条目" else ""}。选中下方仓库可预览。"
                 if (settingsTvBoxOnly) {
-                    for (warehouse in result.entries.take(5)) {
-                        val nested = tvBoxRepository.load(warehouse.url, true)
-                        if (nested is TvBoxConfig.Single) {
-                            tvBoxSelectedName = warehouse.name
-                            tvBoxSingle = nested
-                            tvBoxStatus += "；已进入 ${warehouse.name}：${nested.sites.size} 个站点"
-                            break
-                        }
-                    }
+                    // Multi-warehouse import is metadata-only. TVBox users
+                    // choose a warehouse; downloading up to five nested
+                    // configs here was a serial startup/network bottleneck.
+                    tvBoxStatus += "；已导入仓库列表，请打开「选择影视点」按需选择仓库"
                 }
             }
             is TvBoxConfig.Single -> {
@@ -1246,6 +1241,11 @@ private fun Herrin() {
                     item { Text("影视站点", fontSize = 34.sp, fontWeight = FontWeight.Bold) }
                     item { Text("已导入全部影视点列表；不在导入时逐个启动插件。选择任意影视点后只加载该站点。Spider 站点会执行来源的第三方插件。", color = Color(0xFFBDC8D6)) }
                     item { Text(tvBoxStatus, Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
+                    item { Text("说明：影视点包含云盘扫码或弹幕插件时，可能依赖 TVBox 专有的交互页面与服务。" +
+                        "HERRIN 当前 Spider 子进程没有这些原生授权弹窗；不应把提示当成已登录。" +
+                        "请先选无需登录的合法直连站点。", color = Color(0xFFC9B98D),
+                        modifier = Modifier.testTag("source-plugin-limitations")) }
+
                     if (tvBoxWarehouses.isNotEmpty()) {
                         item { Text("仓库", fontSize = 20.sp) }
                         itemsIndexed(tvBoxWarehouses) { index, warehouse ->
