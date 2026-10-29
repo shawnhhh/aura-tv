@@ -63,6 +63,7 @@ class M434SpiderPlaybackRecoveryTest {
     @Test fun fallbackOnlyAfterExplicitTransportFailureNeverAfterNormalProviderRejection() {
         assertTrue(SpiderDirectPlayback.eligibleFailure("Spider 子进程异常退出，最后阶段：获取播放地址"))
         assertTrue(SpiderDirectPlayback.eligibleFailure("Spider 服务响应超时，请重新应用站点"))
+        assertTrue(SpiderDirectPlayback.eligibleFailure("Spider 操作超时，请重新应用站点"))
         assertFalse(SpiderDirectPlayback.eligibleFailure("服务器 403"))
         assertFalse(SpiderDirectPlayback.eligibleFailure("此线路需要网页解析器"))
         assertFalse(SpiderDirectPlayback.eligibleFailure("没有播放地址"))
