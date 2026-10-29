@@ -1,7 +1,6 @@
 package tv.herrin.app
 
 import android.content.Context
-import com.fongmi.quickjs.host.Host
 import com.github.catvod.Runtime
 import com.github.catvod.crawler.Spider
 import com.github.catvod.net.Net
@@ -365,6 +364,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeKey: String? = null
     private var activeVipFlags: List<String> = emptyList()
     private var activeSiteHeaders: Map<String, String> = emptyMap()
+    private var activeHttpHost: SpiderHttpSessionHost? = null
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
         SpiderResult.Ready(withTimeout(30_000) { runInterruptible(Dispatchers.IO) { block() } })
@@ -382,6 +382,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             close()
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DOWNLOAD)
             val file = SpiderJarCache.obtain(context, jar)
+            // One ephemeral cookie jar per active site; never shared across source changes.
+            val httpHost = SpiderHttpSessionHost()
             Runtime.set(context.applicationContext)
             // An isolated Service cannot provide the foreground Activity from
             // the main process. Do not pretend the Application is an Activity.
@@ -411,11 +413,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi.removePrefix("csp_")}")
             (spiderClass.getDeclaredConstructor().newInstance() as Spider).apply {
                 siteKey = site.key
-                net = Net(Host.NONE, site.key)
+                net = Net(httpHost, site.key)
                 local = Local(site.key)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
                 init(context, site.extension)
-            }.also { active = it; activeKey = key }
+            }.also { active = it; activeKey = key; activeHttpHost = httpHost }
         }
         // FongMi sends the root config's global VIP flags to playerContent.
         // Passing emptyList() prevented some plugins from generating the same
@@ -464,5 +466,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         activeKey = null
         activeVipFlags = emptyList()
         activeSiteHeaders = emptyMap()
+        activeHttpHost?.clear()
+        activeHttpHost = null
     }
 }
