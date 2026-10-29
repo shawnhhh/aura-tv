@@ -807,6 +807,18 @@ private fun Herrin() {
                 is PlaybackResult.Unavailable -> result.reason
                 else -> "播放解析未返回结果"
             }
+            // Android can publish ApplicationExitInfo AFTER the Binder death
+            // callback. Refresh only this failed playback's finite OS category,
+            // without altering the requested source, episode or any credential.
+            val failedStatus = spiderStatus
+            if (failedStatus.contains("Spider 子进程异常退出") &&
+                !failedStatus.contains("系统原因：")) {
+                delay(900)
+                SpiderExitDiagnostics.recent(context)?.let { reason ->
+                    if (spiderStatus == failedStatus) spiderStatus =
+                        "$failedStatus；系统原因：$reason"
+                }
+            }
         }
     }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }

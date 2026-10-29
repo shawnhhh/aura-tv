@@ -14,7 +14,8 @@ internal object SpiderStartupTrace {
         DOWNLOAD("下载 JAR"), NATIVE("准备 ARM 原生库"), LOADER("建立 DEX 类加载器"),
         INITIALIZER("执行 Init.init"), CONSTRUCT("创建 Spider"),
         SPIDER_INIT("执行 Spider.init"), HOME("读取影片目录"),
-        DETAILS("读取影片详情"), PLAYER("获取播放地址"), READY("插件已就绪")
+        DETAILS("读取影片详情"), PLAYER("获取播放地址"),
+        WATCHDOG("Spider 执行超时，宿主终止无响应子进程"), READY("插件已就绪")
     }
 
     private const val MAX_AGE_MS = 2 * 60 * 1_000L

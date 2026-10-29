@@ -175,8 +175,11 @@ class TvBoxSpiderService : Service() {
                     // Cancellation cannot stop a JNI call that ignores interruption.
                     // This watchdog belongs solely to the manifest's :spider process.
                     val terminate = watchdog.schedule({
+                        // If this fires, it is a HOST watchdog timeout, not proof
+                        // of a native SIGSEGV. Persist only this fixed stage string.
+                        SpiderStartupTrace.mark(applicationContext, SpiderStartupTrace.Stage.WATCHDOG)
                         android.os.Process.killProcess(android.os.Process.myPid())
-                    }, 32, TimeUnit.SECONDS)
+                    }, 40, TimeUnit.SECONDS)
                     try {
                         require(payload.length <= SpiderIpc.MAX_REQUEST_CHARS) { "Spider 请求超过进程通信限制" }
                         val request = JSONObject(payload)
@@ -307,9 +310,15 @@ internal class TvBoxSpiderBridge(context: Context) {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             if (epoch != generation || connection !== this) return
+            // Invalidate IMMEDIATELY so the next user action can bind a fresh
+            // service; never hold dead Messenger references while waiting for
+            // the OS to publish a diagnostic record.
+            val stage = SpiderStartupTrace.recent(app)
+            val cause = SpiderExitDiagnostics.recent(app)
             invalidate("Spider 子进程异常退出" +
-                (SpiderStartupTrace.recent(app)?.let { "，最后阶段：$it" } ?: "") +
-                "；请重试当前操作")
+                (stage?.let { "，最后阶段：$it" } ?: "") +
+                (cause?.let { "，系统原因：$it" } ?: "") +
+                "；可换一条直链或重新应用站点")
         }
 
         override fun onBindingDied(name: ComponentName?) {
@@ -413,7 +422,7 @@ internal class TvBoxSpiderBridge(context: Context) {
                     replyTo = responses
                     data = Bundle().apply { putString("payload", encoded) }
                 })
-                withTimeout(37_000) { deferred.await() }
+                withTimeout(44_000) { deferred.await() }
             } catch (timeout: TimeoutCancellationException) {
                 invalidate("Spider 操作超时，请重新应用站点")
                 throw timeout
@@ -468,7 +477,19 @@ internal class TvBoxSpiderBridge(context: Context) {
         val payload = JSONObject().put("film", SpiderIpc.film(film))
             .put("episode", episode).put("line", line).put("allowHttp", allowHttp)
         return when (val response = request(SpiderIpc.PLAY, payload)) {
-            is SpiderResult.Failure -> PlaybackResult.Unavailable(response.message)
+            is SpiderResult.Failure -> {
+                // The source has ALREADY supplied a direct HTTP(S) media URL.
+                // If the Java Spider crashed resolving it again, try that exact
+                // URL; never infer a URL from an opaque episode identifier.
+                val appliedSite = if (SpiderDirectPlayback.eligibleFailure(response.message)) {
+                    runCatching {
+                        lastBrowse?.let { SpiderIpc.readSite(JSONObject(it).getJSONObject("site")) }
+                    }.getOrNull()
+                } else null
+                appliedSite?.let {
+                    SpiderDirectPlayback.resolve(film, episode, line, it, allowHttp)
+                } ?: PlaybackResult.Unavailable(response.message)
+            }
             is SpiderResult.Ready -> try {
                 SpiderIpc.readPlayback(response.value, allowHttp)
             } catch (error: Exception) {
