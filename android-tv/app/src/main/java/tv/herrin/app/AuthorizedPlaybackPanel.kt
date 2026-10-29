@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.mutableLongStateOf
@@ -74,6 +75,8 @@ fun AuthorizedPlaybackPanel(
     isLive: Boolean = false,
     onLiveMenu: () -> Unit = {},
     focusRestoreEpoch: Int = 0,
+    onLineSelection: (() -> Unit)? = null,
+    onEpisodeSelection: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -87,9 +90,11 @@ fun AuthorizedPlaybackPanel(
     var showVerification by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
+    val selectionControl = remember { FocusRequester() }
     val playerRootFocus = remember { FocusRequester() }
     var controlsVisible by remember(media) { mutableStateOf(true) }
     var transportFocused by remember { mutableStateOf(false) }
+    var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
@@ -141,6 +146,7 @@ fun AuthorizedPlaybackPanel(
                     uiEpoch++
                 }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
+                override fun onRenderedFirstFrame() { uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
@@ -245,13 +251,18 @@ fun AuthorizedPlaybackPanel(
     }
     LaunchedEffect(focusControlsEpoch) {
         if (!isLive && focusControlsEpoch > 0) {
-            delay(50)
-            initialControl.requestFocus()
+            // A remote press during initial buffering can precede composition of
+            // the controls. Wait for real video rather than focusing an unattached node.
+            while ((player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) == 0 &&
+                player.playerError == null) delay(50)
+            if (player.playerError == null && controlsVisible) initialControl.requestFocus()
         }
     }
-    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, transportFocused) {
-        if (!isLive && controlsVisible && !transportFocused &&
-            playbackState == Player.STATE_READY && !showVerification) {
+    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification) {
+        // A focused button must not pin the overlay forever. Any remote key restarts
+        // this timer; while paused the controls remain available for resuming.
+        if (!isLive && controlsVisible && player.isPlaying &&
+            playbackState == Player.STATE_READY && !showVerification && errorMessage == null) {
             delay(8_000)
             controlsVisible = false
             playerRootFocus.requestFocus()
@@ -278,9 +289,11 @@ fun AuthorizedPlaybackPanel(
     }
     BackHandler { requestBack("dispatcher") }
     Box(Modifier.fillMaxSize().background(Color.Black)
-        .focusRequester(playerRootFocus).focusable()
+        .focusRequester(playerRootFocus)
+        .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
+        if (key.action == KeyEvent.ACTION_DOWN) controlsInteractionEpoch++
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
             true
@@ -292,7 +305,7 @@ fun AuthorizedPlaybackPanel(
                 playerRootFocus.requestFocus()
             }
             true
-        } else if (!isLive && !transportFocused &&
+        } else if (!isLive && playerRootFocused &&
             key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 PlaybackTransport.seekBy(player,
@@ -302,7 +315,7 @@ fun AuthorizedPlaybackPanel(
                 controlsInteractionEpoch++
             }
             true
-        } else if (!isLive && !transportFocused &&
+        } else if (!isLive && playerRootFocused &&
             key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER)) {
@@ -361,13 +374,14 @@ fun AuthorizedPlaybackPanel(
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 keepScreenOn = true
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                setPadding(32, 32, 32, 32)
+                setPadding(0, 0, 0, 0)
                 this.player = player
             } },
             update = { it.player = player },
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
+        val hasDecodedVideo = (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 0
         if (isLive) {
             // A tiny focus anchor lets DPAD_LEFT/OK open the channel drawer while
             // the video remains edge-to-edge. No visible transport controls.
@@ -383,7 +397,7 @@ fun AuthorizedPlaybackPanel(
                     }
                 }
             }
-        } else if (controlsVisible || showVerification || errorMessage != null)
+        } else if ((controlsVisible && hasDecodedVideo) || showVerification || errorMessage != null)
             Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Button(onClick = { requestBack("visible-button") }) {
@@ -420,9 +434,7 @@ fun AuthorizedPlaybackPanel(
             } else if (activeVariant > 0 && playbackState != Player.STATE_READY) {
                 Text("正在尝试备用播放地址 ${activeVariant + 1} / ${candidates.size}",
                     color = Color(0xFFCFD7E4), modifier = Modifier.testTag("player-fallback-status"))
-            } else if (playbackState == Player.STATE_BUFFERING) {
-                Text("正在缓冲授权媒体…", color = Color(0xFFCFD7E4),
-                    modifier = Modifier.testTag("player-buffering"))
+
             } else if (playbackState == Player.STATE_ENDED) {
                 Text("播放结束 · 可返回详情选择其他集数", color = Color(0xFFCFD7E4))
             }
@@ -438,7 +450,7 @@ fun AuthorizedPlaybackPanel(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        if (!isLive && controlsVisible) Column(
+        if (!isLive && controlsVisible && hasDecodedVideo) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.86f).padding(bottom = 36.dp)
                 .onFocusChanged { transportFocused = it.hasFocus }
                 .background(Color(0xE9151820), RoundedCornerShape(20.dp))
@@ -447,7 +459,12 @@ fun AuthorizedPlaybackPanel(
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(elapsed(shownPosition), color = Color.White)
-                Text("画质：${PlayerQualityLabel.fromSize(player.videoSize.width, player.videoSize.height)}",
+                val format = player.videoFormat
+                Text("画质：" + PlayerQualityLabel.fromDecoded(
+                    player.videoSize.width, player.videoSize.height,
+                    format?.frameRate ?: -1f, format?.sampleMimeType,
+                    format?.colorInfo?.colorTransfer ?: -1,
+                    player.videoDecoderCounters?.renderedOutputBufferCount ?: 0),
                     color = Color(0xFFD3E6F7), modifier = Modifier.testTag("player-quality-label"))
                 Text(elapsed(shownDuration), color = Color(0xFFD2D5DE))
             }
@@ -459,7 +476,9 @@ fun AuthorizedPlaybackPanel(
                 Button(onClick = { PlaybackTransport.seekBy(player, -10_000L) },
                     modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
                 Button(onClick = { if (player.playWhenReady) player.pause() else player.play() },
-                    modifier = Modifier.focusRequester(initialControl).testTag("transport-toggle")) {
+                    modifier = Modifier.focusRequester(initialControl).focusProperties {
+                        if (onLineSelection != null || onEpisodeSelection != null) down = selectionControl
+                    }.testTag("transport-toggle")) {
                     Text(if (player.playWhenReady) "暂停" else "播放")
                 }
                 Button(onClick = { PlaybackTransport.seekBy(player, 10_000L) },
@@ -478,6 +497,18 @@ fun AuthorizedPlaybackPanel(
                     onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
                     enabled = captions.isNotEmpty(), modifier = Modifier.testTag("transport-subtitle")
                 ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
+            }
+            if (onLineSelection != null || onEpisodeSelection != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    onLineSelection?.let { select ->
+                        Button(onClick = select, modifier = Modifier.focusRequester(selectionControl).testTag("transport-lines")) { Text("线路") }
+                    }
+                    onEpisodeSelection?.let { select ->
+                        Button(onClick = select, modifier = Modifier.then(
+                            if (onLineSelection == null) Modifier.focusRequester(selectionControl) else Modifier
+                        ).testTag("transport-episodes")) { Text("选集") }
+                    }
+                }
             }
         }
     }
