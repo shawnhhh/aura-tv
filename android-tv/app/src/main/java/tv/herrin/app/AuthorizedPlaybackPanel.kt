@@ -274,7 +274,11 @@ fun AuthorizedPlaybackPanel(
         }
     }
     DisposableEffect(player, lifecycle) {
-        val session = MediaSession.Builder(context, player).build()
+        // Compose/Activity transitions can briefly overlap outgoing and incoming
+        // players. Media3's default empty ID is process-global and rejects that
+        // valid handoff; each player owns a distinct, credential-free session ID.
+        val session = MediaSession.Builder(context, player)
+            .setId("herrin-${java.util.UUID.randomUUID()}").build()
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) { reportProgress(); player.pause() }
         }
