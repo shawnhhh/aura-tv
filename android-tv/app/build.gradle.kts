@@ -10,8 +10,8 @@ android {
         applicationId = "tv.herrin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 41
-        versionName = "0.4.36-alpha"
+        versionCode = 42
+        versionName = "0.4.37-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }

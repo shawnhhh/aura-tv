@@ -307,6 +307,7 @@ private fun Herrin() {
     // Default settings are deliberately just two source inputs. Legacy diagnostics
     // and import tools remain behind an explicit advanced page.
     var settingsTvBoxOnly by rememberSaveable { mutableStateOf(true) }
+    var playbackPicker by remember { mutableStateOf<String?>(null) }
     var savedProfiles by remember { mutableStateOf(profileStore.list()) }
     var activeProfileId by remember { mutableStateOf(profileStore.activeId()) }
     var sourceNameDraft by rememberSaveable { mutableStateOf("") }
@@ -1914,6 +1915,8 @@ private fun Herrin() {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
                         startPositionMs = previous?.positionMs ?: 0L,
+                        onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
+                        onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, episode, historyLine,
@@ -1925,6 +1928,19 @@ private fun Herrin() {
                             screen = "detail"
                         }
                     )
+                    if (playbackPicker != null) PlaybackSelectionDialog(
+                        film, episode, line, playbackPicker == "lines",
+                        onSelect = { selectedEpisode, selectedLine ->
+                            if (selectedEpisode == episode && selectedLine != line) {
+                                watchHistory.load(catalogScope, film.id, episode, line)?.let { saved ->
+                                    watchHistory.update(catalogScope, film.id, episode, selectedLine,
+                                        saved.positionMs, saved.durationMs)
+                                }
+                            }
+                            episode = selectedEpisode
+                            line = selectedLine
+                            playbackPicker = null
+                        }, onDismiss = { playbackPicker = null })
                 } else if (screen == "player") {
                     // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
                     val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable || !spiderActive
