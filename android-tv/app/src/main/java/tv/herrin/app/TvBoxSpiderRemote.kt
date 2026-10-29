@@ -331,10 +331,14 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     private val responses = Messenger(Handler(Looper.getMainLooper()) { message ->
         if (message.what == SpiderIpc.AUTH_SHOW || message.what == SpiderIpc.AUTH_CLOSE) {
+            // Android recycles Message immediately after this Handler returns.
+            // UI actions happen later: capture values, never the pooled Message.
+            val operationId = message.arg1
+            val dialogId = message.arg2
             val server = message.replyTo
             val respond: (String?) -> Unit = { button ->
                 runCatching { server?.send(Message.obtain(null, SpiderIpc.AUTH_ACTION).apply {
-                    arg1 = message.arg1; arg2 = message.arg2
+                    arg1 = operationId; arg2 = dialogId
                     data = Bundle().apply { if (button != null) putString("button", button) }
                 }) }
                 Unit
