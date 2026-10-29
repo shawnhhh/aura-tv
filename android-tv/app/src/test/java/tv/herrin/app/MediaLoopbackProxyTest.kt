@@ -3,6 +3,7 @@ package tv.herrin.app
 import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
@@ -68,12 +69,12 @@ class MediaLoopbackProxyTest {
             session(server).use { proxy ->
                 val root = java.net.URI(proxy.playbackUrl)
                 get(proxy.playbackUrl.replace(root.path.split('/')[1], "wrong-token")).use { assertEquals(403, it.code) }
-                get(proxy.playbackUrl + "?url=http://169.254.169.254/").use { assertEquals(404, it.code) }
+                get(proxy.playbackUrl + "?url=http://169.254.169.254/").use { assertEquals(403, it.code) }
                 get(proxy.playbackUrl.substringBeforeLast('/') + "/unknown").use { assertEquals(404, it.code) }
                 get(proxy.playbackUrl, mapOf("Range" to "bytes=0-1,4-5")).use { assertEquals(416, it.code) }
                 get(proxy.playbackUrl, mapOf("Origin" to "https://evil.example")).use { assertEquals(403, it.code) }
                 get(proxy.playbackUrl, mapOf("Host" to "evil.example")).use { assertEquals(403, it.code) }
-                browser.newCall(Request.Builder().url(proxy.playbackUrl).post(okhttp3.RequestBody.create(null, "")).build()).execute().use { assertEquals(405, it.code) }
+                browser.newCall(Request.Builder().url(proxy.playbackUrl).post("".toRequestBody(null)).build()).execute().use { assertEquals(405, it.code) }
                 assertEquals(0, server.requestCount)
             }
         }
@@ -151,9 +152,36 @@ class MediaLoopbackProxyTest {
         }
     }
 
+    @Test fun shortChunkedMediaAndResourceExplosionAreHandledWithoutUnboundedBuffering() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setChunkedBody("x", 1))
+            server.enqueue(MockResponse().setBody("#EXTM3U\n" + "s.ts\n".repeat(2049)))
+            session(server).use { proxy ->
+                get(proxy.playbackUrl).use { assertEquals("x", it.body!!.string()) }
+                get(proxy.playbackUrl).use { assertEquals(502, it.code) }
+            }
+        }
+    }
+
+    @Test fun closeCancelsAnUpstreamThatNeverResponds() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+            val proxy = session(server)
+            val finished = java.util.concurrent.CountDownLatch(1)
+            val request = Thread {
+                try { get(proxy.playbackUrl).close() } catch (_: java.io.IOException) { }
+                finally { finished.countDown() }
+            }
+            request.start()
+            assertNotNull(server.takeRequest(2, TimeUnit.SECONDS))
+            proxy.close()
+            assertTrue("Close must cancel waiting playback", finished.await(2, TimeUnit.SECONDS))
+        }
+    }
+
     private fun session(server: MockWebServer, headers: Map<String, String> = emptyMap()): MediaLoopbackProxy {
         val url = "http://media.example:${server.port}/vod/master"
-        val transport = OkHttpClient.Builder().proxy(Proxy.NO_PROXY).dns(Dns { listOf(InetAddress.getByName("127.0.0.1")) })
+        val transport = OkHttpClient.Builder().proxy(Proxy.NO_PROXY).dns(object : Dns { override fun lookup(hostname: String) = listOf(InetAddress.getByName("127.0.0.1")) })
             .callTimeout(5, TimeUnit.SECONDS).build()
         return MediaLoopbackProxy.startForTest(MediaProxyPolicy.authorize(url, headers), transport)
     }

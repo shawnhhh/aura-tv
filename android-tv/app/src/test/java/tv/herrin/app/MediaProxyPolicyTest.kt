@@ -35,7 +35,7 @@ class MediaProxyPolicyTest {
         var calls = 0
         val public = InetAddress.getByName("8.8.8.8")
         val private = InetAddress.getByName("127.0.0.1")
-        val dns = MediaProxyPublicDns(Dns { if (calls++ == 0) listOf(public) else listOf(public, private) })
+        val dns = MediaProxyPublicDns(object : Dns { override fun lookup(hostname: String) = if (calls++ == 0) listOf(public) else listOf(public, private) })
         assertEquals(listOf(public), dns.lookup("media.example"))
         try { dns.lookup("media.example"); fail("Rebinding must be rejected") } catch (_: UnknownHostException) { }
         assertEquals(2, calls)
