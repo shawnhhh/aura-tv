@@ -53,6 +53,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.common.Tracks
@@ -112,7 +113,11 @@ fun AuthorizedPlaybackPanel(
             .setReadTimeoutMs(12_000)
             .setDefaultRequestProperties(media.headers)
         val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
-        ExoPlayer.Builder(context).setMediaSourceFactory(factory).build().apply {
+        // If a vendor MediaCodec fails initialization, try another compatible
+        // system decoder before declaring the selected source unplayable.
+        // Retain Android's hardware-first pipeline and HDR output behavior.
+        val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        ExoPlayer.Builder(context, renderers).setMediaSourceFactory(factory).build().apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             setHandleAudioBecomingNoisy(true)
