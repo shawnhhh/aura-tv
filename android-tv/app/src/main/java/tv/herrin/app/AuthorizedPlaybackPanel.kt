@@ -131,7 +131,10 @@ fun AuthorizedPlaybackPanel(
                 }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
-                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { uiEpoch++ }
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
+                    uiEpoch++
+                }
                 override fun onPlaybackStateChanged(state: Int) {
                     playbackState = state
                     journey.onState(state, android.os.SystemClock.elapsedRealtime())
