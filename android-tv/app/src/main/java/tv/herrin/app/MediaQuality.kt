@@ -14,7 +14,7 @@ data class VerifiedStreamSpec(
     val evidenceStage: MediaEvidenceStage get() = MediaEvidenceStage.SELECTED_TRACK
     val outputConfirmation: MediaOutputConfirmation get() = MediaOutputConfirmation.UNCONFIRMED
     val isKnown: Boolean get() = resolution != null || dynamicRange != null || spatialAudio != null || dolbyAudio != null
-    fun labels(): List<String> = listOfNotNull(resolution, dynamicRange, spatialAudio)
+    fun labels(): List<String> = listOfNotNull(resolution, dynamicRange, spatialAudio ?: dolbyAudio)
 }
 
 /** Values are extracted only after Media3 selected the corresponding track. */

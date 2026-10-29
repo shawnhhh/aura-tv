@@ -62,7 +62,10 @@ class DeviceMediaCapabilitiesTest {
         assertEquals("Dolby Atmos", selected.dolbyAudio)
         assertEquals(MediaEvidenceStage.SELECTED_TRACK, selected.evidenceStage)
         assertEquals(MediaOutputConfirmation.UNCONFIRMED, selected.outputConfirmation)
-        assertEquals("Dolby Audio", MediaQuality.verified(null, SelectedTrackEvidence("audio/ac3")).dolbyAudio)
+        val ac3 = MediaQuality.verified(null, SelectedTrackEvidence("audio/ac3"))
+        assertEquals("Dolby Audio", ac3.dolbyAudio)
+        assertTrue(ac3.isKnown)
+        assertEquals(listOf("Dolby Audio"), ac3.labels())
         assertEquals("Dolby Audio", MediaQuality.verified(null, SelectedTrackEvidence("audio/eac3")).dolbyAudio)
     }
 
