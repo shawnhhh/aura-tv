@@ -418,7 +418,11 @@ private fun Herrin() {
             val savedSite = prefs.tvBoxLastWorkingSiteId.takeIf {
                 prefs.tvBoxLastWorkingRootUrl == prefs.tvBoxWarehouseUrl
             }.orEmpty()
+            // TVBox-style import must not probe all third-party plugins.
+            // Restore at most the previously selected site on startup.
             val candidates = TvBoxAutoSites.candidates(config, savedSite)
+                .filter { savedSite.isNotBlank() &&
+                    TvBoxAutoSites.identity(it, config.spiderJar) == savedSite }.take(1)
             var chosen: Pair<TvBoxSite, List<Film>>? = null
             var chosenSpider = false
             var spiderFailure = ""
@@ -506,7 +510,7 @@ private fun Herrin() {
                 providerFilms = null
                 activeCmsSite = null
                 tvBoxVodScope = "tvbox:pending:$address"
-                providerStatus = "配置已导入，暂无可播放影视目录；可在设置重新应用影视源"
+                providerStatus = "已导入 ${config.sites.size} 个影视点；选择影视点后才加载影片目录"
                 if (spiderCrashed) {
                     tvBoxStatus = "配置读取成功，但 Spider 子进程异常退出。已停止自动重试以保护电视；可打开「选择影视点」尝试其他站点。"
                     vodImportFeedback = "插件崩溃"
@@ -514,8 +518,11 @@ private fun Herrin() {
                     tvBoxStatus = "配置读取成功，但自动检索已达到限时；请打开「选择影视点」手动尝试其他站点。" +
                         (if (spiderFailure.isNotBlank()) "最近失败：${spiderFailure.take(90)}" else "")
                     vodImportFeedback = "检索超时"
+                } else if (candidates.isEmpty()) {
+                    tvBoxStatus = "配置已导入 ${config.sites.size} 个影视点；无需逐个检测。请按「选择影视点」选择需要浏览的站点。"
+                    vodImportFeedback = "已导入配置"
                 } else {
-                    tvBoxStatus += "；标准 CMS 与已允许的 Spider 均未提供可用目录" +
+                    tvBoxStatus += "；上次选定的影视点没有返回可用目录" +
                         (if (spiderFailure.isNotBlank()) "（${spiderFailure.take(80)}）" else "")
                     vodImportFeedback = "未获取到影片"
                 }
@@ -1237,7 +1244,7 @@ private fun Herrin() {
                     verticalArrangement = Arrangement.spacedBy(13.dp)) {
                     item { TvButton("‹ 返回设置", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     item { Text("影视站点", fontSize = 34.sp, fontWeight = FontWeight.Bold) }
-                    item { Text("应用影视源时已自动尝试可用站点。这里仅用于手动切换；选择 Spider 站点会运行该源的第三方插件。", color = Color(0xFFBDC8D6)) }
+                    item { Text("已导入全部影视点列表；不在导入时逐个启动插件。选择任意影视点后只加载该站点。Spider 站点会执行来源的第三方插件。", color = Color(0xFFBDC8D6)) }
                     item { Text(tvBoxStatus, Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
                     if (tvBoxWarehouses.isNotEmpty()) {
                         item { Text("仓库", fontSize = 20.sp) }
@@ -2149,7 +2156,7 @@ private fun Herrin() {
                             item { Text("${if (tvBoxSelectedName.isBlank()) "当前单仓" else tvBoxSelectedName} · ${preview.sites.size} 个影视站点", fontSize = 18.sp) }
                             item { Text(preview.sites.take(15).joinToString("  ·  ") { it.name }.ifBlank { "未提供站点条目" },
                                 modifier = Modifier.testTag("tvbox-site-preview"), lineHeight = 24.sp) }
-                            item { Text("${directCount} 个 HTTP(S) CMS 接口；${adapterCount} 个站点需要 Spider/JS。主动应用影视源会自动尝试 Java csp_*，成功识别配置仍不等于可播放。",
+                            item { Text("${directCount} 个 HTTP(S) CMS 接口；${adapterCount} 个站点需要 Spider/JS。导入时仅读取站点清单，选择影视点后才读取目录；成功识别配置仍不等于可播放。",
                                 modifier = Modifier.testTag("tvbox-site-capabilities"), lineHeight = 23.sp) }
                             item { TvButton(if (tvBoxShowAllSites) "收起完整站点列表" else "查看全部 ${preview.sites.size} 个影视站点",
                                 modifier = Modifier.testTag("tvbox-sites-toggle"), reduced = reduceMotion) {
