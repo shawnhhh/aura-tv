@@ -37,6 +37,21 @@ class PlaybackJourneyTraceTest {
         assertFalse(result.contains("视频轨已就绪超过"))
     }
 
+    @Test fun `pause and buffering recovery do not fabricate a video timeout`() {
+        val trace = PlaybackJourneyTrace()
+        trace.begin(0, 1, 1_000)
+        trace.onTracks(video = true, audio = true)
+        trace.onState(Player.STATE_READY, 2_000)
+        trace.onPlayWhenReady(false, 3_000)
+        assertTrue(trace.summary(100_000).contains("播放已暂停"))
+        trace.onPlayWhenReady(true, 101_000)
+        assertTrue(trace.summary(102_000).contains("等待首帧"))
+        assertTrue(trace.summary(116_000).contains("尚无视频出帧证据"))
+        trace.onState(Player.STATE_BUFFERING, 117_000)
+        trace.onState(Player.STATE_READY, 120_000)
+        assertTrue(trace.summary(121_000).contains("等待首帧"))
+    }
+
     @Test fun `buffering remains separate from decoder readiness`() {
         val trace = PlaybackJourneyTrace()
         trace.begin(0, 1, 5_000)
