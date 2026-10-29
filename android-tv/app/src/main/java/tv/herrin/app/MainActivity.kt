@@ -2696,7 +2696,13 @@ private fun Herrin() {
                                     } else {
                                         film.playbackEpisodes.forEach { entry ->
                                             TvButton("第 ${entry.number} 集 · ${entry.title}",
-                                                modifier = Modifier.testTag("episode-${entry.number}"),
+                                                modifier = Modifier.testTag("episode-${entry.number}")
+                                                    .onPreviewKeyEvent { event ->
+                                                        if (event.type == KeyEventType.KeyDown &&
+                                                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+                                                            runCatching { requester("detail-first-line").requestFocus() }.isSuccess
+                                                        else false
+                                                    },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 episode = entry.number
                                                 line = entry.lines.first().id
@@ -2705,6 +2711,31 @@ private fun Herrin() {
                                         }
                                     }
                                 } }
+                            }
+                            item { Text("播放线路 · 按方向键下键选择",
+                                modifier = Modifier.testTag("detail-line-heading"),
+                                fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (displayedLines.isEmpty()) {
+                                    listOf("演示线路 A", "演示线路 B").forEachIndexed { index, name ->
+                                        TvButton(name, modifier = Modifier.testTag("line-$name")
+                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier),
+                                            reduced = reduceMotion, selected = line == name) { line = name; screen = "player" }
+                                    }
+                                } else {
+                                    displayedLines.forEachIndexed { index, option ->
+                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}")
+                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier), reduced = reduceMotion,
+                                            selected = line == option.id) {
+                                            line = option.id
+                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
+                                            screen = "player"
+                                        }
+                                    }
+                                }
+                                }
                             }
                             item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -2723,26 +2754,7 @@ private fun Herrin() {
                                     restoreGroupFocus = false
                                 }
                             }
-                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
-                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (displayedLines.isEmpty()) {
-                                    listOf("演示线路 A", "演示线路 B").forEach { name ->
-                                        TvButton(name, modifier = Modifier.testTag("line-$name"),
-                                            reduced = reduceMotion, selected = line == name) { line = name; screen = "player" }
-                                    }
-                                } else {
-                                    displayedLines.forEach { option ->
-                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}"), reduced = reduceMotion,
-                                            selected = line == option.id) {
-                                            line = option.id
-                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
-                                            screen = "player"
-                                        }
-                                    }
-                                }
-                                }
-                            }
+
                         }
                     }
                 }
