@@ -37,7 +37,8 @@ data class PlaybackRequest(val filmId: String, val episode: Int, val line: Strin
 data class PlaybackMedia(val uri: String, val headers: Map<String, String> = emptyMap(),
                          val subtitles: List<AuthorizedSubtitle> = emptyList(),
                          val alternateUris: List<String> = emptyList(),
-                         val allowHttpRedirects: Boolean = false)
+                         val allowHttpRedirects: Boolean = false,
+                         val declaredMime: String? = null)
 sealed interface PlaybackResult {
     data class Ready(val media: PlaybackMedia) : PlaybackResult
     data class Unavailable(val reason: String) : PlaybackResult
