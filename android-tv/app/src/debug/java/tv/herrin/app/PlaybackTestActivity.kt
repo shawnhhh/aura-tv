@@ -11,6 +11,8 @@ import androidx.media3.exoplayer.ExoPlayer
 /** Debug-only host. Local test media is never accepted by production settings. */
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
+    var lineSelections = 0
+    var episodeSelections = 0
     val createdPlayers = java.util.concurrent.CopyOnWriteArrayList<ExoPlayer>()
     val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val cueTexts = java.util.concurrent.CopyOnWriteArrayList<String>()
@@ -60,6 +62,10 @@ class PlaybackTestActivity : ComponentActivity() {
                             }
                         })
                     },
+                    onLineSelection = if (intent.getBooleanExtra("withSelectionActions", false))
+                        ({ lineSelections++ }) else null,
+                    onEpisodeSelection = if (intent.getBooleanExtra("withSelectionActions", false))
+                        ({ episodeSelections++ }) else null,
                     onBack = {
                         android.util.Log.i("HerrinPlayerBack", "debug onBack invoked showing=$showing")
                         showing = false

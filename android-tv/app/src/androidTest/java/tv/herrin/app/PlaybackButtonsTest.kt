@@ -65,8 +65,10 @@ class PlaybackButtonsTest {
                 decoded > 3
             }
             remoteClick("player-verification-toggle")
-            compose.onNodeWithTag("player-verification-status")
-                .assertTextContains("已输出视频帧：", substring = true)
+            compose.waitUntil(8_000) {
+                runCatching { compose.onNodeWithTag("player-verification-status")
+                    .assertTextContains("已输出视频帧：", substring = true) }.isSuccess
+            }
             inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PAUSE)
             until("Pause media before seeking") {
                 var paused = false
