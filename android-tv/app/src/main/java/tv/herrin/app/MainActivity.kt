@@ -650,7 +650,9 @@ private fun Herrin() {
     val metadataResolver = remember(context) {
         ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"))
     }
-    val metadataToken = prefs.tmdbReadToken
+    // Reactive token: saving a key starts matching without relaunching the app.
+    var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
+    var metadataRescanEpoch by remember { mutableIntStateOf(0) }
     val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.title}" }
     var metadataScanDone by remember { mutableIntStateOf(0) }
     var metadataScanTotal by remember { mutableIntStateOf(0) }
@@ -658,8 +660,8 @@ private fun Herrin() {
         facetActor = null; facetDirector = null; facetRegion = null
         facetYear = null; facetCategory = null; facetRating = null
     }
-    LaunchedEffect(catalogScope, catalogIdentity, metadataToken) {
-        val eligible = providerFilms.orEmpty().take(80)
+    LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch) {
+        val eligible = providerFilms.orEmpty().take(240)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
         if (metadataToken.isBlank()) return@LaunchedEffect
@@ -2059,6 +2061,45 @@ private fun Herrin() {
                             tvBoxLoadEpoch++
                         } }
                         }
+                        if (settingsTvBoxOnly) {
+                            item { Text("智能海报墙 · TMDB",
+                                fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+                            item { Text(if (metadataToken.isBlank())
+                                "未启用自动刮削：没有配置 TMDB API Read Access Token，当前显示影视源海报。" +
+                                    "配置后自动匹配海报、背景、简介、评分和演员资料。"
+                                else "已开启 TMDB 智能刮削：已处理 $metadataScanDone/$metadataScanTotal，" +
+                                    "匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
+                                    "保留原影视源的播放地址和选集。",
+                                modifier = Modifier.testTag("compact-metadata-status"),
+                                color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
+                            item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
+                                Modifier.fillMaxWidth().testTag("compact-tmdb-token"),
+                                label = { Text("TMDB API Read Access Token（粘贴后保存）") },
+                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                TvButton("保存并开始刮削",
+                                    modifier = Modifier.testTag("compact-tmdb-save"), reduced = reduceMotion) {
+                                    val value = tmdbTokenDraft.trim()
+                                    if (value.length >= 40 && !value.any(Char::isWhitespace)) {
+                                        prefs.tmdbReadToken = value
+                                        metadataToken = value
+                                        tmdbTokenDraft = ""
+                                        metadataRescanEpoch++
+                                        tmdbSettingsStatus = "TMDB 已保存并开始匹配影视资料"
+                                    } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
+                                }
+                                TvButton("重新刮削",
+                                    modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
+                                    if (metadataToken.isNotBlank()) {
+                                        providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
+                                        metadataRescanEpoch++
+                                        tmdbSettingsStatus = "正在重新匹配当前影视点的元数据"
+                                    } else tmdbSettingsStatus = "请先配置 TMDB Token"
+                                }
+                            } }
+                            item { Text(tmdbSettingsStatus, color = Color(0xFFCFD7E4),
+                                modifier = Modifier.testTag("compact-tmdb-feedback")) }
+                        }
                         item { Text("直播源", fontSize = 22.sp) }
                         item {
                             if (settingsTvBoxOnly) TvSourceInput(
@@ -2385,13 +2426,15 @@ private fun Herrin() {
                                 val value = tmdbTokenDraft.trim()
                                 if (value.isNotEmpty() && value.length >= 40 && !value.any(Char::isWhitespace)) {
                                     prefs.tmdbReadToken = value
+                                    metadataToken = value
                                     tmdbTokenDraft = ""
-                                    tmdbSettingsStatus = "已保存；重新打开影视页面后尝试匹配高清海报"
+                                    tmdbSettingsStatus = "已保存；正在匹配海报与影视资料"
                                 } else tmdbSettingsStatus = "请输入完整的 TMDB API Read Access Token"
                             }
                             TvButton("停用高清刮削", modifier = Modifier.testTag("tmdb-token-clear"),
                                 reduced = reduceMotion) {
                                 prefs.tmdbReadToken = ""
+                                metadataToken = ""
                                 providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                 tmdbTokenDraft = ""
                                 tmdbSettingsStatus = "已停用 TMDB 网络匹配，改用源内海报"
