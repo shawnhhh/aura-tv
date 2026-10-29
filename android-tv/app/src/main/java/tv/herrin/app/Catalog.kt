@@ -7,6 +7,8 @@ interface CatalogSource {
         it.title.contains(query.trim(), ignoreCase = true) || it.subtitle.contains(query.trim(), ignoreCase = true)
     }
 }
+/** Public cast metadata, never playback authority. Portraits come only from TMDB's image CDN. */
+data class FilmPerson(val name: String, val role: String = "", val portraitUrl: String? = null)
 data class Film(val id: String, val title: String, val subtitle: String, val category: String,
                 val year: String, val synopsis: String, val artwork: Int, val episodes: Int = 1,
                 val artworkUrl: String? = null, val playbackEpisodes: List<PlaybackEpisode> = emptyList(),
@@ -16,7 +18,8 @@ data class Film(val id: String, val title: String, val subtitle: String, val cat
                 val ratingProvider: String? = null, val metadataSource: String? = null,
                 val originalDisplay: FilmDisplayOrigin? = null,
                 val actors: List<String> = emptyList(), val directors: List<String> = emptyList(),
-                val regions: List<String> = emptyList())
+                val regions: List<String> = emptyList(), val releaseDate: String? = null,
+                val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList())
 class DemoCatalog : CatalogSource {
     override fun titles() = listOf(
         Film("orbit", "最后的轨道", "THE LAST ORBIT", "电影", "2026", "在寂静的远方，一位航行者寻找回家的信号。原创虚构故事，合成影像仅用于界面演示。", R.drawable.photofilm_orbit),

@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
@@ -120,6 +123,29 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
                     contentScale = ContentScale.Fit)
             }
         }
+    }
+}
+
+/** Optional TMDB person portrait. Missing photos use an original neutral fallback. */
+@Composable
+fun PersonPortrait(person: FilmPerson, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val url = person.portraitUrl?.takeIf { it.startsWith("https://image.tmdb.org/t/p/w185/") &&
+        TmdbPortraits.url(it.substringAfter("/w185")) == it }
+    var portrait by remember(url) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(url) {
+        portrait = url?.let { candidate ->
+            withContext(Dispatchers.IO) {
+                runCatching { AuthorizedPosterCache(context).load(candidate) }.getOrNull()
+            }
+        }
+    }
+    Box(modifier.clip(CircleShape).background(Color(0xFF283649)),
+        contentAlignment = Alignment.Center) {
+        if (portrait != null) Image(portrait!!.asImageBitmap(), person.name,
+            Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Text(person.name.take(1).ifBlank { "人" }, color = Color(0xFFD3DEEC),
+            fontSize = 29.sp, fontWeight = FontWeight.Light)
     }
 }
 

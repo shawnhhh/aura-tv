@@ -6,19 +6,40 @@ internal data class FilmFacetSelection(
     val director: String? = null,
     val region: String? = null,
     val year: String? = null,
-    val category: String? = null
+    val category: String? = null,
+    val ratingBand: String? = null
 ) {
     val isEmpty: Boolean get() = actor == null && director == null && region == null &&
-        year == null && category == null
+        year == null && category == null && ratingBand == null
 }
 
 internal object FilmFacetFilters {
+    val ratingBands = listOf("≥9.0", "≥8.0", "≥7.0", "≥6.0", "低于6.0", "未评分")
+
+    /** Scores from arbitrary source text cannot be treated as independently verified TMDB values. */
+    fun ratingMatches(film: Film, band: String?): Boolean {
+        if (band == null) return true
+        val score = film.ratingValue?.takeIf { film.ratingProvider == "TMDB" &&
+            it.isFinite() && it in 0.0..10.0 }
+        if (band == "未评分") return score == null
+        if (score == null) return false
+        return when (band) {
+            "≥9.0" -> score >= 9.0
+            "≥8.0" -> score >= 8.0
+            "≥7.0" -> score >= 7.0
+            "≥6.0" -> score >= 6.0
+            "低于6.0" -> score < 6.0
+            else -> false
+        }
+    }
+
     fun results(films: List<Film>, selected: FilmFacetSelection): List<Film> = films.filter { film ->
         (selected.actor == null || selected.actor in film.actors) &&
             (selected.director == null || selected.director in film.directors) &&
             (selected.region == null || selected.region in film.regions) &&
             (selected.year == null || selected.year == film.year) &&
-            (selected.category == null || selected.category == film.category)
+            (selected.category == null || selected.category == film.category) &&
+            ratingMatches(film, selected.ratingBand)
     }
 
     /** Stable values from the *current* title library; no IMDb/TMDB catalog-wide assumptions. */

@@ -24,7 +24,8 @@ internal data class EnrichedArtwork(
     val rating: Double? = null, val genres: List<String> = emptyList(),
     val category: String? = null, val originalTitle: String? = null,
     val actors: List<String> = emptyList(), val directors: List<String> = emptyList(),
-    val regions: List<String> = emptyList()
+    val regions: List<String> = emptyList(), val releaseDate: String? = null,
+    val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList()
 )
 
 internal object ArtworkTitle {
@@ -49,15 +50,25 @@ internal data class ArtworkSearchCandidate(
     val names: List<String>, val year: Int?, val posterPath: String?, val backdropPath: String?,
     val synopsis: String = "", val rating: Double? = null,
     val voteCount: Int = 0, val genreIds: List<Int> = emptyList(),
-    val originalTitle: String? = null, val tmdbId: Int? = null
+    val originalTitle: String? = null, val tmdbId: Int? = null,
+    val releaseDate: String? = null
 )
 
 /** Only TMDB's explicitly supplied place and credit fields are accepted. */
 internal data class TmdbCredits(
     val actors: List<String> = emptyList(),
     val directors: List<String> = emptyList(),
-    val regions: List<String> = emptyList()
+    val regions: List<String> = emptyList(), val releaseDate: String? = null,
+    val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList()
 )
+
+/** Exact CDN paths only; no profile images from a film source or arbitrary hosts. */
+internal object TmdbPortraits {
+    private val path = Regex("^/[A-Za-z0-9_./-]+\\.(?:jpg|jpeg|png|webp)$")
+    fun url(raw: String?): String? = raw?.takeIf {
+        path.matches(it) && ".." !in it && "//" !in it && "/./" !in it
+    }?.let { "https://image.tmdb.org/t/p/w185$it" }
+}
 
 internal object TmdbCreditsParser {
     fun parse(json: String?, type: String): TmdbCredits {
@@ -79,6 +90,32 @@ internal object TmdbCreditsParser {
         val creators = if (type == "tv") names(root.optJSONArray("created_by"), 5)
             else emptyList()
         val directors = (creators + crew).distinct().take(5)
+        fun people(items: JSONArray?, limit: Int, kind: String): List<FilmPerson> {
+            if (items == null) return emptyList()
+            val parsed = ArrayList<FilmPerson>()
+            for (index in 0 until minOf(items.length(), 80)) {
+                val item = items.optJSONObject(index) ?: continue
+                if (kind == "director" && !item.optString("job").equals("Director", true)) continue
+                val name = item.optString("name").trim().take(60)
+                if (name.isBlank()) continue
+                val role = when (kind) {
+                    "director" -> "导演"
+                    "creator" -> "主创"
+                    else -> item.optString("character").trim().take(65).takeIf { it.isNotBlank() }
+                        ?.let { "饰 $it" } ?: "演员"
+                }
+                if (parsed.none { it.name == name })
+                    parsed += FilmPerson(name, role, TmdbPortraits.url(item.optString("profile_path")))
+                if (parsed.size >= limit) break
+            }
+            return parsed
+        }
+        val directorPeople = people(credits?.optJSONArray("crew"), 3, "director")
+        val creatorPeople = if (type == "tv") people(root.optJSONArray("created_by"), 2, "creator")
+            else emptyList()
+        val castPeople = people(credits?.optJSONArray("cast"), 8, "cast")
+        val allPeople = (directorPeople + creatorPeople + castPeople)
+            .distinctBy { it.name }.take(10)
         val regions = if (type == "tv") {
             val list = root.optJSONArray("origin_country") ?: JSONArray()
             (0 until minOf(list.length(), 12)).mapNotNull { index ->
@@ -93,7 +130,15 @@ internal object TmdbCreditsParser {
                 code.takeIf { it.matches(Regex("[A-Z]{2}")) }
             }.distinct().take(5).map(TmdbRegionNames::label)
         }
-        return TmdbCredits(actors, directors, regions)
+        val release = root.optString(if (type == "movie") "release_date" else "first_air_date")
+            .takeIf { it.matches(Regex("(?:19|20)\\d{2}-\\d{2}-\\d{2}")) }
+        val movieDuration = root.optInt("runtime", 0).takeIf { it in 1..600 }
+        val tvDuration = root.optJSONArray("episode_run_time")?.let { values ->
+            (0 until minOf(values.length(), 10)).map { values.optInt(it, 0) }
+                .firstOrNull { it in 1..360 }
+        }
+        return TmdbCredits(actors, directors, regions, release,
+            if (type == "tv") tvDuration else movieDuration, allPeople)
     }
 }
 
@@ -152,7 +197,8 @@ internal class ArtworkMetadataResolver(
         }
         // Upgrade M4.21 artwork-only cache keys: older positive entries have no
         // cast/director/origin data and must not mask the new detail lookup for 14 days.
-        val key = hash("credits-v2|$category|$queryTitle|${film.year}|${hash(token)}")
+        // The previous cache has cast names but not portrait/roles or release/runtime.
+        val key = hash("detail-v3|$category|$queryTitle|${film.year}|${hash(token)}")
         val file = File(cacheRoot, "$key.json")
         if (file.isFile && file.length() in 1..8192) {
             val parsed = runCatching { JSONObject(file.readText()) }.getOrNull()
@@ -201,7 +247,8 @@ internal class ArtworkMetadataResolver(
             val picture = EnrichedArtwork(
                 image("w780", candidate.posterPath), image("original", candidate.backdropPath),
                 synopsis, candidate.year?.toString(), rating, genres, classified,
-                candidate.originalTitle?.take(160), detail.actors, detail.directors, detail.regions
+                candidate.originalTitle?.take(160), detail.actors, detail.directors, detail.regions,
+                detail.releaseDate ?: candidate.releaseDate, detail.runtimeMinutes, detail.people
             )
             if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null) return null
             persist(file, JSONObject().put("poster", picture.posterUrl ?: "")
@@ -214,7 +261,13 @@ internal class ArtworkMetadataResolver(
                 .put("originalTitle", picture.originalTitle ?: "")
                 .put("actors", JSONArray(picture.actors))
                 .put("directors", JSONArray(picture.directors))
-                .put("regions", JSONArray(picture.regions)))
+                .put("regions", JSONArray(picture.regions))
+                .put("releaseDate", picture.releaseDate ?: "")
+                .put("runtimeMinutes", picture.runtimeMinutes ?: JSONObject.NULL)
+                .put("people", JSONArray().apply { picture.people.forEach { person ->
+                    put(JSONObject().put("name", person.name).put("role", person.role)
+                        .put("portrait", person.portraitUrl ?: ""))
+                } }))
             return picture
         } finally {
             networkLimit.release()
@@ -255,7 +308,19 @@ internal class ArtworkMetadataResolver(
             },
             obj.optString("category").takeIf { it in listOf("电影", "剧集", "动漫", "综艺", "纪录片") },
             obj.optString("originalTitle").takeIf { it.isNotBlank() }?.take(160),
-            cachedNames("actors", 8), cachedNames("directors", 5), cachedNames("regions", 5)
+            cachedNames("actors", 8), cachedNames("directors", 5), cachedNames("regions", 5),
+            obj.optString("releaseDate").takeIf { it.matches(Regex("(?:19|20)\\d{2}-\\d{2}-\\d{2}")) },
+            obj.optInt("runtimeMinutes", 0).takeIf { it in 1..600 },
+            (obj.optJSONArray("people") ?: JSONArray()).let { array ->
+                (0 until minOf(array.length(), 10)).mapNotNull { index ->
+                    val person = array.optJSONObject(index) ?: return@mapNotNull null
+                    val name = person.optString("name").trim().take(60)
+                    if (name.isBlank()) null else FilmPerson(name,
+                        person.optString("role").trim().take(70),
+                        person.optString("portrait").takeIf { it.startsWith("https://image.tmdb.org/t/p/w185/") &&
+                            TmdbPortraits.url(it.substringAfter("/w185")) == it })
+                }
+            }
         )
         return result.takeIf { it.posterUrl != null || it.backdropUrl != null || it.synopsis != null }
     }
@@ -282,7 +347,8 @@ internal class ArtworkMetadataResolver(
                     .map { genres.optInt(it, -1) }.filter { it > 0 },
                 originalTitle = obj.optString(if (category == "movie")
                     "original_title" else "original_name").takeIf { it.isNotBlank() },
-                tmdbId = obj.optInt("id", -1).takeIf { it > 0 }
+                tmdbId = obj.optInt("id", -1).takeIf { it > 0 },
+                releaseDate = date.takeIf { it.matches(Regex("(?:19|20)\\d{2}-\\d{2}-\\d{2}")) }
             )
         }
         return result

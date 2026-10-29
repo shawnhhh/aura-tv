@@ -600,8 +600,9 @@ private fun Herrin() {
     var facetRegion by rememberSaveable { mutableStateOf<String?>(null) }
     var facetYear by rememberSaveable { mutableStateOf<String?>(null) }
     var facetCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var facetRating by rememberSaveable { mutableStateOf<String?>(null) }
     val facetSelection = FilmFacetSelection(facetActor, facetDirector, facetRegion, facetYear,
-        facetCategory)
+        facetCategory, facetRating)
     LaunchedEffect(category, screen) {
         if (category == "直播" && screen == "browse") {
             while (true) {
@@ -641,7 +642,7 @@ private fun Herrin() {
     var metadataScanTotal by remember { mutableIntStateOf(0) }
     LaunchedEffect(catalogScope) {
         facetActor = null; facetDirector = null; facetRegion = null
-        facetYear = null; facetCategory = null
+        facetYear = null; facetCategory = null; facetRating = null
     }
     LaunchedEffect(catalogScope, catalogIdentity, metadataToken) {
         val eligible = providerFilms.orEmpty().take(80)
@@ -698,6 +699,8 @@ private fun Herrin() {
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val facetResultState = rememberLazyListState()
     val film = films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
+    // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
+    val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
     LaunchedEffect(screen, filmId, spiderActive) {
         if (spiderActive && screen == "detail" && film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
             spiderStatus = "正在读取 ${film.title} 的详情和选集…"
@@ -742,6 +745,8 @@ private fun Herrin() {
     }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
     val currentLines = currentEpisode?.lines.orEmpty()
+    val streamEvidenceKey = "$catalogScope|$catalogRefresh|${film.id}|$episode|$line|" +
+        currentLines.firstOrNull { it.id == line }?.uri.orEmpty()
     val resume = watchHistory.load(catalogScope, film.id, episode,
         if (currentLines.isEmpty()) "independent-test" else line)
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -958,14 +963,14 @@ private fun Herrin() {
                             selected = !facetSelection.isEmpty,
                             onFocus = { focusId = "facet-reset" }) {
                             facetActor = null; facetDirector = null; facetRegion = null
-                            facetYear = null; facetCategory = null
+                            facetYear = null; facetCategory = null; facetRating = null
                         }
                     }
-                    Text("演员、导演、地区、首映年份及分类可组合筛选。影片播放仍直接使用原影视源。",
+                    Text("评分（TMDB）、演员、导演、地区、首映年份及分类可组合筛选。影片播放仍直接使用原影视源。",
                         fontSize = 14.sp, color = Color(0xFFC4CDDB))
                     Text(when {
                         providerFilms == null && sourceConfigured -> "影视源目录加载中，暂无可筛选影片"
-                        metadataToken.isBlank() -> "未配置 TMDB：可按源内年份/分类筛选；演员、导演、地区需在高级设置中配置 Token"
+                        metadataToken.isBlank() -> "未配置 TMDB：可按源内年份/分类筛选；评分、演员、导演、地区需在高级设置中配置 Token"
                         metadataScanDone < metadataScanTotal -> "资料匹配中 $metadataScanDone/$metadataScanTotal；当前结果仅包含已取得的资料，尚非完整扫描"
                         metadataScanTotal < films.size -> "本轮已检查前 $metadataScanTotal/${films.size} 部；其余影片尚未刮削，主创/地区结果可能不完整"
                         else -> "本轮已检查 $metadataScanDone/${films.size} 部，成功匹配 $metadataMatched 部；未匹配作品不会被猜测归类"
@@ -980,9 +985,11 @@ private fun Herrin() {
                     FacetRail("导演 / 主创", "director", FilmFacetFilters.directors(films), facetDirector,
                         reduceMotion, onFocus = { focusId = it }, onSelect = { facetDirector = it })
                     FacetRail("国家 / 地区", "region", FilmFacetFilters.regions(films), facetRegion,
+                        reduceMotion, onFocus = { focusId = it }, onSelect = { facetRegion = it })
+                    FacetRail("影片评分 · TMDB", "rating", FilmFacetFilters.ratingBands, facetRating,
                         reduceMotion,
                         downTarget = matches.firstOrNull()?.let { requester("facet-result-${it.id}") },
-                        onFocus = { focusId = it }, onSelect = { facetRegion = it })
+                        onFocus = { focusId = it }, onSelect = { facetRating = it })
                     Text("筛选结果 · ${matches.size} 部${if (metadataScanDone < metadataScanTotal && metadataToken.isNotBlank()) " · 更新中" else ""}",
                         Modifier.testTag("facet-result-count"), fontSize = 22.sp,
                         fontWeight = FontWeight.SemiBold)
@@ -1628,6 +1635,7 @@ private fun Herrin() {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
                         startPositionMs = previous?.positionMs ?: 0L,
+                        onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, episode, historyLine,
                                 position, duration, finished)
@@ -2202,20 +2210,85 @@ private fun Herrin() {
                         item { Text(configStatus, fontSize = 13.sp, color = Color(0xFFBDC8D6)) }
                         item { Text("仅保存你有权访问的 HTTPS 目录。可切换、修改、二次确认删除、复制 JSON 备份或从 JSON 合并导入，最多 10 个。更换 URL 会变更收藏和续播作用域；删除目录不会删除其历史记录。不会抓取第三方影视站。", lineHeight = 22.sp) }
 
-                        item { Text("HERRIN M4.22 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、主创、地区与影片分类。\n影视首页右上角「筛选」可按演员、导演、地区及年份组合筛选。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
+                        item { Text("HERRIN M4.23 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、演职员头像、上映日期、片长与影片分类。\n影视首页右上角「筛选」可按 TMDB 评分、演员、导演、地区及年份组合筛选。\n详情页媒体规格严格区分影视源标称与播放器已识别格式，未知内容播放后再识别。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
                     } else {
-                        item { Text(if (screen == "player" && !spiderActive) "播放演示" else film.title, fontSize = 38.sp, fontWeight = FontWeight.Bold) }
-                        item { Text(buildString {
-                            append(film.year).append("  ·  ").append(film.category)
-                            FilmMetadataEnrichment.ratingLabel(film)?.let { append("  ·  ").append(it) }
-                            if (film.genres.isNotEmpty()) append("\n类型：").append(film.genres.joinToString(" · "))
-                            if (film.actors.isNotEmpty()) append("\n主演：").append(film.actors.take(6).joinToString(" · "))
-                            if (film.directors.isNotEmpty()) append("\n导演 / 主创：").append(film.directors.joinToString(" · "))
-                            if (film.regions.isNotEmpty()) append("\n国家 / 地区：").append(film.regions.joinToString(" · "))
-                            append("\n").append(film.synopsis)
-                            if (film.metadataSource == "TMDB") append("\n资料来源：TMDB；播放线路仍来自你添加的影视源")
-                        }, lineHeight = 26.sp, modifier = Modifier.testTag("detail-metadata")) }
+                        item { Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                            Text(if (screen == "player" && !spiderActive) "播放演示" else film.title,
+                                fontSize = 38.sp, fontWeight = FontWeight.Bold)
+                            Text(buildString {
+                                FilmMetadataEnrichment.ratingLabel(film)?.let { append(it).append("  ·  ") }
+                                append(film.releaseDate ?: film.year).append("  ·  ")
+                                append(film.category)
+                                film.runtimeMinutes?.let {
+                                    append("  ·  ")
+                                    append(if (film.category == "剧集" || film.category == "动漫") "单集约 " else "资料片长 ")
+                                    append(it).append(" 分钟")
+                                }
+                                if (film.genres.isNotEmpty()) append("\n类型：").append(film.genres.joinToString(" · "))
+                                if (film.regions.isNotEmpty()) append("\n国家 / 地区：").append(film.regions.joinToString(" · "))
+                                if (film.directors.isNotEmpty()) append("\n导演 / 主创：").append(film.directors.joinToString(" · "))
+                            }, lineHeight = 25.sp, modifier = Modifier.testTag("detail-metadata"))
+                        } }
+                        item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("画质与音效", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                            val spec = verifiedStreams[streamEvidenceKey]
+                            val claims = SourceMediaClaims.labels(film.title,
+                                currentLines.firstOrNull { it.id == line }?.title.orEmpty())
+                            if (spec?.isKnown == true) Text(
+                                "播放器已识别轨道 · ${spec.labels().joinToString("  ·  ")}",
+                                modifier = Modifier.testTag("detail-media-spec"),
+                                color = Color(0xFFBCE2EF), fontSize = 17.sp)
+                            if (claims.isNotEmpty()) Text(
+                                "影视源标称：${claims.joinToString(" · ")}（未经播放验证）",
+                                modifier = Modifier.testTag("detail-source-claims"),
+                                color = Color(0xFFE5C58E), fontSize = 16.sp)
+                            if (spec?.isKnown != true && claims.isEmpty()) Text(
+                                "清晰度 / HDR / 杜比音效：播放后识别",
+                                modifier = Modifier.testTag("detail-media-spec"),
+                                color = Color(0xFFBCE2EF), fontSize = 17.sp)
+                            Text("规格以实际选中媒体轨道为依据，不代表电视已成功硬解或面板最终输出；未知时不猜测。",
+                                color = Color(0xFF8FA3B9), fontSize = 13.sp)
+                        } }
+                        item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                            Text(film.synopsis.ifBlank { "暂未取得可靠剧情简介" },
+                                modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
+                                color = Color(0xFFE1E8F2))
+                            if (film.metadataSource == "TMDB") Text("资料由 TMDB 提供；播放线路由你添加的影视源提供。",
+                                fontSize = 13.sp, color = Color(0xFF9BAEC2))
+                        } }
+                        if (film.people.isNotEmpty()) item {
+                            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                Text("相关演职人员", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                                LazyRow(Modifier.testTag("detail-people"),
+                                    horizontalArrangement = Arrangement.spacedBy(15.dp)) {
+                                    itemsIndexed(film.people.take(10), key = { index, person ->
+                                        "$index-${person.name}" }) { index, person ->
+                                        var personFocused by remember(person.name) { mutableStateOf(false) }
+                                        Column(Modifier.width(122.dp)
+                                            .testTag("detail-person-$index")
+                                            .border(2.dp, if (personFocused) Color.White else Color.Transparent,
+                                                RoundedCornerShape(14.dp))
+                                            .onFocusChanged { personFocused = it.isFocused }
+                                            .focusable()
+                                            .padding(vertical = 7.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            PersonPortrait(person, Modifier.size(82.dp))
+                                            Text(person.name, fontSize = 14.sp, maxLines = 2,
+                                                textAlign = TextAlign.Center, lineHeight = 17.sp)
+                                            Text(person.role.ifBlank { "演员" }, fontSize = 12.sp,
+                                                maxLines = 2, textAlign = TextAlign.Center,
+                                                color = Color(0xFFB7C5D5), lineHeight = 15.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (film.actors.isNotEmpty()) item {
+                            Text("主演：${film.actors.take(8).joinToString(" · ")}",
+                                modifier = Modifier.testTag("detail-people"), color = Color(0xFFD7E0EA))
+                        }
                         if (spiderActive) item { Text(spiderStatus, color = Color(0xFFE2C38B), modifier = Modifier.testTag("spider-status")) }
                         if (!spiderActive && film.cmsVodId != null && cmsDetailStatus.isNotBlank())
                             item { Text(cmsDetailStatus, color = Color(0xFFE2C38B),
@@ -2235,6 +2308,8 @@ private fun Herrin() {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 TvButton(when {
                                     spiderActive && film.playbackEpisodes.isEmpty() -> "等待 Spider 选集"
+                                    resume != null && resume.positionMs > 0L ->
+                                        "▶ 继续播放 ${resume.positionMs / 60000}:${"%02d".format(resume.positionMs / 1000 % 60)}"
                                     spiderActive -> "▶ 播放当前集"
                                     film.playbackEpisodes.isEmpty() -> "▶ 播放演示"
                                     else -> "▶ 播放授权片源"

@@ -471,7 +471,8 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("facet-screen").assertExists()
         compose.onNodeWithTag("facet-coverage").assertExists()
-        focus("facet-region-all")
+        // Rating is the last facet rail; a single Down must reach the first poster.
+        focus("facet-rating-all")
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("facet-result-orbit").assertIsFocused()
         compose.onNodeWithTag("facet-result-orbit").assertIsDisplayed()
@@ -480,6 +481,15 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("facet-screen").assertExists()
         capture("metadata-facet-dpad")
+    }
+    @Test fun filmDetailShowsUnknownMediaSpecInsteadOfInventingDolbyOrHdr() {
+        focus("details")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("detail-media-spec"))
+        compose.onNodeWithTag("detail-media-spec").assertTextContains("播放后识别")
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("detail-synopsis"))
+        compose.onNodeWithTag("detail-synopsis").assertExists()
+        compose.onNodeWithTag("detail-source-claims").assertDoesNotExist()
     }
     @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
         advancedSettings()

@@ -4,7 +4,8 @@ data class FilmDisplayOrigin(
     val subtitle: String, val synopsis: String, val category: String, val year: String,
     val artworkUrl: String?, val backdropUrl: String?, val genres: List<String>,
     val ratingValue: Double?, val ratingProvider: String?,
-    val actors: List<String>, val directors: List<String>, val regions: List<String>
+    val actors: List<String>, val directors: List<String>, val regions: List<String>,
+    val releaseDate: String?, val runtimeMinutes: Int?, val people: List<FilmPerson>
 )
 
 /**
@@ -28,11 +29,15 @@ internal object FilmMetadataEnrichment {
         actors = metadata.actors.ifEmpty { original.actors },
         directors = metadata.directors.ifEmpty { original.directors },
         regions = metadata.regions.ifEmpty { original.regions },
+        releaseDate = metadata.releaseDate ?: original.releaseDate,
+        runtimeMinutes = metadata.runtimeMinutes ?: original.runtimeMinutes,
+        people = metadata.people.ifEmpty { original.people },
         metadataSource = "TMDB",
         originalDisplay = original.originalDisplay ?: FilmDisplayOrigin(
             original.subtitle, original.synopsis, original.category, original.year, original.artworkUrl,
             original.backdropUrl, original.genres, original.ratingValue, original.ratingProvider,
-            original.actors, original.directors, original.regions)
+            original.actors, original.directors, original.regions,
+            original.releaseDate, original.runtimeMinutes, original.people)
     )
 
     fun restore(film: Film): Film {
@@ -42,6 +47,8 @@ internal object FilmMetadataEnrichment {
             backdropUrl = saved.backdropUrl, genres = saved.genres,
             ratingValue = saved.ratingValue, ratingProvider = saved.ratingProvider,
             actors = saved.actors, directors = saved.directors, regions = saved.regions,
+            releaseDate = saved.releaseDate, runtimeMinutes = saved.runtimeMinutes,
+            people = saved.people,
             metadataSource = null, originalDisplay = null)
     }
 

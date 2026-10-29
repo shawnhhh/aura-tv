@@ -68,6 +68,7 @@ fun AuthorizedPlaybackPanel(
     onPlayer: (ExoPlayer) -> Unit = {},
     startPositionMs: Long = 0L,
     onPlaybackProgress: (positionMs: Long, durationMs: Long, finished: Boolean) -> Unit = { _, _, _ -> },
+    onMediaSpecDetected: (VerifiedStreamSpec) -> Unit = {},
     isLive: Boolean = false,
     onLiveMenu: () -> Unit = {},
     focusRestoreEpoch: Int = 0,
@@ -86,6 +87,7 @@ fun AuthorizedPlaybackPanel(
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
+    val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val player = remember(media) {
         val candidates = (listOf(media.uri) + media.alternateUris).distinct().take(8)
         fun itemFor(uri: String, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
@@ -184,6 +186,20 @@ fun AuthorizedPlaybackPanel(
                 (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED))
                 reportProgress()
         }
+    }
+    // No network probes on the detail screen. Read only selected Media3 formats
+    // after the player itself has opened the exact user-selected source.
+    LaunchedEffect(player, uiEpoch) {
+        fun selected(type: Int): SelectedTrackEvidence? = player.currentTracks.groups
+            .asSequence().filter { it.type == type }.flatMap { group ->
+                (0 until group.length).asSequence().filter { group.isTrackSelected(it) }
+                    .map { group.getTrackFormat(it) }
+            }.firstOrNull()?.let { format ->
+                SelectedTrackEvidence(format.sampleMimeType, format.width, format.height,
+                    format.colorInfo?.colorTransfer ?: -1)
+            }
+        val observed = MediaQuality.verified(selected(C.TRACK_TYPE_VIDEO), selected(C.TRACK_TYPE_AUDIO))
+        if (observed.isKnown) latestMediaSpecCallback(observed)
     }
     LaunchedEffect(player, showVerification) {
         while (showVerification) {
