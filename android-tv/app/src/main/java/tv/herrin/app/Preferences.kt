@@ -69,4 +69,8 @@ class Preferences(context: Context) : FavoritesStore {
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
+    /** Optional personal TMDB API Read Access Token; empty disables metadata calls. */
+    var tmdbReadToken: String
+        get() = prefs.getString("tmdb_read_token", "") ?: ""
+        set(value) { prefs.edit().putString("tmdb_read_token", value.trim()).apply() }
 }

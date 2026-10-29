@@ -56,12 +56,12 @@ internal object SpiderVodCodec {
     fun detail(json: String, film: Film): Film {
         val item = JSONObject(json).optJSONArray("list")?.optJSONObject(0)
             ?: error("Spider 详情缺少 list[0]")
-        val flags = item.optString("vod_play_from").split("$$$").take(8)
+        val flags = item.optString("vod_play_from").split("$$$").take(12)
         val episodes = linkedMapOf<Int, MutableList<PlaybackLine>>()
         val episodeTitles = linkedMapOf<Int, String>()
-        item.optString("vod_play_url").split("$$$").take(8).forEachIndexed { lineIndex, playlist ->
+        item.optString("vod_play_url").split("$$$").take(12).forEachIndexed { lineIndex, playlist ->
             val flag = flags.getOrNull(lineIndex).orEmpty().ifBlank { "线路 ${lineIndex + 1}" }.take(80)
-            playlist.split('#').take(99).forEachIndexed { index, entry ->
+            playlist.split('#').take(300).forEachIndexed { index, entry ->
                 val separator = entry.indexOf('$')
                 val episodeName = if (separator >= 0) entry.substring(0, separator).trim() else ""
                 val opaqueId = (if (separator >= 0) entry.substring(separator + 1) else entry).trim()
@@ -91,7 +91,8 @@ internal object SpiderVodCodec {
             episodes = maxOf(1, playback.size), playbackEpisodes = playback)
     }
 
-    fun player(json: String, allowHttp: Boolean): PlaybackResult {
+    fun player(json: String, allowHttp: Boolean,
+               siteHeaders: Map<String, String> = emptyMap()): PlaybackResult {
         val data = JSONObject(json)
         val options = playerUrls(data.opt("url")).mapNotNull {
             TvBoxUrl.normalize(it, allowHttp)
@@ -109,19 +110,12 @@ internal object SpiderVodCodec {
             return PlaybackResult.Unavailable("此线路需要网页解析器，请切换返回直链的授权线路")
         val uri = playable.firstOrNull()
             ?: return PlaybackResult.Unavailable("Spider 没有返回本次授权的 HTTP(S) 直链")
-        val header = data.optJSONObject("header") ?: data.optJSONObject("headers")
-        val headers = buildMap {
-            if (header != null) {
-                val names = header.keys()
-                while (names.hasNext()) {
-                    val name = names.next()
-                    val value = header.optString(name)
-                    if (name.matches(Regex("[A-Za-z0-9-]{1,60}")) &&
-                        value.length <= 2_048 && !value.contains('\n') && !value.contains('\r'))
-                        put(name, value)
-                }
-            }
-        }
+        val responseHeaders = TvBoxHeaderCodec.decode(
+            data.optJSONObject("header") ?: data.optJSONObject("headers"))
+        // FongMi Result.headers() returns the Site.header fallback only when
+        // the player result supplies no explicit headers. Avoid key-by-key
+        // merging: it could accidentally forward stale authentication values.
+        val headers = responseHeaders.ifEmpty { siteHeaders }
         val tracks = data.optJSONArray("subs") ?: JSONArray()
         val subtitles = (0 until minOf(tracks.length(), 6)).mapNotNull { index ->
             val track = tracks.optJSONObject(index) ?: return@mapNotNull null
@@ -368,6 +362,8 @@ internal object SpiderInitPolicy {
 internal class TvBoxSpiderWorker(private val context: Context) {
     private var active: Spider? = null
     private var activeKey: String? = null
+    private var activeVipFlags: List<String> = emptyList()
+    private var activeSiteHeaders: Map<String, String> = emptyMap()
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
         SpiderResult.Ready(withTimeout(30_000) { runInterruptible(Dispatchers.IO) { block() } })
@@ -420,6 +416,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 init(context, site.extension)
             }.also { active = it; activeKey = key }
         }
+        // FongMi sends the root config's global VIP flags to playerContent.
+        // Passing emptyList() prevented some plugins from generating the same
+        // playable result as TVBox for an otherwise identical episode ID.
+        activeVipFlags = config.vipFlags.take(32)
+        activeSiteHeaders = site.headers
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
         val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
             spider.categoryContent(id, "1", false, hashMapOf())
@@ -443,7 +444,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val spider = active ?: error("站点 Spider 尚未加载")
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
-            SpiderVodCodec.player(spider.playerContent(selected.title, selected.uri, emptyList()), allowHttp).also {
+            SpiderVodCodec.player(spider.playerContent(selected.title, selected.uri, activeVipFlags),
+                allowHttp, activeSiteHeaders).also {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             }
         }) {
@@ -459,5 +461,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         runCatching { active?.js?.close() }
         active = null
         activeKey = null
+        activeVipFlags = emptyList()
+        activeSiteHeaders = emptyMap()
     }
 }

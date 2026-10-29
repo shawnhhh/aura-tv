@@ -10,7 +10,11 @@ interface CatalogSource {
 data class Film(val id: String, val title: String, val subtitle: String, val category: String,
                 val year: String, val synopsis: String, val artwork: Int, val episodes: Int = 1,
                 val artworkUrl: String? = null, val playbackEpisodes: List<PlaybackEpisode> = emptyList(),
-                val spiderVodId: String? = null, val backdropUrl: String? = null)
+                val spiderVodId: String? = null, val backdropUrl: String? = null,
+                val cmsVodId: String? = null,
+                val genres: List<String> = emptyList(), val ratingValue: Double? = null,
+                val ratingProvider: String? = null, val metadataSource: String? = null,
+                val originalDisplay: FilmDisplayOrigin? = null)
 class DemoCatalog : CatalogSource {
     override fun titles() = listOf(
         Film("orbit", "最后的轨道", "THE LAST ORBIT", "电影", "2026", "在寂静的远方，一位航行者寻找回家的信号。原创虚构故事，合成影像仅用于界面演示。", R.drawable.photofilm_orbit),

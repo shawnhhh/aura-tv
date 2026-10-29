@@ -38,6 +38,7 @@ internal object SpiderIpc {
         .put("name", site.name).put("key", site.key)
         .put("spiderApi", site.spiderApi ?: "").put("ext", site.extension)
         .put("jar", site.jar ?: "")
+        .put("header", JSONObject(site.headers))
 
     fun readSite(obj: JSONObject): TvBoxSite = TvBoxSite(
         name = obj.optString("name").take(64),
@@ -45,16 +46,25 @@ internal object SpiderIpc {
         key = obj.optString("key").take(90),
         spiderApi = obj.optString("spiderApi").takeIf { it.startsWith("csp_") },
         extension = obj.optString("ext").take(64_000),
-        jar = obj.optString("jar").takeIf { it.isNotBlank() })
+        jar = obj.optString("jar").takeIf { it.isNotBlank() },
+        headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))
 
     fun film(film: Film): JSONObject {
         val episodes = JSONArray()
-        film.playbackEpisodes.take(99).forEach { ep ->
+        var episodeChars = 0
+        for (ep in film.playbackEpisodes.take(300)) {
             val lines = JSONArray()
-            ep.lines.take(8).forEach { line ->
+            ep.lines.take(12).forEach { line ->
                 lines.put(JSONObject().put("id", line.id).put("title", line.title).put("uri", line.uri))
             }
-            episodes.put(JSONObject().put("number", ep.number).put("title", ep.title).put("lines", lines))
+            val encoded = JSONObject().put("number", ep.number).put("title", ep.title).put("lines", lines)
+            val length = encoded.toString().length
+            // Binder replies have a bounded payload. Keep full normal-length
+            // seasons (not just the first 99) without dropping the whole detail
+            // response when one provider supplies exceptionally long IDs.
+            if (episodeChars + length > 350_000) break
+            episodeChars += length
+            episodes.put(encoded)
         }
         return JSONObject().put("id", film.id).put("title", film.title)
             .put("subtitle", film.subtitle).put("category", film.category)
@@ -66,10 +76,10 @@ internal object SpiderIpc {
 
     fun readFilm(obj: JSONObject): Film {
         val array = obj.optJSONArray("playback") ?: JSONArray()
-        val episodes = (0 until minOf(array.length(), 99)).mapNotNull { index ->
+        val episodes = (0 until minOf(array.length(), 300)).mapNotNull { index ->
             val ep = array.optJSONObject(index) ?: return@mapNotNull null
             val linesArray = ep.optJSONArray("lines") ?: JSONArray()
-            val lines = (0 until minOf(linesArray.length(), 8)).mapNotNull { i ->
+            val lines = (0 until minOf(linesArray.length(), 12)).mapNotNull { i ->
                 val line = linesArray.optJSONObject(i) ?: return@mapNotNull null
                 PlaybackLine(line.optString("id"), line.optString("title"), line.optString("uri"))
             }
@@ -161,7 +171,12 @@ class TvBoxSpiderService : Service() {
                                 val warehouse = TvBoxConfig.Single(
                                     sites = listOf(site), lives = emptyList(),
                                     hasExternalEngine = true,
-                                    spiderJar = request.optString("defaultJar").takeIf { it.isNotBlank() })
+                                    spiderJar = request.optString("defaultJar").takeIf { it.isNotBlank() },
+                                    vipFlags = request.optJSONArray("vipFlags")?.let { array ->
+                                        (0 until minOf(array.length(), 32)).mapNotNull { index ->
+                                            array.optString(index).trim().take(80).takeIf { it.isNotBlank() }
+                                        }
+                                    }.orEmpty())
                                 when (val result = worker.browse(site, warehouse)) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("films", JSONArray().apply {
@@ -304,6 +319,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> {
         val payload = JSONObject().put("site", SpiderIpc.site(site))
             .put("defaultJar", config.spiderJar ?: "")
+            .put("vipFlags", JSONArray(config.vipFlags.take(32)))
         return when (val response = request(SpiderIpc.BROWSE, payload)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> {

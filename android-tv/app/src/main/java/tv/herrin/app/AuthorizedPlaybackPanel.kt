@@ -79,6 +79,7 @@ fun AuthorizedPlaybackPanel(
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
     var uiEpoch by remember(media) { mutableIntStateOf(0) }
     var activeVariant by remember(media) { mutableIntStateOf(0) }
+    var overrideMime by remember(media) { mutableStateOf<String?>(null) }
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var showVerification by remember { mutableStateOf(false) }
@@ -87,7 +88,7 @@ fun AuthorizedPlaybackPanel(
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val player = remember(media) {
         val candidates = (listOf(media.uri) + media.alternateUris).distinct().take(8)
-        fun itemFor(uri: String): MediaItem = MediaItem.Builder().setUri(uri).apply {
+        fun itemFor(uri: String, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
             if (media.subtitles.isNotEmpty()) {
                 setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
                     MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
@@ -97,12 +98,7 @@ fun AuthorizedPlaybackPanel(
                         .build()
                 })
             }
-            when {
-                uri.substringBefore('?').endsWith(".m3u8", ignoreCase = true) ->
-                    setMimeType(MimeTypes.APPLICATION_M3U8)
-                uri.substringBefore('?').endsWith(".mpd", ignoreCase = true) ->
-                    setMimeType(MimeTypes.APPLICATION_MPD)
-            }
+            (mimeOverride ?: PlaybackFormatRetry.initialMime(uri))?.let(::setMimeType)
         }.build()
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
@@ -128,10 +124,23 @@ fun AuthorizedPlaybackPanel(
                     uiEpoch++
                 }
                 override fun onPlayerError(error: PlaybackException) {
-                    if (error.errorCode in 2000..2999 && activeVariant < candidates.lastIndex) {
+                    val alternateMime = PlaybackFormatRetry.nextMime(
+                        candidates[activeVariant], overrideMime, error.errorCode)
+                    if (alternateMime != null) {
+                        // Same source, no scraping: Media3 may have interpreted
+                        // an extensionless HLS playlist as a progressive file.
+                        overrideMime = alternateMime
+                        errorMessage = null
+                        setMediaItem(itemFor(candidates[activeVariant], alternateMime))
+                        prepare()
+                        play()
+                    } else if (PlaybackFormatRetry.retryNextSource(error.errorCode) &&
+                        activeVariant < candidates.lastIndex) {
                         // The Spider chose several authorized URLs. Retry the next
-                        // supplied candidate, without discovering any new stream.
+                        // supplied candidate after network, container or decoder
+                        // failure, without discovering any new stream.
                         activeVariant++
+                        overrideMime = null
                         errorMessage = null
                         setMediaItem(itemFor(candidates[activeVariant]))
                         prepare()
@@ -141,7 +150,8 @@ fun AuthorizedPlaybackPanel(
                             .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                             .firstOrNull()?.responseCode
                         errorMessage = playbackErrorMessage(error.errorCodeName) +
-                            "（${error.errorCodeName}${httpStatus?.let { ", HTTP $it" }.orEmpty()}）"
+                            "（${error.errorCodeName}${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
+                            "; 线路 ${activeVariant + 1}/${candidates.size}）"
                     }
                 }
             })

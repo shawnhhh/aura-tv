@@ -19,7 +19,8 @@ internal data class TvBoxWarehouse(val name: String, val url: String)
 internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null,
                               val key: String = "", val spiderApi: String? = null,
                               val extension: String = "", val jar: String? = null,
-                              val scriptApi: String? = null)
+                              val scriptApi: String? = null,
+                              val headers: Map<String, String> = emptyMap())
 internal data class TvBoxLive(val name: String, val playlistUrl: String?,
                               val sourceUrl: String? = null, val channels: List<LiveChannel> = emptyList())
 
@@ -87,7 +88,8 @@ internal sealed interface TvBoxConfig {
     data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,
                       val fromCache: Boolean = false, val wrappedInImage: Boolean = false,
-                      val spiderJar: String? = null) : TvBoxConfig
+                      val spiderJar: String? = null,
+                      val vipFlags: List<String> = emptyList()) : TvBoxConfig
     data class HerrinCatalog(val address: String, val count: Int) : TvBoxConfig
     data class Error(val reason: String) : TvBoxConfig
 }
@@ -173,7 +175,8 @@ internal object TvBoxConfigParser {
                             spiderApi = api.takeIf { it.startsWith("csp_") && it.matches(Regex("csp_[A-Za-z0-9_]{1,64}")) },
                             extension = extension.take(64_000),
                             jar = site.optString("jar").takeIf { it.isNotBlank() },
-                            scriptApi = script)
+                            scriptApi = script,
+                            headers = TvBoxHeaderCodec.decode(site.optJSONObject("header")))
                     }
                 }
             }
@@ -192,12 +195,32 @@ internal object TvBoxConfigParser {
                 }
             }
             val spider = root.optString("spider").takeIf { it.isNotBlank() }
-            return TvBoxConfig.Single(sites, lives, spider != null || sites.any { it.needsAdapter }, spiderJar = spider)
+            val flagsJson = root.optJSONArray("flags") ?: JSONArray()
+            val flags = (0 until minOf(flagsJson.length(), 32)).mapNotNull { index ->
+                flagsJson.optString(index).trim().take(80).takeIf { it.isNotBlank() }
+            }.distinct()
+            return TvBoxConfig.Single(sites, lives, spider != null || sites.any { it.needsAdapter },
+                spiderJar = spider, vipFlags = flags)
         }
         if (root.optInt("version", -1) == 1 && root.optJSONArray("items") != null) {
             return TvBoxConfig.HerrinCatalog(origin, root.getJSONArray("items").length())
         }
         return TvBoxConfig.Error("未识别的配置：需要 TVBox urls / sites / lives 或 HERRIN items")
+    }
+}
+
+/** TVBox Site.header is the fallback when a Spider omits Result.header entirely. */
+internal object TvBoxHeaderCodec {
+    fun decode(source: JSONObject?): Map<String, String> = buildMap {
+        if (source == null) return@buildMap
+        val names = source.keys()
+        while (names.hasNext() && size < 24) {
+            val name = names.next()
+            val value = source.optString(name).trim()
+            if (name.matches(Regex("[A-Za-z0-9-]{1,60}")) &&
+                value.length in 1..2_048 && '\n' !in value && '\r' !in value)
+                put(name, value)
+        }
     }
 }
 
