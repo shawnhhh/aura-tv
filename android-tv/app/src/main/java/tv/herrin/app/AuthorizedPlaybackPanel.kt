@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.focusable
@@ -86,6 +87,11 @@ fun AuthorizedPlaybackPanel(
     var showVerification by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
+    val playerRootFocus = remember { FocusRequester() }
+    var controlsVisible by remember(media) { mutableStateOf(true) }
+    var transportFocused by remember { mutableStateOf(false) }
+    var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
+    var focusControlsEpoch by remember { mutableIntStateOf(0) }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media) {
@@ -234,7 +240,23 @@ fun AuthorizedPlaybackPanel(
     }
     // Closing a live channel drawer removes its focused node. Restore the
     // player anchor so the very next Left/OK opens the menu without a dead press.
-    LaunchedEffect(player, focusRestoreEpoch) { initialControl.requestFocus() }
+    LaunchedEffect(player, focusRestoreEpoch) {
+        if (isLive) initialControl.requestFocus() else playerRootFocus.requestFocus()
+    }
+    LaunchedEffect(focusControlsEpoch) {
+        if (!isLive && focusControlsEpoch > 0) {
+            delay(50)
+            initialControl.requestFocus()
+        }
+    }
+    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, transportFocused) {
+        if (!isLive && controlsVisible && !transportFocused &&
+            playbackState == Player.STATE_READY && !showVerification) {
+            delay(8_000)
+            controlsVisible = false
+            playerRootFocus.requestFocus()
+        }
+    }
     DisposableEffect(player, lifecycle) {
         val session = MediaSession.Builder(context, player).build()
         val observer = LifecycleEventObserver { _, event ->
@@ -255,10 +277,38 @@ fun AuthorizedPlaybackPanel(
         onBack()
     }
     BackHandler { requestBack("dispatcher") }
-    Box(Modifier.fillMaxSize().background(Color.Black).onPreviewKeyEvent { event ->
+    Box(Modifier.fillMaxSize().background(Color.Black)
+        .focusRequester(playerRootFocus).focusable()
+        .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
+            true
+        } else if (!isLive && transportFocused &&
+            key.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                transportFocused = false
+                controlsVisible = false
+                playerRootFocus.requestFocus()
+            }
+            true
+        } else if (!isLive && !transportFocused &&
+            key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                PlaybackTransport.seekBy(player,
+                    if (key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 10_000L else -10_000L)
+                controlsInteractionEpoch++
+            }
+            true
+        } else if (!isLive && !transportFocused &&
+            key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                controlsVisible = true
+                controlsInteractionEpoch++
+                focusControlsEpoch++
+            }
             true
         } else if (isLive && key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
@@ -331,13 +381,13 @@ fun AuthorizedPlaybackPanel(
                     }
                 }
             }
-        } else Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
+        } else if (controlsVisible || showVerification || errorMessage != null)
+            Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Button(onClick = { requestBack("visible-button") }) {
                 Text(if (isLive) "返回频道" else "返回详情")
             }
-            Text(if (isLive) "仅播放你有权使用的直播频道"
-                else "仅播放你有权使用的媒体 · 播放源按所选影片/线路确定", color = Color.White)
+            // Movie metadata/technical resolver messages are not shown over the film.
             Button(onClick = { showVerification = !showVerification },
                 modifier = Modifier.testTag("player-verification-toggle")) {
                 Text(if (showVerification) "收起实播状态" else "查看实播状态")
@@ -386,14 +436,17 @@ fun AuthorizedPlaybackPanel(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        if (!isLive) Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.80f).padding(bottom = 36.dp)
+        if (!isLive && controlsVisible) Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.86f).padding(bottom = 36.dp)
+                .onFocusChanged { transportFocused = it.hasFocus }
                 .background(Color(0xE9151820), RoundedCornerShape(20.dp))
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(elapsed(shownPosition), color = Color.White)
+                Text(PlayerQualityLabel.fromSize(player.videoSize.width, player.videoSize.height),
+                    color = Color(0xFFD3E6F7), modifier = Modifier.testTag("player-quality-label"))
                 Text(elapsed(shownDuration), color = Color(0xFFD2D5DE))
             }
             Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0xFF434857))) {
