@@ -15,7 +15,6 @@ jobs:
       HERRIN_RELEASE_STORE_PASSWORD: ${{ secrets.HERRIN_RELEASE_STORE_PASSWORD }}
       HERRIN_RELEASE_KEY_ALIAS: ${{ secrets.HERRIN_RELEASE_KEY_ALIAS }}
       HERRIN_RELEASE_KEY_PASSWORD: ${{ secrets.HERRIN_RELEASE_KEY_PASSWORD }}
-      HERRIN_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/herrin-release.jks
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -31,6 +30,8 @@ jobs:
           test -n "$HERRIN_RELEASE_STORE_PASSWORD"
           test -n "$HERRIN_RELEASE_KEY_ALIAS"
           test -n "$HERRIN_RELEASE_KEY_PASSWORD"
+      - name: Set temporary signing path
+        run: printf 'HERRIN_RELEASE_KEYSTORE_PATH=%s/herrin-release.jks\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Restore temporary signing keystore
         run: |
           printf '%s' "$HERRIN_RELEASE_KEYSTORE_B64" | base64 --decode > "$HERRIN_RELEASE_KEYSTORE_PATH"
