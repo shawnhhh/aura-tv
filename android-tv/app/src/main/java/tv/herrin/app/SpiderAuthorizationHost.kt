@@ -76,6 +76,7 @@ internal fun SpiderAuthorizationHost() {
     val latest by rememberUpdatedState(current)
     var busy by remember(current) { mutableStateOf(false) }
     val focus = remember(current.dialog) { FocusRequester() }
+    val focusIndex = current.options.buttons.indexOfFirst { it.enabled }
     val bitmap = remember(current.options) { authorizationBitmap(current.options) }
     LaunchedEffect(current.owner, current.operation, current.dialog) {
         delay(SpiderAuthorizationProtocol.TIMEOUT_MS)
@@ -97,14 +98,21 @@ internal fun SpiderAuthorizationHost() {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 current.options.buttons.forEachIndexed { index, button ->
                     Button(onClick = { busy = true; current.reply(button.id) }, enabled = !busy && button.enabled,
-                        modifier = (if (index == 0) Modifier.focusRequester(focus) else Modifier)
+                        modifier = (if (index == focusIndex) Modifier.focusRequester(focus) else Modifier)
                             .testTag("spider-authorization-action-$index")) { Text(button.label) }
                 }
-                Button(onClick = { SpiderAuthorizationUi.cancel(current) }, modifier = Modifier.testTag("spider-authorization-cancel")) { Text("取消") }
+                Button(onClick = { SpiderAuthorizationUi.cancel(current) },
+                    modifier = (if (focusIndex < 0) Modifier.focusRequester(focus) else Modifier)
+                        .testTag("spider-authorization-cancel")) { Text("取消") }
             }
         }
+        // Dialog has a separate composition/window. Its child must be attached
+        // before requesting focus; an effect in the Activity composition races it.
+        LaunchedEffect(current, focusIndex) {
+            withFrameNanos { }
+            focus.requestFocus()
+        }
     }
-    LaunchedEffect(current) { focus.requestFocus() }
 }
 
 private fun authorizationBitmap(options: SpiderAuthorizationProtocol.Options): Bitmap? = runCatching {

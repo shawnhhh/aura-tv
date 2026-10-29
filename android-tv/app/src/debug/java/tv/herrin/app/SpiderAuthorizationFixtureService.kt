@@ -25,8 +25,11 @@ class SpiderAuthorizationFixtureService : Service() {
         if (message.what == SpiderIpc.AUTH_ACTION) {
             if (operation == message.arg1) session.action(message.arg2, message.data.getString("button"))
         } else {
-            caller = message.replyTo
-            operation = message.arg1
+            val callerForOperation = message.replyTo
+            val operationId = message.arg1
+            val operationCode = message.what
+            caller = callerForOperation
+            operation = operationId
             val payload = message.data.getString("payload").orEmpty()
             worker.execute {
                 // Only test loopback is allowed. The caller embeds an original mock endpoint in extension.
@@ -44,8 +47,8 @@ class SpiderAuthorizationFixtureService : Service() {
                         JSONObject().put("close", response.optBoolean("authorized") && response.optString("token").isNotBlank())
                     }
                 }
-                caller?.send(Message.obtain(null, message.what).apply {
-                    arg1 = operation
+                callerForOperation?.send(Message.obtain(null, operationCode).apply {
+                    arg1 = operationId
                     data = Bundle().apply { putString("payload", SpiderIpc.error(if (result == null) "mock-cancelled" else "mock-authorized").toString()) }
                 })
             }
