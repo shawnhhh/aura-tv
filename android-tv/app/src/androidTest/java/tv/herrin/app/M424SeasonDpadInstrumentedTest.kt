@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,7 @@ import org.junit.runner.RunWith
 
 /** Isolated real Compose-TV focus assertions; no external video backend required. */
 @RunWith(AndroidJUnit4::class)
+@OptIn(ExperimentalTestApi::class)
 class M424SeasonDpadInstrumentedTest {
     @get:Rule val compose = createComposeRule()
 
