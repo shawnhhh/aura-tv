@@ -175,8 +175,11 @@ class TvBoxSpiderService : Service() {
                     // Cancellation cannot stop a JNI call that ignores interruption.
                     // This watchdog belongs solely to the manifest's :spider process.
                     val terminate = watchdog.schedule({
+                        // If this fires, it is a HOST watchdog timeout, not proof
+                        // of a native SIGSEGV. Persist only this fixed stage string.
+                        SpiderStartupTrace.mark(applicationContext, SpiderStartupTrace.Stage.WATCHDOG)
                         android.os.Process.killProcess(android.os.Process.myPid())
-                    }, 32, TimeUnit.SECONDS)
+                    }, 40, TimeUnit.SECONDS)
                     try {
                         require(payload.length <= SpiderIpc.MAX_REQUEST_CHARS) { "Spider 请求超过进程通信限制" }
                         val request = JSONObject(payload)
@@ -307,9 +310,12 @@ internal class TvBoxSpiderBridge(context: Context) {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             if (epoch != generation || connection !== this) return
+            val stage = SpiderStartupTrace.recent(app)
+            val cause = SpiderExitDiagnostics.recent(app)
             invalidate("Spider 子进程异常退出" +
-                (SpiderStartupTrace.recent(app)?.let { "，最后阶段：$it" } ?: "") +
-                "；请重试当前操作")
+                (stage?.let { "，最后阶段：$it" } ?: "") +
+                (cause?.let { "，系统原因：$it" } ?: "") +
+                "；可换一条直链或重新应用站点")
         }
 
         override fun onBindingDied(name: ComponentName?) {
@@ -413,7 +419,7 @@ internal class TvBoxSpiderBridge(context: Context) {
                     replyTo = responses
                     data = Bundle().apply { putString("payload", encoded) }
                 })
-                withTimeout(37_000) { deferred.await() }
+                withTimeout(44_000) { deferred.await() }
             } catch (timeout: TimeoutCancellationException) {
                 invalidate("Spider 操作超时，请重新应用站点")
                 throw timeout
