@@ -310,12 +310,18 @@ internal class TvBoxSpiderBridge(context: Context) {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             if (epoch != generation || connection !== this) return
-            val stage = SpiderStartupTrace.recent(app)
-            val cause = SpiderExitDiagnostics.recent(app)
-            invalidate("Spider 子进程异常退出" +
-                (stage?.let { "，最后阶段：$it" } ?: "") +
-                (cause?.let { "，系统原因：$it" } ?: "") +
-                "；可换一条直链或重新应用站点")
+            // ActivityManager can publish the dead process's exit reason after
+            // ServiceConnection has already fired. A bounded 600ms grace period
+            // avoids a permanent "unknown" on the user's TCL screenshot.
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (epoch != generation || connection !== this) return@postDelayed
+                val stage = SpiderStartupTrace.recent(app)
+                val cause = SpiderExitDiagnostics.recent(app)
+                invalidate("Spider 子进程异常退出" +
+                    (stage?.let { "，最后阶段：$it" } ?: "") +
+                    (cause?.let { "，系统原因：$it" } ?: "") +
+                    "；可换一条直链或重新应用站点")
+            }, 600)
         }
 
         override fun onBindingDied(name: ComponentName?) {
