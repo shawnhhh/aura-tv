@@ -24,6 +24,56 @@ class SpiderLocalProxyPlaybackTest {
     @get:Rule val compose = createEmptyComposeRule()
     private val inst = InstrumentationRegistry.getInstrumentation()
 
+    @Test fun extensionlessSpiderProxyHlsRecoversFromProgressiveAndRendersSegments() {
+        val hls = inst.context.assets.open("synthetic-hls.m3u8")
+            .bufferedReader().use { it.readText() }
+        val segmentPattern = Regex("synthetic-segment-[0-9]{2}\\.ts")
+        var playlist = byteArrayOf()
+        val segmentRequests = AtomicInteger()
+        SpiderLoopbackProxy("hls-site") { params ->
+            val part = params["part"].orEmpty()
+            when {
+                part == "playlist" -> arrayOf(200, "application/vnd.apple.mpegurl",
+                    ByteArrayInputStream(playlist))
+                segmentPattern.matches(part) -> {
+                    segmentRequests.incrementAndGet()
+                    arrayOf(200, "video/mp2t", ByteArrayInputStream(
+                        inst.context.assets.open(part).use { it.readBytes() }))
+                }
+                else -> arrayOf(404, "text/plain", ByteArrayInputStream(byteArrayOf()))
+            }
+        }.use { proxy ->
+            Proxy.set(proxy.port, proxy.token)
+            try {
+                val spider = object : Spider() {}
+                spider.siteKey = "hls-site"
+                playlist = segmentPattern.replace(hls) { match ->
+                    spider.getProxyUrl(mapOf("part" to match.value))
+                }.toByteArray(Charsets.UTF_8)
+                // No declared format: /proxy must retry the same source as HLS
+                // rather than assume it is a progressive media file.
+                val json = JSONObject().put("parse", 0)
+                    .put("url", spider.getProxyUrl(mapOf("part" to "playlist")))
+                    .toString()
+                val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
+                    .putExtra("spiderJson", json).putExtra("spiderAllowHttp", true)
+                ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
+                    compose.waitUntil(35_000) {
+                        var frames = 0
+                        scenario.onActivity {
+                            frames = it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                        }
+                        frames > 3
+                    }
+                    assertTrue("Spider must serve actual HLS video segments",
+                        segmentRequests.get() > 0)
+                }
+            } finally {
+                Proxy.set(-1, "")
+            }
+        }
+    }
+
     @Test fun spiderGeneratedAuthenticatedProxyUrlProducesRealDecodedVideoFrames() {
         val mp4 = inst.context.assets.open("synthetic.mp4").use { it.readBytes() }
         assertTrue(mp4.size > 100)
