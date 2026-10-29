@@ -21,8 +21,8 @@ TCL T7L Ultra 上安装 0.4.33-alpha，导入用户授权的 TVBox 影视仓配�
 
 1. `SpiderExitDiagnostics.kt`：仅查询本应用最近 90 秒内 `:spider` 进程的系统退出原因，显示固定中文分类（原生组件崩溃、Java 未捕获异常、ANR、系统内存不足、主动退出、系统信号）。不收集或展示 tombstone、堆栈、异常消息、URL、Cookie、扩展配置等敏感数据。Android 10 及以下自动不启用。
 2. `SpiderStartupTrace.Stage.WATCHDOG`：宿主 watchdog 即将强制 kill 前落盘固定阶段文本，**不再把宿主超时当成已证实的原生崩溃**。看门狗调整至 40 秒，IPC 最大等待 44 秒，保留现有可中断操作自身 30 秒预算。
-3. `SpiderDirectPlayback.kt`：仅当主进程已认证当前应用的站点、影片 ID 含当前 site key 派生前缀且选中集数返回了真正的 HTTP(S) `.m3u8` / `.mpd` / `.mp4` 直链，且 Spider 在播放阶段死亡/超时时，允许使用其原始 URL 和**同站点**请求头直接交给 Media3。对 HTTP 用户许可、非媒体网页、其它插件 opaque ID、其它站点头严格拒绝；不寻找、更改或猜测媒体地址，也不支持 DRM 绕过。
-4. `M434SpiderPlaybackRecoveryTest.kt`：覆盖站点隔离、允许的媒体扩展名、签名 query 透明保留、HTTP 许可、错误类型与隐私保护，以及 WATCHDOG 与 PLAYER 分离。
+3. `SpiderDirectPlayback.kt`：仅当主进程已认证当前应用的站点、影片 ID 含当前 site key 派生前缀且选中集数返回了真正的 HTTP(S) `.m3u8` / `.mpd` / `.mp4` 直链，且 Spider 在播放阶段死亡/超时时，允许使用其原始 URL 以及仅 `User-Agent`/`Referer` 两类基础请求头交给 Media3；绝不把原站点 Cookie/Authorization 发送到可能不同域名的媒体 CDN。对 HTTP 用户许可、非媒体网页、其它插件 opaque ID、其它站点头严格拒绝；不寻找、更改或猜测媒体地址，也不支持 DRM 绕过。
+4. `M434SpiderPlaybackRecoveryTest.kt`：覆盖站点隔离、不同媒体域名的 Cookie/Authorization 防泄露、允许的媒体扩展名、签名 query 透明保留、HTTP 许可、错误类型与隐私保护，以及 WATCHDOG 与 PLAYER 分离。
 
 ## 本轮验收要求
 
