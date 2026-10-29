@@ -9,3 +9,5 @@
 刮削成功采用官方标题和展示资料；原始标题、图片与简介可恢复。Film ID、Spider/CMS ID、集数与线路、播放链接未被改写。不会调用影视仓扫描或 Spider 运行时；不会逐个扫描12个影视点。官方 CDN URL 限定 `image.tmdb.org`。合法 TMDB 使用与署名仍遵循其 API 条款；不内置 Token。
 
 原创自动测试覆盖清洗/年份/类型、MockWebServer 的真实 HTTP 请求与 Authorization header、官方资料替换、播放身份不变、恢复来源、跨 Resolver 缓存、强制重刮、手工纠错持久化与错误ID、同名歧义及网络恢复。无真实 TMDB 账户时不能声称外网 API/商业图片授权已验收。
+
+季集结构回归：统一官方标题仅影响展示，分组的季号、特别篇/OVA排除、稳定分组身份从 `originalDisplay?.title ?: film.title` 提取，原季2/3线路保持对应关系；来源季名仍可本地搜索。纠错 Resolver 构造应传当前 `catalogScope`，例如 `ArtworkMetadataResolver(cache, catalogScope = catalogScope)`，并在 scope 变化时重建 Resolver。手工匹配文件key包括scope和原始来源身份的长度前缀SHA-256，防止两个影视点重号同名串用纠错。

@@ -126,8 +126,11 @@ internal object ShowGroupMatcher {
 
     private fun candidate(film: Film): Candidate? {
         val kind = kind(film.category)
-        if (kind.isBlank() || unsafeParts.containsMatchIn(film.title)) return null
-        val (base, season) = titleParts(film.title)
+        // Metadata is display-only: its official show title often omits the source season.
+        // The saved source label also retains special/OVA markers that must prevent grouping.
+        val sourceTitle = film.originalDisplay?.title ?: film.title
+        if (kind.isBlank() || unsafeParts.containsMatchIn(sourceTitle)) return null
+        val (base, season) = titleParts(sourceTitle)
         val key = family(base)
         if (key.length < 2) return null
         val seasons = availableSeasons(film) + listOfNotNull(season)
@@ -150,7 +153,9 @@ internal object ShowGroupMatcher {
 
     private fun makeGroup(scope: String, selected: List<Candidate>): ShowGroup {
         val members = selected.map { it.member }
-        val title = members.map { it.baseTitle }.distinct().sortedWith(
+        val officialTitles = members.filter { it.film.metadataSource == "TMDB" }
+            .map { titleParts(it.film.title).first }.filter { it.isNotBlank() }
+        val title = officialTitles.ifEmpty { members.map { it.baseTitle } }.distinct().sortedWith(
             compareByDescending<String> { it.any { ch -> ch in '\u4e00'..'\u9fff' } }
                 .thenBy { it.length }.thenBy { it }
         ).first()

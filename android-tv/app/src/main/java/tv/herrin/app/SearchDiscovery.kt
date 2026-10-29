@@ -12,6 +12,7 @@ internal object SearchDiscovery {
         val matching = films.filter { film ->
             (category == "全部" || film.category == category) &&
                 (query.isBlank() || film.title.contains(query, ignoreCase = true) ||
+                    film.originalDisplay?.title?.contains(query, ignoreCase = true) == true ||
                     film.subtitle.contains(query, ignoreCase = true))
         }
         return if (newestFirst) matching.sortedWith(
