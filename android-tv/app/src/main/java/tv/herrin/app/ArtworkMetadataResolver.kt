@@ -217,9 +217,10 @@ internal fun interface ArtworkJsonFetcher {
 /** Keyed by title, category, year and a one-way token fingerprint to avoid stale cross-account metadata. */
 internal class ArtworkMetadataResolver(
     private val cacheRoot: File,
-    private val fetcher: ArtworkJsonFetcher = NetworkArtworkFetcher
+    private val fetcher: ArtworkJsonFetcher = NetworkArtworkFetcher,
+    catalogScope: String = ""
 ) {
-    private val corrections = TmdbMatchCorrections(File(cacheRoot, "manual-matches"))
+    private val corrections = TmdbMatchCorrections(File(cacheRoot, "manual-matches"), catalogScope)
     fun manualMatch(film: Film): TmdbManualMatch? = corrections.get(film)
     fun setManualMatch(film: Film, match: TmdbManualMatch?) = corrections.set(film, match)
 

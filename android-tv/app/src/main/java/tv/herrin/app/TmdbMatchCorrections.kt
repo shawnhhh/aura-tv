@@ -10,7 +10,7 @@ internal data class TmdbManualMatch(val mediaType: String, val id: Int) {
 }
 
 /** App-private, bounded persistence. Hashed source identity keeps filenames free of private IDs. */
-internal class TmdbMatchCorrections(private val directory: File) {
+internal class TmdbMatchCorrections(private val directory: File, private val catalogScope: String = "") {
     @Synchronized fun get(film: Film): TmdbManualMatch? = runCatching {
         val entry = file(film)
         if (!entry.isFile || entry.length() !in 1..512) return null
@@ -32,7 +32,8 @@ internal class TmdbMatchCorrections(private val directory: File) {
 
     private fun file(film: Film): File {
         val title = film.originalDisplay?.title ?: film.title
-        val identity = "${film.id}|$title|${film.spiderVodId.orEmpty()}|${film.cmsVodId.orEmpty()}"
+        val identity = listOf(catalogScope, film.id, title, film.spiderVodId.orEmpty(),
+            film.cmsVodId.orEmpty()).joinToString("|") { "${it.length}:$it" }
         val key = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         return File(directory, "$key.json")

@@ -117,4 +117,61 @@ class M437MetadataScrapingTest {
         resolver.setManualMatch(original, TmdbManualMatch("movie", 99))
         assertNull(resolver.lookup(original, token, forceRefresh = true))
     }
+
+    @Test fun `official display title retains source season two and three and exact playback routes`() {
+        fun source(id: String, title: String, episode: Int, path: String) = Film(
+            id, title, "", "剧集", "2024", "原简介", 0,
+            playbackEpisodes = listOf(PlaybackEpisode(episode, "第${episode}集", listOf(
+                PlaybackLine("line-$id", "合法原始线路", "https://media.example/$path.mp4")))))
+        val season2 = source("original-s2", "原创剧 第二季", 3, "season2-episode3")
+        val season3 = source("original-s3", "原创剧 第三季", 7, "season3-episode7")
+        val before = ShowCatalog.build(listOf(season2, season3), "source:A").groups.single()
+        val metadata = EnrichedArtwork("https://image.tmdb.org/t/p/w780/original.jpg", null,
+            category = "剧集", displayTitle = "官方原创剧名", tmdbTvId = 437)
+        val enriched2 = FilmMetadataEnrichment.apply(season2, metadata)
+        val enriched3 = FilmMetadataEnrichment.apply(season3, metadata)
+        assertEquals("官方原创剧名", enriched2.title)
+        val catalog = ShowCatalog.build(listOf(enriched2, enriched3), "source:A")
+        val group = catalog.groups.single()
+        assertEquals(before.key, group.key)
+        assertEquals("官方原创剧名", group.displayFilm.title)
+        assertEquals(2, group.memberFor(season2.id)!!.seasonHint)
+        assertEquals(3, group.memberFor(season3.id)!!.seasonHint)
+        val layout = GroupSeasonIndex.from(group)
+        assertEquals(listOf(2, 3), layout.sections.map { it.number })
+        val ref2 = layout.episode(2, 3)!!.sources.single()
+        val ref3 = layout.episode(3, 7)!!.sources.single()
+        assertEquals(PlaybackRequest("original-s2", 3, "line-original-s2"), ref2.request())
+        assertEquals(PlaybackRequest("original-s3", 7, "line-original-s3"), ref3.request())
+        assertSame(season2.playbackEpisodes.single(), ref2.source)
+        assertSame(season3.playbackEpisodes.single().lines.single(), ref3.line)
+        assertEquals("https://media.example/season2-episode3.mp4", ref2.line.uri)
+        assertEquals("https://media.example/season3-episode7.mp4", ref3.line.uri)
+        assertEquals("官方原创剧名", catalog.search("第三季", "全部", false).single().title)
+        val special = FilmMetadataEnrichment.apply(source("special", "原创剧 第三季 特别篇", 1, "special"), metadata)
+        assertEquals(setOf("original-s2", "original-s3"),
+            ShowCatalog.build(listOf(enriched2, enriched3, special), "source:A")
+                .groups.single().members.map { it.film.id }.toSet())
+    }
+
+    @Test fun `manual corrections isolate identical source ids and titles by catalog scope`() {
+        val cache = temp.newFolder()
+        val selected = film("完全同名作品")
+        val siteA = ArtworkMetadataResolver(cache, catalogScope = "warehouse:A/site:1")
+        val siteB = ArtworkMetadataResolver(cache, catalogScope = "warehouse:A/site:2")
+        siteA.setManualMatch(selected, TmdbManualMatch("movie", 437))
+        assertNull(siteB.manualMatch(selected))
+        siteB.setManualMatch(selected, TmdbManualMatch("tv", 438))
+        assertEquals(TmdbManualMatch("movie", 437), siteA.manualMatch(selected))
+        assertEquals(TmdbManualMatch("tv", 438), siteB.manualMatch(selected))
+        assertEquals(TmdbManualMatch("movie", 437),
+            ArtworkMetadataResolver(cache, catalogScope = "warehouse:A/site:1").manualMatch(selected))
+        siteA.setManualMatch(selected, null)
+        assertEquals(TmdbManualMatch("tv", 438), siteB.manualMatch(selected))
+        cache.walkTopDown().filter { it.isFile }.forEach {
+            assertFalse(it.readText().contains("warehouse:"))
+            assertFalse(it.name.contains("site:"))
+        }
+    }
+
 }
