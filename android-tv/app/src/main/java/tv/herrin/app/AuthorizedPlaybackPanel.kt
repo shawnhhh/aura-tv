@@ -458,7 +458,7 @@ fun AuthorizedPlaybackPanel(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(elapsed(shownPosition), color = Color.White)
+                Text(elapsed(shownPosition), color = Color.White, modifier = Modifier.testTag("player-position-label"))
                 val format = player.videoFormat
                 Text("画质：" + PlayerQualityLabel.fromDecoded(
                     player.videoSize.width, player.videoSize.height,
@@ -466,7 +466,7 @@ fun AuthorizedPlaybackPanel(
                     format?.colorInfo?.colorTransfer ?: -1,
                     player.videoDecoderCounters?.renderedOutputBufferCount ?: 0),
                     color = Color(0xFFD3E6F7), modifier = Modifier.testTag("player-quality-label"))
-                Text(elapsed(shownDuration), color = Color(0xFFD2D5DE))
+                Text(elapsed(shownDuration), color = Color(0xFFD2D5DE), modifier = Modifier.testTag("player-duration-label"))
             }
             Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0xFF434857))) {
                 Box(Modifier.fillMaxWidth(percent).fillMaxHeight().background(Color.White))
