@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -90,6 +91,25 @@ class PlaybackDiagnosticsIntegrationTest {
             assertTrue(requests.contains("/synthetic-segment-00.ts"))
             assertTrue(requests.contains("/init-stream0.m4s"))
             assertTrue(requests.contains("/chunk-stream0-00001.m4s"))
+        }
+    }
+
+    @Test fun firstFrameJourneyIsVisibleInVerificationWithoutExposingMediaAddress() {
+        fixtures { server, _ ->
+            launch(server, "/mp4").use { scenario ->
+                frames(scenario)
+                compose.onNodeWithTag("player-verification-toggle").performClick()
+                compose.waitUntil(30_000) {
+                    runCatching { compose.onNodeWithTag("player-journey-status")
+                        .assertTextContains("已输出视频帧", substring = true) }.isSuccess
+                }
+                val text = compose.onNodeWithTag("player-journey-status").fetchSemanticsNode()
+                    .config[androidx.compose.ui.semantics.SemanticsProperties.Text].joinToString()
+                assertTrue(text.contains("第 1/1 条地址"))
+                assertFalse(text.contains("localhost"))
+                assertFalse(text.contains("https://"))
+                assertFalse(text.contains("token"))
+            }
         }
     }
 
