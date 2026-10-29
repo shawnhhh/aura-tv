@@ -36,3 +36,10 @@ M4.30 已把 Spider 兼容、媒体错误分类、本地代理基础、HDR/杜�
 - GitHub TV 模拟器：原有全量 instrumentation，保留视频、遥控器焦点、缓存、源与 IPTV 回归。
 - 新增 Android TV instrumentation：用应用内授权的原创 MP4 测试素材取得真实 Media3 已渲染帧，展开「查看实播状态」并验证播放器诊断标签 `player-journey-status` 显示首帧，且不会包含 URL/host/token。
 - 首帧信息默认只在用户主动展开“查看实播状态”时显示；不在后台进行采集或上传。
+
+## M4.31.2 — CatVod 解析到实际首帧回归、解码器回退
+
+- Debug-only `PlaybackTestActivity` 可接收测试自动生成的 `spiderJson`，使用生产相同的 `SpiderVodCodec.player()` 解析出 `PlaybackMedia`；只在 `android:exported=false` 的调试 Activity 中使用，不作为主界面可输入任意地址的功能。
+- API 30 TV instrumentation 以本地 TLS HLS 清单及原创 TS 分段确认：来源给出的 `format=hls` 可以处理无扩展名清单，`Referer` / `User-Agent` 能传到清单与视频分段，Media3 输出视频帧；源服务器不满足请求头时测试服务器返回 403。
+- Media3 引入 `DefaultRenderersFactory.setEnableDecoderFallback(true)`，首选系统 MediaCodec 初始化失败时允许选择其他兼容系统解码器；不引入 FFmpeg/VLC、不禁用系统 HDR、不声称 Dolby Vision/HDR10+ 已在 TCL 真机输出。
+- CI 使用测试自行创建的 HTTPS 站点和原创播放文件，不依赖未经授权的第三方影片、Cookie、DRM 或运行时 Spider JAR。
