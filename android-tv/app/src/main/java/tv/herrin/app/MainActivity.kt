@@ -1919,13 +1919,13 @@ private fun Herrin() {
                     )
                 } else if (screen == "player") {
                     // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
-                    val unavailable = spiderResolved as? PlaybackResult.Unavailable
+                    val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable || !spiderActive
                     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
                         .testTag("player-startup-surface"),
                         contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            if (unavailable == null) {
+                            if (!playbackUnavailable) {
                                 CircularProgressIndicator(color = Color.White,
                                     modifier = Modifier.size(40.dp))
                                 Text("正在打开影片…", fontSize = 21.sp,
@@ -1935,8 +1935,10 @@ private fun Herrin() {
                                     modifier = Modifier.testTag("player-startup-error"))
                                 Text("请重试，或返回选集切换播放线路。",
                                     color = Color(0xFFBCCADB), fontSize = 16.sp)
-                                TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
-                                    reduced = reduceMotion) { playerRetryEpoch++ }
+                                if (spiderActive) {
+                                    TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
+                                        reduced = reduceMotion) { playerRetryEpoch++ }
+                                }
                             }
                             TvButton("返回选集", modifier = Modifier.testTag("player-startup-back"),
                                 reduced = reduceMotion) { screen = "detail" }
