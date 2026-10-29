@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.key
 import kotlinx.coroutines.delay
@@ -80,6 +81,31 @@ fun AuthorizedPlaybackPanel(
     onEpisodeSelection: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
+    // A media replacement owns a fresh composition, including callbacks,
+    // effects, focus nodes and native surfaces. No outgoing resource can be
+    // retained in a slot that now represents another episode or line.
+    key(media) {
+        AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
+            onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
+            onLineSelection, onEpisodeSelection, onBack)
+    }
+}
+
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+@Composable
+private fun AuthorizedPlaybackSession(
+    media: PlaybackMedia,
+    onPlayer: (ExoPlayer) -> Unit,
+    startPositionMs: Long,
+    onPlaybackProgress: (Long, Long, Boolean) -> Unit,
+    onMediaSpecDetected: (VerifiedStreamSpec) -> Unit,
+    isLive: Boolean,
+    onLiveMenu: () -> Unit,
+    focusRestoreEpoch: Int,
+    onLineSelection: (() -> Unit)?,
+    onEpisodeSelection: (() -> Unit)?,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val danmaku = rememberDanmakuSettings()
@@ -102,8 +128,8 @@ fun AuthorizedPlaybackPanel(
     // Keep updates within one media session, while retaining the old session's
     // callbacks until its DisposableEffect has persisted and released its player.
     // A single shared State would route old onDispose progress into the new episode.
-    val latestProgressCallback by key(media) { rememberUpdatedState(onPlaybackProgress) }
-    val latestMediaSpecCallback by key(media) { rememberUpdatedState(onMediaSpecDetected) }
+    val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
+    val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media) {
         PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime)
     }
@@ -281,7 +307,6 @@ fun AuthorizedPlaybackPanel(
         // Start only after this composition has committed and the outgoing
         // effect has released its session. Starting inside remember overlaps
         // prepare/play with the previous player's teardown during inline swaps.
-        onPlayer(player)
         player.setMediaItem(itemFor(candidates.first(), 0))
         if (startPositionMs > 0L)
             player.seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
@@ -295,6 +320,10 @@ fun AuthorizedPlaybackPanel(
             player.release()
         }
     }
+    // Publish the player from the committed composition, after remember/dispose
+    // callbacks. A transition must never leave an observer holding a player
+    // created by an outgoing or abandoned composition.
+    SideEffect { onPlayer(player) }
     fun requestBack(source: String) {
         android.util.Log.i("HerrinPlayerBack",
             "source=$source focus=${context.javaClass.simpleName} released=${player.isReleased}")

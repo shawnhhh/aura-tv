@@ -61,7 +61,11 @@ class PlaybackTestActivity : ComponentActivity() {
                         },
                         onPlayer = {
                             player = it
-                            createdPlayers.add(it)
+                            if (createdPlayers.addIfAbsent(it)) {
+                            // The committed callback can run again after UI updates.
+                            // Observe each actual player once and retain its real
+                            // state at attachment, including initial BUFFERING.
+                            states.add(it.playbackState)
                             it.addListener(object : androidx.media3.common.Player.Listener {
                                 override fun onPlaybackStateChanged(state: Int) { states.add(state) }
                                 override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
@@ -74,6 +78,7 @@ class PlaybackTestActivity : ComponentActivity() {
                                     }
                                 }
                             })
+                            }
                         },
                         onLineSelection = if (intent.getBooleanExtra("withSelectionActions", false))
                             ({ lineSelections++ }) else null,
