@@ -2,6 +2,7 @@ package tv.herrin.app
 
 import android.content.Context
 import com.github.catvod.Runtime
+import com.github.catvod.Proxy as CatVodProxy
 import com.github.catvod.crawler.Spider
 import com.github.catvod.net.Net
 import com.github.catvod.utils.Local
@@ -434,7 +435,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val localProxy = SpiderLoopbackProxy(site.key) { params ->
                 synchronized(created) { created.proxy(params) }
             }
-            com.github.catvod.Proxy.set(localProxy.port, localProxy.token)
+            CatVodProxy.set(localProxy.port, localProxy.token)
             try {
                 created.siteKey = site.key
                 created.net = Net(httpHost, site.key)
@@ -445,7 +446,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     activeLoopbackProxy = localProxy }
             } catch (error: Throwable) {
                 localProxy.close()
-                com.github.catvod.Proxy.set(-1, "")
+                CatVodProxy.set(-1, "")
                 SpiderRuntimeCompat.dispose(created)
                 httpHost.clear()
                 throw error
@@ -492,7 +493,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     fun close() {
         activeLoopbackProxy?.close()
         activeLoopbackProxy = null
-        com.github.catvod.Proxy.set(-1, "")
+        CatVodProxy.set(-1, "")
         SpiderRuntimeCompat.dispose(active)
         active = null
         activeKey = null
