@@ -31,7 +31,9 @@ class PlaybackHistory(context: Context) {
         scope: String, filmId: String, episode: Int, lineId: String,
         positionMs: Long, durationMs: Long, ended: Boolean = false
     ) {
-        if (scope.isBlank() || filmId.isBlank() || lineId.isBlank() || episode !in 1..99) return
+        // CMS / Spider adapters can expose up to 300 source positions; these are global
+        // source indexes, *not* per-season episode numbers.
+        if (scope.isBlank() || filmId.isBlank() || lineId.isBlank() || episode !in 1..300) return
         val token = key(scope, filmId, episode, lineId)
         val completed = ended || durationMs > 0L && positionMs >= durationMs - 3_000L
         if (completed) { clear(scope, filmId, episode, lineId); return }

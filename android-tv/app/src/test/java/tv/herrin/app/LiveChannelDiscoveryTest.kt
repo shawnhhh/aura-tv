@@ -4,6 +4,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LiveChannelDiscoveryTest {
+    @Test fun sameProgrammeAppearsOnceWithDistinctSelectableLines() {
+        val duplicates = listOf(
+            LiveChannel("CCTV1", "https://tv.example/one", "央视"),
+            LiveChannel("CCTV-1 高清", "https://tv.example/two", "央视"),
+            LiveChannel("CCTV1", "https://tv.example/one", "其它"),
+            LiveChannel("CCTV2", "https://tv.example/three", "央视")
+        )
+        val choices = LiveChannelDiscovery.choices(duplicates)
+        assertEquals(2, choices.size)
+        assertEquals(listOf("https://tv.example/one", "https://tv.example/two"),
+            choices[0].options.map { it.url })
+        assertEquals(listOf("CCTV1", "CCTV2"), choices.map { it.name })
+        assertEquals(listOf("CCTV1"), LiveChannelDiscovery.groupedVisible(
+            duplicates, "央视", true, "", { it.url.endsWith("two") }).map { it.name })
+        assertEquals(listOf("CCTV1"), LiveChannelDiscovery.groupedVisible(
+            duplicates, null, false, "cctv-1", { false }).map { it.name })
+    }
     private val channels = listOf(
         LiveChannel("新闻一", "https://licensed.example.org/news-1", "新闻"),
         LiveChannel("体育一", "https://licensed.example.org/sports", " 体育 "),

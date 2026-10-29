@@ -108,6 +108,13 @@ class PlaybackButtonsTest {
                 }
                 changed
             }
+            compose.onNodeWithTag("transport-speed").assertIsDisplayed()
+            remoteClick("transport-speed")
+            until("D-pad CENTER must change Media3 playback speed") {
+                var adjusted = false
+                scenario.onActivity { adjusted = kotlin.math.abs(it.player.playbackParameters.speed - 1.25f) < 0.01f }
+                adjusted
+            }
             inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             // The real remote Back callback already fired. This test owns Compose's
             // virtual frame clock: advance pending recomposition so the screen's

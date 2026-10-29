@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +51,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -66,23 +68,42 @@ fun AuthorizedPlaybackPanel(
     onPlayer: (ExoPlayer) -> Unit = {},
     startPositionMs: Long = 0L,
     onPlaybackProgress: (positionMs: Long, durationMs: Long, finished: Boolean) -> Unit = { _, _, _ -> },
+    onMediaSpecDetected: (VerifiedStreamSpec) -> Unit = {},
     isLive: Boolean = false,
+    onLiveMenu: () -> Unit = {},
+    focusRestoreEpoch: Int = 0,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var errorMessage by remember(media.uri, media.headers, media.subtitles) { mutableStateOf<String?>(null) }
-    var playbackState by remember(media.uri, media.headers, media.subtitles) { mutableIntStateOf(Player.STATE_IDLE) }
-    var uiEpoch by remember(media.uri, media.headers, media.subtitles) { mutableIntStateOf(0) }
+    var errorMessage by remember(media) { mutableStateOf<String?>(null) }
+    var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
+    var uiEpoch by remember(media) { mutableIntStateOf(0) }
+    var activeVariant by remember(media) { mutableIntStateOf(0) }
+    var overrideMime by remember(media) { mutableStateOf<String?>(null) }
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var showVerification by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
-    val player = remember(media.uri, media.headers, media.subtitles) {
+    val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
+    val player = remember(media) {
+        val candidates = (listOf(media.uri) + media.alternateUris).distinct().take(8)
+        fun itemFor(uri: String, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
+            if (media.subtitles.isNotEmpty()) {
+                setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
+                    MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
+                        .setMimeType(MimeTypes.TEXT_VTT).setLanguage(subtitle.language)
+                        .setLabel(subtitle.title)
+                        .setSelectionFlags(if (index == 0) C.SELECTION_FLAG_DEFAULT else 0)
+                        .build()
+                })
+            }
+            (mimeOverride ?: PlaybackFormatRetry.initialMime(uri))?.let(::setMimeType)
+        }.build()
         val http = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(false)
+            .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(12_000)
             .setDefaultRequestProperties(media.headers)
@@ -93,6 +114,9 @@ fun AuthorizedPlaybackPanel(
             setHandleAudioBecomingNoisy(true)
             onPlayer(this)
             addListener(object : Player.Listener {
+                override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                    uiEpoch++
+                }
                 override fun onTracksChanged(tracks: Tracks) { uiEpoch++ }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
@@ -102,31 +126,38 @@ fun AuthorizedPlaybackPanel(
                     uiEpoch++
                 }
                 override fun onPlayerError(error: PlaybackException) {
-                    errorMessage = playbackErrorMessage(error.errorCodeName)
+                    val alternateMime = PlaybackFormatRetry.nextMime(
+                        candidates[activeVariant], overrideMime, error.errorCode)
+                    if (alternateMime != null) {
+                        // Same source, no scraping: Media3 may have interpreted
+                        // an extensionless HLS playlist as a progressive file.
+                        overrideMime = alternateMime
+                        errorMessage = null
+                        setMediaItem(itemFor(candidates[activeVariant], alternateMime))
+                        prepare()
+                        play()
+                    } else if (PlaybackFormatRetry.retryNextSource(error.errorCode) &&
+                        activeVariant < candidates.lastIndex) {
+                        // The Spider chose several authorized URLs. Retry the next
+                        // supplied candidate after network, container or decoder
+                        // failure, without discovering any new stream.
+                        activeVariant++
+                        overrideMime = null
+                        errorMessage = null
+                        setMediaItem(itemFor(candidates[activeVariant]))
+                        prepare()
+                        play()
+                    } else {
+                        val httpStatus = generateSequence(error.cause) { it.cause }
+                            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+                            .firstOrNull()?.responseCode
+                        errorMessage = playbackErrorMessage(error.errorCodeName) +
+                            "（${error.errorCodeName}${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
+                            "; 线路 ${activeVariant + 1}/${candidates.size}）"
+                    }
                 }
             })
-            val item = MediaItem.Builder().setUri(media.uri).apply {
-                if (media.subtitles.isNotEmpty()) {
-                    setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
-                        MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
-                            .setMimeType(MimeTypes.TEXT_VTT)
-                            .setLanguage(subtitle.language)
-                            .setLabel(subtitle.title)
-                            // With lazy sidecar subtitle loading a late track choice can
-                            // miss a short HLS clip entirely. Start one explicitly
-                            // configured subtitle by default; users can turn it off.
-                            .setSelectionFlags(if (index == 0) C.SELECTION_FLAG_DEFAULT else 0)
-                            .build()
-                    })
-                }
-                when {
-                    media.uri.substringBefore('?').endsWith(".m3u8", ignoreCase = true) ->
-                        setMimeType(MimeTypes.APPLICATION_M3U8)
-                    media.uri.substringBefore('?').endsWith(".mpd", ignoreCase = true) ->
-                        setMimeType(MimeTypes.APPLICATION_MPD)
-                }
-            }.build()
-            setMediaItem(item)
+            setMediaItem(itemFor(candidates.first()))
             if (startPositionMs > 0L) seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
             prepare()
             playWhenReady = true
@@ -156,13 +187,29 @@ fun AuthorizedPlaybackPanel(
                 reportProgress()
         }
     }
+    // No network probes on the detail screen. Read only selected Media3 formats
+    // after the player itself has opened the exact user-selected source.
+    LaunchedEffect(player, uiEpoch) {
+        fun selected(type: Int): SelectedTrackEvidence? = player.currentTracks.groups
+            .asSequence().filter { it.type == type }.flatMap { group ->
+                (0 until group.length).asSequence().filter { group.isTrackSelected(it) }
+                    .map { group.getTrackFormat(it) }
+            }.firstOrNull()?.let { format ->
+                SelectedTrackEvidence(format.sampleMimeType, format.width, format.height,
+                    format.colorInfo?.colorTransfer ?: -1)
+            }
+        val observed = MediaQuality.verified(selected(C.TRACK_TYPE_VIDEO), selected(C.TRACK_TYPE_AUDIO))
+        if (observed.isKnown) latestMediaSpecCallback(observed)
+    }
     LaunchedEffect(player, showVerification) {
         while (showVerification) {
             verificationTick++
             delay(1_000)
         }
     }
-    LaunchedEffect(player) { initialControl.requestFocus() }
+    // Closing a live channel drawer removes its focused node. Restore the
+    // player anchor so the very next Left/OK opens the menu without a dead press.
+    LaunchedEffect(player, focusRestoreEpoch) { initialControl.requestFocus() }
     DisposableEffect(player, lifecycle) {
         val session = MediaSession.Builder(context, player).build()
         val observer = LifecycleEventObserver { _, event ->
@@ -187,6 +234,10 @@ fun AuthorizedPlaybackPanel(
         val key = event.nativeKeyEvent
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
+            true
+        } else if (isLive && key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) onLiveMenu()
             true
         } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
@@ -240,7 +291,22 @@ fun AuthorizedPlaybackPanel(
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
-        Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
+        if (isLive) {
+            // A tiny focus anchor lets DPAD_LEFT/OK open the channel drawer while
+            // the video remains edge-to-edge. No visible transport controls.
+            Box(Modifier.size(1.dp).focusRequester(initialControl).focusable()
+                .testTag("live-player-focus"))
+            if (errorMessage != null) {
+                Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 42.dp)
+                    .background(Color(0xD9161B25), RoundedCornerShape(14.dp)).padding(16.dp)) {
+                    Text(errorMessage!!, color = Color(0xFFFFD0D0),
+                        modifier = Modifier.testTag("player-error"))
+                    Button(onClick = { retryPlayback() }, modifier = Modifier.testTag("player-retry")) {
+                        Text("重试")
+                    }
+                }
+            }
+        } else Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Button(onClick = { requestBack("visible-button") }) {
                 Text(if (isLive) "返回频道" else "返回详情")
@@ -269,6 +335,9 @@ fun AuthorizedPlaybackPanel(
                 Text(errorMessage!!, color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
                 Button(onClick = { retryPlayback() },
                     modifier = Modifier.testTag("player-retry")) { Text("重试播放") }
+            } else if (activeVariant > 0 && playbackState != Player.STATE_READY) {
+                Text("正在尝试备用播放地址 ${activeVariant + 1} / ${media.alternateUris.size + 1}",
+                    color = Color(0xFFCFD7E4), modifier = Modifier.testTag("player-fallback-status"))
             } else if (playbackState == Player.STATE_BUFFERING) {
                 Text("正在缓冲授权媒体…", color = Color(0xFFCFD7E4),
                     modifier = Modifier.testTag("player-buffering"))
@@ -287,7 +356,7 @@ fun AuthorizedPlaybackPanel(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        Column(
+        if (!isLive) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.80f).padding(bottom = 36.dp)
                 .background(Color(0xE9151820), RoundedCornerShape(20.dp))
                 .padding(horizontal = 18.dp, vertical = 12.dp),
@@ -310,6 +379,12 @@ fun AuthorizedPlaybackPanel(
                 }
                 Button(onClick = { PlaybackTransport.seekBy(player, 10_000L) },
                     modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
+                Button(onClick = {
+                    player.setPlaybackSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
+                    uiEpoch++
+                }, modifier = Modifier.testTag("transport-speed")) {
+                    Text("倍速: ${player.playbackParameters.speed}×")
+                }
                 Button(
                     onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
                     enabled = audios.size > 1, modifier = Modifier.testTag("transport-audio")

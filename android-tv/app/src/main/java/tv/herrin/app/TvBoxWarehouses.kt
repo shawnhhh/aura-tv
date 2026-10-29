@@ -14,16 +14,82 @@ import java.net.URL
 import java.io.File
 import java.security.MessageDigest
 
-/** TVBox metadata is untrusted: no Spider, JAR, JavaScript or site API is executed. */
+/** TVBox metadata is untrusted; executable plugins require a separate, explicit opt-in. */
 internal data class TvBoxWarehouse(val name: String, val url: String)
-internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null)
+internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null,
+                              val key: String = "", val spiderApi: String? = null,
+                              val extension: String = "", val jar: String? = null,
+                              val scriptApi: String? = null,
+                              val headers: Map<String, String> = emptyMap())
 internal data class TvBoxLive(val name: String, val playlistUrl: String?,
                               val sourceUrl: String? = null, val channels: List<LiveChannel> = emptyList())
+
+/** A one-tap apply can run a plugin; silent relaunch cannot trust a new JAR hash or source. */
+internal object TvBoxSpiderPolicy {
+    fun mayRun(userApplied: Boolean, source: String, jarSpec: String,
+               trustedSource: String, trustedJarSpec: String): Boolean =
+        userApplied || (source.isNotBlank() && jarSpec.isNotBlank() &&
+            source == trustedSource && jarSpec == trustedJarSpec)
+}
+
+/**
+ * Prefer a previously successful TVBox site on the next launch. Preference is
+ * pinned to the applied root and the exact site API/JAR identity, and must NOT
+ * replace the independent Spider execution approval check.
+ */
+internal object TvBoxAutoSites {
+    fun identity(site: TvBoxSite, defaultJar: String?): String {
+        val value = listOf(site.key, site.apiUrl.orEmpty(), site.spiderApi.orEmpty(),
+            if (site.spiderApi != null) site.jar ?: defaultJar.orEmpty() else "")
+            .joinToString("\u0000")
+        return MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    fun candidates(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
+        val direct = config.sites.filter { it.apiUrl != null }.take(8)
+        val spider = config.sites.filter { it.spiderApi != null }
+            .sortedBy { site ->
+                if (listOf("云盘", "片单", "预告", "音乐").any { site.name.contains(it) }) 1 else 0
+            }.take(12)
+        val preferred = config.sites.firstOrNull {
+            (it.apiUrl != null || it.spiderApi != null) &&
+                identity(it, config.spiderJar) == preferredId
+        }
+        return (listOfNotNull(preferred) + direct + spider)
+            .distinctBy { identity(it, config.spiderJar) }
+    }
+}
+
+/** Avoid leaving the TV's Apply button showing “读取中” after many dead sources. */
+internal object TvBoxAutoScanPolicy {
+    const val TOTAL_BUDGET_MS = 45_000L
+    private const val CMS_BUDGET_WITH_SPIDER_MS = 12_000L
+    private const val CMS_SINGLE_MS = 6_000L
+    private const val SPIDER_SINGLE_MS = 20_000L
+
+    /** Null means skip this candidate; the caller can continue to Spider or finish. */
+    fun timeoutMs(elapsedMs: Long, cmsElapsedMs: Long, hasSpider: Boolean,
+                  spider: Boolean): Long? {
+        val remaining = TOTAL_BUDGET_MS - elapsedMs.coerceAtLeast(0)
+        if (remaining <= 0) return null
+        val cap = if (spider) SPIDER_SINGLE_MS else minOf(CMS_SINGLE_MS,
+            (if (hasSpider) CMS_BUDGET_WITH_SPIDER_MS else TOTAL_BUDGET_MS) - cmsElapsedMs.coerceAtLeast(0))
+        return minOf(remaining, cap).takeIf { it > 0 }
+    }
+
+    /** A dead native/plugin process should not be launched repeatedly in one scan. */
+    fun isSpiderProcessCrash(message: String): Boolean =
+        message.contains("Spider 子进程异常退出")
+}
 
 internal sealed interface TvBoxConfig {
     data class Warehouses(val entries: List<TvBoxWarehouse>, val ignored: Int, val fromCache: Boolean = false) : TvBoxConfig
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,
-                      val fromCache: Boolean = false, val wrappedInImage: Boolean = false) : TvBoxConfig
+                      val fromCache: Boolean = false, val wrappedInImage: Boolean = false,
+                      val spiderJar: String? = null,
+                      val vipFlags: List<String> = emptyList()) : TvBoxConfig
     data class HerrinCatalog(val address: String, val count: Int) : TvBoxConfig
     data class Error(val reason: String) : TvBoxConfig
 }
@@ -95,7 +161,22 @@ internal object TvBoxConfigParser {
                     if (title.isBlank()) null else {
                         val api = site.optString("api").trim()
                         val direct = TvBoxUrl.normalize(api, allowHttp = true)
-                        TvBoxSite(title, api.isNotBlank() && direct == null, direct)
+                        // TVBox drpy/JS rules are script definitions, not JSON CMS endpoints.
+                        // Fetching them with ac=detail mislabels a script as a playable catalog.
+                        val script = direct?.takeIf { address ->
+                            runCatching { URI(address).path.lowercase().let {
+                                it.endsWith(".js") || it.endsWith(".py")
+                            } }.getOrDefault(false)
+                        }
+                        val cms = direct?.takeUnless { script != null }
+                        val extension = site.opt("ext")?.let { if (it is String) it else it.toString() }.orEmpty()
+                        TvBoxSite(title, api.isNotBlank() && cms == null, cms,
+                            key = site.optString("key").take(90).ifBlank { "site_$i" },
+                            spiderApi = api.takeIf { it.startsWith("csp_") && it.matches(Regex("csp_[A-Za-z0-9_]{1,64}")) },
+                            extension = extension.take(64_000),
+                            jar = site.optString("jar").takeIf { it.isNotBlank() },
+                            scriptApi = script,
+                            headers = TvBoxHeaderCodec.decode(site.optJSONObject("header")))
                     }
                 }
             }
@@ -113,12 +194,33 @@ internal object TvBoxConfigParser {
                     }
                 }
             }
-            return TvBoxConfig.Single(sites, lives, root.optString("spider").isNotBlank() || sites.any { it.needsAdapter })
+            val spider = root.optString("spider").takeIf { it.isNotBlank() }
+            val flagsJson = root.optJSONArray("flags") ?: JSONArray()
+            val flags = (0 until minOf(flagsJson.length(), 128)).mapNotNull { index ->
+                flagsJson.optString(index).trim().take(80).takeIf { it.isNotBlank() }
+            }.distinct().take(32)
+            return TvBoxConfig.Single(sites, lives, spider != null || sites.any { it.needsAdapter },
+                spiderJar = spider, vipFlags = flags)
         }
         if (root.optInt("version", -1) == 1 && root.optJSONArray("items") != null) {
             return TvBoxConfig.HerrinCatalog(origin, root.getJSONArray("items").length())
         }
         return TvBoxConfig.Error("未识别的配置：需要 TVBox urls / sites / lives 或 HERRIN items")
+    }
+}
+
+/** TVBox Site.header is the fallback when a Spider omits Result.header entirely. */
+internal object TvBoxHeaderCodec {
+    fun decode(source: JSONObject?): Map<String, String> = buildMap {
+        if (source == null) return@buildMap
+        val names = source.keys()
+        while (names.hasNext() && size < 24) {
+            val name = names.next()
+            val value = source.optString(name).trim()
+            if (name.matches(Regex("[A-Za-z0-9-]{1,60}")) &&
+                value.length in 1..2_048 && '\n' !in value && '\r' !in value)
+                put(name, value)
+        }
     }
 }
 

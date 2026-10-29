@@ -40,10 +40,28 @@ class Preferences(context: Context) : FavoritesStore {
     var liveEpgUrl: String
         get() = prefs.getString("live_epg_url", "") ?: ""
         set(value) { prefs.edit().putString("live_epg_url", value).apply() }
-    /** Stored only for convenient re-entry; never auto-fetch an untrusted TVBox source on launch. */
+    /** User-applied URL. Only a matching, explicitly applied Spider JAR may auto-run again. */
     var tvBoxWarehouseUrl: String
         get() = prefs.getString("tvbox_warehouse_url", "") ?: ""
         set(value) { prefs.edit().putString("tvbox_warehouse_url", value).apply() }
+    /** Trust is scoped to the exact source URL and exact URL+MD5 JAR spec. */
+    var tvBoxTrustedSpiderRootUrl: String
+        get() = prefs.getString("tvbox_trusted_spider_root", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_trusted_spider_root", value).apply() }
+    var tvBoxTrustedSpiderJarSpec: String
+        get() = prefs.getString("tvbox_trusted_spider_jar", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_trusted_spider_jar", value).apply() }
+    /** Optimization hint only: never grants permission to execute a changed Spider JAR. */
+    var tvBoxLastWorkingRootUrl: String
+        get() = prefs.getString("tvbox_last_working_root", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_last_working_root", value).apply() }
+    var tvBoxLastWorkingSiteId: String
+        get() = prefs.getString("tvbox_last_working_site_id", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_last_working_site_id", value).apply() }
+    /** Last user-submitted live playlist URL; actual validated channels live in TvBoxLiveStore. */
+    var tvBoxLiveSourceUrl: String
+        get() = prefs.getString("tvbox_live_source_url", "") ?: ""
+        set(value) { prefs.edit().putString("tvbox_live_source_url", value).apply() }
     /** Set only after a manual import: show already-approved offline channels on launch. */
     var tvBoxLiveActive: Boolean
         get() = prefs.getBoolean("tvbox_live_active", false)
@@ -51,4 +69,8 @@ class Preferences(context: Context) : FavoritesStore {
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
+    /** Optional personal TMDB API Read Access Token; empty disables metadata calls. */
+    var tmdbReadToken: String
+        get() = prefs.getString("tmdb_read_token", "") ?: ""
+        set(value) { prefs.edit().putString("tmdb_read_token", value.trim()).apply() }
 }

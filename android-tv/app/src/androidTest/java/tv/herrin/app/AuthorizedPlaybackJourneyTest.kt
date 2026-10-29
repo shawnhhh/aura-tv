@@ -207,4 +207,25 @@ class AuthorizedPlaybackJourneyTest {
             }
         }
     }
+
+    @Test fun inaccessiblePrimaryAutomaticallyUsesProviderSuppliedBackupAndRendersFrames() {
+        withOriginalTlsFixtures { server, paths, _, _ ->
+            ActivityScenario.launch<PlaybackTestActivity>(
+                Intent(inst.targetContext, PlaybackTestActivity::class.java)
+                    .putExtra("fixture", server.url("/flaky.mp4").toString())
+                    .putExtra("alternate", server.url("/first.mp4").toString())
+            ).use { scenario ->
+                until("Second supplied media URL must recover a real decoder frame") {
+                    var rendered = false
+                    scenario.onActivity { rendered =
+                        (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3 }
+                    rendered
+                }
+                assertTrue(paths.contains("/flaky.mp4"))
+                assertTrue(paths.contains("/first.mp4"))
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                compose.waitForIdle()
+            }
+        }
+    }
 }

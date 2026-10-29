@@ -1,7 +1,7 @@
 name: HERRIN Android Debug
 on:
   push:
-    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls']
+    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls', 'feat/herrin-m4-5-catvod-spider-playback-20261027']
     paths: ['android-tv/**', '.github/workflows/android-debug.yml']
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-debug.yml']

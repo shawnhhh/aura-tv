@@ -4,6 +4,79 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TvBoxWarehousesTest {
+    @Test fun autoProbeReservesTimeForSpiderAfterSeveralCmsTimeouts() {
+        assertEquals(6_000L, TvBoxAutoScanPolicy.timeoutMs(0, 0, true, false))
+        assertEquals(3_000L, TvBoxAutoScanPolicy.timeoutMs(9_000, 9_000, true, false))
+        assertNull(TvBoxAutoScanPolicy.timeoutMs(12_000, 12_000, true, false))
+        assertEquals(20_000L, TvBoxAutoScanPolicy.timeoutMs(12_000, 12_000, true, true))
+        assertEquals(5_000L, TvBoxAutoScanPolicy.timeoutMs(40_000, 12_000, true, true))
+        assertNull(TvBoxAutoScanPolicy.timeoutMs(45_000, 12_000, true, true))
+    }
+
+    @Test fun autoProbeWithoutSpiderUsesCmsBudgetWithoutRepeatedNativeCrash() {
+        assertEquals(6_000L, TvBoxAutoScanPolicy.timeoutMs(20_000, 20_000, false, false))
+        assertTrue(TvBoxAutoScanPolicy.isSpiderProcessCrash("站点：Spider 子进程异常退出；主界面仍可使用"))
+        assertFalse(TvBoxAutoScanPolicy.isSpiderProcessCrash("Spider 下载返回 HTTP 404"))
+        assertFalse(TvBoxAutoScanPolicy.isSpiderProcessCrash("Spider 网络读取超时"))
+    }
+
+    @Test fun lastWorkingSpiderSiteIsTriedBeforeSlowCmsSites() {
+        val cms = (1..9).map { TvBoxSite("CMS $it", false,
+            apiUrl = "https://example.org/cms/$it", key = "cms$it") }
+        val spider = TvBoxSite("影视", true, key = "movie", spiderApi = "csp_Real")
+        val config = TvBoxConfig.Single(cms + spider, emptyList(), true,
+            spiderJar = "https://example.org/engine.jar;md5;0123456789abcdef0123456789abcdef")
+        val id = TvBoxAutoSites.identity(spider, config.spiderJar)
+        val ordered = TvBoxAutoSites.candidates(config, id)
+        assertEquals("movie", ordered.first().key)
+        assertEquals(9, ordered.size) // The 9th CMS is outside the bounded fallback.
+        assertEquals(1, ordered.count { it.key == "movie" })
+        assertEquals("cms1", ordered[1].key)
+    }
+
+    @Test fun changedSpiderBinaryNeverReusesTheOldPreferenceOrTrust() {
+        val spider = TvBoxSite("影视", true, key = "movie", spiderApi = "csp_Real")
+        val firstJar = "https://example.org/engine.jar;md5;0123456789abcdef0123456789abcdef"
+        val changedJar = "https://example.org/engine.jar;md5;fedcba9876543210fedcba9876543210"
+        val cms = TvBoxSite("CMS", false, apiUrl = "https://example.org/cms", key = "cms")
+        val oldId = TvBoxAutoSites.identity(spider, firstJar)
+        val newConfig = TvBoxConfig.Single(listOf(cms, spider), emptyList(), true, spiderJar = changedJar)
+        assertEquals(listOf("cms", "movie"), TvBoxAutoSites.candidates(newConfig, oldId).map { it.key })
+        assertNotEquals(oldId, TvBoxAutoSites.identity(spider, changedJar))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false, "https://example.org/tv", changedJar,
+            "https://example.org/tv", firstJar))
+    }
+
+    @Test fun stalePreferredSiteFallsBackToOriginalPriorityAndSkipsDuplicates() {
+        val spider = TvBoxSite("片单测试", true, key = "list", spiderApi = "csp_List")
+        val playable = TvBoxSite("电影站", true, key = "film", spiderApi = "csp_Film")
+        val config = TvBoxConfig.Single(listOf(spider, playable), emptyList(), true)
+        val candidates = TvBoxAutoSites.candidates(config, "expired-preference")
+        assertEquals(listOf("film", "list"), candidates.map { it.key })
+        val preferred = TvBoxAutoSites.identity(spider, config.spiderJar)
+        assertEquals(listOf("list", "film"), TvBoxAutoSites.candidates(config, preferred).map { it.key })
+    }
+
+    @Test fun previouslyWorkingCmsSkipsEarlierSlowCmsOnNextLaunch() {
+        val cms = (1..4).map { TvBoxSite("CMS $it", false,
+            apiUrl = "https://example.org/api/$it", key = "cms$it") }
+        val config = TvBoxConfig.Single(cms, emptyList(), false)
+        val id = TvBoxAutoSites.identity(cms.last(), config.spiderJar)
+        assertEquals(listOf("cms4", "cms1", "cms2", "cms3"),
+            TvBoxAutoSites.candidates(config, id).map { it.key })
+    }
+
+    @Test fun spiderOnlyAutoRunsAfterApplyOrWithExactPreviouslyTrustedJar() {
+        val source = "http://www.饭太硬.net/tv"
+        val oldJar = "https://example.org/spider.jar;md5;0123456789abcdef0123456789abcdef"
+        val newJar = "https://example.org/spider.jar;md5;fedcba9876543210fedcba9876543210"
+        assertTrue(TvBoxSpiderPolicy.mayRun(true, source, newJar, "", ""))
+        assertTrue(TvBoxSpiderPolicy.mayRun(false, source, oldJar, source, oldJar))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false, source, newJar, source, oldJar))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false, "https://another.example/tv", oldJar, source, oldJar))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false, source, oldJar, "", ""))
+    }
+
     @Test fun acceptsChineseIdnAndRejectsNonNetworkAndCredentialUrls() {
         assertEquals("http://www.xn--sss604efuw.net/tv", TvBoxUrl.normalize("http://www.饭太硬.net/tv", true))
         assertNull(TvBoxUrl.normalize("http://www.饭太硬.net/tv"))
@@ -43,6 +116,19 @@ class TvBoxWarehousesTest {
         assertEquals("https://mine.example.org/tv.m3u", config.lives[0].playlistUrl)
         assertNull(config.lives[1].playlistUrl)
         assertNull(config.lives[2].playlistUrl)
+    }
+
+    @Test fun drpyJavascriptRulesAreNotMisidentifiedAsCmsCatalogs() {
+        val config = TvBoxConfigParser.parse("""{"sites":[
+            {"name":"JS站","api":"https://example.org/drpy2.min.js"},
+            {"name":"CMS站","api":"http://example.org/api.php"},
+            {"name":"爬虫站","api":"csp_Guard"}
+        ]}""", "https://example.org") as TvBoxConfig.Single
+        assertEquals("https://example.org/drpy2.min.js", config.sites[0].scriptApi)
+        assertNull(config.sites[0].apiUrl)
+        assertTrue(config.sites[0].needsAdapter)
+        assertEquals("http://example.org/api.php", config.sites[1].apiUrl)
+        assertEquals("csp_Guard", config.sites[2].spiderApi)
     }
 
     @Test fun recognizesHerrinCatalogButDoesNotConfuseOtherFormats() {

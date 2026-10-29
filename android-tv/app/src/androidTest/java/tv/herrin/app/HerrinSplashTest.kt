@@ -3,6 +3,14 @@ package tv.herrin.app
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import android.graphics.Bitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -56,5 +64,26 @@ class HerrinSplashTest {
         var completed = false
         compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(true) { completed = true } } } }
         compose.runOnIdle { assertTrue(completed) }
+    }
+    @Test fun exitCurtainOverlapsHomeBeforeCompleting() {
+        compose.mainClock.autoAdvance = false
+        var exiting by mutableStateOf(false)
+        var finished = false
+        compose.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Box(Modifier.fillMaxSize()) {
+                    Text("首页内容", Modifier.testTag("home-underlay"))
+                    SplashExitCurtain(false, exiting, onReady = { exiting = true },
+                        onFinished = { finished = true })
+                }
+            }
+        }
+        compose.runOnIdle { exiting = true }
+        compose.mainClock.advanceTimeBy(180)
+        compose.onNodeWithTag("home-underlay").assertExists()
+        compose.onNodeWithTag("splash-curtain").assertExists()
+        compose.runOnIdle { assertFalse(finished) }
+        compose.mainClock.advanceTimeBy(700)
+        compose.runOnIdle { assertTrue(finished) }
     }
 }
