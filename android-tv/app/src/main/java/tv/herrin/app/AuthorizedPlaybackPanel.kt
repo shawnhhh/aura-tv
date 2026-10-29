@@ -121,7 +121,7 @@ fun AuthorizedPlaybackPanel(
         }
         (mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))?.let(::setMimeType)
     }.build()
-    val player = remember(media) {
+    val player = remember(media, context, lifecycle) {
         journey.begin(0, candidates.size, android.os.SystemClock.elapsedRealtime())
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
@@ -137,7 +137,6 @@ fun AuthorizedPlaybackPanel(
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             setHandleAudioBecomingNoisy(true)
-            onPlayer(this)
             addListener(object : Player.Listener {
                 override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                     uiEpoch++
@@ -190,10 +189,6 @@ fun AuthorizedPlaybackPanel(
                     }
                 }
             })
-            setMediaItem(itemFor(candidates.first(), 0))
-            if (startPositionMs > 0L) seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
-            prepare()
-            playWhenReady = true
         }
     }
     fun reportProgress() {
@@ -283,6 +278,15 @@ fun AuthorizedPlaybackPanel(
             if (event == Lifecycle.Event.ON_STOP) { reportProgress(); player.pause() }
         }
         lifecycle.addObserver(observer)
+        // Start only after this composition has committed and the outgoing
+        // effect has released its session. Starting inside remember overlaps
+        // prepare/play with the previous player's teardown during inline swaps.
+        onPlayer(player)
+        player.setMediaItem(itemFor(candidates.first(), 0))
+        if (startPositionMs > 0L)
+            player.seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
+        player.prepare()
+        player.playWhenReady = true
         onDispose {
             reportProgress()
             lifecycle.removeObserver(observer)

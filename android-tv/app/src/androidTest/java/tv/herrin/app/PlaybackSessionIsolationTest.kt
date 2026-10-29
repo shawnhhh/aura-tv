@@ -65,7 +65,9 @@ class PlaybackSessionIsolationTest {
                         handoffState = "samePlayer=${current === outgoingPlayer}, " +
                             "outgoingReleased=${outgoingPlayer.isReleased}, state=${current.playbackState}, " +
                             "playWhenReady=${current.playWhenReady}, frames=$frames, " +
-                            "error=${current.playerError?.errorCodeName}, created=${it.createdPlayers.size}"
+                            "error=${current.playerError?.errorCodeName}, created=${it.createdPlayers.size}, " +
+                            "incomingReleased=${current.isReleased}, items=${current.mediaItemCount}, " +
+                            "states=${it.states.toList().takeLast(12)}"
                         switchedAndDecoded = current !== outgoingPlayer && outgoingPlayer.isReleased && frames > 3
                     }
                     switchedAndDecoded
