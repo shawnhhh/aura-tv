@@ -63,6 +63,10 @@ internal class PlaybackJourneyTrace(private val stalledAfterMs: Long = 15_000L) 
             firstFrameAtMs = nowMs.coerceAtLeast(startedAtMs)
     }
 
+    fun clearPreviousFailure() {
+        lastFailure = null
+    }
+
     fun onFailure(category: PlaybackFailureHints.Category) {
         failed = category
         lastFailure = category
