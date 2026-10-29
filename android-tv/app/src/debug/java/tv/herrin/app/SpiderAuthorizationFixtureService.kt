@@ -1,5 +1,8 @@
 package tv.herrin.app
 
+import com.github.catvod.Runtime as CatVodRuntime
+import com.github.catvod.utils.Dialog as CatVodDialog
+
 import android.app.Service
 import android.content.Intent
 import android.os.*
@@ -29,9 +32,9 @@ class SpiderAuthorizationFixtureService : Service() {
                 // Only test loopback is allowed. The caller embeds an original mock endpoint in extension.
                 val endpoint = JSONObject(payload).getJSONObject("site").getString("ext")
                 require(URL(endpoint).host == "127.0.0.1")
-                com.github.catvod.Runtime.set(applicationContext)
-                com.github.catvod.Runtime.setDialog { options, callback -> session.show(options, callback) }
-                val result = com.github.catvod.utils.Dialog().use { dialog ->
+                CatVodRuntime.set(applicationContext)
+                CatVodRuntime.setDialog { options, callback -> session.show(options, callback) }
+                val result = CatVodDialog().use { dialog ->
                     dialog.show(JSONObject().put("qrcode", "https://example.invalid/herrin-original-qr")
                         .put("buttons", org.json.JSONArray().put(JSONObject().put("id", "check")
                             .put("label", "确认").put("close", false)))) {

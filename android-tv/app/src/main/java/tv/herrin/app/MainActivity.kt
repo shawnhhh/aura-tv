@@ -643,8 +643,8 @@ private fun Herrin() {
     // Only the source's playback identity survives enrichment. Every network
     // result modifies display fields in-place and never alters episode links,
     // favorites IDs or history keys.
-    val metadataResolver = remember(context) {
-        ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"))
+    val metadataResolver = remember(context, catalogScope) {
+        ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"), catalogScope = catalogScope)
     }
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }

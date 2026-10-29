@@ -1,5 +1,7 @@
 package tv.herrin.app
 
+import com.github.catvod.Runtime as CatVodRuntime
+
 import android.app.ActivityManager
 import android.app.Service
 import android.content.ComponentName
@@ -275,7 +277,7 @@ class TvBoxSpiderService : Service() {
         val process = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
             .runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
         check(process == "$packageName:spider") { "Spider must run in its dedicated process" }
-        com.github.catvod.Runtime.setDialog { options, callback ->
+        CatVodRuntime.setDialog { options, callback ->
             if (authCaller == null) java.util.concurrent.CompletableFuture<String>().apply {
                 completeExceptionally(IllegalStateException("No active authorization operation"))
             } else try {
@@ -296,7 +298,7 @@ class TvBoxSpiderService : Service() {
 
     override fun onDestroy() {
         authorization.cancel()
-        com.github.catvod.Runtime.setDialog(null)
+        CatVodRuntime.setDialog(null)
         scope.cancel()
         // A plugin's destroy can also hang; the deadline runs off the main looper.
         val terminate = watchdog.schedule({
