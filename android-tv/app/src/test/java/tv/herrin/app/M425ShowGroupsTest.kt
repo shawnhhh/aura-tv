@@ -73,7 +73,7 @@ class M425ShowGroupsTest {
         val a = film("a", "原创剧 第一季", tmdb = 777)
         val b = film("b", "原创剧 第二季", tmdb = 777)
         val initial = ShowCatalog.build(listOf(a, b), "scope").groups.single()
-        val refreshed = ShowCatalog.build(listOf(b.copy(year = "2026", episodes = listOf(
+        val refreshed = ShowCatalog.build(listOf(b.copy(year = "2026", playbackEpisodes = listOf(
             ep(2, "02", line("b", "备用", "b2")))), a.copy(year = "2026")), "scope").groups.single()
         assertEquals(initial.key, refreshed.key)
         assertEquals(initial.memberIds, refreshed.memberIds)
