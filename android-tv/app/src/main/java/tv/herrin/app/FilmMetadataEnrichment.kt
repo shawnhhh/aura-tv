@@ -5,7 +5,8 @@ data class FilmDisplayOrigin(
     val artworkUrl: String?, val backdropUrl: String?, val genres: List<String>,
     val ratingValue: Double?, val ratingProvider: String?,
     val actors: List<String>, val directors: List<String>, val regions: List<String>,
-    val releaseDate: String?, val runtimeMinutes: Int?, val people: List<FilmPerson>
+    val releaseDate: String?, val runtimeMinutes: Int?, val people: List<FilmPerson>,
+    val title: String? = null
 )
 
 /**
@@ -15,12 +16,13 @@ data class FilmDisplayOrigin(
  */
 internal object FilmMetadataEnrichment {
     fun apply(original: Film, metadata: EnrichedArtwork): Film = original.copy(
+        title = metadata.displayTitle?.takeIf { it.isNotBlank() } ?: original.title,
         subtitle = metadata.originalTitle?.takeIf { it.isNotBlank() &&
             ArtworkTitle.normalize(it) != ArtworkTitle.normalize(original.title) }
             ?: metadata.genres.joinToString(" · ").ifBlank { original.subtitle },
         synopsis = metadata.synopsis?.takeIf { it.isNotBlank() } ?: original.synopsis,
         category = metadata.category?.takeIf { it.isNotBlank() } ?: original.category,
-        year = original.year.ifBlank { metadata.year.orEmpty() },
+        year = metadata.year?.takeIf { it.isNotBlank() } ?: original.year,
         artworkUrl = metadata.posterUrl ?: original.artworkUrl,
         backdropUrl = metadata.backdropUrl ?: original.backdropUrl,
         genres = metadata.genres.ifEmpty { original.genres },
@@ -38,12 +40,12 @@ internal object FilmMetadataEnrichment {
             original.subtitle, original.synopsis, original.category, original.year, original.artworkUrl,
             original.backdropUrl, original.genres, original.ratingValue, original.ratingProvider,
             original.actors, original.directors, original.regions,
-            original.releaseDate, original.runtimeMinutes, original.people)
+            original.releaseDate, original.runtimeMinutes, original.people, original.title)
     )
 
     fun restore(film: Film): Film {
         val saved = film.originalDisplay ?: return film
-        return film.copy(subtitle = saved.subtitle, synopsis = saved.synopsis, category = saved.category,
+        return film.copy(title = saved.title ?: film.title, subtitle = saved.subtitle, synopsis = saved.synopsis, category = saved.category,
             year = saved.year, artworkUrl = saved.artworkUrl,
             backdropUrl = saved.backdropUrl, genres = saved.genres,
             ratingValue = saved.ratingValue, ratingProvider = saved.ratingProvider,
