@@ -371,7 +371,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeLoopbackProxy: SpiderLoopbackProxy? = null
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
-        withTimeoutOrNull(30_000) {
+        withTimeoutOrNull(150_000) {
             SpiderResult.Ready(runInterruptible(Dispatchers.IO) { block() })
         } ?: run {
             close()
