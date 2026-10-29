@@ -67,6 +67,7 @@ class SpiderLocalProxyPlaybackTest {
                     }
                     assertTrue("Spider must serve actual HLS video segments",
                         segmentRequests.get() > 0)
+                    TvVisibleFrameEvidence.verify(inst, "m433-catvod-hls-visible-frame")
                 }
             } finally {
                 Proxy.set(-1, "")
@@ -108,6 +109,7 @@ class SpiderLocalProxyPlaybackTest {
                         frames > 3
                     }
                     assertTrue("Media3 must request the Java Spider proxy", calls.get() > 0)
+                    TvVisibleFrameEvidence.verify(inst, "m433-catvod-mp4-visible-frame")
                     compose.onNodeWithTag("player-verification-toggle").performClick()
                     compose.waitUntil(30_000) {
                         runCatching {
