@@ -18,6 +18,11 @@ internal object PlaybackFormatRetry {
         else -> null
     }
 
+    /** The format declared for a primary URL must not leak onto unrelated backup URLs. */
+    fun candidateMime(uri: String, candidateIndex: Int, primaryDeclaredMime: String?): String? =
+        if (candidateIndex == 0) declaredMime(primaryDeclaredMime) ?: initialMime(uri)
+        else initialMime(uri)
+
     fun initialMime(uri: String): String? {
         val withoutFragment = uri.substringBefore('#').lowercase()
         val path = withoutFragment.substringBefore('?')
