@@ -5,7 +5,8 @@ data class FilmDisplayOrigin(
     val artworkUrl: String?, val backdropUrl: String?, val genres: List<String>,
     val ratingValue: Double?, val ratingProvider: String?,
     val actors: List<String>, val directors: List<String>, val regions: List<String>,
-    val releaseDate: String?, val runtimeMinutes: Int?, val people: List<FilmPerson>
+    val releaseDate: String?, val runtimeMinutes: Int?, val people: List<FilmPerson>,
+    val title: String? = null
 )
 
 /**
@@ -15,12 +16,13 @@ data class FilmDisplayOrigin(
  */
 internal object FilmMetadataEnrichment {
     fun apply(original: Film, metadata: EnrichedArtwork): Film = original.copy(
+        title = metadata.displayTitle?.takeIf { it.isNotBlank() } ?: original.title,
         subtitle = metadata.originalTitle?.takeIf { it.isNotBlank() &&
             ArtworkTitle.normalize(it) != ArtworkTitle.normalize(original.title) }
             ?: metadata.genres.joinToString(" · ").ifBlank { original.subtitle },
         synopsis = metadata.synopsis?.takeIf { it.isNotBlank() } ?: original.synopsis,
         category = metadata.category?.takeIf { it.isNotBlank() } ?: original.category,
-        year = original.year.ifBlank { metadata.year.orEmpty() },
+        year = metadata.year?.takeIf { it.isNotBlank() } ?: original.year,
         artworkUrl = metadata.posterUrl ?: original.artworkUrl,
         backdropUrl = metadata.backdropUrl ?: original.backdropUrl,
         genres = metadata.genres.ifEmpty { original.genres },
@@ -38,12 +40,32 @@ internal object FilmMetadataEnrichment {
             original.subtitle, original.synopsis, original.category, original.year, original.artworkUrl,
             original.backdropUrl, original.genres, original.ratingValue, original.ratingProvider,
             original.actors, original.directors, original.regions,
-            original.releaseDate, original.runtimeMinutes, original.people)
+            original.releaseDate, original.runtimeMinutes, original.people, original.title)
     )
+
+    /**
+     * Source detail requests can finish after TMDB matching or after the user disables it.
+     * Read the CURRENT film at completion: only the source owns episodes and playback URLs,
+     * while the current metadata choice owns display fields. Never revive a stale TMDB flag.
+     */
+    fun mergeSourceDetails(current: Film, details: Film): Film {
+        // A delayed callback from a different selection cannot replace this entry.
+        if (current.id != details.id) return current
+        if (current.metadataSource != "TMDB" && details.metadataSource != "TMDB") return details
+        // Copying the current entry also preserves originalDisplay's source season markers.
+        // If details carries an old TMDB snapshot while current is raw, keep the user's
+        // latest raw display choice; restoring that snapshot would restore obsolete data.
+        return current.copy(
+            episodes = details.episodes,
+            playbackEpisodes = details.playbackEpisodes,
+            spiderVodId = current.spiderVodId ?: details.spiderVodId,
+            cmsVodId = current.cmsVodId ?: details.cmsVodId
+        )
+    }
 
     fun restore(film: Film): Film {
         val saved = film.originalDisplay ?: return film
-        return film.copy(subtitle = saved.subtitle, synopsis = saved.synopsis, category = saved.category,
+        return film.copy(title = saved.title ?: film.title, subtitle = saved.subtitle, synopsis = saved.synopsis, category = saved.category,
             year = saved.year, artworkUrl = saved.artworkUrl,
             backdropUrl = saved.backdropUrl, genres = saved.genres,
             ratingValue = saved.ratingValue, ratingProvider = saved.ratingProvider,

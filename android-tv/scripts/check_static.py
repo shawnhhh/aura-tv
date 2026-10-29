@@ -1,11 +1,18 @@
 """Offline structural checks; does not substitute for compilation or remote testing."""
 from pathlib import Path
 import hashlib
+import re
 import zipfile
 import xml.etree.ElementTree as ET
 root = Path(__file__).resolve().parents[1]
 for path in root.glob('app/src/main/**/*.xml'):
     ET.parse(path)
+# XML validity alone misses process names rejected by Android's package parser.
+for path in root.glob('app/src/*/AndroidManifest.xml'):
+    for element in ET.parse(path).getroot().iter():
+        process = element.get('{http://schemas.android.com/apk/res/android}process')
+        if process is not None:
+            assert re.fullmatch(r':?[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*', process), (path, process)
 jar = root / 'gradle/wrapper/gradle-wrapper.jar'
 assert hashlib.sha256(jar.read_bytes()).hexdigest() == '498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17'
 with zipfile.ZipFile(jar) as z:

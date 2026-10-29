@@ -135,7 +135,8 @@ internal object SpiderVodCodec {
         }
         return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles,
             alternateUris = playable.drop(1), allowHttpRedirects = allowHttp,
-            declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format"))))
+            declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format")),
+            danmakuSources = DanmakuProtocol.decodeSources(data.opt("danmaku"))))
     }
 
     /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */
@@ -370,7 +371,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeLoopbackProxy: SpiderLoopbackProxy? = null
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
-        withTimeoutOrNull(30_000) {
+        withTimeoutOrNull(150_000) {
             SpiderResult.Ready(runInterruptible(Dispatchers.IO) { block() })
         } ?: run {
             close()

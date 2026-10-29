@@ -32,7 +32,24 @@ internal object TvVisibleFrameEvidence {
                     val observed = sampleCenter(bitmap)
                     if (observed.illuminated + observed.colored >
                         strongest.illuminated + strongest.colored) strongest = observed
-                    if (observed.plausible()) visible = true
+                    if (observed.plausible()) {
+                        visible = true
+                        // Only this fixed, bundled ORIGINAL MP4 fixture is exported to CI logs.
+                        // A bounded compositor thumbnail permits human inspection via the GitHub
+                        // logs connector even when artifact download hosts are unavailable.
+                        if (label == "m437-mp4-visible-frame") {
+                            val thumbnail = Bitmap.createScaledBitmap(bitmap, 480, 270, true)
+                            try {
+                                val bytes = java.io.ByteArrayOutputStream()
+                                thumbnail.compress(Bitmap.CompressFormat.JPEG, 80, bytes)
+                                val encoded = android.util.Base64.encodeToString(bytes.toByteArray(), android.util.Base64.NO_WRAP)
+                                val chunks = encoded.chunked(2800)
+                                chunks.forEachIndexed { index, data ->
+                                    android.util.Log.i("HerrinVideoEvidence", "FRAME $label ${index + 1}/${chunks.size} $data")
+                                }
+                            } finally { thumbnail.recycle() }
+                        }
+                    }
                 } finally {
                     bitmap.recycle()
                 }
@@ -65,14 +82,15 @@ internal object TvVisibleFrameEvidence {
         var illuminated = 0
         var colored = 0
         val colors = HashSet<Int>()
-        // 16 x 12 small samples inside the middle of the video surface;
-        // HERRIN buttons and status text are positioned at the top edge.
+        // 16 x 12 samples in the unobscured upper-middle video surface.
+        // Exclude both the top diagnostics and bottom transport/danmaku controls:
+        // their colored buttons must never qualify a black video as visible.
         for (y in 0 until 12) {
             for (x in 0 until 16) {
                 val px = bitmap.getPixel(
                     (bitmap.width * (0.30 + (x + 0.5) * 0.40 / 16)).toInt()
                         .coerceIn(0, bitmap.width - 1),
-                    (bitmap.height * (0.26 + (y + 0.5) * 0.49 / 12)).toInt()
+                    (bitmap.height * (0.22 + (y + 0.5) * 0.28 / 12)).toInt()
                         .coerceIn(0, bitmap.height - 1)
                 )
                 val r = Color.red(px)

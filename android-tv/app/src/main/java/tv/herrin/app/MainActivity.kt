@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF080B10), contentColor = MaterialTheme.colorScheme.onBackground) { Herrin() }
+                SpiderAuthorizationHost()
             }
         }
     }
@@ -307,6 +308,7 @@ private fun Herrin() {
     // Default settings are deliberately just two source inputs. Legacy diagnostics
     // and import tools remain behind an explicit advanced page.
     var settingsTvBoxOnly by rememberSaveable { mutableStateOf(true) }
+    var playbackPicker by remember { mutableStateOf<String?>(null) }
     var savedProfiles by remember { mutableStateOf(profileStore.list()) }
     var activeProfileId by remember { mutableStateOf(profileStore.activeId()) }
     var sourceNameDraft by rememberSaveable { mutableStateOf("") }
@@ -641,13 +643,15 @@ private fun Herrin() {
     // Only the source's playback identity survives enrichment. Every network
     // result modifies display fields in-place and never alters episode links,
     // favorites IDs or history keys.
-    val metadataResolver = remember(context) {
-        ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"))
+    val metadataResolver = remember(context, catalogScope) {
+        ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"), catalogScope = catalogScope)
     }
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
-    val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.title}" }
+    val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
+    var metadataForceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var metadataCorrection by remember { mutableStateOf<Film?>(null) }
     var metadataScanDone by remember { mutableIntStateOf(0) }
     var metadataScanTotal by remember { mutableIntStateOf(0) }
     LaunchedEffect(catalogScope) {
@@ -664,7 +668,7 @@ private fun Herrin() {
             coroutineScope {
                 batch.forEach { original ->
                     launch(Dispatchers.IO) {
-                        val info = runCatching { metadataResolver.lookup(original, metadataToken) }
+                        val info = runCatching { metadataResolver.lookup(original, metadataToken, forceRefresh = original.id in metadataForceIds) }
                             .getOrNull()
                         withContext(Dispatchers.Main.immediate) {
                             if (info != null) {
@@ -674,6 +678,7 @@ private fun Herrin() {
                                     else current
                                 }
                             }
+                            metadataForceIds = metadataForceIds - original.id
                             metadataScanDone++
                         }
                     }
@@ -728,7 +733,7 @@ private fun Herrin() {
             spiderStatus = "正在读取 ${film.title} 的详情和选集…"
             when (val loaded = spiderBridge.details(film)) {
                 is SpiderResult.Ready -> {
-                    providerFilms = providerFilms?.map { if (it.id == film.id) loaded.value else it }
+                    providerFilms = providerFilms?.map { if (it.id == film.id) FilmMetadataEnrichment.mergeSourceDetails(it, loaded.value) else it }
                     spiderStatus = if (loaded.value.playbackEpisodes.isEmpty()) "该影片没有可用选集" else "已加载选集，请选择播放"
                 }
                 is SpiderResult.Failure -> spiderStatus = loaded.message
@@ -745,7 +750,7 @@ private fun Herrin() {
             cmsDetailStatus = "正在读取 ${film.title} 的完整选集…"
             when (val result = tvBoxVodRepo.details(site, film, tvBoxAllowHttp)) {
                 is TvBoxVodDetailResult.Ready -> {
-                    providerFilms = providerFilms?.map { if (it.id == film.id) result.film else it }
+                    providerFilms = providerFilms?.map { if (it.id == film.id) FilmMetadataEnrichment.mergeSourceDetails(it, result.film) else it }
                     cmsDetailStatus = if (result.film.playbackEpisodes.isEmpty())
                         "该节点未提供可直接播放的媒体地址" else "已取得完整选集"
                 }
@@ -772,7 +777,7 @@ private fun Herrin() {
                 when (loaded) {
                     is SpiderResult.Ready -> if (loaded.value.id == current.id &&
                         loaded.value.playbackEpisodes.isNotEmpty()) {
-                        providerFilms = providerFilms?.map { if (it.id == current.id) loaded.value else it }
+                        providerFilms = providerFilms?.map { if (it.id == current.id) FilmMetadataEnrichment.mergeSourceDetails(it, loaded.value) else it }
                     }
                     is SpiderResult.Failure -> groupDetailStatus = "${current.title.take(24)}：${loaded.message.take(55)}"
                     null -> groupDetailStatus = "${current.title.take(24)}：选集读取超时"
@@ -784,7 +789,7 @@ private fun Herrin() {
                 when (loaded) {
                     is TvBoxVodDetailResult.Ready -> if (loaded.film.id == current.id &&
                         loaded.film.playbackEpisodes.isNotEmpty()) {
-                        providerFilms = providerFilms?.map { if (it.id == current.id) loaded.film else it }
+                        providerFilms = providerFilms?.map { if (it.id == current.id) FilmMetadataEnrichment.mergeSourceDetails(it, loaded.film) else it }
                     }
                     is TvBoxVodDetailResult.Error -> groupDetailStatus = "${current.title.take(24)}：${loaded.reason.take(55)}"
                     null -> groupDetailStatus = "${current.title.take(24)}：选集读取超时"
@@ -811,7 +816,7 @@ private fun Herrin() {
                     is SpiderResult.Ready -> {
                         playableFilm = detailed.value
                         providerFilms = providerFilms?.map {
-                            if (it.id == film.id) detailed.value else it
+                            if (it.id == film.id) FilmMetadataEnrichment.mergeSourceDetails(it, detailed.value) else it
                         }
                         val first = detailed.value.playbackEpisodes.firstOrNull()
                         val option = first?.lines?.firstOrNull()
@@ -1910,13 +1915,19 @@ private fun Herrin() {
                 val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
                     val historyLine = if (licensedMedia != null) line else "independent-test"
-                    val previous = watchHistory.load(catalogScope, film.id, episode, historyLine)
+                    // Snapshot the selected episode. A disposed player's final callback
+                    // must not read the mutable episode after the user chooses the next one.
+                    val historyEpisode = episode
+                    val previous = watchHistory.load(catalogScope, film.id, historyEpisode, historyLine)
+                    key(catalogScope, film.id, historyEpisode, historyLine) {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
                         startPositionMs = previous?.positionMs ?: 0L,
+                        onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
+                        onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
-                            watchHistory.update(catalogScope, film.id, episode, historyLine,
+                            watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
                                 position, duration, finished)
                         },
                         onBack = {
@@ -1925,9 +1936,24 @@ private fun Herrin() {
                             screen = "detail"
                         }
                     )
+                    }
+                    if (playbackPicker != null) PlaybackSelectionDialog(
+                        film, episode, line, playbackPicker == "lines",
+                        onSelect = { selectedEpisode, selectedLine ->
+                            if (selectedEpisode == episode && selectedLine != line) {
+                                watchHistory.load(catalogScope, film.id, episode, line)?.let { saved ->
+                                    watchHistory.update(catalogScope, film.id, episode, selectedLine,
+                                        saved.positionMs, saved.durationMs)
+                                }
+                            }
+                            episode = selectedEpisode
+                            line = selectedLine
+                            playbackPicker = null
+                        }, onDismiss = { playbackPicker = null })
                 } else if (screen == "player") {
                     // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
                     val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable || !spiderActive
+                    val offlineDemonstration = !sourceConfigured && !spiderActive && film.playbackEpisodes.isEmpty()
                     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
                         .testTag("player-startup-surface"),
                         contentAlignment = Alignment.Center) {
@@ -1939,9 +1965,11 @@ private fun Herrin() {
                                 Text("正在打开影片…", fontSize = 21.sp,
                                     modifier = Modifier.testTag("player-startup-label"))
                             } else {
-                                Text("暂时无法播放", fontSize = 24.sp,
-                                    modifier = Modifier.testTag("player-startup-error"))
-                                Text("请重试，或返回选集切换播放线路。",
+                                Text(if (offlineDemonstration) "播放演示" else "暂时无法播放", fontSize = 24.sp,
+                                    modifier = Modifier.testTag(if (offlineDemonstration) "player-demo-status" else "player-startup-error"))
+                                Text(if (offlineDemonstration)
+                                    "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
+                                    else "请重试，或返回选集切换播放线路。",
                                     color = Color(0xFFBCCADB), fontSize = 16.sp)
                                 if (spiderActive) {
                                     TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
@@ -2171,6 +2199,7 @@ private fun Herrin() {
                                 TvButton("重新刮削",
                                     modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
                                     if (metadataToken.isNotBlank()) {
+                                        metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataRescanEpoch++
                                         tmdbSettingsStatus = "正在重新匹配当前影视点的元数据"
@@ -2582,6 +2611,16 @@ private fun Herrin() {
                                 if (displayFilm.directors.isNotEmpty()) append("\n导演 / 主创：").append(displayFilm.directors.joinToString(" · "))
                             }, lineHeight = 25.sp, modifier = Modifier.testTag("detail-metadata"))
                         } }
+                        if (providerFilms != null) item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TvButton("纠正影片资料", Modifier.testTag("metadata-correct")) { metadataCorrection = film }
+                                TvButton("重新刮削本片", Modifier.testTag("metadata-rescrape-film")) {
+                                    metadataForceIds = setOf(film.id)
+                                    providerFilms = providerFilms?.map { if (it.id == film.id) FilmMetadataEnrichment.restore(it) else it }
+                                    metadataRescanEpoch++
+                                }
+                            }
+                        }
                         item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("画质与音效", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
                             val spec = verifiedStreams[streamEvidenceKey]
@@ -2839,6 +2878,16 @@ private fun Herrin() {
                     }
                 }
             }
+        }
+        metadataCorrection?.let { original ->
+            MetadataCorrectionDialog(original, metadataResolver.manualMatch(original),
+                onConfirm = { match ->
+                    metadataResolver.setManualMatch(original, match)
+                    metadataForceIds = setOf(original.id)
+                    providerFilms = providerFilms?.map { if (it.id == original.id) FilmMetadataEnrichment.restore(it) else it }
+                    metadataRescanEpoch++
+                    metadataCorrection = null
+                }, onDismiss = { metadataCorrection = null })
         }
         if (splash) {
             SplashExitCurtain(reduceMotion, splashExiting,

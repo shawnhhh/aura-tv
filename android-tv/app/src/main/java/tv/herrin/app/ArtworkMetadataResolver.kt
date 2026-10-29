@@ -26,25 +26,58 @@ internal data class EnrichedArtwork(
     val actors: List<String> = emptyList(), val directors: List<String> = emptyList(),
     val regions: List<String> = emptyList(), val releaseDate: String? = null,
     val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList(),
-    val tmdbTvId: Int? = null
+    val tmdbTvId: Int? = null, val displayTitle: String? = null,
+    val tmdbId: Int? = null, val mediaType: String? = null
 )
 
+/** Conservative identity extraction: standalone technical tags never become a title or a year. */
+internal data class ArtworkIdentity(val title: String, val year: String?, val mediaType: String?)
+
 internal object ArtworkTitle {
-    private val suffixes = Regex(
-        "(?i)(?:[\\[【(（][^\\]】)）]{0,30}(?:国语|国配|中字|双语|字幕|超清|高清|蓝光|WEB[- ]?DL|BD|HD|4K|1080P|720P|完整版|完结|更新|第\\d+集|202[0-9])[^\\]】)）]{0,30}[\\]】)）])"
-    )
     private val punctuation = Regex("[^\\p{L}\\p{N}]+")
+    private val technical = "(?:2160[Pp]|1080[Pp]|720[Pp]|[48][Kk]|[Hh][Dd][Rr](?:10\\+?)?|[Dd]olby[ ._-]?[Vv]ision|[Dd][Vv]|杜比视界|杜比|蓝光|超清|高清|国语中字|国语|国配|粤语|双语|中文字幕|中字|字幕|无字幕|简繁|内嵌字幕|[Ww][Ee][Bb][- ]?[Dd][Ll]|[Bb][Dd][Rr]ip|[Bb][Dd]|[Hh][Dd]|[Hh]\\.?26[45]|[Xx]26[45]|[Hh][Ee][Vv][Cc]|[Aa][Aa][Cc]|[Dd][Tt][Ss]|[Aa][Tt][Mm][Oo][Ss]|完整版|完结|全集|更新至?\\d+集)"
+    private val brackets = Regex("[\\[【(（]([^\\]】)）]{1,100})[\\]】)）]")
+    private val tag = Regex("(?i)(?<![\\p{L}\\p{N}])$technical(?![\\p{L}\\p{N}])")
+    private val trailingChineseTag = Regex("(?:国语中字|国语|粤语|国配|中文字幕|中字|无字幕|内嵌字幕|杜比视界|超清|高清|蓝光|完整版|全集|完结)$")
+    private val separatedYear = Regex("(?<![\\p{L}\\p{N}])((?:19|20)\\d{2})(?![\\p{L}\\p{N}])")
 
-    fun searchQuery(raw: String): String = Normalizer.normalize(raw.trim(), Normalizer.Form.NFKC)
-        .replace(suffixes, "")
-        .replace(Regex("[_.·]+"), " ")
-        .trim()
-
-    fun normalize(raw: String): String {
-        return searchQuery(raw)
-            .replace(punctuation, "")
-            .lowercase(Locale.ROOT)
+    fun identify(film: Film): ArtworkIdentity {
+        val raw = Normalizer.normalize(film.title.trim(), Normalizer.Form.NFKC)
+        val titleYear = separatedYear.findAll(raw).lastOrNull {
+            it.range.first > 0 && raw.take(it.range.first).any(Char::isLetter) &&
+                it.groupValues[1].toInt() <= java.time.Year.now().value + 1
+        }?.groupValues?.get(1)
+        val year = Regex("(?:19|20)\\d{2}").find(film.year)?.value ?: titleYear
+        val type = when {
+            film.category in listOf("电影", "纪录片") -> "movie"
+            film.category in listOf("剧集", "电视剧", "动漫", "动画", "综艺") -> "tv"
+            film.category.contains("电影") || film.category.equals("movie", true) -> "movie"
+            film.category.contains("剧") || film.category.equals("tv", true) || film.episodes > 1 -> "tv"
+            else -> null
+        }
+        return ArtworkIdentity(searchQuery(raw), year, type)
     }
+
+    fun searchQuery(raw: String): String {
+        val normalized = Normalizer.normalize(raw.trim(), Normalizer.Form.NFKC)
+        var clean = normalized.replace(brackets) { result ->
+            val contents = result.groupValues[1]
+            if (tag.containsMatchIn(contents) || contents.matches(Regex("(?:19|20)\\d{2}"))) " "
+            else result.value
+        }.replace(Regex("[_.·]+"), " ")
+        clean = clean.replace(tag, " ")
+        // A bare year such as '1917' is a film title. Remove only a separated year beside a name.
+        clean = clean.replace(separatedYear) { match ->
+            if (match.range.first > 0 && clean.take(match.range.first).any(Char::isLetter) &&
+                match.groupValues[1].toInt() <= java.time.Year.now().value + 1) " " else match.value
+        }
+        var last: String
+        do { last = clean; clean = clean.trim().replace(trailingChineseTag, "") } while (last != clean)
+        clean = clean.replace(Regex("[ \\t-]+"), " ").trim(' ', '-', '[', ']', '【', '】')
+        return clean.ifBlank { normalized }
+    }
+
+    fun normalize(raw: String): String = searchQuery(raw).replace(punctuation, "").lowercase(Locale.ROOT)
 }
 
 internal data class ArtworkSearchCandidate(
@@ -184,24 +217,24 @@ internal fun interface ArtworkJsonFetcher {
 /** Keyed by title, category, year and a one-way token fingerprint to avoid stale cross-account metadata. */
 internal class ArtworkMetadataResolver(
     private val cacheRoot: File,
-    private val fetcher: ArtworkJsonFetcher = NetworkArtworkFetcher
+    private val fetcher: ArtworkJsonFetcher = NetworkArtworkFetcher,
+    catalogScope: String = ""
 ) {
-    fun lookup(film: Film, readAccessToken: String): EnrichedArtwork? {
+    private val corrections = TmdbMatchCorrections(File(cacheRoot, "manual-matches"), catalogScope)
+    fun manualMatch(film: Film): TmdbManualMatch? = corrections.get(film)
+    fun setManualMatch(film: Film, match: TmdbManualMatch?) = corrections.set(film, match)
+
+    fun lookup(film: Film, readAccessToken: String, forceRefresh: Boolean = false): EnrichedArtwork? {
         val token = readAccessToken.trim()
         if (!Regex("^[A-Za-z0-9._~-]{20,1000}$").matches(token) || film.title.isBlank()) return null
-        val queryTitle = ArtworkTitle.searchQuery(film.title)
+        val identity = ArtworkTitle.identify(film)
+        val queryTitle = identity.title
         if (queryTitle.isBlank()) return null
-        val category = when (film.category) {
-            "电影", "纪录片" -> "movie"
-            "剧集", "电视剧", "动漫", "动画", "综艺" -> "tv"
-            else -> return null
-        }
-        // Upgrade M4.21 artwork-only cache keys: older positive entries have no
-        // cast/director/origin data and must not mask the new detail lookup for 14 days.
-        // The previous cache has cast names but not portrait/roles or release/runtime.
-        val key = hash("detail-v4|$category|$queryTitle|${film.year}|${hash(token)}")
+        val manual = manualMatch(film)
+        val category = manual?.mediaType ?: identity.mediaType ?: return null
+        val key = hash("detail-v5|$category|$queryTitle|${identity.year}|${manual?.id}|${hash(token)}")
         val file = File(cacheRoot, "$key.json")
-        if (file.isFile && file.length() in 1..8192) {
+        if (!forceRefresh && file.isFile && file.length() in 1..16384) {
             val parsed = runCatching { JSONObject(file.readText()) }.getOrNull()
             val maxAge = if (parsed?.optBoolean("negative") == true) 3L * 3600 * 1000
                 else 14L * 24 * 3600 * 1000
@@ -216,28 +249,32 @@ internal class ArtworkMetadataResolver(
         networkLimit.acquire()
         try {
             if ((rejectedTokens[tokenKey] ?: 0L) > System.currentTimeMillis()) return null
-            val searchUrl = "https://api.themoviedb.org/3/search/$category?query=" +
+            val searchUrl = if (manual != null) {
+                "https://api.themoviedb.org/3/$category/${manual.id}?append_to_response=credits&language=zh-CN"
+            } else "https://api.themoviedb.org/3/search/$category?query=" +
                 URLEncoder.encode(queryTitle, "UTF-8") + "&language=zh-CN&include_adult=false&page=1"
             val response = try { fetcher.load(searchUrl, token) }
                 catch (auth: ArtworkAuthenticationFailure) {
                     rejectedTokens[tokenKey] = System.currentTimeMillis() + 30L * 60 * 1000
                     return null
                 } catch (_: Exception) { null }
-            if (response == null) {
-                cacheNegative(file)
-                return null
-            }
-            val results = runCatching { JSONObject(response).getJSONArray("results") }.getOrNull()
-                ?: return null
-            val candidate = ArtworkMatch.best(queryTitle, film.year, candidates(results, category))
-                ?: run { cacheNegative(file); return null }
-            // One official detail request also returns cast/crew and explicit origin countries.
-            // If it fails, the already-validated artwork result still works independently.
-            val detail = candidate.tmdbId?.let { tmdbId ->
+            // Transport errors are retryable; a failed network is not a negative title match.
+            if (response == null) return null
+            val root = runCatching { JSONObject(response) }.getOrNull() ?: return null
+            val candidate = if (manual != null) {
+                if (root.optInt("id") != manual.id || root.optBoolean("adult")) return null
+                candidates(JSONArray().put(root), category).singleOrNull()
+            } else {
+                val results = root.optJSONArray("results") ?: return null
+                ArtworkMatch.best(queryTitle, identity.year.orEmpty(), candidates(results, category))
+            } ?: run { cacheNegative(file); return null }
+            // Manual corrections already fetched detail, while automatic matches add one credit call.
+            val detail = if (manual != null) TmdbCreditsParser.parse(response, category)
+            else candidate.tmdbId?.let { tmdbId ->
                 val url = "https://api.themoviedb.org/3/$category/$tmdbId" +
                     "?append_to_response=credits&language=zh-CN"
-                val response = runCatching { fetcher.load(url, token) }.getOrNull()
-                TmdbCreditsParser.parse(response, category)
+                val creditResponse = runCatching { fetcher.load(url, token) }.getOrNull()
+                TmdbCreditsParser.parse(creditResponse, category)
             } ?: TmdbCredits()
             val synopsis = candidate.synopsis.trim().take(1300).takeIf { it.isNotBlank() }
             val rating = candidate.rating?.takeIf { it.isFinite() && it in 0.0..10.0 &&
@@ -250,7 +287,8 @@ internal class ArtworkMetadataResolver(
                 synopsis, candidate.year?.toString(), rating, genres, classified,
                 candidate.originalTitle?.take(160), detail.actors, detail.directors, detail.regions,
                 detail.releaseDate ?: candidate.releaseDate, detail.runtimeMinutes, detail.people,
-                if (category == "tv") candidate.tmdbId else null
+                if (category == "tv") candidate.tmdbId else null,
+                candidate.names.firstOrNull { it.isNotBlank() }?.take(160), candidate.tmdbId, category
             )
             if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null) return null
             persist(file, JSONObject().put("poster", picture.posterUrl ?: "")
@@ -267,6 +305,9 @@ internal class ArtworkMetadataResolver(
                 .put("releaseDate", picture.releaseDate ?: "")
                 .put("runtimeMinutes", picture.runtimeMinutes ?: JSONObject.NULL)
                 .put("tmdbTvId", picture.tmdbTvId ?: JSONObject.NULL)
+                .put("displayTitle", picture.displayTitle ?: "")
+                .put("tmdbId", picture.tmdbId ?: JSONObject.NULL)
+                .put("mediaType", picture.mediaType ?: "")
                 .put("people", JSONArray().apply { picture.people.forEach { person ->
                     put(JSONObject().put("name", person.name).put("role", person.role)
                         .put("portrait", person.portraitUrl ?: ""))
@@ -282,10 +323,13 @@ internal class ArtworkMetadataResolver(
     private fun persist(file: File, json: JSONObject) {
         runCatching {
             cacheRoot.mkdirs()
-            if ((cacheRoot.listFiles()?.size ?: 0) > 300) {
-                cacheRoot.listFiles()?.sortedBy { it.lastModified() }?.take(35)?.forEach { it.delete() }
-            }
-            file.writeText(json.toString())
+            val entries = cacheRoot.listFiles().orEmpty().filter { it.isFile && it.extension == "json" }
+            if (entries.size > 300) entries.sortedBy { it.lastModified() }.take(35).forEach { it.delete() }
+            val temporary = File.createTempFile("tmdb-", ".tmp", cacheRoot)
+            try {
+                temporary.writeText(json.toString())
+                check(temporary.renameTo(file))
+            } finally { temporary.delete() }
         }
     }
 
@@ -324,7 +368,10 @@ internal class ArtworkMetadataResolver(
                             TmdbPortraits.url(it.substringAfter("/w185")) == it })
                 }
             },
-            obj.optInt("tmdbTvId", 0).takeIf { it > 0 }
+            obj.optInt("tmdbTvId", 0).takeIf { it > 0 },
+            obj.optString("displayTitle").takeIf { it.isNotBlank() }?.take(160),
+            obj.optInt("tmdbId", 0).takeIf { it > 0 },
+            obj.optString("mediaType").takeIf { it in listOf("movie", "tv") }
         )
         return result.takeIf { it.posterUrl != null || it.backdropUrl != null || it.synopsis != null }
     }
@@ -338,7 +385,10 @@ internal class ArtworkMetadataResolver(
             val names = if (category == "movie") listOf(obj.optString("title"),
                 obj.optString("original_title")) else listOf(obj.optString("name"),
                 obj.optString("original_name"))
-            val genres = obj.optJSONArray("genre_ids") ?: JSONArray()
+            val genres = obj.optJSONArray("genre_ids") ?: (obj.optJSONArray("genres") ?: JSONArray()).let { values ->
+                JSONArray().apply { for (index in 0 until minOf(values.length(), 15))
+                    put(values.optJSONObject(index)?.optInt("id", -1) ?: -1) }
+            }
             result += ArtworkSearchCandidate(
                 names, Regex("^\\d{4}").find(date)?.value?.toIntOrNull(),
                 obj.optString("poster_path").takeIf { acceptablePath(it) },

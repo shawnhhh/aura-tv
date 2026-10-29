@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.mutableLongStateOf
@@ -28,7 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.key
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,10 +77,38 @@ fun AuthorizedPlaybackPanel(
     isLive: Boolean = false,
     onLiveMenu: () -> Unit = {},
     focusRestoreEpoch: Int = 0,
+    onLineSelection: (() -> Unit)? = null,
+    onEpisodeSelection: (() -> Unit)? = null,
+    onBack: () -> Unit
+) {
+    // A media replacement owns a fresh composition, including callbacks,
+    // effects, focus nodes and native surfaces. No outgoing resource can be
+    // retained in a slot that now represents another episode or line.
+    key(media) {
+        AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
+            onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
+            onLineSelection, onEpisodeSelection, onBack)
+    }
+}
+
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+@Composable
+private fun AuthorizedPlaybackSession(
+    media: PlaybackMedia,
+    onPlayer: (ExoPlayer) -> Unit,
+    startPositionMs: Long,
+    onPlaybackProgress: (Long, Long, Boolean) -> Unit,
+    onMediaSpecDetected: (VerifiedStreamSpec) -> Unit,
+    isLive: Boolean,
+    onLiveMenu: () -> Unit,
+    focusRestoreEpoch: Int,
+    onLineSelection: (() -> Unit)?,
+    onEpisodeSelection: (() -> Unit)?,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val danmaku = rememberDanmakuSettings()
     var errorMessage by remember(media) { mutableStateOf<String?>(null) }
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
     var uiEpoch by remember(media) { mutableIntStateOf(0) }
@@ -87,11 +118,16 @@ fun AuthorizedPlaybackPanel(
     var showVerification by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
+    val selectionControl = remember { FocusRequester() }
     val playerRootFocus = remember { FocusRequester() }
     var controlsVisible by remember(media) { mutableStateOf(true) }
     var transportFocused by remember { mutableStateOf(false) }
+    var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
+    // Keep updates within one media session, while retaining the old session's
+    // callbacks until its DisposableEffect has persisted and released its player.
+    // A single shared State would route old onDispose progress into the new episode.
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media) {
@@ -111,7 +147,7 @@ fun AuthorizedPlaybackPanel(
         }
         (mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))?.let(::setMimeType)
     }.build()
-    val player = remember(media) {
+    val player = remember(media, context, lifecycle) {
         journey.begin(0, candidates.size, android.os.SystemClock.elapsedRealtime())
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
@@ -127,7 +163,6 @@ fun AuthorizedPlaybackPanel(
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
             setHandleAudioBecomingNoisy(true)
-            onPlayer(this)
             addListener(object : Player.Listener {
                 override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                     uiEpoch++
@@ -141,6 +176,7 @@ fun AuthorizedPlaybackPanel(
                     uiEpoch++
                 }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
+                override fun onRenderedFirstFrame() { uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
@@ -179,10 +215,6 @@ fun AuthorizedPlaybackPanel(
                     }
                 }
             })
-            setMediaItem(itemFor(candidates.first(), 0))
-            if (startPositionMs > 0L) seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
-            prepare()
-            playWhenReady = true
         }
     }
     fun reportProgress() {
@@ -245,24 +277,41 @@ fun AuthorizedPlaybackPanel(
     }
     LaunchedEffect(focusControlsEpoch) {
         if (!isLive && focusControlsEpoch > 0) {
-            delay(50)
-            initialControl.requestFocus()
+            // A remote press during initial buffering can precede composition of
+            // the controls. Wait for real video rather than focusing an unattached node.
+            while ((player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) == 0 &&
+                player.playerError == null) delay(50)
+            if (player.playerError == null && controlsVisible) initialControl.requestFocus()
         }
     }
-    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, transportFocused) {
-        if (!isLive && controlsVisible && !transportFocused &&
-            playbackState == Player.STATE_READY && !showVerification) {
+    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification) {
+        // A focused button must not pin the overlay forever. Any remote key restarts
+        // this timer; while paused the controls remain available for resuming.
+        if (!isLive && controlsVisible && player.isPlaying &&
+            playbackState == Player.STATE_READY && !showVerification && errorMessage == null) {
             delay(8_000)
             controlsVisible = false
             playerRootFocus.requestFocus()
         }
     }
     DisposableEffect(player, lifecycle) {
-        val session = MediaSession.Builder(context, player).build()
+        // Compose/Activity transitions can briefly overlap outgoing and incoming
+        // players. Media3's default empty ID is process-global and rejects that
+        // valid handoff; each player owns a distinct, credential-free session ID.
+        val session = MediaSession.Builder(context, player)
+            .setId("herrin-${java.util.UUID.randomUUID()}").build()
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) { reportProgress(); player.pause() }
         }
         lifecycle.addObserver(observer)
+        // Start only after this composition has committed and the outgoing
+        // effect has released its session. Starting inside remember overlaps
+        // prepare/play with the previous player's teardown during inline swaps.
+        player.setMediaItem(itemFor(candidates.first(), 0))
+        if (startPositionMs > 0L)
+            player.seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
+        player.prepare()
+        player.playWhenReady = true
         onDispose {
             reportProgress()
             lifecycle.removeObserver(observer)
@@ -271,6 +320,10 @@ fun AuthorizedPlaybackPanel(
             player.release()
         }
     }
+    // Publish the player from the committed composition, after remember/dispose
+    // callbacks. A transition must never leave an observer holding a player
+    // created by an outgoing or abandoned composition.
+    SideEffect { onPlayer(player) }
     fun requestBack(source: String) {
         android.util.Log.i("HerrinPlayerBack",
             "source=$source focus=${context.javaClass.simpleName} released=${player.isReleased}")
@@ -278,9 +331,11 @@ fun AuthorizedPlaybackPanel(
     }
     BackHandler { requestBack("dispatcher") }
     Box(Modifier.fillMaxSize().background(Color.Black)
-        .focusRequester(playerRootFocus).focusable()
+        .focusRequester(playerRootFocus)
+        .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
+        if (key.action == KeyEvent.ACTION_DOWN) controlsInteractionEpoch++
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
             true
@@ -292,7 +347,7 @@ fun AuthorizedPlaybackPanel(
                 playerRootFocus.requestFocus()
             }
             true
-        } else if (!isLive && !transportFocused &&
+        } else if (!isLive && playerRootFocused &&
             key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 PlaybackTransport.seekBy(player,
@@ -302,7 +357,7 @@ fun AuthorizedPlaybackPanel(
                 controlsInteractionEpoch++
             }
             true
-        } else if (!isLive && !transportFocused &&
+        } else if (!isLive && playerRootFocused &&
             key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER)) {
@@ -334,6 +389,10 @@ fun AuthorizedPlaybackPanel(
             true
         } else false
     }) {
+        // A PlayerView owns its native video surface and key handlers for one
+        // player. Replacing media must replace that surface too: the outgoing
+        // decoder can still be detaching while Compose installs the new player.
+        key(player) {
         AndroidView(
             factory = { ctx -> object : PlayerView(ctx) {
                 // Native PlayerView otherwise consumes the first Back to hide its controller.
@@ -361,13 +420,16 @@ fun AuthorizedPlaybackPanel(
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 keepScreenOn = true
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                setPadding(32, 32, 32, 32)
-                this.player = player
+                setPadding(0, 0, 0, 0)
             } },
             update = { it.player = player },
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
+        }
+        if (!isLive) Media3DanmakuOverlay(player, media.uri, media.danmakuSources,
+            danmaku.value, Modifier.fillMaxSize())
+        val hasDecodedVideo = (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 0
         if (isLive) {
             // A tiny focus anchor lets DPAD_LEFT/OK open the channel drawer while
             // the video remains edge-to-edge. No visible transport controls.
@@ -383,7 +445,7 @@ fun AuthorizedPlaybackPanel(
                     }
                 }
             }
-        } else if (controlsVisible || showVerification || errorMessage != null)
+        } else if ((controlsVisible && hasDecodedVideo) || showVerification || errorMessage != null)
             Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Button(onClick = { requestBack("visible-button") }) {
@@ -420,9 +482,7 @@ fun AuthorizedPlaybackPanel(
             } else if (activeVariant > 0 && playbackState != Player.STATE_READY) {
                 Text("正在尝试备用播放地址 ${activeVariant + 1} / ${candidates.size}",
                     color = Color(0xFFCFD7E4), modifier = Modifier.testTag("player-fallback-status"))
-            } else if (playbackState == Player.STATE_BUFFERING) {
-                Text("正在缓冲授权媒体…", color = Color(0xFFCFD7E4),
-                    modifier = Modifier.testTag("player-buffering"))
+
             } else if (playbackState == Player.STATE_ENDED) {
                 Text("播放结束 · 可返回详情选择其他集数", color = Color(0xFFCFD7E4))
             }
@@ -438,7 +498,7 @@ fun AuthorizedPlaybackPanel(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        if (!isLive && controlsVisible) Column(
+        if (!isLive && controlsVisible && hasDecodedVideo) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.86f).padding(bottom = 36.dp)
                 .onFocusChanged { transportFocused = it.hasFocus }
                 .background(Color(0xE9151820), RoundedCornerShape(20.dp))
@@ -446,10 +506,15 @@ fun AuthorizedPlaybackPanel(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(elapsed(shownPosition), color = Color.White)
-                Text("画质：${PlayerQualityLabel.fromSize(player.videoSize.width, player.videoSize.height)}",
+                Text(elapsed(shownPosition), color = Color.White, modifier = Modifier.testTag("player-position-label"))
+                val format = player.videoFormat
+                Text("画质：" + PlayerQualityLabel.fromDecoded(
+                    player.videoSize.width, player.videoSize.height,
+                    format?.frameRate ?: -1f, format?.sampleMimeType,
+                    format?.colorInfo?.colorTransfer ?: -1,
+                    player.videoDecoderCounters?.renderedOutputBufferCount ?: 0),
                     color = Color(0xFFD3E6F7), modifier = Modifier.testTag("player-quality-label"))
-                Text(elapsed(shownDuration), color = Color(0xFFD2D5DE))
+                Text(elapsed(shownDuration), color = Color(0xFFD2D5DE), modifier = Modifier.testTag("player-duration-label"))
             }
             Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0xFF434857))) {
                 Box(Modifier.fillMaxWidth(percent).fillMaxHeight().background(Color.White))
@@ -459,7 +524,9 @@ fun AuthorizedPlaybackPanel(
                 Button(onClick = { PlaybackTransport.seekBy(player, -10_000L) },
                     modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
                 Button(onClick = { if (player.playWhenReady) player.pause() else player.play() },
-                    modifier = Modifier.focusRequester(initialControl).testTag("transport-toggle")) {
+                    modifier = Modifier.focusRequester(initialControl).focusProperties {
+                        if (onLineSelection != null || onEpisodeSelection != null) down = selectionControl
+                    }.testTag("transport-toggle")) {
                     Text(if (player.playWhenReady) "暂停" else "播放")
                 }
                 Button(onClick = { PlaybackTransport.seekBy(player, 10_000L) },
@@ -479,6 +546,19 @@ fun AuthorizedPlaybackPanel(
                     enabled = captions.isNotEmpty(), modifier = Modifier.testTag("transport-subtitle")
                 ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
             }
+            if (onLineSelection != null || onEpisodeSelection != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    onLineSelection?.let { select ->
+                        Button(onClick = select, modifier = Modifier.focusRequester(selectionControl).testTag("transport-lines")) { Text("线路") }
+                    }
+                    onEpisodeSelection?.let { select ->
+                        Button(onClick = select, modifier = Modifier.then(
+                            if (onLineSelection == null) Modifier.focusRequester(selectionControl) else Modifier
+                        ).testTag("transport-episodes")) { Text("选集") }
+                    }
+                }
+            }
+            DanmakuControls(danmaku.value, { danmaku.value = it })
         }
     }
 }

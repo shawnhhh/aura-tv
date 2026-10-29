@@ -1,0 +1,60 @@
+package tv.herrin.app
+
+import com.github.catvod.Runtime as CatVodRuntime
+import com.github.catvod.utils.Dialog as CatVodDialog
+
+import android.app.Service
+import android.content.Intent
+import android.os.*
+import org.json.JSONObject
+import java.net.URL
+import java.util.concurrent.Executors
+
+/** Debug-only original fixture. Never accepts arbitrary plugin code, credentials or external endpoints. */
+class SpiderAuthorizationFixtureService : Service() {
+    private val worker = Executors.newSingleThreadExecutor()
+    private var caller: Messenger? = null
+    private var operation = 0
+    private val session = SpiderAuthorizationSession { id, payload ->
+        caller?.send(Message.obtain(null, if (payload == null) SpiderIpc.AUTH_CLOSE else SpiderIpc.AUTH_SHOW).apply {
+            arg1 = operation; arg2 = id; replyTo = incoming
+            data = Bundle().apply { if (payload != null) putString("payload", payload) }
+        })
+    }
+    private val incoming: Messenger = Messenger(Handler(Looper.getMainLooper()) { message ->
+        if (message.what == SpiderIpc.AUTH_ACTION) {
+            if (operation == message.arg1) session.action(message.arg2, message.data.getString("button"))
+        } else {
+            val callerForOperation = message.replyTo
+            val operationId = message.arg1
+            val operationCode = message.what
+            caller = callerForOperation
+            operation = operationId
+            val payload = message.data.getString("payload").orEmpty()
+            worker.execute {
+                // Only test loopback is allowed. The caller embeds an original mock endpoint in extension.
+                val endpoint = JSONObject(payload).getJSONObject("site").getString("ext")
+                require(URL(endpoint).host == "127.0.0.1")
+                CatVodRuntime.set(applicationContext)
+                CatVodRuntime.setDialog { options, callback -> session.show(options, callback) }
+                val result = CatVodDialog().use { dialog ->
+                    dialog.show(JSONObject().put("qrcode", "https://example.invalid/herrin-original-qr")
+                        .put("buttons", org.json.JSONArray().put(JSONObject().put("id", "check")
+                            .put("label", "确认").put("close", false)))) {
+                        val response = URL(endpoint).openConnection().apply { connectTimeout = 2000; readTimeout = 2000 }
+                            .getInputStream().bufferedReader().use { JSONObject(it.readText()) }
+                        // Authorization value stays here, never in IPC responses, logs or UI.
+                        JSONObject().put("close", response.optBoolean("authorized") && response.optString("token").isNotBlank())
+                    }
+                }
+                callerForOperation?.send(Message.obtain(null, operationCode).apply {
+                    arg1 = operationId
+                    data = Bundle().apply { putString("payload", SpiderIpc.error(if (result == null) "mock-cancelled" else "mock-authorized").toString()) }
+                })
+            }
+        }
+        true
+    })
+    override fun onBind(intent: Intent?): IBinder = incoming.binder
+    override fun onDestroy() { session.cancel(); worker.shutdownNow(); super.onDestroy() }
+}

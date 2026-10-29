@@ -40,3 +40,14 @@ lines += ['', 'ADB smoke: see adb-smoke.log and launch.txt. Startup frames are r
           'Physical TCL remote, TV IME variants, 4K overscan and real streaming remain unverified.']
 (out / 'REPORT.md').write_text('\n'.join(lines) + '\n')
 print(json.dumps(summary, ensure_ascii=False))
+# Fixed ORIGINAL synthetic fixture only; never export authorization QR/user media.
+# Full-resolution originals remain artifacts. This small actual-compositor thumbnail
+# allows visual review using the GitHub logs connector without an artifact host route.
+frames = {}
+for index, total, data in re.findall(r'FRAME m437-mp4-visible-frame (\d+)/(\d+) ([A-Za-z0-9+/=]+)', log):
+    frames[int(index)] = (int(total), data)
+if frames and len(frames) == next(iter(frames.values()))[0]:
+    encoded = ''.join(frames[i][1] for i in range(1, len(frames) + 1))
+    if len(encoded) <= 180_000:
+        (out / 'original-mp4-compositor-thumbnail.jpg').write_bytes(base64.b64decode(encoded))
+        print('HERRIN_ORIGINAL_VIDEO_FRAME_BASE64=' + encoded)

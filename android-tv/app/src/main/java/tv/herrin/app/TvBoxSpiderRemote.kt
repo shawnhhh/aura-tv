@@ -1,5 +1,7 @@
 package tv.herrin.app
 
+import com.github.catvod.Runtime as CatVodRuntime
+
 import android.app.ActivityManager
 import android.app.Service
 import android.content.ComponentName
@@ -37,6 +39,9 @@ internal object SpiderIpc {
     const val BROWSE = 1
     const val DETAILS = 2
     const val PLAY = 3
+    const val AUTH_SHOW = 10
+    const val AUTH_ACTION = 11
+    const val AUTH_CLOSE = 12
     const val MAX_RESPONSE_CHARS = 450_000
     const val MAX_REQUEST_CHARS = 400_000
 
@@ -111,6 +116,7 @@ internal object SpiderIpc {
         .put("alternates", JSONArray(media.alternateUris.take(7)))
         .put("allowHttpRedirects", media.allowHttpRedirects)
         .put("declaredMime", media.declaredMime ?: "")
+        .put("danmaku", DanmakuProtocol.encodeSources(media.danmakuSources))
         .put("headers", JSONObject(media.headers))
         .put("subs", JSONArray().apply {
             media.subtitles.take(6).forEach { subtitle ->
@@ -150,7 +156,8 @@ internal object SpiderIpc {
         }.filter { it != url }.distinct()
         return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
             response.optBoolean("allowHttpRedirects") && allowHttp,
-            declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime"))))
+            declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime")),
+            danmakuSources = DanmakuProtocol.decodeSources(response.opt("danmaku"))))
     }
 }
 
@@ -164,7 +171,21 @@ class TvBoxSpiderService : Service() {
     private val lock = Mutex()
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
     private val worker by lazy { TvBoxSpiderWorker(applicationContext) }
-    private val incoming = Messenger(Handler(Looper.getMainLooper()) { message ->
+    @Volatile private var authCaller: Pair<Messenger, Int>? = null
+    private val authorization = SpiderAuthorizationSession { dialogId, payload ->
+        authCaller?.let { (caller, operationId) ->
+            runCatching { caller.send(Message.obtain(null, if (payload == null) SpiderIpc.AUTH_CLOSE else SpiderIpc.AUTH_SHOW).apply {
+                arg1 = operationId; arg2 = dialogId
+                replyTo = incoming
+                data = Bundle().apply { if (payload != null) putString("payload", payload) }
+            }) }
+        }
+    }
+    private val incoming: Messenger = Messenger(Handler(Looper.getMainLooper()) { message ->
+        if (message.what == SpiderIpc.AUTH_ACTION) {
+            if (authCaller?.second == message.arg1) authorization.action(message.arg2, message.data.getString("button"))
+            return@Handler true
+        }
         val reply = message.replyTo
         val id = message.arg1
         val operation = message.what
@@ -172,6 +193,7 @@ class TvBoxSpiderService : Service() {
         if (reply != null) {
             scope.launch {
                 val response = lock.withLock {
+                    authCaller = reply to id
                     // Cancellation cannot stop a JNI call that ignores interruption.
                     // This watchdog belongs solely to the manifest's :spider process.
                     val terminate = watchdog.schedule({
@@ -179,7 +201,7 @@ class TvBoxSpiderService : Service() {
                         // of a native SIGSEGV. Persist only this fixed stage string.
                         SpiderStartupTrace.mark(applicationContext, SpiderStartupTrace.Stage.WATCHDOG)
                         android.os.Process.killProcess(android.os.Process.myPid())
-                    }, 40, TimeUnit.SECONDS)
+                    }, 160, TimeUnit.SECONDS)
                     try {
                         require(payload.length <= SpiderIpc.MAX_REQUEST_CHARS) { "Spider 请求超过进程通信限制" }
                         val request = JSONObject(payload)
@@ -230,6 +252,8 @@ class TvBoxSpiderService : Service() {
                         Log.e("HerrinSpiderWorker", "Spider linkage failed: ${e.javaClass.simpleName}")
                         SpiderIpc.error(SpiderFailureDetails.message(e))
                     } finally {
+                        authorization.cancel()
+                        authCaller = null
                         terminate.cancel(false)
                     }
                 }
@@ -253,11 +277,28 @@ class TvBoxSpiderService : Service() {
         val process = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
             .runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
         check(process == "$packageName:spider") { "Spider must run in its dedicated process" }
+        CatVodRuntime.setDialog { options, callback ->
+            if (authCaller == null) java.util.concurrent.CompletableFuture<String>().apply {
+                completeExceptionally(IllegalStateException("No active authorization operation"))
+            } else try {
+                authorization.show(options, callback).also { result ->
+                    val deadline = watchdog.schedule({ result.complete(null) },
+                        SpiderAuthorizationProtocol.TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                    result.whenComplete { _, _ -> deadline.cancel(false) }
+                }
+            } catch (_: Exception) {
+                java.util.concurrent.CompletableFuture<String>().apply {
+                    completeExceptionally(IllegalArgumentException("Unsupported authorization dialog"))
+                }
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder = incoming.binder
 
     override fun onDestroy() {
+        authorization.cancel()
+        CatVodRuntime.setDialog(null)
         scope.cancel()
         // A plugin's destroy can also hang; the deadline runs off the main looper.
         val terminate = watchdog.schedule({
@@ -289,6 +330,25 @@ internal class TvBoxSpiderBridge(context: Context) {
     @Volatile private var lastBrowse: String? = null
 
     private val responses = Messenger(Handler(Looper.getMainLooper()) { message ->
+        if (message.what == SpiderIpc.AUTH_SHOW || message.what == SpiderIpc.AUTH_CLOSE) {
+            // Android recycles Message immediately after this Handler returns.
+            // UI actions happen later: capture values, never the pooled Message.
+            val operationId = message.arg1
+            val dialogId = message.arg2
+            val server = message.replyTo
+            val respond: (String?) -> Unit = { button ->
+                runCatching { server?.send(Message.obtain(null, SpiderIpc.AUTH_ACTION).apply {
+                    arg1 = operationId; arg2 = dialogId
+                    data = Bundle().apply { if (button != null) putString("button", button) }
+                }) }
+                Unit
+            }
+            if (pending.containsKey(message.arg1)) SpiderAuthorizationUi.receive(this,
+                message.arg1, message.arg2,
+                if (message.what == SpiderIpc.AUTH_CLOSE) null else message.data.getString("payload"), respond)
+            else respond(null)
+            return@Handler true
+        }
         val deferred = pending.remove(message.arg1)
         deferred?.complete(message.data.getString("payload").orEmpty())
         true
@@ -334,6 +394,7 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     /** Main-thread only: release dead registrations and reject every outstanding caller. */
     private fun invalidate(reason: String) {
+        SpiderAuthorizationUi.clear(this)
         generation++
         hydratedGeneration = -1
         remote = null
@@ -422,7 +483,7 @@ internal class TvBoxSpiderBridge(context: Context) {
                     replyTo = responses
                     data = Bundle().apply { putString("payload", encoded) }
                 })
-                withTimeout(44_000) { deferred.await() }
+                withTimeout(165_000) { deferred.await() }
             } catch (timeout: TimeoutCancellationException) {
                 invalidate("Spider 操作超时，请重新应用站点")
                 throw timeout
@@ -431,6 +492,7 @@ internal class TvBoxSpiderBridge(context: Context) {
                 throw error
             } finally {
                 pending.remove(id)
+                SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge)
             }
         }
         require(response.length <= SpiderIpc.MAX_RESPONSE_CHARS) { "Spider 返回内容超过进程通信限制" }
@@ -446,6 +508,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> {
+        withContext(Dispatchers.Main.immediate) { SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge) }
         val payload = JSONObject().put("site", SpiderIpc.site(site))
             .put("defaultJar", config.spiderJar ?: "")
             .put("vipFlags", JSONArray(config.vipFlags.take(32)))

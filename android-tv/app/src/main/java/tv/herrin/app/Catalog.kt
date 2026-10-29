@@ -38,7 +38,8 @@ data class PlaybackMedia(val uri: String, val headers: Map<String, String> = emp
                          val subtitles: List<AuthorizedSubtitle> = emptyList(),
                          val alternateUris: List<String> = emptyList(),
                          val allowHttpRedirects: Boolean = false,
-                         val declaredMime: String? = null)
+                         val declaredMime: String? = null,
+                         val danmakuSources: List<DanmakuSource> = emptyList())
 sealed interface PlaybackResult {
     data class Ready(val media: PlaybackMedia) : PlaybackResult
     data class Unavailable(val reason: String) : PlaybackResult

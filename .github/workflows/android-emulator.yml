@@ -1,7 +1,7 @@
 name: HERRIN Android TV Emulator
 on:
   push:
-    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls', 'feat/herrin-m4-5-catvod-spider-playback-20261027']
+    branches: ['integration/herrin-m437-consumer-tv-20261029', 'feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls', 'feat/herrin-m4-5-catvod-spider-playback-20261027']
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
@@ -51,6 +51,10 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: bash android-tv/scripts/emulator_ci.sh
+      - name: Generate Chinese acceptance record
+        if: always()
+        working-directory: android-tv
+        run: python3 scripts/acceptance_report.py
       - name: Collect emulator screenshots and UI test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -58,6 +62,7 @@ jobs:
           name: HERRIN-emulator-evidence
           path: |
             android-tv/build/emulator-evidence/
+            android-tv/build/acceptance/
             android-tv/app/build/reports/androidTests/
             android-tv/app/build/outputs/androidTest-results/
             android-tv/app/build/outputs/apk/debug/*.apk

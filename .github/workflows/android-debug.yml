@@ -1,7 +1,7 @@
 name: HERRIN Android Debug
 on:
   push:
-    branches: ['feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls', 'feat/herrin-m4-5-catvod-spider-playback-20261027']
+    branches: ['integration/herrin-m437-consumer-tv-20261029', 'feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls', 'feat/herrin-m4-5-catvod-spider-playback-20261027']
     paths: ['android-tv/**', '.github/workflows/android-debug.yml']
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-debug.yml']
@@ -35,6 +35,9 @@ jobs:
           "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0'
       - name: Test, lint and assemble Debug APK
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+      - name: Generate Chinese acceptance record
+        if: always()
+        run: python3 scripts/acceptance_report.py
       - uses: actions/upload-artifact@v4
         with:
           name: HERRIN-debug-apk
@@ -47,4 +50,5 @@ jobs:
           name: HERRIN-test-reports
           path: |
             android-tv/app/build/reports/
+            android-tv/build/acceptance/
           if-no-files-found: ignore

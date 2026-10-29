@@ -67,6 +67,7 @@ class PlaybackDiagnosticsIntegrationTest {
                     val (asset, mime) = when (path) {
                         "/primary.m3u8" -> return MockResponse().setResponseCode(403)
                         "/mp4" -> "synthetic.mp4" to "video/mp4"
+                        "/remote" -> "synthetic-remote.mp4" to "video/mp4"
                         "/hls" -> "synthetic-hls.m3u8" to "application/vnd.apple.mpegurl"
                         "/synthetic-segment-00.ts" -> "synthetic-segment-00.ts" to "video/mp2t"
                         "/dash" -> "playback-diagnostics/manifest.mpd" to "application/dash+xml"
@@ -105,28 +106,40 @@ class PlaybackDiagnosticsIntegrationTest {
 
     @Test fun tvRemoteDownFocusesControlsWhileLeftRightSeekAndQualityUsesMedia3Size() {
         fixtures { server, _ ->
-            launch(server, "/mp4").use { scenario ->
+            launch(server, "/remote").use { scenario ->
                 frames(scenario)
+                TvVisibleFrameEvidence.verify(inst, "m437-remote-visible-frame")
                 // The overlay may auto-hide during slow CI decoding; re-open
                 // it using the actual remote instead of depending on timing.
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
                 compose.waitUntil(8_000) {
                     runCatching { compose.onNodeWithTag("player-quality-label").assertExists() }.isSuccess
                 }
+                compose.onNodeWithTag("player-quality-label")
+                    .assertTextContains("320×180", substring = true)
+                    .assertTextContains("24 fps", substring = true)
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
                 compose.waitUntil(8_000) {
                     runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
                 }
                 var position = -1L
-                scenario.onActivity { it.player.pause(); it.player.seekTo(0L) }
+                scenario.onActivity { it.player.pause(); it.player.seekTo(12_000L) }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
                 scenario.onActivity { position = it.player.currentPosition }
-                assertTrue("Remote Right must seek the video", position > 0L)
+                assertEquals("Remote Right must seek exactly ten seconds", 22_000L, position)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("player-position-label")
+                        .assertTextContains("00:22") }.isSuccess
+                }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT)
                 scenario.onActivity { position = it.player.currentPosition }
-                assertTrue("Remote Left must rewind", position == 0L)
+                assertEquals("Remote Left must rewind exactly ten seconds", 12_000L, position)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("player-position-label")
+                        .assertTextContains("00:12") }.isSuccess
+                }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
                 compose.waitUntil(8_000) {
                     runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
@@ -135,10 +148,73 @@ class PlaybackDiagnosticsIntegrationTest {
         }
     }
 
+    @Test fun realRemoteDownReachesLineAndEpisodeActions() {
+        fixtures { server, _ ->
+            val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
+                .putExtra("fixture", server.url("/mp4").toString())
+                .putExtra("withSelectionActions", true)
+            ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
+                frames(scenario)
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PAUSE)
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
+                }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("transport-lines").assertIsFocused() }.isSuccess
+                }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+                scenario.onActivity { assertEquals(1, it.lineSelections) }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("transport-episodes").assertIsFocused() }.isSuccess
+                }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+                scenario.onActivity { assertEquals(1, it.episodeSelections) }
+            }
+        }
+    }
+
+    @Test fun focusedControlsHideAfterIdleAndRealRemoteReopensThem() {
+        fixtures { server, _ ->
+            launch(server, "/remote").use { scenario ->
+                scenario.onActivity { it.player.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE }
+                frames(scenario)
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
+                }
+                compose.waitUntil(15_000) {
+                    runCatching { compose.onNodeWithTag("transport-toggle").assertDoesNotExist() }.isSuccess
+                }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+                compose.waitUntil(8_000) {
+                    runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess
+                }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+                compose.waitUntil(8_000) {
+                    var paused = false
+                    scenario.onActivity { paused = !it.player.playWhenReady }
+                    paused
+                }
+                inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+                compose.waitUntil(8_000) {
+                    var playing = false
+                    scenario.onActivity { playing = it.player.playWhenReady }
+                    playing
+                }
+            }
+        }
+    }
+
     @Test fun extensionlessMp4HlsAndDashDecodeOriginalFrames() {
         fixtures { server, requests ->
             for (path in listOf("/mp4", "/hls", "/dash")) {
-                launch(server, path).use(::frames)
+                launch(server, path).use { scenario ->
+                    frames(scenario)
+                    TvVisibleFrameEvidence.verify(inst, "m437-${path.removePrefix("/")}-visible-frame")
+                }
             }
             assertTrue(requests.contains("/synthetic-segment-00.ts"))
             assertTrue(requests.contains("/init-stream0.m4s"))

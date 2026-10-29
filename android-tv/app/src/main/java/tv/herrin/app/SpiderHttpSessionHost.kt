@@ -1,5 +1,7 @@
 package tv.herrin.app
 
+import com.github.catvod.Runtime as CatVodRuntime
+
 import com.fongmi.quickjs.host.Host
 import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -16,6 +18,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  */
 internal class SpiderHttpSessionHost : Host {
     private val cookies = LinkedHashMap<String, Cookie>()
+
+    override fun dialog(options: String): java.util.concurrent.CompletableFuture<String> =
+        CatVodRuntime.dialog(options, null)
+
+    override fun dialog(options: String, onAction: java.util.function.Function<String, java.util.concurrent.CompletableFuture<String>>): java.util.concurrent.CompletableFuture<String> =
+        CatVodRuntime.dialog(options, onAction)
 
     @Synchronized
     override fun getCookie(url: String?): String {

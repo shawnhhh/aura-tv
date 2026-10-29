@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity android:name=".PlaybackTestActivity" android:exported="false" android:screenOrientation="landscape" />
+        <service android:name=".SpiderAuthorizationFixtureService" android:exported="false" android:process=":spider_auth_test" />
     </application>
 </manifest>
