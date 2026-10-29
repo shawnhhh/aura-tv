@@ -80,7 +80,6 @@ fun AuthorizedPlaybackPanel(
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
     var uiEpoch by remember(media) { mutableIntStateOf(0) }
     var activeVariant by remember(media) { mutableIntStateOf(0) }
-    var overrideMime by remember(media) { mutableStateOf<String?>(null) }
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var showVerification by remember { mutableStateOf(false) }
@@ -88,20 +87,23 @@ fun AuthorizedPlaybackPanel(
     val initialControl = remember { FocusRequester() }
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
+    val retries = remember(media) {
+        PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime)
+    }
+    val candidates = retries.candidates
+    fun itemFor(uri: String, candidateIndex: Int, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
+        if (media.subtitles.isNotEmpty()) {
+            setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
+                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
+                    .setMimeType(MimeTypes.TEXT_VTT).setLanguage(subtitle.language)
+                    .setLabel(subtitle.title)
+                    .setSelectionFlags(if (index == 0) C.SELECTION_FLAG_DEFAULT else 0)
+                    .build()
+            })
+        }
+        (mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))?.let(::setMimeType)
+    }.build()
     val player = remember(media) {
-        val candidates = (listOf(media.uri) + media.alternateUris).distinct().take(8)
-        fun itemFor(uri: String, candidateIndex: Int, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
-            if (media.subtitles.isNotEmpty()) {
-                setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
-                    MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
-                        .setMimeType(MimeTypes.TEXT_VTT).setLanguage(subtitle.language)
-                        .setLabel(subtitle.title)
-                        .setSelectionFlags(if (index == 0) C.SELECTION_FLAG_DEFAULT else 0)
-                        .build()
-                })
-            }
-            (mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))?.let(::setMimeType)
-        }.build()
         val http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
             .setConnectTimeoutMs(12_000)
@@ -126,34 +128,23 @@ fun AuthorizedPlaybackPanel(
                     uiEpoch++
                 }
                 override fun onPlayerError(error: PlaybackException) {
-                    val alternateMime = PlaybackFormatRetry.nextMime(
-                        candidates[activeVariant], overrideMime ?: PlaybackFormatRetry.candidateMime(
-                            candidates[activeVariant], activeVariant, media.declaredMime), error.errorCode)
-                    if (alternateMime != null) {
-                        // Same source, no scraping: Media3 may have interpreted
-                        // an extensionless HLS playlist as a progressive file.
-                        overrideMime = alternateMime
+                    val httpStatus = PlaybackFailureHints.safeHttpStatus(
+                        PlaybackFailureHints.causes(error)
+                            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+                            .firstOrNull()?.responseCode)
+                    val next = retries.next(error.errorCode, httpStatus)
+                    if (next != null) {
+                        // Retry only the exact provider-supplied URLs. The session owns
+                        // both the per-address MIME and a finite monotonic retry budget.
+                        val recoveryPositionMs = currentPosition.coerceAtLeast(0L)
+                        activeVariant = next.candidateIndex
                         errorMessage = null
-                        setMediaItem(itemFor(candidates[activeVariant], activeVariant, alternateMime))
-                        prepare()
-                        play()
-                    } else if (PlaybackFormatRetry.retryNextSource(error.errorCode) &&
-                        activeVariant < candidates.lastIndex) {
-                        // The Spider chose several authorized URLs. Retry the next
-                        // supplied candidate after network, container or decoder
-                        // failure, without discovering any new stream.
-                        activeVariant++
-                        overrideMime = null
-                        errorMessage = null
-                        setMediaItem(itemFor(candidates[activeVariant], activeVariant))
+                        setMediaItem(itemFor(next.uri, next.candidateIndex, next.mime))
+                        if (!isLive && recoveryPositionMs > 0L) seekTo(recoveryPositionMs)
                         prepare()
                         play()
                     } else {
-                        val httpStatus = generateSequence(error.cause) { it.cause }
-                            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
-                            .firstOrNull()?.responseCode
-                        errorMessage = playbackErrorMessage(error.errorCodeName) + " · " +
-                            PlaybackFailureHints.hint(error.errorCodeName, httpStatus) +
+                        errorMessage = PlaybackFailureHints.hint(error.errorCodeName, httpStatus) +
                             "（${PlaybackFailureHints.safeCode(error.errorCodeName)}" +
                             "${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
                             "; 地址 ${activeVariant + 1}/${candidates.size}）"
@@ -173,9 +164,12 @@ fun AuthorizedPlaybackPanel(
     }
     fun retryPlayback() {
         val resumePosition = player.currentPosition.coerceAtLeast(0L)
+        val first = retries.restart()
+        activeVariant = first.candidateIndex
         errorMessage = null
+        player.setMediaItem(itemFor(first.uri, first.candidateIndex, first.mime))
+        if (!isLive && resumePosition > 0L) player.seekTo(resumePosition)
         player.prepare()
-        if (resumePosition > 0L) player.seekTo(resumePosition)
         player.play()
     }
     LaunchedEffect(player) {
@@ -339,7 +333,7 @@ fun AuthorizedPlaybackPanel(
                 Button(onClick = { retryPlayback() },
                     modifier = Modifier.testTag("player-retry")) { Text("重试播放") }
             } else if (activeVariant > 0 && playbackState != Player.STATE_READY) {
-                Text("正在尝试备用播放地址 ${activeVariant + 1} / ${media.alternateUris.size + 1}",
+                Text("正在尝试备用播放地址 ${activeVariant + 1} / ${candidates.size}",
                     color = Color(0xFFCFD7E4), modifier = Modifier.testTag("player-fallback-status"))
             } else if (playbackState == Player.STATE_BUFFERING) {
                 Text("正在缓冲授权媒体…", color = Color(0xFFCFD7E4),
