@@ -178,7 +178,7 @@ class PlaybackDiagnosticsIntegrationTest {
 
     @Test fun focusedControlsHideAfterIdleAndRealRemoteReopensThem() {
         fixtures { server, _ ->
-            launch(server, "/mp4").use { scenario ->
+            launch(server, "/remote").use { scenario ->
                 scenario.onActivity { it.player.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE }
                 frames(scenario)
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
