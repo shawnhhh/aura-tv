@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -72,12 +71,17 @@ fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = Con
                 Image(bitmap, film.title, Modifier.fillMaxSize().alpha(posterAlpha),
                     contentScale = ContentScale.Crop)
             } else {
-                // Do not magnify a 300px portrait into a 4K wallpaper. Give it a
-                // blurred cinematic background and a sharp, aspect-preserving foreground.
-                Image(bitmap, null, Modifier.fillMaxSize().blur(32.dp).alpha(0.38f * posterAlpha),
-                    contentScale = ContentScale.Crop)
-                Image(bitmap, film.title, Modifier.fillMaxWidth(0.58f).fillMaxHeight(0.90f)
-                    .alpha(0.72f * posterAlpha), contentScale = ContentScale.Fit)
+                // A 32dp full-screen RenderEffect blur forces an expensive
+                // offscreen GPU pass (especially at 4K). Dim the same source
+                // instead: retain image-specific ambience without blocking
+                // remote-focus feedback or stretching the portrait foreground.
+                Image(bitmap, null, Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop, alpha = 0.16f * posterAlpha)
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+                    0.0f to Color(0xE9080C13), 0.7f to Color(0x4D080C13),
+                    1.0f to Color(0x50080C13))))
+                Image(bitmap, film.title, Modifier.fillMaxWidth(0.58f).fillMaxHeight(0.90f),
+                    contentScale = ContentScale.Fit, alpha = 0.72f * posterAlpha)
             }
         }
     }

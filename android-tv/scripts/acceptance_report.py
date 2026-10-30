@@ -1,6 +1,8 @@
 """Emit a factual Chinese CI acceptance report from JUnit files and artifact hashes."""
 from pathlib import Path
 import hashlib
+import json
+from remote_perf_report import render_markdown
 import os
 import subprocess
 import xml.etree.ElementTree as ET
@@ -26,6 +28,13 @@ lines += ['', '当前作业未执行的测试组显示 0；完整结论须联合
           '## 可安装 APK', '', '在 Debug 工作流的 Artifacts 中下载 `HERRIN-debug-apk`，解压后通过 Android TV 安装或 `adb install -r app-debug.apk` 安装。']
 for apk in (root / 'app/build/outputs/apk/debug').glob('*.apk'):
     lines.append(f'- `{apk.name}`：{apk.stat().st_size} 字节；SHA-256 `{hashlib.sha256(apk.read_bytes()).hexdigest()}`')
+performance_summary = root / 'build/emulator-evidence/summary.json'
+if performance_summary.is_file():
+    try:
+        performance = json.loads(performance_summary.read_text()).get('remote_performance', {})
+        lines += ['', *render_markdown(performance)]
+    except (ValueError, OSError, TypeError):
+        lines += ['', '## Android TV 遥控器性能', '', '指标文件无法解析；不能声称已采样或达标。']
 lines += ['', '## 验收边界', '',
           '- 出帧、遥控 seek、焦点、MP4/HLS/DASH 和画面像素证据见 Emulator Artifacts 中的测试报告、截图及 summary.json。',
           '- 授权仅使用原创模拟服务；未验收第三方网盘账号和具体私有影视源。',
