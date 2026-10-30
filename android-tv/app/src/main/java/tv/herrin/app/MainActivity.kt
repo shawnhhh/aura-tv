@@ -74,6 +74,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+/** Only one branded wordmark fade; no fixed multi-second launch choreography. */
+internal object LaunchMotion {
+    const val WORDMARK_HOLD_MS = 100L
+    const val FADE_MS = 340
+    const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + FADE_MS
+}
+
 /** Elapsed uptime from Activity launch to first interactive home.
  * Measure cold starts on TCL separately; Compose timing excludes process spawn. */
 internal object StartupTiming {
@@ -3059,7 +3066,7 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
     LaunchedEffect(exiting, reduced) {
         if (exiting) {
             if (reduced) opacity.snapTo(0f)
-            else opacity.animateTo(0f, tween(340, easing = FastOutSlowInEasing))
+            else opacity.animateTo(0f, tween(LaunchMotion.FADE_MS, easing = FastOutSlowInEasing))
             StartupTiming.finish()
             onFinished()
         }
@@ -3385,7 +3392,7 @@ internal fun Splash(reduced: Boolean, done: () -> Unit) {
         // Let the underlying home compose on the very next frame. This is
         // branding, not an artificial 2.7-second loading screen.
         withFrameNanos { }
-        if (!reduced) delay(100)
+        if (!reduced) delay(LaunchMotion.WORDMARK_HOLD_MS)
         done()
     }
     BoxWithConstraints(
