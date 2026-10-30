@@ -76,7 +76,10 @@ class M437MetadataScrapingTest {
         resolver.setManualMatch(enriched, null)
         assertNull(resolver.manualMatch(original))
         assertNull(resolver.lookup(original, token))
-        assertEquals(1, urls.size)
+        // A title with an unknown CMS genre must now attempt a movie search
+        // instead of quietly skipping metadata enrichment.
+        assertEquals(2, urls.size)
+        assertTrue(urls.last().contains("/search/movie?"))
         cache.walkTopDown().filter { it.isFile }.forEach { assertFalse(it.readText().contains(token)) }
     }
 
