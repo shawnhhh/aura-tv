@@ -118,6 +118,7 @@ private fun AuthorizedPlaybackSession(
     var showVerification by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
+    val retryControl = remember { FocusRequester() }
     val selectionControl = remember { FocusRequester() }
     val playerRootFocus = remember { FocusRequester() }
     var controlsVisible by remember(media) { mutableStateOf(true) }
@@ -276,13 +277,19 @@ private fun AuthorizedPlaybackSession(
     LaunchedEffect(player, focusRestoreEpoch) {
         if (isLive) initialControl.requestFocus() else playerRootFocus.requestFocus()
     }
-    LaunchedEffect(focusControlsEpoch) {
-        if (!isLive && focusControlsEpoch > 0) {
-            // A remote press during initial buffering can precede composition of
-            // the controls. Wait for real video rather than focusing an unattached node.
-            while ((player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) == 0 &&
-                player.playerError == null) delay(50)
-            if (player.playerError == null && controlsVisible) initialControl.requestFocus()
+    LaunchedEffect(focusControlsEpoch, errorMessage, controlsVisible, isLive) {
+        // Focus targets are Compose controls; they do NOT depend on the video
+        // decoder producing its first frame. A buffering film must not trap
+        // the remote on an unfocusable black screen.
+        when (PlayerRemoteFocusPolicy.destination(
+            live = isLive, requested = focusControlsEpoch > 0,
+            controlsVisible = controlsVisible, errorVisible = errorMessage != null
+        )) {
+            PlayerRemoteFocusPolicy.Destination.TRANSPORT ->
+                runCatching { initialControl.requestFocus() }
+            PlayerRemoteFocusPolicy.Destination.RETRY ->
+                runCatching { retryControl.requestFocus() }
+            PlayerRemoteFocusPolicy.Destination.NONE -> Unit
         }
     }
     LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification) {
@@ -496,7 +503,8 @@ private fun AuthorizedPlaybackSession(
             if (errorMessage != null) {
                 Text(errorMessage!!, color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
                 Button(onClick = { retryPlayback() },
-                    modifier = Modifier.testTag("player-retry")) { Text("重试播放") }
+                    modifier = Modifier.focusRequester(retryControl)
+                        .testTag("player-retry")) { Text("重试播放") }
             } else if (activeVariant > 0 && playbackState != Player.STATE_READY) {
                 Text("正在尝试备用播放地址 ${activeVariant + 1} / ${candidates.size}",
                     color = Color(0xFFCFD7E4), modifier = Modifier.testTag("player-fallback-status"))
@@ -516,7 +524,9 @@ private fun AuthorizedPlaybackSession(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        if (!isLive && controlsVisible && hasDecodedVideo) Column(
+        if (PlayerRemoteFocusPolicy.showTransport(
+                live = isLive, controlsVisible = controlsVisible,
+                errorVisible = errorMessage != null)) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.86f).padding(bottom = 36.dp)
                 .onFocusChanged { transportFocused = it.hasFocus }
                 .background(Color(0xE9151820), RoundedCornerShape(20.dp))
