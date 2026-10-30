@@ -706,6 +706,11 @@ private fun Herrin() {
     }
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
+    var tmdbConnectivity by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED) }
+    LaunchedEffect(metadataToken) {
+        tmdbConnectivity = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
+            else withContext(Dispatchers.IO) { TmdbConnectivityProbe.check(metadataToken) }
+    }
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
     // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
     val catalogIdentity = remember(providerFilms) {
@@ -2356,6 +2361,20 @@ private fun Herrin() {
                             } }
                             item { Text(tmdbSettingsStatus, color = Color(0xFFCFD7E4),
                                 modifier = Modifier.testTag("compact-tmdb-feedback")) }
+                            if (metadataToken.isNotBlank()) item {
+                                Text(tmdbConnectivity.text,
+                                    modifier = Modifier.testTag("compact-tmdb-connectivity"),
+                                    color = if (tmdbConnectivity == TmdbProbeState.CONNECTED)
+                                        Color(0xFFB3E8D2) else Color(0xFFFFD49D))
+                            }
+                            if (tmdbConnectivity == TmdbProbeState.CONNECTED &&
+                                metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
+                                providerFilms.orEmpty().none { it.metadataSource == "TMDB" }) item {
+                                Text("已连通 TMDB，但本轮没有可靠的同名匹配。请检查影视源片名、电影/剧集分类，" +
+                                    "或在影片详情中手动纠正匹配；不会误用其他影片的海报。",
+                                    modifier = Modifier.testTag("compact-tmdb-no-matches"),
+                                    color = Color(0xFFFFD49D))
+                            }
                         }
                         item { Text("直播源", fontSize = 22.sp) }
                         item {
