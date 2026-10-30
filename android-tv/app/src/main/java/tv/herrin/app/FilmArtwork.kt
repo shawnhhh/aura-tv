@@ -39,9 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
@@ -158,53 +156,27 @@ fun PersonPortrait(person: FilmPerson, modifier: Modifier = Modifier) {
 @Composable
 private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap? {
     val context = LocalContext.current
-    // TMDB requires a user-provided Read Access Token, never a bundled production credential.
-    // Reading SharedPreferences on composition lets the settings screen switch enrichment on/off.
-    val tmdbToken = context.getSharedPreferences("herrin", Context.MODE_PRIVATE)
-        .getString("tmdb_read_token", "").orEmpty()
     val url = if (hero) film.backdropUrl ?: film.artworkUrl else film.artworkUrl
-    var poster by remember(url, film.id, film.year, film.title, tmdbToken, hero) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(url, film.id, film.year, film.title, tmdbToken, hero) {
-        // The hero artwork follows D-pad film selection. Wait briefly until
-        // the cursor settles so rapid navigation does not start dozens of
-        // heavy 2560px image downloads and blurs for skipped movies.
+    // TMDB matching is managed centrally by MainActivity's bounded catalogue
+    // enrichment worker. Do NOT start another TMDB request per visible card:
+    // that duplicated network, JSON parsing and image downloads during D-pad.
+    // The resulting enriched Film updates the URL and triggers this effect.
+    var poster by remember(url, film.id, hero) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(url, film.id, hero) {
+        // Rapid cursor movement should not fetch high-res hero pictures for
+        // titles that were only focused for a few milliseconds.
         if (hero) delay(110)
-        coroutineScope {
-            // Render the source poster as soon as it is available, even if the user's TMDB
-            // token is rejected, offline, rate-limited, or an 80-title shelf is still loading.
-            // Both paths run concurrently, and the original image cannot overwrite an upgrade.
-            var upgraded = false
-            launch {
-                val fallback = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val sourceUrls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
-                            else listOfNotNull(film.artworkUrl)
-                        val cache = AuthorizedPosterCache(context)
-                        sourceUrls.distinct().firstNotNullOfOrNull {
-                            cache.load(it,
-                            allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null,
-                            hero = hero)
-                        }
-                    }.getOrNull()
+        poster = withContext(Dispatchers.IO) {
+            runCatching {
+                val urls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
+                    else listOfNotNull(film.artworkUrl)
+                val cache = AuthorizedPosterCache(context)
+                urls.distinct().firstNotNullOfOrNull {
+                    cache.load(it,
+                        allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null,
+                        hero = hero)
                 }
-                if (!upgraded && fallback != null) poster = fallback
-            }
-            if (!film.isOriginalDemo() && tmdbToken.isNotBlank() && film.metadataSource != "TMDB") launch {
-                val enrichedBitmap = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val enriched = ArtworkMetadataResolver(File(context.cacheDir, "tmdb-artwork"))
-                            .lookup(film, tmdbToken)
-                        val urls = if (hero) listOfNotNull(enriched?.backdropUrl, enriched?.posterUrl)
-                            else listOfNotNull(enriched?.posterUrl)
-                        val cache = AuthorizedPosterCache(context)
-                        urls.firstNotNullOfOrNull { candidate -> cache.load(candidate, hero = hero) }
-                    }.getOrNull()
-                }
-                if (enrichedBitmap != null) {
-                    upgraded = true
-                    poster = enrichedBitmap
-                }
-            }
+            }.getOrNull()
         }
     }
     return poster
