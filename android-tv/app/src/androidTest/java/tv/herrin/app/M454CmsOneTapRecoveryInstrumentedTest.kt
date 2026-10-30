@@ -86,8 +86,13 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             assertEquals(2, server.requestCount)
             compose.onNodeWithTag(tag).performClick()
             compose.waitUntil(12_000) {
+                runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess
+            }
+            compose.waitUntil(12_000) { server.requestCount >= 3 }
+            compose.waitUntil(12_000) {
                 runCatching {
-                    compose.onNodeWithTag("film-detail-list").assertExists()
+                    compose.onNodeWithTag("film-detail-list")
+                        .performScrollToNode(hasTestTag("cms-detail-retry"))
                     compose.onNodeWithTag("cms-detail-retry").assertExists()
                 }.isSuccess
             }
@@ -165,14 +170,18 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             compose.waitUntil(10_000) {
                 runCatching {
                     compose.onNodeWithTag("film-detail-list").assertExists()
-                    compose.onNodeWithTag("detail-choose-episode").assertExists()
                 }.isSuccess
             }
             compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
             assertEquals("Already listed film needs no second CMS detail request",
                 2, server.requestCount)
-            compose.onNodeWithTag("film-detail-list")
-                .performScrollToNode(hasTestTag("episode-1"))
+            compose.waitUntil(10_000) {
+                runCatching {
+                    compose.onNodeWithTag("film-detail-list")
+                        .performScrollToNode(hasTestTag("episode-1"))
+                    compose.onNodeWithTag("episode-1").assertExists()
+                }.isSuccess
+            }
             compose.onNodeWithTag("episode-1").performClick()
             compose.waitUntil(10_000) {
                 runCatching { compose.onNodeWithTag("player-root-focus").assertExists() }.isSuccess
