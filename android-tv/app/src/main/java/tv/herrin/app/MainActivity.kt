@@ -1202,6 +1202,10 @@ private fun Herrin() {
             details(item)
             return
         }
+        // A one-tap player may originate from Search, My, or a filtered
+        // catalog rather than Home. Player Back -> Detail -> Back must restore
+        // that original screen, not a stale detail-session destination.
+        returnScreen = screen
         filmId = item.id
         val selectedCmsFilm = !spiderActive && activeCmsSite != null &&
             !item.cmsVodId.isNullOrBlank()
