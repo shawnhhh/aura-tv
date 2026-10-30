@@ -680,7 +680,7 @@ private fun Herrin() {
         facetYear = null; facetCategory = null; facetRating = null
     }
     LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch) {
-        val eligible = providerFilms.orEmpty().take(240)
+        val eligible = providerFilms.orEmpty().take(ArtworkScrapePolicy.STARTUP_LIMIT)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
         if (metadataToken.isBlank()) return@LaunchedEffect
@@ -725,12 +725,13 @@ private fun Herrin() {
     // a second TMDB client inside every visible PosterArtwork composable.
     LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch) {
         if (metadataToken.isBlank()) return@LaunchedEffect
-        delay(400)
+        delay(ArtworkScrapePolicy.FOCUS_DWELL_MS)
         val candidates = providerFilms.orEmpty()
         val index = candidates.indexOfFirst { it.id == filmId }
-        if (index < 240) return@LaunchedEffect
+        if (index < 0) return@LaunchedEffect
         val selected = candidates[index]
-        if (selected.metadataSource == "TMDB") return@LaunchedEffect
+        if (!ArtworkScrapePolicy.shouldMatchFocused(index, selected.metadataSource == "TMDB"))
+            return@LaunchedEffect
         val info = withContext(Dispatchers.IO) {
             runCatching {
                 metadataResolver.lookup(selected, metadataToken,
