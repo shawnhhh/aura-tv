@@ -154,6 +154,30 @@ class M438SingleWarehousePerformanceTest {
             // headroom for shared GitHub CI emulator noise. Real hardware
             // target remains <= 100-150ms and is not implied by this gate.
             assertTrue("TV remote regression: P95=$p95 ms (limit 600ms)", p95 < 600)
+
+            // The 60-film CMS list deliberately contains NO playbackEpisodes.
+            // One remote OK must open the player and resolve ONLY the focused
+            // title from this selected local CMS, not show an extra details page.
+            val detail = JSONObject().put("list", JSONArray().put(JSONObject()
+                .put("vod_id", "performance-16")
+                .put("vod_name", "性能影片 16")
+                .put("vod_play_from", "授权模拟线路")
+                .put("vod_play_url", "正片$https://192.0.2.1/fixture.mp4"))
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody(detail.toString()))
+            remote(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(10_000) { server.requestCount >= 3 }
+            assertEquals("Only the selected film should request its CMS details", 3, server.requestCount)
+            compose.waitUntil(10_000) {
+                runCatching {
+                    compose.onNodeWithTag("player-root-focus").assertExists()
+                }.isSuccess
+            }
+            compose.onNodeWithTag("player-root-focus").assertExists()
+            // The selected source supplies the only playable URL; no test
+            // stream is inferred from the catalog title, and no Spider is run.
+            Log.i("HerrinPerf", "m454_one_tap_cms_sites=12 listed_films=60 " +
+                "selected_detail_requests=1 player_opened=1")
         }
     }
 }
