@@ -2172,10 +2172,13 @@ private fun Herrin() {
                             } else {
                                 Text(if (offlineDemonstration) "播放演示" else "暂时无法播放", fontSize = 24.sp,
                                     modifier = Modifier.testTag(if (offlineDemonstration) "player-demo-status" else "player-startup-error"))
-                                Text(if (offlineDemonstration)
-                                    "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
-                                    else "请重试，或返回选集切换播放线路。",
-                                    color = Color(0xFFBCCADB), fontSize = 16.sp)
+                                Text(when {
+                                    offlineDemonstration ->
+                                        "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
+                                    cmsFailed ->
+                                        "该影视点没有提供可用的播放线路，可重新播放或返回片库更换影片。"
+                                    else -> "请重试，或返回选集切换播放线路。"
+                                }, color = Color(0xFFBCCADB), fontSize = 16.sp)
                                 if (spiderActive || cmsFailed) {
                                     TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
                                         reduced = reduceMotion) {
@@ -2187,8 +2190,15 @@ private fun Herrin() {
                                     }
                                 }
                             }
-                            TvButton("返回选集", modifier = Modifier.testTag("player-startup-back"),
-                                reduced = reduceMotion) { screen = "detail" }
+                            TvButton(if (cmsFailed) "返回片库" else "返回选集",
+                                modifier = Modifier.testTag("player-startup-back"),
+                                reduced = reduceMotion) {
+                                if (cmsFailed) {
+                                    cmsPlaybackPendingId = null
+                                    cmsPlaybackFailedId = null
+                                    screen = returnScreen
+                                } else screen = "detail"
+                            }
                         }
                     }
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
