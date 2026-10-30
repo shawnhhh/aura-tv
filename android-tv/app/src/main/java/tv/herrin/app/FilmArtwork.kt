@@ -164,7 +164,7 @@ private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap?
     LaunchedEffect(url, film.id, hero) {
         // Rapid cursor movement should not fetch high-res hero pictures for
         // titles that were only focused for a few milliseconds.
-        if (hero) delay(110)
+        if (hero) delay(TvFocusFramePolicy.HERO_ARTWORK_DOWNLOAD_DWELL_MS)
         poster = withContext(Dispatchers.IO) {
             runCatching {
                 val urls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
