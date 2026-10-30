@@ -860,6 +860,48 @@ private fun Herrin() {
             }
         }
     }
+    // A CMS listing usually has a vod_id but no playable URI. Resolve only
+    // the clicked film while its player loading screen is visible. Cancellation
+    // on Back / film change prevents an old lookup from starting the wrong film.
+    LaunchedEffect(screen, film.id, activeCmsSite?.apiUrl, spiderActive,
+        cmsPlaybackPendingId, playerRetryEpoch) {
+        val site = activeCmsSite
+        if (screen != "player" || spiderActive || site == null ||
+            cmsPlaybackPendingId != film.id || film.cmsVodId.isNullOrBlank()) return@LaunchedEffect
+
+        // Another path may already have populated real episodes. Never fetch
+        // an original CMS item a second time just because the card was clicked.
+        val existing = CmsOneTapPlaybackPolicy.firstPlayable(film)
+        if (existing != null) {
+            episode = existing.first
+            line = existing.second
+            cmsPlaybackFailedId = null
+            cmsPlaybackPendingId = null
+            return@LaunchedEffect
+        }
+
+        val loaded = withTimeoutOrNull(8_000L) {
+            tvBoxVodRepo.details(site, film, tvBoxAllowHttp)
+        }
+        val resolved = (loaded as? TvBoxVodDetailResult.Ready)?.film
+            ?.takeIf { it.id == film.id }
+            ?.let { FilmMetadataEnrichment.mergeSourceDetails(film, it) }
+        val chosen = resolved?.let(CmsOneTapPlaybackPolicy::firstPlayable)
+        if (chosen != null && resolved != null) {
+            // Commit this title only. Updated Film + episode/line are then
+            // resolved by the existing licensed Media3 player path.
+            providerFilms = providerFilms?.map {
+                if (it.id == film.id) FilmMetadataEnrichment.mergeSourceDetails(it, resolved)
+                else it
+            }
+            episode = chosen.first
+            line = chosen.second
+            cmsPlaybackFailedId = null
+        } else {
+            cmsPlaybackFailedId = film.id
+        }
+        cmsPlaybackPendingId = null
+    }
     var groupDetailStatus by remember { mutableStateOf("") }
     // A catalog listing often has no playbackEpisodes until ac=detail/Spider
     // details. Resolve ONLY the selected show's members, on demand, bounded,
