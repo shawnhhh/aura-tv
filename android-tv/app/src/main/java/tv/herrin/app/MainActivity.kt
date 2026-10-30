@@ -3137,20 +3137,22 @@ internal fun SeasonBrowser(
     }
 }
 
-/** The static H remains on top until the destination has had time to render. */
+/** The full HERRIN splash slides off-screen to reveal the composed home. */
 @Composable
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit) {
-    val opacity = remember { Animatable(1f) }
+    val slide = remember { Animatable(0f) }
     LaunchedEffect(exiting, reduced) {
         if (exiting) {
-            if (reduced) opacity.snapTo(0f)
-            else opacity.animateTo(0f, tween(LaunchMotion.FADE_MS, easing = FastOutSlowInEasing))
+            if (reduced) slide.snapTo(1f)
+            else slide.animateTo(1f, tween(LaunchMotion.FADE_MS,
+                easing = FastOutSlowInEasing))
             StartupTiming.finish()
             onFinished()
         }
     }
-    Box(Modifier.fillMaxSize().testTag("splash-curtain").graphicsLayer { alpha = opacity.value }) {
+    Box(Modifier.fillMaxSize().testTag("splash-curtain")
+        .graphicsLayer { translationX = slide.value * size.width }) {
         Splash(reduced, onReady)
     }
 }
