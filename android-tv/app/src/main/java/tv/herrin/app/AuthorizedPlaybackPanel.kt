@@ -125,6 +125,7 @@ private fun AuthorizedPlaybackSession(
     var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
+    val remoteHoldSeek = remember(media) { RemoteHoldSeek() }
     // Keep updates within one media session, while retaining the old session's
     // callbacks until its DisposableEffect has persisted and released its player.
     // A single shared State would route old onDispose progress into the new episode.
@@ -329,13 +330,23 @@ private fun AuthorizedPlaybackSession(
             "source=$source focus=${context.javaClass.simpleName} released=${player.isReleased}")
         onBack()
     }
+    fun applyRemoteSeek(deltaMs: Long) {
+        // Reflect the actual committed target immediately in the seek bar.
+        // Player timeline updates can otherwise lag the remote by one second.
+        shownPosition = PlaybackTransport.seekBy(player, deltaMs)
+        if (!isLive) controlsVisible = true
+        controlsInteractionEpoch++
+    }
     BackHandler { requestBack("dispatcher") }
     Box(Modifier.fillMaxSize().background(Color.Black)
         .focusRequester(playerRootFocus)
         .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
-        if (key.action == KeyEvent.ACTION_DOWN) controlsInteractionEpoch++
+        // A held key may generate dozens of native repeat events. Avoid
+        // invalidating the whole overlay on every ignored/coalesced repeat.
+        if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0)
+            controlsInteractionEpoch++
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
             true
@@ -348,14 +359,16 @@ private fun AuthorizedPlaybackSession(
             }
             true
         } else if (!isLive && playerRootFocused &&
-            key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
-            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
-                PlaybackTransport.seekBy(player,
-                    if (key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 10_000L else -10_000L)
-                // Give visual confirmation of the seek and then auto-hide.
-                controlsVisible = true
-                controlsInteractionEpoch++
+            (key.keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            val direction = if (key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+            val delta = when (key.action) {
+                KeyEvent.ACTION_DOWN -> remoteHoldSeek.down(
+                    direction, key.repeatCount, key.eventTime)
+                KeyEvent.ACTION_UP -> remoteHoldSeek.up(direction)
+                else -> null
             }
+            if (delta != null) applyRemoteSeek(delta)
             true
         } else if (!isLive && playerRootFocused &&
             key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_DOWN,
@@ -371,11 +384,16 @@ private fun AuthorizedPlaybackSession(
                 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) onLiveMenu()
             true
-        } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND)) {
-            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
-                PlaybackTransport.seekBy(player,
-                    if (key.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 10_000L else -10_000L)
+        } else if (key.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
+            key.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+            val direction = if (key.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 1 else -1
+            val delta = when (key.action) {
+                KeyEvent.ACTION_DOWN -> remoteHoldSeek.down(
+                    direction, key.repeatCount, key.eventTime)
+                KeyEvent.ACTION_UP -> remoteHoldSeek.up(direction)
+                else -> null
             }
+            if (delta != null) applyRemoteSeek(delta)
             true
         } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
