@@ -481,17 +481,15 @@ private fun AuthorizedPlaybackSession(
                     }
                 }
             }
-        } else if ((controlsVisible && hasDecodedVideo) || showVerification || errorMessage != null)
-            Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Button(onClick = { requestBack("visible-button") }) {
-                Text(if (isLive) "返回频道" else "返回详情")
-            }
-            // Movie metadata/technical resolver messages are not shown over the film.
-            Button(onClick = { showVerification = !showVerification },
-                modifier = Modifier.testTag("player-verification-toggle")) {
-                Text(if (showVerification) "收起实播状态" else "查看实播状态")
-            }
+        } else if (showVerification || errorMessage != null ||
+            (controlsVisible && activeVariant > 0 && playbackState != Player.STATE_READY) ||
+            (controlsVisible && playbackState == Player.STATE_ENDED))
+            // No permanent top-left text or buttons over the video.
+            // Diagnostics appear only when deliberately opened from the
+            // bottom control row; genuine playback errors remain actionable.
+            Column(Modifier.align(Alignment.Center).fillMaxWidth(0.72f)
+                .background(Color(0xDD101722), RoundedCornerShape(14.dp))
+                .padding(22.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             if (showVerification) {
                 val _observeVerification = verificationTick + uiEpoch
                 val counters = player.videoDecoderCounters
@@ -598,6 +596,26 @@ private fun AuthorizedPlaybackSession(
                 }
             }
             DanmakuControls(danmaku.value, { danmaku.value = it })
+            // Remote-only actions stay in the temporary transport surface;
+            // the upper-left of a playing film remains completely clean.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { requestBack("transport-back") },
+                    modifier = Modifier.testTag("player-back-control")) { Text("返回") }
+                Button(onClick = {
+                    viewportMode = viewportMode.toggle()
+                    playbackPreferences.playbackFillScreen =
+                        viewportMode == PlaybackViewportMode.FILL
+                    controlsInteractionEpoch++
+                }, modifier = Modifier.testTag("transport-viewport-mode")) {
+                    Text("画面：" + viewportMode.label)
+                }
+                Button(onClick = { showVerification = !showVerification
+                    controlsInteractionEpoch++ },
+                    modifier = Modifier.testTag("player-verification-toggle")) {
+                    Text(if (showVerification) "收起播放信息" else "播放信息")
+                }
+            }
         }
     }
 }
