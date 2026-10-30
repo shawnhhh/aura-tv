@@ -370,6 +370,10 @@ private fun Herrin() {
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
     var cmsDetailStatus by remember { mutableStateOf("") }
+    // Only the selected CMS title may resolve its missing episodes inside
+    // the regular player loading surface. No catalog-wide eager scans.
+    var cmsPlaybackPendingId by remember { mutableStateOf<String?>(null) }
+    var cmsPlaybackFailedId by remember { mutableStateOf<String?>(null) }
     var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseUrl) }
     // Large pasted backups should never be marshalled into an Activity saved-state Bundle.
     var tvBoxJsonDraft by remember { mutableStateOf("") }
@@ -1159,6 +1163,16 @@ private fun Herrin() {
             }
             spiderActive && item.spiderVodId != null -> {
                 // Resolve missing episodes while the fullscreen loader is shown.
+                episode = 1
+                line = "pending"
+                screen = "player"
+            }
+            CmsOneTapPlaybackPolicy.resolveSelectedFilmInPlayer(
+                siteSelected = activeCmsSite != null, groupedSeason = false,
+                spiderActive = spiderActive, cmsVodId = item.cmsVodId,
+                hasPlayableEpisode = first != null && option != null) -> {
+                cmsPlaybackFailedId = null
+                cmsPlaybackPendingId = item.id
                 episode = 1
                 line = "pending"
                 screen = "player"
