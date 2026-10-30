@@ -1046,12 +1046,12 @@ private fun Herrin() {
         val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
         settingsFocusJob[0]?.cancel()
         if (settingsListState.layoutInfo.visibleItemsInfo.any { it.index == itemIndex } &&
-            runCatching { requester(target).requestFocus() }.isSuccess) return
+            runCatching { requester(target).requestFocus() }.getOrDefault(false)) return
         settingsFocusJob[0] = uiScope.launch {
             settingsListState.scrollToItem(itemIndex)
             repeat(3) {
                 withFrameNanos { }
-                if (runCatching { requester(target).requestFocus() }.isSuccess) return@launch
+                if (runCatching { requester(target).requestFocus() }.getOrDefault(false)) return@launch
             }
         }
     }
@@ -1078,7 +1078,7 @@ private fun Herrin() {
             if (!aligned) to.scrollToItem(index, -sourceOffset)
             repeat(3) {
                 withFrameNanos { }
-                if (runCatching { requester(target).requestFocus() }.isSuccess) {
+                if (runCatching { requester(target).requestFocus() }.getOrDefault(false)) {
                     RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
                     return@launch
                 }
