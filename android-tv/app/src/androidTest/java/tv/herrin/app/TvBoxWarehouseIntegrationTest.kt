@@ -11,6 +11,34 @@ import okio.Buffer
 
 /** HTTP tests use only a local fixture server; no third-party TVBox service is contacted. */
 class TvBoxWarehouseIntegrationTest {
+    @Test fun coldStartReturnsPreviouslyValidatedWarehouseWithoutWaitingForNetwork() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val url = server.url("/cold-start-single.json").toString()
+            val repo = TvBoxConfigRepository(
+                InstrumentationRegistry.getInstrumentation().targetContext)
+            val old = """{"sites":[{"key":"first","name":"本地已验单仓","api":"https://licensed.test/cms"}]}"""
+            val newer = """{"sites":[{"key":"new","name":"服务器更新单仓","api":"https://licensed.test/cms"}]}"""
+            assertTrue(repo.importJson(old, url, allowHttp = true) is TvBoxConfig.Single)
+            val begin = android.os.SystemClock.elapsedRealtime()
+            val restored = repo.load(url, allowHttp = true, preferCached = true)
+                as TvBoxConfig.Single
+            val elapsedMs = android.os.SystemClock.elapsedRealtime() - begin
+            assertTrue(restored.fromCache)
+            assertEquals("本地已验单仓", restored.sites.single().name)
+            assertEquals("Startup cache must not wait on third-party HTTP", 0, server.requestCount)
+            assertTrue("Warm cache restore too slow: $elapsedMs ms", elapsedMs < 1_500)
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody(newer))
+            val refreshed = repo.load(url, allowHttp = true) as TvBoxConfig.Single
+            assertFalse(refreshed.fromCache)
+            assertEquals("服务器更新单仓", refreshed.sites.single().name)
+            assertEquals(1, server.requestCount)
+            // Cache does not grant permission to bypass explicit HTTP consent.
+            assertTrue(repo.load(url, allowHttp = false, preferCached = true) is TvBoxConfig.Error)
+        }
+    }
+
     @Test fun imageContentTypeActuallyContainsTvBoxJsonAfterJpegEndMarker() = runBlocking {
         MockWebServer().use { server ->
             server.start()
