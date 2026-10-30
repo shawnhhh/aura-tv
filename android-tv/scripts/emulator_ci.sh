@@ -23,6 +23,7 @@ collect() {
 trap collect EXIT
 # Parse/report reliability must be tested before claiming an emulator pass.
 python3 -m unittest discover -s scripts -p 'test_remote_perf_report.py' -v
+python3 -m unittest discover -s scripts -p 'test_verify_full_tv_suite.py' -v
 gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/build.log
 adb logcat -G 16M || true
 adb shell setprop log.tag.HerrinRemote DEBUG
