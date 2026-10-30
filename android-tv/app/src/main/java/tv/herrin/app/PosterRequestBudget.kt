@@ -38,8 +38,7 @@ internal class PosterRequestBudget(
         val permits = if (hero) heroes else tiles
         if (cancelled()) return false
         try {
-            while (true) {
-                if (cancelled()) return false
+            while (!cancelled()) {
                 if (!permits.tryAcquire(WAIT_POLL_MS, TimeUnit.MILLISECONDS)) continue
                 if (!cancelled()) return true
                 permits.release()
@@ -47,8 +46,8 @@ internal class PosterRequestBudget(
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-            return false
         }
+        return false
     }
 
     fun release(hero: Boolean) {
