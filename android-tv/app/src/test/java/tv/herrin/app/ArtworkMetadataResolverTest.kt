@@ -83,7 +83,8 @@ class ArtworkMetadataResolverTest {
         val film = film("没有匹配的作品", "2024")
         assertNull(resolver.lookup(film, exampleToken))
         assertNull(resolver.lookup(film, exampleToken))
-        assertEquals(1, attempts)
+        assertEquals(2, attempts)
+        // Both official movie and TV searches were exhausted exactly once.
         // A fresh resolver likewise must not repeatedly query the exact same empty result.
         assertNull(ArtworkMetadataResolver(cacheDir, ArtworkJsonFetcher { _, _ ->
             throw AssertionError("persistent negative cache was bypassed")
@@ -91,7 +92,29 @@ class ArtworkMetadataResolverTest {
         // Expiry permits eventual recovery when the upstream TMDB catalog changes.
         cacheDir.listFiles()!!.single().setLastModified(System.currentTimeMillis() - 4L * 3600 * 1000)
         assertNull(resolver.lookup(film, exampleToken))
-        assertEquals(2, attempts)
+        assertEquals(4, attempts)
+    }
+
+    @Test fun `wrong TVBox category may fall back to exact TV match`() {
+        val calls = mutableListOf<String>()
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            calls += url
+            when {
+                "/search/movie" in url -> """{"results":[]}"""
+                "/search/tv" in url -> """{"results":[{"id":2026,"name":"长夜归来",
+                    "original_name":"长夜归来","first_air_date":"2026-02-08",
+                    "poster_path":"/tv-poster.jpg","backdrop_path":"/tv-bg.jpg"}]}"""
+                "/tv/2026" in url -> """{"id":2026,"credits":{"cast":[]}}"""
+                else -> error("Unexpected official TMDB route")
+            }
+        })
+        val found = resolver.lookup(film("长夜归来", "2026", "电影"), exampleToken)
+        assertEquals("tv", found?.mediaType)
+        assertEquals(2026, found?.tmdbTvId)
+        assertEquals("https://image.tmdb.org/t/p/w780/tv-poster.jpg", found?.posterUrl)
+        assertTrue(calls.first().contains("/search/movie"))
+        assertTrue(calls[1].contains("/search/tv"))
+        assertTrue(calls.last().contains("/tv/2026"))
     }
 
     @Test fun `traversal image paths and adult candidates are not accepted`() {
