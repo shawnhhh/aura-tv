@@ -109,14 +109,28 @@ class M438SingleWarehousePerformanceTest {
                 compose.activity.window.addOnFrameMetricsAvailableListener(
                     listener, Handler(thread.looper))
             }
-            val samples = try {
-                List(16) { remote(KeyEvent.KEYCODE_DPAD_RIGHT) }.sorted()
+            // Measure the actual Activity KeyEvent to Poster focus callback
+            // for all sixteen moves on a 60-film rail, not only Compose idle.
+            RemoteFocusLatencyProbe.start()
+            val measured = try {
+                val timings = List(16) { remote(KeyEvent.KEYCODE_DPAD_RIGHT) }
+                timings to RemoteFocusLatencyProbe.stop()
             } finally {
+                RemoteFocusLatencyProbe.stop()
                 compose.runOnUiThread {
                     compose.activity.window.removeOnFrameMetricsAvailableListener(listener)
                 }
                 thread.quitSafely()
             }
+            val samples = measured.first.sorted()
+            val focusEvents = measured.second
+            assertEquals("All 16 dense-shelf D-pad events must reach a film",
+                16, focusEvents.size)
+            assertEquals("Every horizontal event must focus a different film",
+                16, focusEvents.map { it.filmId }.distinct().size)
+            val keyToFocus = focusEvents.map { it.millis }.sorted()
+            val focusP95 = java.lang.String.format(java.util.Locale.US, "%.2f",
+                keyToFocus[(keyToFocus.size * 95 / 100).coerceAtMost(keyToFocus.lastIndex)])
             val p95 = samples[(samples.size * 95 / 100).coerceAtMost(samples.lastIndex)]
             val frames = frameMs.toList().sorted()
             val frameP95 = frames.takeIf { it.isNotEmpty() }
@@ -126,6 +140,15 @@ class M438SingleWarehousePerformanceTest {
                 " dpad_p95_ms=$p95 frame_p95_ms=" + (frameP95 ?: "unavailable") +
                 " frames_over_16ms=" + frames.count { it > 16L } +
                 " frames_total=" + frames.size)
+            val denseMetrics = "m447_dense_dpad_events=16 focus_success=${focusEvents.size} " +
+                "key_to_focus_p95_ms=$focusP95 end_to_idle_p95_ms=$p95 " +
+                "frame_p95_ms=${frameP95 ?: "unavailable"} frames_total=${frames.size}"
+            Log.i("HerrinPerf", denseMetrics)
+            val fd = InstrumentationRegistry.getInstrumentation().uiAutomation
+                .executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence && " +
+                    "echo '$denseMetrics' >> /data/local/tmp/herrin-test-evidence/remote-performance.log")
+            java.io.FileInputStream(fd.fileDescriptor).use { it.readBytes() }
+            fd.close()
             // Baseline (2026-10-30, Android TV API30): 199ms P95. Tighten
             // the regression budget from 1500ms to 600ms while leaving
             // headroom for shared GitHub CI emulator noise. Real hardware
