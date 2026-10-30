@@ -2087,11 +2087,16 @@ private fun Herrin() {
                 }
             }
             "detail", "player", "settings" -> {
+                val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
+                val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
                 val licensed = if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty())
                     LicensedPlaybackResolver.resolve(film, episode, line) else null
                 val licensedMedia = (licensed as? PlaybackResult.Ready)?.media
-                val testMedia = if (screen == "player" && !spiderActive) AuthorizedUrls.https(prefs.testMediaUrl) else null
+                // The independent testing URL must not start playing while a
+                // selected CMS film is still resolving its real licensed source.
+                val testMedia = if (screen == "player" && !spiderActive &&
+                    activeCmsSite == null) AuthorizedUrls.https(prefs.testMediaUrl) else null
                 val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
                     val historyLine = if (licensedMedia != null) line else "independent-test"
@@ -2132,7 +2137,8 @@ private fun Herrin() {
                         }, onDismiss = { playbackPicker = null })
                 } else if (screen == "player") {
                     // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
-                    val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable || !spiderActive
+                    val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable ||
+                        (!spiderActive && !cmsWaiting)
                     val offlineDemonstration = !sourceConfigured && !spiderActive && film.playbackEpisodes.isEmpty()
                     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
                         .testTag("player-startup-surface"),
@@ -2151,9 +2157,15 @@ private fun Herrin() {
                                     "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
                                     else "请重试，或返回选集切换播放线路。",
                                     color = Color(0xFFBCCADB), fontSize = 16.sp)
-                                if (spiderActive) {
+                                if (spiderActive || cmsFailed) {
                                     TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
-                                        reduced = reduceMotion) { playerRetryEpoch++ }
+                                        reduced = reduceMotion) {
+                                        if (cmsFailed) {
+                                            cmsPlaybackFailedId = null
+                                            cmsPlaybackPendingId = film.id
+                                        }
+                                        playerRetryEpoch++
+                                    }
                                 }
                             }
                             TvButton("返回选集", modifier = Modifier.testTag("player-startup-back"),
