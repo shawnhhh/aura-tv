@@ -203,7 +203,7 @@ class AuthorizedPosterCache(
         }
         // Stable stripes prevent repeat downloads for the same image; do not
         // serialize every poster behind one global network lock.
-        private val imageLocks = Array(64) { Any() }
+        private val imageLocks = PosterStripeGate()
         private val networkSlots = PosterRequestBudget()
     }
 
@@ -220,7 +220,7 @@ class AuthorizedPosterCache(
             .joinToString("") { "%02x".format(it) }
         val file = File(File(context.cacheDir, "authorized-posters"), "$digest.img")
         val memoryKey = file.absolutePath + if (hero) ":hero" else ":tile"
-        val stripe = imageLocks[(digest.hashCode() and Int.MAX_VALUE) % imageLocks.size]
+        val stripeKey = digest.hashCode()
 
         // A file that was cleared, replaced or corrupted must not keep its
         // previous decoded bitmap alive in the LRU cache.
@@ -240,7 +240,8 @@ class AuthorizedPosterCache(
         }
 
         memoryHit()?.let { return it }
-        synchronized(stripe) {
+        if (!imageLocks.acquire(stripeKey, cancelled)) return null
+        try {
             if (cancelled()) return null
             memoryHit()?.let { return it }
             val existing = file.takeIf { it.isFile && it.length() in 1..8_000_000 }
@@ -301,6 +302,8 @@ class AuthorizedPosterCache(
             } finally {
                 networkSlots.release(hero = hero)
             }
+        } finally {
+            imageLocks.release(stripeKey)
         }
     }
 
