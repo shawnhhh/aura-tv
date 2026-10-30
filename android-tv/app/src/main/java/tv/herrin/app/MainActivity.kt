@@ -370,6 +370,7 @@ private fun Herrin() {
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
     var cmsDetailStatus by remember { mutableStateOf("") }
+    var detailLoadEpoch by remember { mutableIntStateOf(0) }
     // Only the selected CMS title may resolve its missing episodes inside
     // the regular player loading surface. No catalog-wide eager scans.
     var cmsPlaybackPendingId by remember { mutableStateOf<String?>(null) }
@@ -842,7 +843,7 @@ private fun Herrin() {
     fun displayKey(item: Film): String = showCatalog.groupFor(item.id)?.key ?: item.id
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
-    LaunchedEffect(screen, filmId, spiderActive, showGroup?.key) {
+    LaunchedEffect(screen, filmId, spiderActive, showGroup?.key, detailLoadEpoch) {
         if (showGroup == null && spiderActive && screen == "detail" &&
             film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
             spiderStatus = "正在读取 ${film.title} 的详情和选集…"
@@ -858,7 +859,7 @@ private fun Herrin() {
     // Standard CMS responses often list only title/poster on ac=detail&pg=1.
     // Like TVBox, fetch ac=detail&ids=<vod_id> only when entering that film's
     // detail surface; no stream URL is inferred from the listing itself.
-    LaunchedEffect(screen, filmId, activeCmsSite?.apiUrl, showGroup?.key) {
+    LaunchedEffect(screen, filmId, activeCmsSite?.apiUrl, showGroup?.key, detailLoadEpoch) {
         val site = activeCmsSite
         if (showGroup == null && !spiderActive && screen == "detail" && site != null &&
             film.cmsVodId != null && film.playbackEpisodes.isEmpty()) {
@@ -2127,7 +2128,7 @@ private fun Herrin() {
                             } else screen = "detail"
                         }
                     )
-                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
+                } else LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
                     .onPreviewKeyEvent { event ->
                         // An active TV text editor owns its arrow keys. Only the
@@ -2849,8 +2850,18 @@ private fun Herrin() {
                         }
                         // Third-party playback resolution stays internal, not on the movie details UI.
                         if (!spiderActive && film.cmsVodId != null && cmsDetailStatus.isNotBlank())
-                            item { Text(cmsDetailStatus, color = Color(0xFFE2C38B),
-                                modifier = Modifier.testTag("cms-detail-status")) }
+                            item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(cmsDetailStatus, color = Color(0xFFE2C38B),
+                                    modifier = Modifier.testTag("cms-detail-status"))
+                                if (film.playbackEpisodes.isEmpty() &&
+                                    !cmsDetailStatus.startsWith("正在")) {
+                                    TvButton("重新读取选集", modifier = Modifier.testTag("cms-detail-retry"),
+                                        reduced = reduceMotion) {
+                                        cmsDetailStatus = "正在重新读取选集…"
+                                        detailLoadEpoch++
+                                    }
+                                }
+                            } }
                         if (screen == "player") {
                             if (!spiderActive) item { var status by remember { mutableStateOf("正在准备演示…") }
                                 LaunchedEffect(film.id, episode, line) {
@@ -2993,7 +3004,9 @@ private fun Herrin() {
                                                     },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 episode = entry.number
-                                                line = entry.lines.first().id
+                                                line = entry.lines.firstOrNull {
+                                                    AuthorizedUrls.https(it.uri) != null
+                                                }?.id ?: entry.lines.firstOrNull()?.id ?: line
                                                 screen = "player"
                                             }
                                         }
