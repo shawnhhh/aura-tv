@@ -1,0 +1,34 @@
+{
+  "list": [
+    {
+      "vod_id": "blender-big-buck-bunny-2008",
+      "vod_name": "大兔子 Big Buck Bunny",
+      "vod_year": "2008",
+      "type_name": "动漫",
+      "vod_remarks": "Blender Foundation · CC BY 3.0",
+      "vod_content": "Blender Foundation 开放授权动画短片。原片结尾保留署名。该片源用于验证 HERRIN 播放、字幕与画面铺满功能；并非商业影视站点。",
+      "vod_play_from": "公开视频 MP4$$$备用 HLS",
+      "vod_play_url": "正片$https://uploads.video-commander.com/sample/BigBuckBunny.mp4$$$正片$https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    },
+    {
+      "vod_id": "blender-tears-of-steel-2012",
+      "vod_name": "钢铁之泪 Tears of Steel",
+      "vod_year": "2012",
+      "type_name": "电影",
+      "vod_remarks": "Blender Foundation · CC BY 3.0",
+      "vod_content": "Blender Foundation 科幻特效开放电影。依照 CC BY 3.0 授权公开展示，保留片尾署名。本源使用第三方公开的 HLS 演示流。",
+      "vod_play_from": "公开 HLS",
+      "vod_play_url": "正片$https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+    },
+    {
+      "vod_id": "mdn-flower-cc0",
+      "vod_name": "花朵短片 Flower",
+      "vod_year": "",
+      "type_name": "电影",
+      "vod_remarks": "MDN · CC0 · 短视频",
+      "vod_content": "Mozilla MDN 公开视频示例，CC0 短片，用于验证播放、视频缩放及硬解码。",
+      "vod_play_from": "公开 MP4",
+      "vod_play_url": "短片$https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+    }
+  ]
+}
