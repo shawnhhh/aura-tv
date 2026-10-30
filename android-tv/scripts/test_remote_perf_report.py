@@ -61,6 +61,20 @@ class RemotePerfReportTest(unittest.TestCase):
         self.assertNotIn("redraw_p95_ms", metrics)
         self.assertNotIn("navigation_to_redraw_ratio", metrics)
 
+    def test_dense_film_rail_reports_real_focus_callback_latency(self):
+        raw = (
+            "I HerrinPerf: m447_dense_dpad_events=16 focus_success=16 "
+            "key_to_focus_p95_ms=72.42 end_to_idle_p95_ms=287 "
+            "frame_p95_ms=199 frames_total=43"
+        )
+        result = parse_remote_performance(raw)["dense_catalog"]
+        self.assertEqual(16, result["focus_success"])
+        self.assertEqual(72.42, result["key_to_focus_p95_ms"])
+        rendered = "\n".join(render_markdown({"dense_catalog": result}))
+        self.assertIn("12 站点", rendered)
+        self.assertIn("72.42ms", rendered)
+        self.assertIn("199.0ms", rendered)
+
     def test_non_herrin_tag_and_unavailable_are_ignored(self):
         log = (
             "I OtherTag: m443_horizontal_dpad_events=40 focus_success=40\n"
