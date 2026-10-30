@@ -1049,7 +1049,7 @@ private fun Herrin() {
             runCatching { requester(target).requestFocus() }.getOrDefault(false)) return
         settingsFocusJob[0] = uiScope.launch {
             settingsListState.scrollToItem(itemIndex)
-            repeat(3) {
+            repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
                 withFrameNanos { }
                 if (runCatching { requester(target).requestFocus() }.getOrDefault(false)) return@launch
             }
@@ -1076,7 +1076,7 @@ private fun Herrin() {
                 it.index == index && it.offset - sourceOffset in -24..24
             }
             if (!aligned) to.scrollToItem(index, -sourceOffset)
-            repeat(3) {
+            repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
                 withFrameNanos { }
                 if (runCatching { requester(target).requestFocus() }.getOrDefault(false)) {
                     RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
