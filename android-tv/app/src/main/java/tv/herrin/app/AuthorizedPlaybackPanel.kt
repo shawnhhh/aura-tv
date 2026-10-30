@@ -134,6 +134,9 @@ private fun AuthorizedPlaybackSession(
     // The isolated debug activity keeps full controls visible for legacy E2E.
     var advancedControlsVisible by remember(media) { mutableStateOf(testDiagnostics) }
     var transportFocused by remember { mutableStateOf(false) }
+    // UP closes the overlay only from the main seek/play row. On expanded
+    // settings rows UP must navigate to the previous row, not discard setup.
+    var mainTransportRowFocused by remember { mutableStateOf(false) }
     var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
@@ -374,7 +377,7 @@ private fun AuthorizedPlaybackSession(
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
             if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
             true
-        } else if (!isLive && transportFocused &&
+        } else if (!isLive && transportFocused && mainTransportRowFocused &&
             key.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 transportFocused = false
@@ -568,7 +571,9 @@ private fun AuthorizedPlaybackSession(
             Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0xFF434857))) {
                 Box(Modifier.fillMaxWidth(percent).fillMaxHeight().background(Color.White))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            Row(Modifier.fillMaxWidth().onFocusChanged {
+                    mainTransportRowFocused = it.hasFocus
+                }, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = { applyRemoteSeek(-10_000L) },
                     modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
