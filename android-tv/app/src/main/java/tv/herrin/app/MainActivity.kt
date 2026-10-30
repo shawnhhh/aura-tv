@@ -1387,18 +1387,25 @@ private fun Herrin() {
             }
             "browse", "search" -> {
                 val isSearch = screen == "search"
-                val filtered = if (isSearch) showCatalog.search(
-                    query, searchCategory, searchNewestFirst
-                ) else if (category == "我的") showCatalog.favorites(favorites)
-                else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
-                // History drives the first shelf only for films with actual saved playback.
-                // On a fresh installation the same rail shows browseable demo suggestions.
-                val watched = if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
-                    showCatalog.watchProgress(shown) { source, entry, option ->
-                        watchHistory.load(catalogScope, source.id, entry.number, option.id)
-                    }?.let { shown to it.updatedAtMs }
-                }.sortedByDescending { it.second }.map { it.first }
+                // Focus color animations can recompose every frame: searching,
+                // regrouping and reading playback history must NOT run per frame.
+                val filtered = remember(showCatalog, films, category, isSearch,
+                    query, searchCategory, searchNewestFirst, favorites) {
+                    if (isSearch) showCatalog.search(query, searchCategory, searchNewestFirst)
+                    else if (category == "我的") showCatalog.favorites(favorites)
+                    else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
+                }
+                // History is recomputed on returning from playback or when the
+                // source/catalog changes, not on every D-pad/animation frame.
+                val watched = remember(isSearch, category, filtered, showCatalog,
+                    watchHistory, catalogScope, screen) {
+                    if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
+                        showCatalog.watchProgress(shown) { source, entry, option ->
+                            watchHistory.load(catalogScope, source.id, entry.number, option.id)
+                        }?.let { shown to it.updatedAtMs }
+                    }.sortedByDescending { it.second }.map { it.first }
                     else emptyList()
+                }
                 val railFilms = if (watched.isNotEmpty()) watched else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
                 val recommendedFilms = if (!isSearch && category == "首页") browseFilms.asReversed() else emptyList()
@@ -1854,9 +1861,11 @@ private fun Herrin() {
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
                                 onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { openMovie(item) },
                                 progress = if (!isSearch && category == "首页") {
-                                    showCatalog.watchProgress(item) { source, part, option ->
-                                        watchHistory.load(catalogScope, source.id, part.number, option.id)
-                                    }?.fraction
+                                    remember(item.id, showCatalog, catalogScope, screen) {
+                                        showCatalog.watchProgress(item) { source, part, option ->
+                                            watchHistory.load(catalogScope, source.id, part.number, option.id)
+                                        }?.fraction
+                                    }
                                 } else null)
                         }
                     }
