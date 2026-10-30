@@ -527,6 +527,21 @@ private fun AuthorizedPlaybackSession(
                 Button(onClick = { retryPlayback() },
                     modifier = Modifier.focusRequester(retryControl)
                         .testTag("player-retry")) { Text("重试播放") }
+                // Network errors are often source-specific, not decoder bugs.
+                // Offer the original user's actual lines/episodes without
+                // forcing another failed retry on the same URL.
+                if (onLineSelection != null || onEpisodeSelection != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (onLineSelection != null) Button(onClick = onLineSelection,
+                            modifier = Modifier.testTag("player-error-change-line")) {
+                            Text("切换线路")
+                        }
+                        if (onEpisodeSelection != null) Button(onClick = onEpisodeSelection,
+                            modifier = Modifier.testTag("player-error-change-episode")) {
+                            Text("返回选集")
+                        }
+                    }
+                }
             } else if (activeVariant > 0 && playbackState != Player.STATE_READY) {
                 Text("正在尝试备用播放地址 ${activeVariant + 1} / ${candidates.size}",
                     color = Color(0xFFCFD7E4), modifier = Modifier.testTag("player-fallback-status"))
