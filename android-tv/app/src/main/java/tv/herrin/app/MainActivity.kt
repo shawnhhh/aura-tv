@@ -374,14 +374,6 @@ private fun Herrin() {
     // the regular player loading surface. No catalog-wide eager scans.
     var cmsPlaybackPendingId by remember { mutableStateOf<String?>(null) }
     var cmsPlaybackFailedId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(screen, filmId) {
-        // A Back press during a slow CMS request must not leave a stale
-        // pending lookup that can later attach to an unrelated navigation.
-        if (screen != "player") {
-            cmsPlaybackPendingId = null
-            cmsPlaybackFailedId = null
-        }
-    }
     var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseUrl) }
     // Large pasted backups should never be marshalled into an Activity saved-state Bundle.
     var tvBoxJsonDraft by remember { mutableStateOf("") }
@@ -655,6 +647,14 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    LaunchedEffect(screen, filmId) {
+        // A Back press during a slow CMS request must not leave a stale
+        // pending lookup that can later attach to an unrelated navigation.
+        if (screen != "player") {
+            cmsPlaybackPendingId = null
+            cmsPlaybackFailedId = null
+        }
+    }
     var facetsReturnScreen by rememberSaveable { mutableStateOf("browse") }
     var facetActor by rememberSaveable { mutableStateOf<String?>(null) }
     var facetDirector by rememberSaveable { mutableStateOf<String?>(null) }
