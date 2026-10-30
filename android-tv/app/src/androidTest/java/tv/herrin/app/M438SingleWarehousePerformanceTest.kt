@@ -1,6 +1,11 @@
 package tv.herrin.app
 
 import android.os.SystemClock
+import android.os.Handler
+import android.os.HandlerThread
+import android.view.FrameMetrics
+import android.view.Window
+import java.util.Collections
 import android.util.Log
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
@@ -91,11 +96,36 @@ class M438SingleWarehousePerformanceTest {
             compose.onNodeWithTag(first)
                 .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             compose.onNodeWithTag(first).assertIsFocused()
-            val samples = List(16) { remote(KeyEvent.KEYCODE_DPAD_RIGHT) }.sorted()
+            // Collect Android's compositor frame timings while the real
+            // D-pad moves across the dense poster rail. Only metrics, never
+            // source metadata or video, are sent to CI artifacts.
+            val frameMs = Collections.synchronizedList(mutableListOf<Long>())
+            val thread = HandlerThread("HerrinPerfCollector").apply { start() }
+            val listener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
+                val ns = metrics.getMetric(FrameMetrics.TOTAL_DURATION)
+                if (ns > 0) frameMs.add(ns / 1_000_000)
+            }
+            compose.runOnUiThread {
+                compose.activity.window.addOnFrameMetricsAvailableListener(
+                    listener, Handler(thread.looper))
+            }
+            val samples = try {
+                List(16) { remote(KeyEvent.KEYCODE_DPAD_RIGHT) }.sorted()
+            } finally {
+                compose.runOnUiThread {
+                    compose.activity.window.removeOnFrameMetricsAvailableListener(listener)
+                }
+                thread.quitSafely()
+            }
             val p95 = samples[(samples.size * 95 / 100).coerceAtMost(samples.lastIndex)]
+            val frames = frameMs.toList().sorted()
+            val frameP95 = frames.takeIf { it.isNotEmpty() }
+                ?.get((frames.size * 95 / 100).coerceAtMost(frames.lastIndex))
             Log.i("HerrinPerf", "single_warehouse=12_sites_60_films import_ms=$importMs " +
                 "catalog_ms=$catalogMs dpad_p50_ms=" + samples[samples.size / 2] +
-                " dpad_p95_ms=$p95")
+                " dpad_p95_ms=$p95 frame_p95_ms=" + (frameP95 ?: "unavailable") +
+                " frames_over_16ms=" + frames.count { it > 16L } +
+                " frames_total=" + frames.size)
             assertTrue("Severe TV remote stalling: P95=$p95 ms", p95 < 1_500)
         }
     }
