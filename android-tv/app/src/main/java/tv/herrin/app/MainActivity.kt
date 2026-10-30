@@ -804,7 +804,9 @@ private fun Herrin() {
     var reduced by remember { mutableStateOf(prefs.reducedMotion) }
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val reduceMotion = reduced || systemReduced
-    var splash by rememberSaveable { mutableStateOf(true) }
+    // A genuinely new Activity launch should replay the HERRIN slide;
+    // restoring old saved-instance-state must not skip the startup curtain.
+    var splash by remember { mutableStateOf(true) }
     // Keep the finished H mark above the first home frames while it dissolves;
     // removing it before the hero is drawn causes a visible black flash.
     var splashExiting by remember { mutableStateOf(false) }
