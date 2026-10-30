@@ -5,6 +5,7 @@ import json
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from remote_perf_report import parse_remote_performance, render_markdown
 out = Path('build/emulator-evidence')
 tests = []
 for path in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml'):
@@ -32,11 +33,14 @@ summary = {'exit_code': int(sys.argv[1]), 'device': 'Android TV API 30 x86 / tv_
            'decoder_evidence': re.findall(r'HerrinDecoder[^\n]*', log),
            'catalog_evidence': re.findall(r'HerrinCatalog[^\n]*', log),
            'remote_HTTPS_stream_tested': False}
+# Only whitelisted numeric key/value pairs go into artifacts.
+summary['remote_performance'] = parse_remote_performance(log)
 (out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',
          '| Instrumentation test | Result |', '| --- | --- |']
 lines += [f"| {t['test']} | {t['status']} |" for t in tests]
-lines += ['', 'ADB smoke: see adb-smoke.log and launch.txt. Startup frames are real emulator screenshots.',
+lines += ['', *render_markdown(summary['remote_performance']), '',
+          'ADB smoke: see adb-smoke.log and launch.txt. Startup frames are real emulator screenshots.',
           'Physical TCL remote, TV IME variants, 4K overscan and real streaming remain unverified.']
 (out / 'REPORT.md').write_text('\n'.join(lines) + '\n')
 print(json.dumps(summary, ensure_ascii=False))
