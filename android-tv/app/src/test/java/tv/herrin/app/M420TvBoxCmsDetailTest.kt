@@ -88,46 +88,12 @@ class M420TvBoxCmsDetailTest {
         val selected = TvBoxVodCodec.decode("""{"list":[{
             "vod_id":"film-A", "vod_name":"用户选择的影片 A"
         }]}""").single()
-        val response = """{"list":[{
-            "vod_id":"film-B","vod_name":"意外返回的影片 B",
-            "vod_play_from":"错误线路",
-            "vod_play_url":"正片${'
-        val endpoint = TvBoxCmsEndpoint.address(
-            "https://licensed.example.test/api.php?token=a%2Fb&ac=list&pg=3",
-            vodId = "season/42?x=1&y=2", allowHttp = false)
-        assertNotNull(endpoint)
-        assertTrue(endpoint!!.contains("token=a%2Fb"))
-        assertFalse("Signed token must not be percent-escaped twice", endpoint.contains("a%252Fb"))
-        assertTrue(endpoint.contains("ac=detail"))
-        assertTrue(endpoint.contains("ids=season%2F42%3Fx%3D1%26y%3D2"))
-        assertFalse(endpoint.contains("pg=3"))
-    }
-
-    @Test fun namedAndBareDirectPlaybackEntriesBothProduceEpisodes() {
-        val listed = TvBoxVodCodec.decode("""{"list":[{"vod_id":"direct","vod_name":"自制测试片"}]}""")
-            .single()
-        val detailed = TvBoxVodCodec.detail("""{"list":[{
-            "vod_id":"direct","vod_name":"自制测试片",
-            "vod_play_from":"直链",
-            "vod_play_url":"https://licensed.example.test/original.mp4"
-        }]}""", listed, allowHttp = false)
-        assertEquals("https://licensed.example.test/original.mp4",
-            detailed.playbackEpisodes.single().lines.single().uri)
-        assertTrue(LicensedPlaybackResolver.resolve(detailed, 1, "cms-0") is PlaybackResult.Ready)
-    }
-
-    @Test fun invalidPlaylistMustNotBecomePlayableBrowserPage() {
-        val listed = TvBoxVodCodec.decode("""{"list":[{"vod_id":"web","vod_name":"网页片段"}]}""")
-            .single()
-        val result = TvBoxVodCodec.detail("""{"list":[{
-            "vod_id":"web","vod_name":"网页片段",
-            "vod_play_url":"网页${'$'}javascript:location.href='https://elsewhere/'"
-        }]}""", listed, allowHttp = false)
-        assertTrue(result.playbackEpisodes.isEmpty())
-    }
-}
-}https://licensed.example.test/wrong-film.mp4"
-        }]}"""
+        val response = JSONObject().put("list", JSONArray().put(JSONObject()
+            .put("vod_id", "film-B")
+            .put("vod_name", "意外返回的影片 B")
+            .put("vod_play_from", "错误线路")
+            .put("vod_play_url", "https://licensed.example.test/wrong-film.mp4")))
+            .toString()
         val thrown = assertThrows(IllegalStateException::class.java) {
             TvBoxVodCodec.detail(response, selected, allowHttp = false)
         }
