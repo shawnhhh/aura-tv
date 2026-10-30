@@ -1,6 +1,7 @@
 """Emit a factual Chinese CI acceptance report from JUnit files and artifact hashes."""
 from pathlib import Path
 import hashlib
+import re
 import json
 from remote_perf_report import render_markdown
 import os
@@ -12,8 +13,11 @@ out = root / 'build/acceptance'
 out.mkdir(parents=True, exist_ok=True)
 sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
 run = f"https://github.com/{os.getenv('GITHUB_REPOSITORY', 'shawnhhh/aura-tv')}/actions/runs/{os.getenv('GITHUB_RUN_ID', 'local')}"
-lines = ['# HERRIN M4.37 自动验收记录', '', f'- 构建提交：`{sha}`', f'- CI：{run}',
-         '- 基线：`2509da39a83bdca0b5cfc1fe2ac3a37e67b3d9da`（PR #43）', '',
+gradle_text = (root / 'app/build.gradle.kts').read_text()
+version_match = re.search(r'^\\s*versionName\\s*=\\s*"([^"]+)"', gradle_text, re.M)
+version_label = version_match.group(1) if version_match else '版本未识别'
+lines = [f'# HERRIN {version_label} 自动验收记录', '', f'- 构建提交：`{sha}`', f'- CI：{run}',
+         '- 结论：必须同时确认本提交的 Debug 与 Android TV Emulator 两项工作流均成功。', '',
          '| 测试组 | 总数 | 失败 | 错误 | 跳过 |', '| --- | ---: | ---: | ---: | ---: |']
 for name, folder in [('JVM', 'app/build/test-results/testDebugUnitTest'),
                      ('Android TV', 'app/build/outputs/androidTest-results')]:
@@ -35,6 +39,10 @@ if performance_summary.is_file():
         lines += ['', *render_markdown(performance)]
     except (ValueError, OSError, TypeError):
         lines += ['', '## Android TV 遥控器性能', '', '指标文件无法解析；不能声称已采样或达标。']
+full_suite_gate = root / 'build/emulator-evidence/full-suite-gate.log'
+if full_suite_gate.exists():
+    lines += ['', '## 完整 Android TV 用例覆盖门禁', '',
+              '```text', full_suite_gate.read_text(errors='replace').strip(), '```']
 lines += ['', '## 验收边界', '',
           '- 出帧、遥控 seek、焦点、MP4/HLS/DASH 和画面像素证据见 Emulator Artifacts 中的测试报告、截图及 summary.json。',
           '- 授权仅使用原创模拟服务；未验收第三方网盘账号和具体私有影视源。',
