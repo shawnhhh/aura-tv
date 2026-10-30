@@ -34,6 +34,7 @@
 - 新增 Android instrumentation 检查同一图片被复用时返回**同一内存 Bitmap 对象**、磁盘缓存损坏会使内存缓存失效并重下、超大海报卡片被降采样、Hero 图片仍有足够分辨率。
 - 竖版海报快速移动时，全屏 Hero 背景图片网络加载延迟 110ms 后才启动，避免每个一闪而过的焦点都立即下载/解码最高 2560px 大图；卡片淡入从 280ms 收敛为 120ms，让图片更快达到全不透明。
 - 发现原 `rememberAuthorizedPoster` 对每张可见卡片在命中 TMDB Token 时都尝试独立网络刮削，与 `MainActivity` 全目录批量刮削重叠；现统一由主目录引擎产生 TMDB 匹配结果、更新 Film 的显示 URL，图片控件只负责加载该 URL，避免焦点移动触发重复 TMDB API/JSON/图像下载。
+- 取消 `FilmArtwork` 和 `PosterArtwork` 在每次 Compose 重组时读取本地 SharedPreferences 判断 TMDB Token；影视源作品不论是否已配置 Token，未获得真实图片时都使用中性占位，不误用 HERRIN 的原创演示影片海报。
 
 此阶段需要重新检查 Android Debug、Lint、JVM 和电视模拟器全部测试，尤其要确保损坏缓存回退、TV 画质和扫码/弹幕无回归。不能把第一轮的 98/98 自动套用为第二轮结果。
 
