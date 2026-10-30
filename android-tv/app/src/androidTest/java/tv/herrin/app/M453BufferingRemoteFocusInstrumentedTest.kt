@@ -29,10 +29,14 @@ class M453BufferingRemoteFocusInstrumentedTest {
         val server = MockWebServer()
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         server.start()
+        // Resolve the MockWebServer URL on the instrumentation test thread.
+        // MockWebServer.url() may perform a reverse hostname lookup and must
+        // never execute inside the Compose main-thread setContent lambda.
+        val mockMedia = PlaybackMedia(server.url("/mock-buffering.mp4").toString())
         try {
             compose.setContent {
                 AuthorizedPlaybackPanel(
-                    media = PlaybackMedia(server.url("/mock-buffering.mp4").toString()),
+                    media = mockMedia,
                     onBack = {}
                 )
             }
