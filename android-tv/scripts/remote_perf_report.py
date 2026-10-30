@@ -17,13 +17,27 @@ _PAIR = re.compile(r"([a-zA-Z0-9_.]+)=([0-9.]+|unavailable)")
 _START = re.compile(r"\bm443_(vertical|horizontal)_dpad_events=(\d+)\b")
 _BURST = re.compile(r"\bm443_rapid_burst_events=(\d+)\b")
 _FRAMEBASE = re.compile(r"\bm445_redraw_frames=(\d+)\b")
+_DENSE = re.compile(r"\bm447_dense_dpad_events=(\d+)\b")
 
 
 def parse_remote_performance(logcat: str) -> dict:
     """Latest sample per direction, or empty dict if the probe did not run."""
     results = {}
     for line in logcat.splitlines():
-        if "HerrinPerf" not in line or not ("m443_" in line or "m445_" in line):
+        if "HerrinPerf" not in line or not ("m443_" in line or "m445_" in line or "m447_" in line):
+            continue
+        dense = _DENSE.search(line)
+        if dense:
+            fields = dict(_PAIR.findall(line[dense.end():]))
+            result = {"events": int(dense.group(1))}
+            for key in ("focus_success", "frames_total"):
+                if key in fields and fields[key] != "unavailable":
+                    result[key] = int(fields[key])
+            for key in ("key_to_focus_p95_ms", "end_to_idle_p95_ms",
+                        "frame_p95_ms"):
+                if key in fields and fields[key] != "unavailable":
+                    result[key] = float(fields[key])
+            results["dense_catalog"] = result
             continue
         framebase = _FRAMEBASE.search(line)
         if framebase:
@@ -104,6 +118,17 @@ def render_markdown(performance: dict) -> list[str]:
                   f"{baseline.get('navigation_to_redraw_ratio', '未采集')} |",
                   "", "固定画面重绘使用同一个主页视口的 decorView.invalidate，"
                   "仅作模拟器图形环境基线；和 Compose 实际重组不能严格等同。"]
+    dense = performance.get("dense_catalog")
+    if dense:
+        lines += ["", "## 单仓 12 站点／60 部影片密集列表实测", "",
+                  "| 按键次数 | 焦点成功 | 焦点回调 P95 | 到 Compose 空闲 P95 | 合成帧 P95 |",
+                  "| ---: | ---: | ---: | ---: | ---: |",
+                  f"| {dense.get('events', '未采集')} | "
+                  f"{dense.get('focus_success', '未采集')} | "
+                  f"{dense.get('key_to_focus_p95_ms', '未采集')}ms | "
+                  f"{dense.get('end_to_idle_p95_ms', '未采集')}ms | "
+                  f"{dense.get('frame_p95_ms', '未采集')}ms |",
+                  "", "此测试仅选中用户配置的模拟 CMS 站点；不会执行其他 11 个 Spider 站点。"]
     lines += [
         "",
         "长帧：总合成时间 >16.67ms（按 60Hz 计算）；严重长帧：>33.33ms。"
