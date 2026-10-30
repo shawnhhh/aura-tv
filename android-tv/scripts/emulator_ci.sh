@@ -30,3 +30,5 @@ bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
 # Shell-owned evidence survives the package uninstall performed by AGP.
 adb shell rm -rf /data/local/tmp/herrin-test-evidence
 gradle :app:connectedDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log
+# Do not report success if instrumentation skipped essential remote/playback cases.
+python3 scripts/verify_full_tv_suite.py 2>&1 | tee build/emulator-evidence/full-suite-gate.log
