@@ -277,7 +277,9 @@ private fun AuthorizedPlaybackSession(
     LaunchedEffect(player, focusRestoreEpoch) {
         if (isLive) initialControl.requestFocus() else playerRootFocus.requestFocus()
     }
-    LaunchedEffect(focusControlsEpoch, errorMessage, controlsVisible, isLive) {
+    // Only an explicit remote request may move focus into the controls.
+    // Visibility/error recomposition alone must not steal focus during seeking.
+    LaunchedEffect(focusControlsEpoch) {
         // Focus targets are Compose controls; they do NOT depend on the video
         // decoder producing its first frame. A buffering film must not trap
         // the remote on an unfocusable black screen.
