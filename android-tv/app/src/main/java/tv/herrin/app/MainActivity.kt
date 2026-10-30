@@ -2868,7 +2868,7 @@ private fun Herrin() {
                             } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                TvButton(when {
+                                if (providerFilms == null) TvButton(when {
                                     showGroup != null && groupResume != null ->
                                         "▶ 继续播放 第${groupResume.first.season}季 第${groupResume.first.number}集 ${formatSeasonClock(groupResume.second.positionMs)}"
                                     showGroup != null && groupSection?.episodes?.isNotEmpty() == true ->
@@ -2901,7 +2901,9 @@ private fun Herrin() {
                                     else if (seasonLayout != null && detailSeasonEntries.isNotEmpty())
                                         playSeasonEpisode(detailSeasonSource ?: detailSeasonEntries.first())
                                     else screen = "player"
-                                }
+                                } else Text("请选择下方具体集数或播放线路",
+                                    modifier = Modifier.testTag("detail-choose-episode"),
+                                    color = Color(0xFFBDD8F0))
                                 val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
                                     ?: (film.id in favorites)
                                 TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
@@ -2912,7 +2914,7 @@ private fun Herrin() {
                                     favorites = prefs.idsFor(catalogScope)
                                 }
                             } }
-                            if (showGroup == null && resume != null && seasonLayout == null) {
+                            if (providerFilms == null && showGroup == null && resume != null && seasonLayout == null) {
                                 item { Text("继续播放 · 已观看 ${resume.positionMs / 1000} 秒 / ${resume.durationMs / 1000} 秒",
                                     fontSize = 17.sp, color = Color(0xFFD4E6FD)) }
                                 item { TvButton("从头播放", reduced = reduceMotion) {
