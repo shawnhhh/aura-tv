@@ -426,7 +426,7 @@ internal class ArtworkMetadataResolver(
     }
 }
 
-private class ArtworkAuthenticationFailure : Exception()
+internal class ArtworkAuthenticationFailure : Exception()
 
 internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
     override fun load(url: String, readAccessToken: String): String? {
