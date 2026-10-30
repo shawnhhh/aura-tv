@@ -32,24 +32,22 @@ class HerrinSplashTest {
             }
         }
     }
-    @Test fun lettersCollapseToHThenHomeCallback() {
+    @Test fun completeHerrinWordmarkStaysWholeUntilFastFade() {
         compose.mainClock.autoAdvance = false
         var completed = false
-        compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(false) { completed = true } } } }
-        compose.onNodeWithText("H").assertIsDisplayed()
-        compose.onNodeWithText("E").assertIsDisplayed()
-        compose.onAllNodesWithText("R").assertCountEquals(2)
-        compose.onNodeWithText("I").assertIsDisplayed()
-        compose.onNodeWithText("N").assertIsDisplayed()
+        compose.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Surface { Splash(false) { completed = true } }
+            }
+        }
+        compose.onNodeWithContentDescription("HERRIN").assertIsDisplayed()
+        compose.onNodeWithTag("splash-wordmark").assertExists()
+        // There is never a single-letter H-only screen.
+        compose.onNodeWithText("H").assertDoesNotExist()
         screenshot("splash-HERRIN")
-        compose.mainClock.advanceTimeBy(2600)
-        compose.onNodeWithText("H").assertIsDisplayed()
-        compose.onNodeWithText("E").assertDoesNotExist()
-        compose.onNodeWithText("N").assertDoesNotExist()
-        assertFalse(completed)
-        screenshot("splash-H")
-        compose.mainClock.advanceTimeBy(1000)
-        compose.runOnIdle { assertTrue(completed) }
+        compose.mainClock.advanceTimeBy(600)
+        compose.runOnIdle { assertTrue("No multi-second branding hold", completed) }
+        compose.onNodeWithContentDescription("HERRIN").assertExists()
     }
     @Test fun skipCompletesImmediately() {
         compose.mainClock.autoAdvance = false
