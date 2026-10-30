@@ -51,7 +51,8 @@ internal object ArtworkTitle {
         val type = when {
             film.category in listOf("电影", "纪录片") -> "movie"
             film.category in listOf("剧集", "电视剧", "动漫", "动画", "综艺") -> "tv"
-            film.category.contains("电影") || film.category.equals("movie", true) -> "movie"
+            film.category.contains("电影") || film.category.equals("movie", true) ||
+                film.category.endsWith("片") -> "movie"
             film.category.contains("剧") || film.category.equals("tv", true) || film.episodes > 1 -> "tv"
             else -> null
         }
@@ -237,7 +238,10 @@ internal class ArtworkMetadataResolver(
         val queryTitle = identity.title
         if (queryTitle.isBlank()) return null
         val manual = manualMatch(film)
-        val category = manual?.mediaType ?: identity.mediaType ?: return null
+        // CMS type_name is often a genre such as 科幻、悬疑 or simply 未知.
+        // Do not silently skip these films: try the official movie catalog first,
+        // then the TV catalog when no unambiguous exact-title match is found.
+        val category = manual?.mediaType ?: identity.mediaType ?: "movie"
         val key = hash("detail-v5|$category|$queryTitle|${identity.year}|${manual?.id}|${hash(token)}")
         val file = File(cacheRoot, "$key.json")
         if (!forceRefresh && file.isFile && file.length() in 1..16384) {
