@@ -1,0 +1,11 @@
+{
+  "sites": [
+    {
+      "key": "herrin_open_films",
+      "name": "HERRIN · 公开授权影片（3部）",
+      "type": 1,
+      "api": "https://raw.githubusercontent.com/shawnhhh/aura-tv/feat/herrin-public-authorized-demo-sources-20261030/android-tv/demo/herrin-open-films-cms.json"
+    }
+  ],
+  "lives": []
+}
