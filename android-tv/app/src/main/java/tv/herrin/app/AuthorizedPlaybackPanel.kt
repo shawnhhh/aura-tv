@@ -108,6 +108,10 @@ private fun AuthorizedPlaybackSession(
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val playbackPreferences = remember(context) { Preferences(context) }
+    var viewportMode by remember(media) {
+        mutableStateOf(PlaybackViewportMode.fromStoredFill(playbackPreferences.playbackFillScreen))
+    }
     val danmaku = rememberDanmakuSettings()
     var errorMessage by remember(media) { mutableStateOf<String?>(null) }
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
@@ -444,13 +448,17 @@ private fun AuthorizedPlaybackSession(
                 // One TV focus system: native view renders video and subtitles only;
                 // the Compose row below provides seek, play, tracks and a progress timeline.
                 useController = false
+                resizeMode = viewportMode.resizeMode
                 isFocusable = false
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 keepScreenOn = true
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 setPadding(0, 0, 0, 0)
             } },
-            update = { it.player = player },
+            update = {
+                it.resizeMode = viewportMode.resizeMode
+                it.player = player
+            },
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
