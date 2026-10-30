@@ -24,6 +24,8 @@
 - 自动隐藏控制条时不把焦点送往不可见按钮；
 - 直播频道仍保持独立的方向键/频道抽屉逻辑。
 
+新增 **Android TV 真实 OS KeyEvent + 本地 MockWebServer** 的 `M453BufferingRemoteFocusInstrumentedTest`：HTTP 连接建立后服务端不发送任何视频数据，播放器解码帧数为零的缓冲场景下，实际注入 DPAD_DOWN，必须立即把焦点交给 `transport-toggle`；旧版“等待首帧”逻辑会在这项测试中超时。只使用本地测试服务器，无真实影视源。
+
 沿用 Android TV 100+ 全量模拟器回归，包括 72/72 海报焦点、20 次遥控连续键、60 影片密集列表、播放和字幕验证、设置 7 键突发等。最新 HEAD 的 Android Debug、JVM/Lint 和 Android TV Emulator 均成功后才算自动化验收；TCL T7L Ultra 真机仍需测试厂商遥控器和实际视频硬解码。
 
 版本 `0.4.53-alpha` / code 58。接续 M4.52 Draft #60；**新 PR 依旧 Draft，不合并 main/master**。
