@@ -261,34 +261,61 @@ internal class ArtworkMetadataResolver(
             // Transport errors are retryable; a failed network is not a negative title match.
             if (response == null) return null
             val root = runCatching { JSONObject(response) }.getOrNull() ?: return null
+            var matchedCategory = category
             val candidate = if (manual != null) {
                 if (root.optInt("id") != manual.id || root.optBoolean("adult")) return null
                 candidates(JSONArray().put(root), category).singleOrNull()
             } else {
                 val results = root.optJSONArray("results") ?: return null
-                ArtworkMatch.best(queryTitle, identity.year.orEmpty(), candidates(results, category))
+                val primary = ArtworkMatch.best(queryTitle, identity.year.orEmpty(),
+                    candidates(results, category))
+                if (primary != null) primary else {
+                    // TVBox site type_name is often absent/misclassified. Search
+                    // the other OFFICIAL TMDB media type only if the first query
+                    // was valid but produced no exact, year-consistent match.
+                    // A fuzzy or ambiguous hit is never automatically accepted.
+                    val other = if (category == "movie") "tv" else "movie"
+                    val url = "https://api.themoviedb.org/3/search/$other?query=" +
+                        URLEncoder.encode(queryTitle, "UTF-8") +
+                        "&language=zh-CN&include_adult=false&page=1"
+                    val otherResponse = try { fetcher.load(url, token) }
+                        catch (auth: ArtworkAuthenticationFailure) {
+                            rejectedTokens[tokenKey] = System.currentTimeMillis() + 30L * 60 * 1000
+                            return null
+                        } catch (_: Exception) { null }
+                    // If the alternate request failed, don't poison the cache:
+                    // this is a connection problem, not an absent movie.
+                    if (otherResponse == null) return null
+                    val otherList = runCatching { JSONObject(otherResponse).optJSONArray("results") }
+                        .getOrNull() ?: return null
+                    ArtworkMatch.best(queryTitle, identity.year.orEmpty(),
+                        candidates(otherList, other)).also {
+                        if (it != null) matchedCategory = other
+                    }
+                }
             } ?: run { cacheNegative(file); return null }
-            // Manual corrections already fetched detail, while automatic matches add one credit call.
-            val detail = if (manual != null) TmdbCreditsParser.parse(response, category)
+            // Manual corrections already fetched detail; otherwise read the
+            // matched category's credits, never the original misclassified tab.
+            val detail = if (manual != null) TmdbCreditsParser.parse(response, matchedCategory)
             else candidate.tmdbId?.let { tmdbId ->
-                val url = "https://api.themoviedb.org/3/$category/$tmdbId" +
+                val url = "https://api.themoviedb.org/3/$matchedCategory/$tmdbId" +
                     "?append_to_response=credits&language=zh-CN"
                 val creditResponse = runCatching { fetcher.load(url, token) }.getOrNull()
-                TmdbCreditsParser.parse(creditResponse, category)
+                TmdbCreditsParser.parse(creditResponse, matchedCategory)
             } ?: TmdbCredits()
             val synopsis = candidate.synopsis.trim().take(1300).takeIf { it.isNotBlank() }
             val rating = candidate.rating?.takeIf { it.isFinite() && it in 0.0..10.0 &&
                 candidate.voteCount >= 10 }
             val genres = TmdbGenreClassification.labels(candidate.genreIds)
-            val classified = TmdbGenreClassification.category(film.category, category,
+            val classified = TmdbGenreClassification.category(film.category, matchedCategory,
                 candidate.genreIds)
             val picture = EnrichedArtwork(
                 image("w780", candidate.posterPath), image("original", candidate.backdropPath),
                 synopsis, candidate.year?.toString(), rating, genres, classified,
                 candidate.originalTitle?.take(160), detail.actors, detail.directors, detail.regions,
                 detail.releaseDate ?: candidate.releaseDate, detail.runtimeMinutes, detail.people,
-                if (category == "tv") candidate.tmdbId else null,
-                candidate.names.firstOrNull { it.isNotBlank() }?.take(160), candidate.tmdbId, category
+                if (matchedCategory == "tv") candidate.tmdbId else null,
+                candidate.names.firstOrNull { it.isNotBlank() }?.take(160), candidate.tmdbId, matchedCategory
             )
             if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null) return null
             persist(file, JSONObject().put("poster", picture.posterUrl ?: "")
