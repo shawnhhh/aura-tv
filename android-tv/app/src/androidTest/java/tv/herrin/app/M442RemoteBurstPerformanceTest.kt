@@ -64,6 +64,21 @@ class M442RemoteBurstPerformanceTest {
         }
     }
 
+    private fun persistMetricLine(line: String) {
+        // Shell-owned evidence is pulled by emulator_ci.sh even if logcat rolls.
+        // A bounded numeric-only line cannot expose film names, URLs or secrets.
+        require(line.length <= 512 && line.all {
+            it.isLetterOrDigit() || it == ' ' || it == '_' || it == '=' ||
+                it == '.' || it == '%'
+        })
+        val cmd = "mkdir -p /data/local/tmp/herrin-test-evidence && " +
+            "echo '$line' >> /data/local/tmp/herrin-test-evidence/remote-performance.log"
+        val fd = InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand(cmd)
+        java.io.FileInputStream(fd.fileDescriptor).use { it.readBytes() }
+        fd.close()
+    }
+
     private fun p95Long(sorted: List<Long>): Long =
         sorted[(sorted.size * 95 / 100).coerceAtMost(sorted.lastIndex)]
 
@@ -97,9 +112,10 @@ class M442RemoteBurstPerformanceTest {
         }
         val p95EndToIdle = p95Long(endToIdleMs.sorted())
         val keyToFocusP95 = p95Ms(samples)
-        Log.i("HerrinPerf", "m443_vertical_dpad_events=32 focus_success=${samples.size} " +
-            "key_to_focus_p95_ms=$keyToFocusP95 " +
-            "end_to_idle_p95_ms=$p95EndToIdle")
+        val verticalMetrics = "m443_vertical_dpad_events=32 focus_success=${samples.size} " +
+            "key_to_focus_p95_ms=$keyToFocusP95 end_to_idle_p95_ms=$p95EndToIdle"
+        Log.i("HerrinPerf", verticalMetrics)
+        persistMetricLine(verticalMetrics)
         assertTrue("Vertical focus severe idle stall P95=$p95EndToIdle ms",
             p95EndToIdle < 1_000)
         assertTrue("Vertical focus callback latency P95=$keyToFocusP95 ms",
@@ -153,11 +169,13 @@ class M442RemoteBurstPerformanceTest {
         val severeFrames = frames.count { it > 33_333_334L }
         val longFramePct = if (frames.isEmpty()) 0.0 else 100.0 * longFrames / frames.size
         val longFramePctText = String.format(Locale.US, "%.2f", longFramePct)
-        Log.i("HerrinPerf", "m443_horizontal_dpad_events=40 focus_success=${samples.size} " +
+        val horizontalMetrics = "m443_horizontal_dpad_events=40 focus_success=${samples.size} " +
             "key_to_focus_p95_ms=$keyToFocusP95 end_to_idle_p95_ms=$p95EndToIdle " +
             "frame_p95_ms=$frameP95Ms frames_total=${frames.size} " +
             "frames_over_16_67ms=$longFrames frames_over_33_33ms=$severeFrames " +
-            "long_frame_pct=$longFramePctText")
+            "long_frame_pct=$longFramePctText"
+        Log.i("HerrinPerf", horizontalMetrics)
+        persistMetricLine(horizontalMetrics)
         assertTrue("Horizontal focus severe idle stall P95=$p95EndToIdle ms",
             p95EndToIdle < 1_000)
         assertTrue("Horizontal focus callback latency P95=$keyToFocusP95 ms",
