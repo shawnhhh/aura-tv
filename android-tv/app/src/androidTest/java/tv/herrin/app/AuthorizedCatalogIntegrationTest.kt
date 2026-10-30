@@ -69,6 +69,20 @@ class AuthorizedCatalogIntegrationTest {
         assertTrue(load(server.url("/uncached").toString()) is CatalogLoadResult.Error)
         android.util.Log.i("HerrinCatalog", "HTTPS: valid, malformed, timeout, redirect, oversized, HTML, 503, URL isolation and offline passed")
     }
+    @Test fun cancelledPosterDoesNotContactRemoteServer() = fixture { context, server, open ->
+        val attempts = java.util.concurrent.atomic.AtomicInteger()
+        val countingOpen: (String) -> HttpURLConnection = { raw ->
+            attempts.incrementAndGet()
+            open(raw)
+        }
+        val cache = AuthorizedPosterCache(context, countingOpen)
+        val url = server.url("/cancelled.png").toString()
+        assertNull(cache.load(url, cancelled = { true }))
+        assertEquals("Stale off-screen poster must never open a network socket",
+            0, attempts.get())
+        assertEquals(0, server.requestCount)
+    }
+
     @Test fun largePosterUsesDownsampledRgb565TileButHeroRetainsDetail() = fixture { context, server, open ->
         // The RGB565 optimization is valid for opaque artwork. A transparent
         // PNG must retain alpha rather than silently corrupting its edges.
