@@ -117,6 +117,45 @@ class ArtworkMetadataResolverTest {
         assertTrue(calls.last().contains("/tv/2026"))
     }
 
+    @Test fun `CMS genre labeled as action film is searched instead of dropped`() {
+        assertEquals("movie", ArtworkTitle.identify(film("追光者", "2026", "动作片")).mediaType)
+        val requested = mutableListOf<String>()
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            requested += url
+            when {
+                "/search/movie" in url -> """{"results":[{"id":437,"title":"追光者",
+                    "release_date":"2026-01-01","poster_path":"/movie.jpg"}]}"""
+                "/movie/437" in url -> """{"id":437,"credits":{"cast":[]}}"""
+                else -> error("Genre-based movie must not need a TV fallback")
+            }
+        })
+        assertEquals("https://image.tmdb.org/t/p/w780/movie.jpg",
+            resolver.lookup(film("追光者", "2026", "动作片"), exampleToken)?.posterUrl)
+        assertEquals(2, requested.size)
+        assertTrue(requested.first().contains("/search/movie"))
+    }
+
+    @Test fun `unknown CMS type searches movie and TV without guessing wrong title`() {
+        val requested = mutableListOf<String>()
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            requested += url
+            when {
+                "/search/movie" in url -> """{"results":[]}"""
+                "/search/tv" in url -> """{"results":[{"id":730,"name":"星河计划",
+                    "first_air_date":"2026-06-01","poster_path":"/tv.jpg"}]}"""
+                "/tv/730" in url -> """{"id":730,"credits":{"cast":[]}}"""
+                else -> error("Unexpected official TMDB route")
+            }
+        })
+        val result = resolver.lookup(film("星河计划", "2026", "未知"), exampleToken)
+        assertEquals("tv", result?.mediaType)
+        assertEquals(730, result?.tmdbTvId)
+        assertEquals(3, requested.size)
+        assertTrue(requested[0].contains("/search/movie"))
+        assertTrue(requested[1].contains("/search/tv"))
+        assertTrue(requested[2].contains("/tv/730"))
+    }
+
     @Test fun `traversal image paths and adult candidates are not accepted`() {
         val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { _, _ ->
             """{"results":[{"title":"安全影片","original_title":"安全影片",
