@@ -67,8 +67,11 @@ internal object TvBoxVodCodec {
     fun detail(json: String, film: Film, allowHttp: Boolean): Film {
         val id = film.cmsVodId ?: error("缺少 CMS 原始 vod_id")
         val candidates = decode(json, allowHttp)
+        // A CMS endpoint can return a single *different* VOD when ids= is
+        // ignored or rewritten by a gateway. Never play that wrong movie.
+        // The selected source ID is authoritative, not array cardinality.
         val found = candidates.firstOrNull { it.cmsVodId == id }
-            ?: candidates.singleOrNull() ?: error("CMS 详情未返回对应影片")
+            ?: error("CMS 详情未返回所选影片")
         return film.copy(
             subtitle = found.subtitle.ifBlank { film.subtitle },
             category = found.category.ifBlank { film.category },
