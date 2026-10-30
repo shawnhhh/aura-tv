@@ -719,6 +719,33 @@ private fun Herrin() {
             }
         }
     }
+    // The initial enrichment queue is deliberately capped at 240 to avoid
+    // flooding a TV with hundreds of network requests. Posters beyond that
+    // cap are matched *on demand* after cursor dwell, instead of reintroducing
+    // a second TMDB client inside every visible PosterArtwork composable.
+    LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch) {
+        if (metadataToken.isBlank()) return@LaunchedEffect
+        delay(400)
+        val candidates = providerFilms.orEmpty()
+        val index = candidates.indexOfFirst { it.id == filmId }
+        if (index < 240) return@LaunchedEffect
+        val selected = candidates[index]
+        if (selected.metadataSource == "TMDB") return@LaunchedEffect
+        val info = withContext(Dispatchers.IO) {
+            runCatching {
+                metadataResolver.lookup(selected, metadataToken,
+                    forceRefresh = selected.id in metadataForceIds)
+            }.getOrNull()
+        }
+        if (info != null) {
+            providerFilms = providerFilms?.map { current ->
+                if (current.id == selected.id && current.metadataSource != "TMDB")
+                    FilmMetadataEnrichment.apply(current, info)
+                else current
+            }
+        }
+        metadataForceIds = metadataForceIds - selected.id
+    }
     var favorites by remember(catalogScope) { mutableStateOf(prefs.idsFor(catalogScope)) }
     var reduced by remember { mutableStateOf(prefs.reducedMotion) }
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
