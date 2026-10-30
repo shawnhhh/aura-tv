@@ -14,21 +14,22 @@
 2. 72 次真实 Android TV KeyEvent 压力回归，逐键验证焦点目标：
    上下 32 次必须在 `blue/orbit` 间准确切换，左右 40 次必须在
    `tide/orbit` 间准确切换；**72/72** 是强制测试断言，而非虚构的 log 字段。
-3. 同时测量焦点回调 P95（毫秒）、测试输入直到 Compose 空闲 P95（毫米秒）；
+3. 额外加入 **20 次不等待 Compose idle** 的遥控器左右反向连按，最后必须回到 `card-orbit`，同时记录整组耗时。此测试不宣称逐键验证全部 20 次，因为持续注入时存在中间态重叠；单独展示最终焦点正确性。
+4. 同时测量焦点回调 P95（毫秒）、测试输入直到 Compose 空闲 P95（毫米秒）；
    `Window.FrameMetrics.TOTAL_DURATION` 计算帧 P95、60Hz 超 16.67ms
    长帧数量和占比、超过 33.33ms 严重长帧数量。长帧比例先做基线观察，
    不在缺少真机稳定基线时设定误导性的 60fps 强制断言。
-4. CI 每组测量输出仅包含数字，logcat 和独立 shell 所有者指标文件双通道保留；
+5. CI 每组测量输出仅包含数字，logcat 和独立 shell 所有者指标文件双通道保留；
    Android Emulator 的 `summary.json`、`REPORT.md` 和中文 `验收报告.md`
    自动读取并展示真实 P95 和长帧比率。缺失样本显示「未采集」，不自动填零。
-5. 改善 GPU 负担：取消竖版电影海报作为 Hero 背景时 32dp 全屏
+6. 改善 GPU 负担：取消竖版电影海报作为 Hero 背景时 32dp 全屏
    RenderEffect 模糊的离屏处理，保留低透明度的图片氛围层、
    显式暗色渐变及清晰比例正确的主海报。
-6. `android-tv/scripts/test_remote_perf_report.py` 测试指标解析、缺失值和
+7. `android-tv/scripts/test_remote_perf_report.py` 测试指标解析、缺失值和
    影视资源信息不泄露，模拟器 CI 在编译前先执行 Python 单测。
 
 ## 验收准则
-- 焦点正确率：72/72，没有静默丢失焦点。
+- 焦点正确率：72/72 的逐键目标断言；另外 20 次无 idle 连按的**最终**焦点正确。
 - **测试用模拟器预算**：焦点回调 P95 <750ms，输入至 Compose idle P95 <1000ms，
   必须存在 FrameMetrics 合成帧样本。这是宽松的严重回归门槛，
   **不是** 60fps 达标指标。
