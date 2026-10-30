@@ -19,6 +19,7 @@ REQUIRED_CLASSES = (
     "M449SettingsNoIdleBurstTest",
     "M453BufferingRemoteFocusInstrumentedTest",
     "M454CmsOneTapRecoveryInstrumentedTest",
+    "M456NativeFullscreenPlayerTest",
     "AuthorizedCatalogIntegrationTest",
     "TvBoxVodIntegrationTest",
     "TvBoxWarehouseIntegrationTest",

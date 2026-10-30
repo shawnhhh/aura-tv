@@ -39,16 +39,71 @@ class M453BufferingRemoteFocusInstrumentedTest {
             compose.waitUntil(7_000) {
                 runCatching {
                     compose.onNodeWithTag("transport-toggle").assertExists()
-                    compose.onNodeWithTag("transport-viewport-mode").assertExists()
+                    compose.onNodeWithTag("transport-more").assertExists()
                 }.isSuccess
             }
+            // Consumer playback must start as a short, two-row control strip:
+            // extra settings and all developer diagnostics are not composed.
+            compose.onNodeWithTag("transport-speed").assertDoesNotExist()
+            compose.onNodeWithTag("transport-audio").assertDoesNotExist()
+            compose.onNodeWithTag("transport-subtitle").assertDoesNotExist()
+            compose.onNodeWithTag("transport-viewport-mode").assertDoesNotExist()
+            compose.onNodeWithTag("danmaku-controls").assertDoesNotExist()
             compose.onNodeWithTag("player-verification-toggle").assertDoesNotExist()
             compose.onNodeWithTag("player-back-control").assertDoesNotExist()
             compose.onNodeWithTag("player-verification-status").assertDoesNotExist()
             compose.onNodeWithTag("player-journey-status").assertDoesNotExist()
-            compose.onNodeWithTag("transport-viewport-mode")
-                .assertTextContains("画面：", substring = true)
+
+            // Actual native TV remote Center opens advanced settings, not a
+            // test-only performClick on the additional "more" button.
+            compose.onNodeWithTag("transport-more")
+                .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            compose.waitForIdle()
+            compose.onNodeWithTag("transport-more").assertIsFocused()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
+                KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(5_000) {
+                runCatching {
+                    compose.onNodeWithTag("transport-viewport-mode").assertExists()
+                    compose.onNodeWithTag("transport-speed").assertExists()
+                    compose.onNodeWithTag("danmaku-controls").assertExists()
+                }.isSuccess
+            }
+            val before = compose.onNodeWithTag("transport-viewport-mode")
+                .fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Text]
+                .joinToString(" ") { it.text }
             compose.onNodeWithTag("transport-viewport-mode").performClick()
+            val after = compose.onNodeWithTag("transport-viewport-mode")
+                .fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Text]
+                .joinToString(" ") { it.text }
+            org.junit.Assert.assertNotEquals("Aspect mode must toggle without a player restart",
+                before, after)
+
+            // An expanded submenu must permit UP to return to the previous
+            // row. The old parent key interceptor hid every control on UP,
+            // making multi-row TV settings awkward or impossible to navigate.
+            compose.onNodeWithTag("transport-viewport-mode")
+                .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            compose.waitForIdle()
+            compose.onNodeWithTag("transport-viewport-mode").assertIsFocused()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
+                KeyEvent.KEYCODE_DPAD_UP)
+            compose.waitForIdle()
+            compose.onNodeWithTag("transport-more").assertExists()
+            compose.onNodeWithTag("transport-viewport-mode").assertExists()
+
+            // Return to compact HUD without removing or relocating the user's
+            // explicitly deleted upper-left technical labels.
+            compose.onNodeWithTag("transport-more")
+                .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
+                KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(5_000) {
+                runCatching {
+                    compose.onNodeWithTag("transport-viewport-mode").assertDoesNotExist()
+                    compose.onNodeWithTag("transport-speed").assertDoesNotExist()
+                }.isSuccess
+            }
             compose.onNodeWithTag("player-verification-toggle").assertDoesNotExist()
             compose.onNodeWithTag("player-back-control").assertDoesNotExist()
         } finally {
