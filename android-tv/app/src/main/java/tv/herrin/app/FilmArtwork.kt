@@ -109,8 +109,8 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
                     color = Color(0x708BA0B8))
             }
         } else {
-            Image(painterResource(film.artwork), null, Modifier.fillMaxSize().blur(10.dp),
-                contentScale = ContentScale.Crop, alpha = 0.24f)
+            Image(painterResource(film.artwork), null, Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop, alpha = 0.20f)
             Image(painterResource(film.artwork), film.title,
                 Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit)
         }
@@ -118,8 +118,11 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
             Box(Modifier.fillMaxSize().alpha(posterAlpha).testTag("poster-remote-ready")
                 .background(Color(0xFF101821))) {
                 val image = poster.asImageBitmap()
-                Image(image, null, Modifier.fillMaxSize().blur(12.dp),
-                    contentScale = ContentScale.Crop, alpha = 0.34f)
+                // A per-card RenderEffect blur forces expensive GPU offscreen passes
+                // whenever the viewer navigates quickly through the rail.
+                // Retain a dim source-image backdrop plus sharp foreground.
+                Image(image, null, Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop, alpha = 0.23f)
                 Box(Modifier.fillMaxSize().background(Color(0xA20C111A)))
                 Image(image, film.title, Modifier.fillMaxSize().padding(3.dp),
                     contentScale = ContentScale.Fit)
