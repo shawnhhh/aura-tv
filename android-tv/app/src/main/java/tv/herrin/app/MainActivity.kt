@@ -813,6 +813,17 @@ private fun Herrin() {
         screen == "detail" && film.id == bypassGroupFilmId
     }
     val displayFilm = showGroup?.displayFilm ?: film
+    // User input and title / Play CTA stay immediate. Full-screen hero artwork
+    // follows only after a brief, cancellable focus dwell. Rapid D-pad repeats
+    // therefore cannot enqueue a chain of 2K image decodes/crossfades.
+    var heroArtworkFilm by remember(catalogScope) { mutableStateOf(displayFilm) }
+    LaunchedEffect(displayFilm.id, displayFilm.artworkUrl, displayFilm.backdropUrl,
+        screen, category) {
+        if (TvFocusFramePolicy.delaysBackground(screen)) {
+            delay(TvFocusFramePolicy.HERO_DWELL_MS)
+        }
+        heroArtworkFilm = displayFilm
+    }
     fun displayKey(item: Film): String = showCatalog.groupFor(item.id)?.key ?: item.id
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
@@ -949,18 +960,26 @@ private fun Herrin() {
     }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
     val currentLines = currentEpisode?.lines.orEmpty()
-    val seasonLayout = remember(film.id, film.playbackEpisodes) { SeasonEpisodes.fromFilm(film) }
-    val groupLayout = remember(showGroup) { showGroup?.let(GroupSeasonIndex::from) }
+    // Neither a season index nor its persistent playback history belongs on
+    // the hot D-pad path through the poster wall. Prepare only when a detail
+    // or playback screen genuinely needs that information.
+    val viewingFilm = TvFocusFramePolicy.needsPlaybackSelectionData(screen)
+    val seasonLayout = remember(film.id, film.playbackEpisodes, viewingFilm) {
+        if (viewingFilm) SeasonEpisodes.fromFilm(film) else null
+    }
+    val groupLayout = remember(showGroup, viewingFilm) {
+        if (viewingFilm) showGroup?.let(GroupSeasonIndex::from) else null
+    }
     val unmappedGroupMembers = showGroup?.members?.filter { member ->
         groupLayout?.sections?.any { section ->
             section.episodes.any { entry -> entry.sources.any { it.film.id == member.film.id } }
         } != true
     }.orEmpty()
-    val groupResume = groupLayout?.let { layout ->
+    val groupResume = if (viewingFilm) groupLayout?.let { layout ->
         GroupSeasonIndex.latest(layout) { option ->
             watchHistory.load(catalogScope, option.film.id, option.source.number, option.line.id)
         }
-    }
+    } else null
     val groupSection = groupLayout?.sections?.firstOrNull { it.number == detailSelectedSeason }
         ?: groupLayout?.sections?.firstOrNull { it.number == groupResume?.first?.season }
         ?: groupLayout?.sections?.firstOrNull()
@@ -972,11 +991,11 @@ private fun Herrin() {
         ?.flatMap { it.sources.asSequence() }?.firstOrNull { option ->
             option.film.id == film.id && option.source.number == episode && option.line.id == line
         } ?: groupResume?.first
-    val seasonResume = seasonLayout?.let { layout ->
+    val seasonResume = if (viewingFilm) seasonLayout?.let { layout ->
         SeasonPlayback.latest(layout) { sourceNumber, lineId ->
             watchHistory.load(catalogScope, film.id, sourceNumber, lineId)
         }
-    }
+    } else null
     val detailSeason = seasonLayout?.sections?.firstOrNull {
         it.number == detailSelectedSeason
     } ?: seasonLayout?.sections?.firstOrNull {
@@ -991,9 +1010,10 @@ private fun Herrin() {
     var seasonOfficialEpisodes by remember(film.id, film.tmdbTvId, detailSeason?.number, metadataToken) {
         mutableStateOf<Map<Int, TmdbEpisodeDisplay>>(emptyMap())
     }
-    LaunchedEffect(film.id, film.tmdbTvId, detailSeason?.number, metadataToken) {
+    LaunchedEffect(screen, film.id, film.tmdbTvId, detailSeason?.number, metadataToken) {
         val seasonNumber = detailSeason?.number
-        seasonOfficialEpisodes = if (film.metadataSource == "TMDB" &&
+        seasonOfficialEpisodes = if (TvFocusFramePolicy.shouldLoadSeasonDetails(screen) &&
+            film.metadataSource == "TMDB" &&
             film.tmdbTvId != null && seasonNumber != null && metadataToken.isNotBlank()) {
             withContext(Dispatchers.IO) {
                 TmdbSeasonEpisodes(java.io.File(context.cacheDir, "tmdb-artwork"),
@@ -1015,8 +1035,8 @@ private fun Herrin() {
     }
     val streamEvidenceKey = "$catalogScope|$catalogRefresh|${film.id}|$episode|$line|" +
         currentLines.firstOrNull { it.id == line }?.uri.orEmpty()
-    val resume = watchHistory.load(catalogScope, film.id, episode,
-        if (currentLines.isEmpty()) "independent-test" else line)
+    val resume = if (viewingFilm) watchHistory.load(catalogScope, film.id, episode,
+        if (currentLines.isEmpty()) "independent-test" else line) else null
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
     val settingsListState = rememberLazyListState()
@@ -1271,9 +1291,13 @@ private fun Herrin() {
         // Compose the lightweight home structure behind the fading logo, but
         // defer the large image decode until the logo is completely gone.
         // On resource-limited TVs this avoids competing with first-frame UI.
-        if (!splash && (!sourceConfigured || films.isNotEmpty())) {
-            Crossfade(targetState = displayFilm, animationSpec = if (reduceMotion) tween(0)
-                else tween(360, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
+        if (!splash && TvFocusFramePolicy.allowsBackdrop(screen) &&
+            (!sourceConfigured || films.isNotEmpty())) {
+            // Avoid drawing the heavy 2K bitmap underneath a full-screen video
+            // Surface, and limit crossfade to stable focus instead of each key.
+            Crossfade(targetState = heroArtworkFilm, animationSpec = if (reduceMotion) tween(0)
+                else tween(TvFocusFramePolicy.HERO_CROSSFADE_MS,
+                    easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
                 FilmArtwork(hero, Modifier.fillMaxSize())
             }
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
