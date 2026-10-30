@@ -1030,61 +1030,46 @@ private fun Herrin() {
         }
     }
     var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
-    var transferringSettingsFocus by remember { mutableStateOf(false) }
+    // Latest D-pad press wins: an old animated scroll must never block a newer
+    // request. Scroll instantly, then focus after the Lazy item is attached.
+    var settingsFocusJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun moveCompactSettingsFocus(target: String) {
         val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
-        if (transferringSettingsFocus) return
-        // Ordinary adjacent transitions stay synchronous and respond to a single D-pad press.
+        settingsFocusJob?.cancel()
         if (settingsListState.layoutInfo.visibleItemsInfo.any { it.index == itemIndex } &&
             runCatching { requester(target).requestFocus() }.isSuccess) return
-        transferringSettingsFocus = true
-        uiScope.launch {
-            try {
-                // Explicitly compose distant rows first; requesting an unattached field
-                // otherwise drops the press on smaller television viewports.
-                withTimeoutOrNull(1_100) {
-                    settingsListState.animateScrollToItem(itemIndex)
-                } ?: settingsListState.scrollToItem(itemIndex)
+        settingsFocusJob = uiScope.launch {
+            settingsListState.scrollToItem(itemIndex)
+            repeat(3) {
                 withFrameNanos { }
-                runCatching { requester(target).requestFocus() }
-            } finally {
-                transferringSettingsFocus = false
+                if (runCatching { requester(target).requestFocus() }.isSuccess) return@launch
             }
         }
     }
-    var transferringPosterFocus by remember { mutableStateOf(false) }
+    var posterFocusJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun transferPosterFocus(from: LazyListState, to: LazyListState,
                             fromIndex: Int, destination: List<Film>, prefix: String) {
-        if (transferringPosterFocus || destination.isEmpty()) return
-        transferringPosterFocus = true
-        uiScope.launch {
-            try {
-                val index = fromIndex.coerceIn(0, destination.lastIndex)
-                val sourceOffset = from.layoutInfo.visibleItemsInfo
-                    .firstOrNull { it.index == fromIndex }?.offset?.coerceAtLeast(0) ?: 0
-                // Keep the destination at approximately the same horizontal screen
-                // position. LazyRow may not have composed an off-screen target yet.
-                val alreadyAligned = to.layoutInfo.visibleItemsInfo.any {
-                    it.index == index && it.offset - sourceOffset in -24..24
-                }
-                if (!alreadyAligned) {
-                    // D-pad focus is an immediate navigation operation, not
-                    // a one-second carousel animation. Compose the target
-                    // row at the requested offset in the next layout frame.
-                    to.scrollToItem(index, -sourceOffset)
-                }
-                val target = "$prefix${displayKey(destination[index])}"
-                repeat(3) {
-                    withFrameNanos { }
-                    if (runCatching { requester(target).requestFocus() }.isSuccess) {
-                        RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
-                        return@launch
-                    }
-                }
-                RemoteTrace.event { "RAIL target unattached=$target" }
-            } finally {
-                transferringPosterFocus = false
+        if (destination.isEmpty()) return
+        posterFocusJob?.cancel()
+        val index = fromIndex.coerceIn(0, destination.lastIndex)
+        val sourceOffset = from.layoutInfo.visibleItemsInfo
+            .firstOrNull { it.index == fromIndex }?.offset?.coerceAtLeast(0) ?: 0
+        val target = "$prefix${displayKey(destination[index])}"
+        // Cancelled jobs do not hold a global boolean lock. Rapid alternating
+        // UP/DOWN requests can supersede pending layout/focus restoration.
+        posterFocusJob = uiScope.launch {
+            val aligned = to.layoutInfo.visibleItemsInfo.any {
+                it.index == index && it.offset - sourceOffset in -24..24
             }
+            if (!aligned) to.scrollToItem(index, -sourceOffset)
+            repeat(3) {
+                withFrameNanos { }
+                if (runCatching { requester(target).requestFocus() }.isSuccess) {
+                    RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
+                    return@launch
+                }
+            }
+            RemoteTrace.event { "RAIL target unattached=$target" }
         }
     }
     fun details(f: Film) {
