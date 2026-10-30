@@ -348,6 +348,7 @@ private fun AuthorizedPlaybackSession(
     }
     BackHandler { requestBack("dispatcher") }
     Box(Modifier.fillMaxSize().background(Color.Black)
+        .testTag("player-root-focus")
         .focusRequester(playerRootFocus)
         .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
