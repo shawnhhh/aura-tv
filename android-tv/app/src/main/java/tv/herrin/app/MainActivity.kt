@@ -2109,8 +2109,12 @@ private fun Herrin() {
                     .onPreviewKeyEvent { event ->
                         // An active TV text editor owns its arrow keys. Only the
                         // non-editing focus stops use compact-row navigation.
-                        if (screen != "settings" || !settingsTvBoxOnly ||
-                            configInputFocused || event.type != KeyEventType.KeyDown) false
+                        if (!CompactSettingsKeyPolicy.intercept(
+                                onSettings = screen == "settings",
+                                compact = settingsTvBoxOnly,
+                                editorFocused = configInputFocused,
+                                keyDown = event.type == KeyEventType.KeyDown,
+                                code = event.nativeKeyEvent.keyCode)) false
                         else {
                             val code = event.nativeKeyEvent.keyCode
                             val target = when (code) {
