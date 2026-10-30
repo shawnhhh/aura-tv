@@ -69,6 +69,26 @@ class AuthorizedCatalogIntegrationTest {
         assertTrue(load(server.url("/uncached").toString()) is CatalogLoadResult.Error)
         android.util.Log.i("HerrinCatalog", "HTTPS: valid, malformed, timeout, redirect, oversized, HTML, 503, URL isolation and offline passed")
     }
+    @Test fun largePosterUsesDownsampledRgb565TileButHeroRetainsDetail() = fixture { context, server, open ->
+        val image = Bitmap.createBitmap(1200, 1800, Bitmap.Config.ARGB_8888)
+        val data = ByteArrayOutputStream()
+        image.eraseColor(android.graphics.Color.BLUE)
+        assertTrue(image.compress(Bitmap.CompressFormat.PNG, 80, data))
+        image.recycle()
+        fun response() = MockResponse().setHeader("Content-Type", "image/png")
+            .setBody(okio.Buffer().write(data.toByteArray()))
+        val url = server.url("/large.png").toString()
+        server.enqueue(response())
+        val cache = AuthorizedPosterCache(context, open)
+        val tile = cache.load(url, hero = false)!!
+        assertTrue("TV card bitmap is oversized", tile.width <= 640 && tile.height <= 960)
+        assertEquals(Bitmap.Config.RGB_565, tile.config)
+        val hero = cache.load(url, hero = true)!!
+        assertTrue(hero.width >= tile.width && hero.height >= tile.height)
+        assertEquals(Bitmap.Config.ARGB_8888, hero.config)
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun posterCacheHitOfflineIsolationCorruptionRecoveryAndResponseValidation() = fixture { context, server, open ->
         val cache = AuthorizedPosterCache(context, open)
         val output = ByteArrayOutputStream()
@@ -80,13 +100,19 @@ class AuthorizedCatalogIntegrationTest {
         fun image() = MockResponse().setHeader("Content-Type", "image/png").setBody(okio.Buffer().write(output.toByteArray()))
         val url = server.url("/poster.png").toString()
         server.enqueue(image())
-        assertEquals(16, cache.load(url)!!.width)
+        val firstBitmap = cache.load(url)!!
+        assertEquals(16, firstBitmap.width)
         val requests = server.requestCount
-        assertNotNull(cache.load(url))
+        // Cached tile bitmaps must be returned by identity, not re-decoded
+        // each time a LazyRow recycles and re-attaches the same film.
+        assertSame(firstBitmap, AuthorizedPosterCache(context, open).load(url))
         assertEquals(requests, server.requestCount)
         File(context.cacheDir, "authorized-posters").listFiles()!!.single().writeText("broken")
         server.enqueue(image())
-        assertNotNull(cache.load(url))
+        val recoveredBitmap = cache.load(url)
+        assertNotNull(recoveredBitmap)
+        assertNotSame("A corrupted disk image must invalidate the memory entry",
+            firstBitmap, recoveredBitmap)
         assertEquals(requests + 1, server.requestCount)
         server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html>error</html>"))
         assertNull(cache.load(server.url("/html").toString()))
