@@ -2716,9 +2716,15 @@ private fun Herrin() {
                                 val value = tmdbTokenDraft.trim()
                                 if (value.isNotEmpty() && value.length >= 40 && !value.any(Char::isWhitespace)) {
                                     prefs.tmdbReadToken = value
+                                    metadataResolver.clearAuthCooldown(value)
+                                    // Saving the SAME token must still retry old negative results;
+                                    // match the compact-settings action and never require relaunch.
+                                    metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
+                                    providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                     metadataToken = value
                                     tmdbTokenDraft = ""
-                                    tmdbSettingsStatus = "已保存；正在匹配海报与影视资料"
+                                    metadataRescanEpoch++
+                                    tmdbSettingsStatus = "已保存；正在重新匹配海报与影视资料"
                                 } else tmdbSettingsStatus = "请输入完整的 TMDB API Read Access Token"
                             }
                             TvButton("停用高清刮削", modifier = Modifier.testTag("tmdb-token-clear"),
