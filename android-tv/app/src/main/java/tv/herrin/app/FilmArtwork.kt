@@ -56,10 +56,10 @@ fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = Con
     val poster = rememberAuthorizedPoster(film, hero = true)
     val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
         animationSpec = tween(280), label = "poster-fade-in")
-    val hasExternalImage = film.artworkUrl != null || film.backdropUrl != null ||
-        (!film.isOriginalDemo() && LocalContext.current
-            .getSharedPreferences("herrin", Context.MODE_PRIVATE)
-            .getString("tmdb_read_token", "").orEmpty().isNotBlank())
+    // External titles without an image show a neutral backdrop, not a
+    // misleading demo movie photo. No preferences I/O during every frame.
+    val hasExternalImage = !film.isOriginalDemo() ||
+        film.artworkUrl != null || film.backdropUrl != null
     Box(modifier, contentAlignment = Alignment.CenterEnd) {
         if (!hasExternalImage) Image(painterResource(film.artwork), film.title,
             Modifier.fillMaxSize(), contentScale = contentScale)
@@ -91,10 +91,9 @@ fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = Con
 @Composable
 fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
     val poster = rememberAuthorizedPoster(film)
-    val remoteArtwork = !film.artworkUrl.isNullOrBlank() ||
-        (!film.isOriginalDemo() && LocalContext.current
-            .getSharedPreferences("herrin", Context.MODE_PRIVATE)
-            .getString("tmdb_read_token", "").orEmpty().isNotBlank())
+    // Constant-time presentation identity. Avoid SharedPreferences lookups
+    // during focus/scroll recompositions across dozens of poster cards.
+    val remoteArtwork = !film.isOriginalDemo() || !film.artworkUrl.isNullOrBlank()
     val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
         animationSpec = if (reduced) snap() else tween(120), label = "card-poster-fade")
     Box(modifier, contentAlignment = Alignment.Center) {
