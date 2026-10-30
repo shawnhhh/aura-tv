@@ -1044,17 +1044,35 @@ private fun Herrin() {
     // In-flight jobs are implementation details, not UI state: updating them
     // must not trigger a global Compose recomposition on every remote press.
     val settingsFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    val settingsIntent = remember { CompactSettingsIntent() }
+    LaunchedEffect(screen, settingsTvBoxOnly) {
+        if (screen != "settings" || !settingsTvBoxOnly) {
+            settingsFocusJob[0]?.cancel()
+            settingsIntent.clear()
+        }
+    }
     fun moveCompactSettingsFocus(target: String) {
         val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
+        settingsIntent.request(target)
         settingsFocusJob[0]?.cancel()
+        fun confirmFocus(): Boolean {
+            if (runCatching { requester(target).requestFocus() }.isFailure) return false
+            if (focusId != target) return false
+            settingsIntent.settled(target)
+            return true
+        }
         if (settingsListState.layoutInfo.visibleItemsInfo.any { it.index == itemIndex } &&
-            runCatching { requester(target).requestFocus() }.isSuccess) return
+            confirmFocus()) return
         settingsFocusJob[0] = uiScope.launch {
             settingsListState.scrollToItem(itemIndex)
+            if (confirmFocus()) return@launch
             repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
                 withFrameNanos { }
-                if (runCatching { requester(target).requestFocus() }.isSuccess) return@launch
+                if (confirmFocus()) return@launch
             }
+            // If this target never attached, do not keep routing future keys
+            // from a stale offscreen destination.
+            settingsIntent.abandoned(target)
         }
     }
     val posterFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
@@ -2095,9 +2113,9 @@ private fun Herrin() {
                             val code = event.nativeKeyEvent.keyCode
                             val target = when (code) {
                                 android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                                    TvFocusRoutes.compactSettingsNeighbor(focusId, false, lastMovieSettingsAction)
+                                    settingsIntent.next(focusId, false, lastMovieSettingsAction)
                                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                                    TvFocusRoutes.compactSettingsNeighbor(focusId, true, lastMovieSettingsAction)
+                                    settingsIntent.next(focusId, true, lastMovieSettingsAction)
                                 else -> null
                             }
                             if (target == null) false else {
