@@ -37,7 +37,7 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             val config = JSONObject().put("sites", JSONArray().put(JSONObject()
                 .put("key", "licensed")
                 .put("name", "授权本地 CMS")
-                .put("api", server.url("/cms").toString())).toString()
+                .put("api", server.url("/cms").toString()))).toString()
             val listing = JSONObject().put("list", JSONArray().put(JSONObject()
                 .put("vod_id", "film-A").put("vod_name", "我的影片 A")
                 .put("type_name", "电影"))).toString()
@@ -113,7 +113,7 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             val site = JSONObject().put("sites", JSONArray().put(JSONObject()
                 .put("key", "licensed")
                 .put("name", "授权直链源")
-                .put("api", server.url("/cms").toString())).toString()
+                .put("api", server.url("/cms").toString()))).toString()
             // The CMS is deliberately allowed to return HTTP metadata, but
             // its first playback link is not accepted by the licensed
             // HTTPS-only player. The second valid line must be selected.
