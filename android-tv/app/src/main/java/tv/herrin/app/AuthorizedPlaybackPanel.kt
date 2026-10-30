@@ -127,8 +127,12 @@ private fun AuthorizedPlaybackSession(
     val initialControl = remember { FocusRequester() }
     val retryControl = remember { FocusRequester() }
     val selectionControl = remember { FocusRequester() }
+    val moreControl = remember { FocusRequester() }
     val playerRootFocus = remember { FocusRequester() }
     var controlsVisible by remember(media) { mutableStateOf(true) }
+    // Playback starts with a small, unintrusive remote-first control strip.
+    // The isolated debug activity keeps full controls visible for legacy E2E.
+    var advancedControlsVisible by remember(media) { mutableStateOf(testDiagnostics) }
     var transportFocused by remember { mutableStateOf(false) }
     var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
@@ -308,6 +312,7 @@ private fun AuthorizedPlaybackSession(
             playbackState == Player.STATE_READY && !showVerification && errorMessage == null) {
             delay(8_000)
             controlsVisible = false
+            if (!testDiagnostics) advancedControlsVisible = false
             playerRootFocus.requestFocus()
         }
     }
@@ -548,12 +553,14 @@ private fun AuthorizedPlaybackSession(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(elapsed(shownPosition), color = Color.White, modifier = Modifier.testTag("player-position-label"))
                 val format = player.videoFormat
-                Text("画质：" + PlayerQualityLabel.fromDecoded(
-                    player.videoSize.width, player.videoSize.height,
-                    format?.frameRate ?: -1f, format?.sampleMimeType,
-                    format?.colorInfo?.colorTransfer ?: -1,
-                    player.videoDecoderCounters?.renderedOutputBufferCount ?: 0),
-                    color = Color(0xFFD3E6F7), modifier = Modifier.testTag("player-quality-label"))
+                if (advancedControlsVisible) {
+                    Text("画质：" + PlayerQualityLabel.fromDecoded(
+                        player.videoSize.width, player.videoSize.height,
+                        format?.frameRate ?: -1f, format?.sampleMimeType,
+                        format?.colorInfo?.colorTransfer ?: -1,
+                        player.videoDecoderCounters?.renderedOutputBufferCount ?: 0),
+                        color = Color(0xFFD3E6F7), modifier = Modifier.testTag("player-quality-label"))
+                }
                 Text(elapsed(shownDuration), color = Color(0xFFD2D5DE), modifier = Modifier.testTag("player-duration-label"))
             }
             Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0xFF434857))) {
@@ -561,15 +568,17 @@ private fun AuthorizedPlaybackSession(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { PlaybackTransport.seekBy(player, -10_000L) },
+                Button(onClick = { applyRemoteSeek(-10_000L) },
                     modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
                 Button(onClick = { if (player.playWhenReady) player.pause() else player.play() },
                     modifier = Modifier.focusRequester(initialControl).focusProperties {
-                        if (onLineSelection != null || onEpisodeSelection != null) down = selectionControl
+                        down = if (advancedControlsVisible &&
+                            (onLineSelection != null || onEpisodeSelection != null))
+                            selectionControl else moreControl
                     }.testTag("transport-toggle")) {
                     Text(if (player.playWhenReady) "暂停" else "播放")
                 }
-                Button(onClick = { PlaybackTransport.seekBy(player, 10_000L) },
+                Button(onClick = { applyRemoteSeek(10_000L) },
                     modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
                 Button(onClick = {
                     player.setPlaybackSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
