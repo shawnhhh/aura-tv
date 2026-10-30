@@ -2557,7 +2557,7 @@ private fun Herrin() {
                                                         filmId = loaded.films.first().id
                                                         category = "首页"
                                                         screen = "browse"
-                                                        tvBoxStatus = "已读取 ${loaded.films.size} 部影片；可直接播放的 HTTPS 线路会显示在影片详情中"
+                                                        tvBoxStatus = "已读取 ${loaded.films.size} 部影片；点击海报即可尝试播放有权限的 HTTPS 线路"
                                                     }
                                                 }
                                             }
