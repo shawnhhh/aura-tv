@@ -707,12 +707,19 @@ private fun Herrin() {
     }
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
+    var metadataRescanEpoch by remember { mutableIntStateOf(0) }
     var tmdbConnectivity by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED) }
     LaunchedEffect(metadataToken) {
-        tmdbConnectivity = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
+        val result = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
             else withContext(Dispatchers.IO) { TmdbConnectivityProbe.check(metadataToken) }
+        tmdbConnectivity = result
+        if (result == TmdbProbeState.CONNECTED) {
+            metadataResolver.clearAuthCooldown(metadataToken)
+            // First scan can have been skipped while a previous 401 cooldown
+            // was active. One verified rescan avoids a misleading 20/20 zero.
+            metadataRescanEpoch++
+        }
     }
-    var metadataRescanEpoch by remember { mutableIntStateOf(0) }
     // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
     val catalogIdentity = remember(providerFilms) {
         providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
@@ -2344,15 +2351,19 @@ private fun Herrin() {
                                     val value = tmdbTokenDraft.trim()
                                     if (value.length >= 40 && !value.any(Char::isWhitespace)) {
                                         prefs.tmdbReadToken = value
+                                        metadataResolver.clearAuthCooldown(value)
+                                        metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
+                                        providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataToken = value
                                         tmdbTokenDraft = ""
                                         metadataRescanEpoch++
-                                        tmdbSettingsStatus = "TMDB 已保存并开始匹配影视资料"
+                                        tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
                                 TvButton("重新刮削",
                                     modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
                                     if (metadataToken.isNotBlank()) {
+                                        metadataResolver.clearAuthCooldown(metadataToken)
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataRescanEpoch++
