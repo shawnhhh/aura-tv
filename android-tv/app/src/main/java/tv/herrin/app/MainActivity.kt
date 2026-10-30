@@ -1692,12 +1692,12 @@ private fun Herrin() {
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton(if (providerFilms == null) "▶ 播放演示" else if (film.playbackEpisodes.isNotEmpty()) "▶ 播放" else "查看选集",
+                            TvButton(if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
                                 selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },
                                 modifier = Modifier.testTag("play")
                                     .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
                                     .focusRequester(requester("play"))) {
-                                if (showGroup != null || providerFilms != null && film.playbackEpisodes.isEmpty()) details(film)
+                                if (showGroup != null || providerFilms != null) details(film)
                                 else {
                                     returnScreen = "browse"
                                     episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
