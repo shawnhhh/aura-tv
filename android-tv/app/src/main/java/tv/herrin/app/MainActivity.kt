@@ -3396,7 +3396,7 @@ internal fun Splash(reduced: Boolean, done: () -> Unit) {
         if (!reduced) delay(LaunchMotion.WORDMARK_HOLD_MS)
         done()
     }
-    BoxWithConstraints(
+    Box(
         Modifier.fillMaxSize().background(Color(0xFF080B10))
             .testTag("splash").focusRequester(focus)
             .onPreviewKeyEvent { event ->
