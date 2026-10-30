@@ -119,7 +119,7 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
     val focusedScale = if (quiet) 1.028f else 1.042f
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduced) focusedScale else 1f,
-        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.84f, stiffness = 460f),
+        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.89f, stiffness = 760f),
         label = "tv-pill-focus-scale"
     )
     val liftPx = with(LocalDensity.current) { 2.dp.toPx() }
@@ -130,10 +130,11 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
         quiet -> Color.Transparent
         else -> Color(0x99343840)
     }
-    val fill by animateColorAsState(targetFill, if (reduced) snap() else tween(190),
-        label = "tv-pill-fill")
-    val contentColor by animateColorAsState(if (focused) Color(0xFF111318) else Color.White,
-        if (reduced) snap() else tween(190), label = "tv-pill-content")
+    // Primary D-pad selection must become visibly white in the SAME frame.
+    // Previous 190ms animated background/text colors left a perceptible lag
+    // even after native focus had already moved.
+    val fill = targetFill
+    val contentColor = if (focused) Color(0xFF111318) else Color.White
     Box(modifier
         .graphicsLayer {
             scaleX = scale
@@ -3267,10 +3268,11 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
     // Keep artwork dimensions fixed. Enlarging the whole focus target used to
     // crop neighboring cards and made TV posters appear to change size.
     val lift by animateFloatAsState(if (focused && !reduced) 2.5f else 0f,
-        if (reduced) snap() else tween(200, easing = FastOutSlowInEasing),
+        if (reduced) snap() else tween(105, easing = FastOutSlowInEasing),
         label = "poster-focus-lift")
-    val stroke by animateColorAsState(if (focused) Color(0xFFF6F7FA) else Color(0x665E6A78),
-        if (reduced) snap() else tween(190), label = "poster-focus-outline")
+    // Draw focus instantly, animate only the compositor translation;
+    // do not invalidate the image/border for 190ms on every key press.
+    val stroke = if (focused) Color(0xFFF6F7FA) else Color(0x665E6A78)
     val shape = RoundedCornerShape(13.dp)
     val liftPx = with(LocalDensity.current) { 1.dp.toPx() }
     Box(modifier.width(217.dp).height(116.dp)
