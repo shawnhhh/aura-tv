@@ -126,7 +126,11 @@ class M438SingleWarehousePerformanceTest {
                 " dpad_p95_ms=$p95 frame_p95_ms=" + (frameP95 ?: "unavailable") +
                 " frames_over_16ms=" + frames.count { it > 16L } +
                 " frames_total=" + frames.size)
-            assertTrue("Severe TV remote stalling: P95=$p95 ms", p95 < 1_500)
+            // Baseline (2026-10-30, Android TV API30): 199ms P95. Tighten
+            // the regression budget from 1500ms to 600ms while leaving
+            // headroom for shared GitHub CI emulator noise. Real hardware
+            // target remains <= 100-150ms and is not implied by this gate.
+            assertTrue("TV remote regression: P95=$p95 ms (limit 600ms)", p95 < 600)
         }
     }
 }
