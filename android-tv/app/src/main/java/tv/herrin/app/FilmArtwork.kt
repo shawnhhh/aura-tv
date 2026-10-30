@@ -268,12 +268,16 @@ class AuthorizedPosterCache(
                     }
                     val bytes = data.toByteArray()
                     val bitmap = decode(bytes, hero) ?: return null
-                    file.parentFile?.mkdirs()
-                    val cached = file.parentFile?.listFiles()?.sortedBy { it.lastModified() }.orEmpty()
-                    if (cached.size > 150 || cached.sumOf { it.length() } > 100_000_000L) {
-                        cached.take(25).forEach { it.delete() }
+                    // Directory enumeration, sorting and disk-usage walks are
+                    // expensive when 60+ posters arrive on a cold TV home.
+                    // Store first, then prune at most once per 16 image writes.
+                    val folder = file.parentFile
+                    if (folder != null && (folder.isDirectory || folder.mkdirs())) {
+                        runCatching {
+                            file.writeBytes(bytes)
+                            PosterDiskCacheMaintenance.onImageStored(folder, file)
+                        }
                     }
-                    runCatching { file.writeBytes(bytes) }
                     return rememberDecoded(bitmap)
                 } finally {
                     connection.disconnect()
