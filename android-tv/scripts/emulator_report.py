@@ -33,8 +33,20 @@ summary = {'exit_code': int(sys.argv[1]), 'device': 'Android TV API 30 x86 / tv_
            'decoder_evidence': re.findall(r'HerrinDecoder[^\n]*', log),
            'catalog_evidence': re.findall(r'HerrinCatalog[^\n]*', log),
            'remote_HTTPS_stream_tested': False}
+# Instrumentation also writes two bounded numeric-only lines to shell-owned
+# evidence so a long integration suite cannot roll the metrics out of logcat.
+metric_log = log
+for metric_file in (
+    out / 'test-evidence' / 'remote-performance.log',
+    out / 'test-evidence' / 'herrin-test-evidence' / 'remote-performance.log',
+):
+    if metric_file.is_file():
+        metric_log += '\\n' + '\\n'.join(
+            'HerrinPerf: ' + line
+            for line in metric_file.read_text(errors='replace').splitlines()
+        )
 # Only whitelisted numeric key/value pairs go into artifacts.
-summary['remote_performance'] = parse_remote_performance(log)
+summary['remote_performance'] = parse_remote_performance(metric_log)
 (out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',
          '| Instrumentation test | Result |', '| --- | --- |']
