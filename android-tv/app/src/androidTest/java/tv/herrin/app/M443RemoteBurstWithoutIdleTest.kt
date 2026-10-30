@@ -52,8 +52,15 @@ class M443RemoteBurstWithoutIdleTest {
             runCatching { compose.onNodeWithTag("card-orbit").assertIsFocused() }.isSuccess
         }
         val totalMs = (SystemClock.elapsedRealtimeNanos() - started) / 1_000_000
-        Log.i("HerrinPerf", "m443_rapid_burst_events=20 last_focus_correct=1 " +
-            "burst_to_final_focus_ms=$totalMs")
+        val metrics = "m443_rapid_burst_events=20 last_focus_correct=1 " +
+            "burst_to_final_focus_ms=$totalMs"
+        Log.i("HerrinPerf", metrics)
+        // Same sanitized evidence channel used by the 72-key per-step suite.
+        val fd = InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence && " +
+                "echo '$metrics' >> /data/local/tmp/herrin-test-evidence/remote-performance.log")
+        java.io.FileInputStream(fd.fileDescriptor).use { it.readBytes() }
+        fd.close()
         assertTrue("20-event key burst should not stall the test process", totalMs < 8_000)
     }
 }
