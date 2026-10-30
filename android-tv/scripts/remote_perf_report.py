@@ -15,6 +15,7 @@ _ALLOWED_INTS = (
 )
 _PAIR = re.compile(r"([a-zA-Z0-9_.]+)=([0-9.]+|unavailable)")
 _START = re.compile(r"\bm443_(vertical|horizontal)_dpad_events=(\d+)\b")
+_BURST = re.compile(r"\bm443_rapid_burst_events=(\d+)\b")
 
 
 def parse_remote_performance(logcat: str) -> dict:
@@ -22,6 +23,16 @@ def parse_remote_performance(logcat: str) -> dict:
     results = {}
     for line in logcat.splitlines():
         if "HerrinPerf" not in line or "m443_" not in line:
+            continue
+        burst = _BURST.search(line)
+        if burst:
+            remaining = line[burst.end():]
+            fields = dict(_PAIR.findall(remaining))
+            results["burst"] = {
+                "events": int(burst.group(1)),
+                "last_focus_correct": int(fields.get("last_focus_correct", "0")),
+                "burst_to_final_focus_ms": float(fields.get("burst_to_final_focus_ms", "0")),
+            }
             continue
         match = _START.search(line)
         if not match:
@@ -63,6 +74,12 @@ def render_markdown(performance: dict) -> list[str]:
             f"{fmt('frame_p95_ms', 'ms')} | "
             f"{fmt('long_frame_pct', '%')} |"
         )
+    burst = performance.get("burst")
+    if burst:
+        lines += ["", "无逐键 idle 等待的连续遥控器反向切换：" +
+                  f"{burst.get('events')} 次，最终焦点" +
+                  ("正确" if burst.get("last_focus_correct") == 1 else "错误") +
+                  f"，总耗时 {burst.get('burst_to_final_focus_ms')}ms。"]
     lines += [
         "",
         "长帧：总合成时间 >16.67ms（按 60Hz 计算）；严重长帧：>33.33ms。"
