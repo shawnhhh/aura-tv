@@ -70,7 +70,9 @@ class AuthorizedCatalogIntegrationTest {
         android.util.Log.i("HerrinCatalog", "HTTPS: valid, malformed, timeout, redirect, oversized, HTML, 503, URL isolation and offline passed")
     }
     @Test fun largePosterUsesDownsampledRgb565TileButHeroRetainsDetail() = fixture { context, server, open ->
-        val image = Bitmap.createBitmap(1200, 1800, Bitmap.Config.ARGB_8888)
+        // The RGB565 optimization is valid for opaque artwork. A transparent
+        // PNG must retain alpha rather than silently corrupting its edges.
+        val image = Bitmap.createBitmap(1200, 1800, Bitmap.Config.RGB_565)
         val data = ByteArrayOutputStream()
         image.eraseColor(android.graphics.Color.BLUE)
         assertTrue(image.compress(Bitmap.CompressFormat.PNG, 80, data))
