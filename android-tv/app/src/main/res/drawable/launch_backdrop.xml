@@ -4,6 +4,6 @@
             <solid android:color="#080B10" />
         </shape>
     </item>
-    <item android:gravity="center" android:width="108dp" android:height="108dp"
-        android:drawable="@drawable/launch_h" />
+    <item android:gravity="center" android:width="420dp" android:height="84dp"
+        android:drawable="@drawable/launch_wordmark" />
 </layer-list>

@@ -293,10 +293,21 @@ class AuthorizedPosterCache(
         val maxWidth = if (hero) 2560 else 640
         val maxHeight = if (hero) 1440 else 960
         while (bounds.outWidth / sample > maxWidth || bounds.outHeight / sample > maxHeight) sample *= 2
-        return BitmapFactory.decodeByteArray(
+        val decoded = BitmapFactory.decodeByteArray(
             bytes, 0, bytes.size,
             BitmapFactory.Options().apply { inSampleSize = sample
                 inPreferredConfig = if (hero) Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565 }
-        )
+        ) ?: return null
+        // PNG decoders on some Android TV devices ignore inPreferredConfig.
+        // For opaque poster tiles explicitly convert to RGB565 to bound GPU
+        // memory, but preserve full-quality ARGB8888 on hero backgrounds.
+        if (!hero && decoded.config != Bitmap.Config.RGB_565 && !decoded.hasAlpha()) {
+            val compact = decoded.copy(Bitmap.Config.RGB_565, false)
+            if (compact != null) {
+                decoded.recycle()
+                return compact
+            }
+        }
+        return decoded
     }
 }

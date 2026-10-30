@@ -3,7 +3,7 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <!-- Render the H mark in the native starting window, before Compose is ready. -->
+        <!-- The native starting window renders the complete HERRIN wordmark immediately. -->
         <item name="android:windowBackground">@drawable/launch_backdrop</item>
         <item name="android:colorAccent">#FFFFFF</item>
     </style>
