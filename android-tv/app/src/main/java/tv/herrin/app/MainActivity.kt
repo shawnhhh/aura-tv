@@ -1422,10 +1422,10 @@ private fun Herrin() {
                     verticalArrangement = Arrangement.spacedBy(13.dp)) {
                     item { TvButton("‹ 返回设置", Modifier.testTag("screen-first").focusRequester(requester("screen-first")), reduceMotion) { back() } }
                     item { Text("影视站点", fontSize = 34.sp, fontWeight = FontWeight.Bold) }
-                    item { Text("已导入全部影视点列表；不在导入时逐个启动插件。选择任意影视点后只加载该站点。Spider 站点会执行来源的第三方插件。", color = Color(0xFFBDC8D6)) }
-                    item { Text(tvBoxStatus, Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
-                    item { Text("说明：影视点包含云盘扫码或弹幕插件时，可能依赖 TVBox 专有的交互页面与服务。" +
-                        "HERRIN 当前 Spider 子进程没有这些原生授权弹窗；不应把提示当成已登录。" +
+                    item { Text("已导入影视点列表。选择其中一个影视点后才加载其影片；部分来源需要额外组件才能打开。", color = Color(0xFFBDC8D6)) }
+                    item { Text(ConsumerSourceStatus.display(tvBoxStatus), Modifier.testTag("source-site-status"), color = Color(0xFFDEE5EE)) }
+                    item { Text("提示：部分影视点或网盘需要额外登录授权、或依赖来源专用交互页面。" +
+                        "当前不保证支持所有来源的登录弹窗；仅显示授权入口不代表已登录。" +
                         "请先选无需登录的合法直连站点。", color = Color(0xFFC9B98D),
                         modifier = Modifier.testTag("source-plugin-limitations")) }
 
@@ -2274,7 +2274,7 @@ private fun Herrin() {
                             }
                         } }
                         if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
-                            item { Text(tvBoxStatus, Modifier.testTag("compact-tvbox-status"),
+                            item { Text(ConsumerSourceStatus.display(tvBoxStatus), Modifier.testTag("compact-tvbox-status"),
                                 color = if (vodImportFeedback.contains("崩溃") || vodImportFeedback.contains("超时"))
                                     Color(0xFFF2A5A5) else Color(0xFFCFD7E4),
                                 lineHeight = 21.sp, fontSize = 14.sp) }
