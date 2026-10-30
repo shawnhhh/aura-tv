@@ -813,6 +813,13 @@ private fun Herrin() {
         screen == "detail" && film.id == bypassGroupFilmId
     }
     val displayFilm = showGroup?.displayFilm ?: film
+    // Focus/title change in the current input frame. Large hero decode and
+    // full-screen crossfade should not run for every intermediate cursor stop.
+    var backdropFilm by remember { mutableStateOf(displayFilm) }
+    LaunchedEffect(displayFilm, screen) {
+        if (screen == "browse" || screen == "search") delay(RemoteMotionPolicy.HERO_DWELL_MS)
+        backdropFilm = displayFilm
+    }
     fun displayKey(item: Film): String = showCatalog.groupFor(item.id)?.key ?: item.id
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
@@ -1032,37 +1039,44 @@ private fun Herrin() {
     var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
     // Latest D-pad press wins: an old animated scroll must never block a newer
     // request. Scroll instantly, then focus after the Lazy item is attached.
-    var settingsFocusJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // In-flight jobs are implementation details, not UI state: updating them
+    // must not trigger a global Compose recomposition on every remote press.
+    val settingsFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     fun moveCompactSettingsFocus(target: String) {
         val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
-        settingsFocusJob?.cancel()
+        settingsFocusJob[0]?.cancel()
         if (settingsListState.layoutInfo.visibleItemsInfo.any { it.index == itemIndex } &&
             runCatching { requester(target).requestFocus() }.isSuccess) return
-        settingsFocusJob = uiScope.launch {
+        settingsFocusJob[0] = uiScope.launch {
             settingsListState.scrollToItem(itemIndex)
-            repeat(3) {
+            repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
                 withFrameNanos { }
                 if (runCatching { requester(target).requestFocus() }.isSuccess) return@launch
             }
         }
     }
-    var posterFocusJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val posterFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     fun transferPosterFocus(from: LazyListState, to: LazyListState,
-                            fromIndex: Int, destination: List<Film>, prefix: String) {
+                            fromIndex: Int, destination: List<Film>, prefix: String,
+                            vertical: androidx.compose.foundation.ScrollState, toBottom: Boolean) {
         if (destination.isEmpty()) return
-        posterFocusJob?.cancel()
+        posterFocusJob[0]?.cancel()
         val index = fromIndex.coerceIn(0, destination.lastIndex)
         val sourceOffset = from.layoutInfo.visibleItemsInfo
             .firstOrNull { it.index == fromIndex }?.offset?.coerceAtLeast(0) ?: 0
         val target = "$prefix${displayKey(destination[index])}"
         // Cancelled jobs do not hold a global boolean lock. Rapid alternating
         // UP/DOWN requests can supersede pending layout/focus restoration.
-        posterFocusJob = uiScope.launch {
+        posterFocusJob[0] = uiScope.launch {
+            // The viewport scroll and focus transfer are ONE cancellable
+            // transaction. Otherwise an old outer scroll coroutine can execute
+            // after newer D-pad input and steal the viewport.
+            vertical.scrollTo(if (toBottom) vertical.maxValue else 0)
             val aligned = to.layoutInfo.visibleItemsInfo.any {
                 it.index == index && it.offset - sourceOffset in -24..24
             }
             if (!aligned) to.scrollToItem(index, -sourceOffset)
-            repeat(3) {
+            repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
                 withFrameNanos { }
                 if (runCatching { requester(target).requestFocus() }.isSuccess) {
                     RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
@@ -1256,9 +1270,10 @@ private fun Herrin() {
         // Compose the lightweight home structure behind the fading logo, but
         // defer the large image decode until the logo is completely gone.
         // On resource-limited TVs this avoids competing with first-frame UI.
-        if (!splash && (!sourceConfigured || films.isNotEmpty())) {
-            Crossfade(targetState = displayFilm, animationSpec = if (reduceMotion) tween(0)
-                else tween(360, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
+        if (!splash && screen != "player" && screen != "live-player" &&
+            (!sourceConfigured || films.isNotEmpty())) {
+            Crossfade(targetState = backdropFilm, animationSpec = if (reduceMotion) tween(0)
+                else tween(RemoteMotionPolicy.HERO_CROSSFADE_MS, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
                 FilmArtwork(hero, Modifier.fillMaxSize())
             }
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
@@ -1906,11 +1921,8 @@ private fun Herrin() {
                                 .onPreviewKeyEvent { event ->
                                     if (homeRail && event.type == KeyEventType.KeyDown &&
                                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                                        uiScope.launch {
-                                            browseScroll.scrollTo(browseScroll.maxValue)
-                                            transferPosterFocus(railState, recommendState, index,
-                                                recommendedFilms, "recommend-")
-                                        }
+                                        transferPosterFocus(railState, recommendState, index,
+                                            recommendedFilms, "recommend-", browseScroll, true)
                                         true
                                     } else false
                                 }
@@ -1944,11 +1956,8 @@ private fun Herrin() {
                                     .onPreviewKeyEvent { event ->
                                         if (event.type == KeyEventType.KeyDown &&
                                             event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                                            uiScope.launch {
-                                                browseScroll.scrollTo(0)
-                                                transferPosterFocus(recommendState, railState, index,
-                                                    railFilms, "card-")
-                                            }
+                                            transferPosterFocus(recommendState, railState, index,
+                                                railFilms, "card-", browseScroll, false)
                                             true
                                         } else false
                                     }
