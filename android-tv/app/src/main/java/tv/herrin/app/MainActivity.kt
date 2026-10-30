@@ -2138,52 +2138,31 @@ private fun Herrin() {
                             playbackPicker = null
                         }, onDismiss = { playbackPicker = null })
                 } else if (screen == "player") {
-                    // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
                     val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable ||
                         (!spiderActive && !cmsWaiting)
-                    val offlineDemonstration = !sourceConfigured && !spiderActive && film.playbackEpisodes.isEmpty()
-                    Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
-                        .testTag("player-startup-surface"),
-                        contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            if (!playbackUnavailable) {
-                                CircularProgressIndicator(color = Color.White,
-                                    modifier = Modifier.size(40.dp))
-                                Text("正在打开影片…", fontSize = 21.sp,
-                                    modifier = Modifier.testTag("player-startup-label"))
-                            } else {
-                                Text(if (offlineDemonstration) "播放演示" else "暂时无法播放", fontSize = 24.sp,
-                                    modifier = Modifier.testTag(if (offlineDemonstration) "player-demo-status" else "player-startup-error"))
-                                Text(when {
-                                    offlineDemonstration ->
-                                        "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
-                                    cmsFailed ->
-                                        "该影视点没有提供可用的播放线路，可重新播放或返回片库更换影片。"
-                                    else -> "请重试，或返回选集切换播放线路。"
-                                }, color = Color(0xFFBCCADB), fontSize = 16.sp)
-                                if (spiderActive || cmsFailed) {
-                                    TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
-                                        reduced = reduceMotion) {
-                                        if (cmsFailed) {
-                                            cmsPlaybackFailedId = null
-                                            cmsPlaybackPendingId = film.id
-                                        }
-                                        playerRetryEpoch++
-                                    }
-                                }
+                    val offlineDemonstration = !sourceConfigured && !spiderActive &&
+                        film.playbackEpisodes.isEmpty()
+                    PlayerStartupSurface(
+                        loading = !playbackUnavailable,
+                        offlineDemonstration = offlineDemonstration,
+                        cmsFailed = cmsFailed,
+                        retryAvailable = spiderActive || cmsFailed,
+                        reducedMotion = reduceMotion,
+                        onRetry = {
+                            if (cmsFailed) {
+                                cmsPlaybackFailedId = null
+                                cmsPlaybackPendingId = film.id
                             }
-                            TvButton(if (cmsFailed) "返回片库" else "返回选集",
-                                modifier = Modifier.testTag("player-startup-back"),
-                                reduced = reduceMotion) {
-                                if (cmsFailed) {
-                                    cmsPlaybackPendingId = null
-                                    cmsPlaybackFailedId = null
-                                    screen = returnScreen
-                                } else screen = "detail"
-                            }
+                            playerRetryEpoch++
+                        },
+                        onBack = {
+                            if (cmsFailed) {
+                                cmsPlaybackPendingId = null
+                                cmsPlaybackFailedId = null
+                                screen = returnScreen
+                            } else screen = "detail"
                         }
-                    }
+                    )
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
                     .onPreviewKeyEvent { event ->
