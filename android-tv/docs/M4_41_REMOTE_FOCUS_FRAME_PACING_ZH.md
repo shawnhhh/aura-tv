@@ -21,6 +21,7 @@
 - 播放和直播全屏期间，**不再执行首页大背景的合成与解码工作**。
 - 浏览、搜索、设置和站点页不再每次切焦点计算 `SeasonEpisodes` / `GroupSeasonIndex` 或逐集读取本地观看历史。详情/播放仍保留原有最新续播进度和季集分组。
 - TMDB 季剧集详情只在进入详情页时加载。此前的 240 条后台资料匹配、用户主动重新刮削和延迟匹配策略不受影响。
+- **跨海报行上下移动**：原调用链“按键事件 → 外层 launch 滚动整页 → 内层 launch 滚动 LazyRow → 最多等待三帧聚焦”，并使用 `transferringPosterFocus` 布尔锁直接丢弃切换期间的下一次按键。改成同一个可取消 Job 完成纵向滚动与横向位置保留；新按键取消过期任务，避免用户连续上下按时感觉无响应。原有 `homeDpadDownAndUpKeepTheSameColumnAcrossBothPosterShelves` 设备回归保留。
 - 使用 Android TV API 30 仿真基线 `M438SingleWarehousePerformanceTest` （12 站点、60 电影、16 次 DPAD）继续检测焦点耗时；额外 3 项 M441 JVM 策略用例防止以后重新把视频背景与选片热路径耦合。
 - `0.4.41-alpha`（versionCode 46），单独 Draft PR；所有旧 PR 与 master 保持不变。
 
