@@ -78,9 +78,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 internal object RemoteTrace {
     private const val TAG = "HerrinRemote"
     fun event(message: String) {
-        if (Log.isLoggable(TAG, Log.DEBUG)) {
-            Log.d(TAG, message)
-        }
+        if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, message)
+    }
+    // Release builds may receive dozens of D-pad events per second. Avoid
+    // allocating strings/focus diagnostics unless adb explicitly enables it.
+    inline fun event(message: () -> String) {
+        if (Log.isLoggable("HerrinRemote", Log.DEBUG)) Log.d("HerrinRemote", message())
     }
 }
 
@@ -91,9 +94,9 @@ class MainActivity : ComponentActivity() {
         val originalCallback = window.callback
         window.callback = object : android.view.Window.Callback by originalCallback {
             override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-                RemoteTrace.event("ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}")
+                RemoteTrace.event { "ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}" }
                 val handled = originalCallback.dispatchKeyEvent(event)
-                RemoteTrace.event("ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled")
+                RemoteTrace.event { "ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled" }
                 return handled
             }
         }
@@ -1020,18 +1023,18 @@ private fun Herrin() {
                 repeat(3) {
                     withFrameNanos { }
                     if (runCatching { requester(target).requestFocus() }.isSuccess) {
-                        RemoteTrace.event("RAIL transfer target=$target x=$sourceOffset")
+                        RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
                         return@launch
                     }
                 }
-                RemoteTrace.event("RAIL target unattached=$target")
+                RemoteTrace.event { "RAIL target unattached=$target" }
             } finally {
                 transferringPosterFocus = false
             }
         }
     }
     fun details(f: Film) {
-        RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen")
+        RemoteTrace.event { "DETAILS invoked film=${f.id} from=$screen" }
         cmsDetailStatus = ""
         filmId = f.id
         bypassGroupFilmId = null
@@ -1145,7 +1148,7 @@ private fun Herrin() {
             // reopens some television IMEs and swallows its first D-pad CENTER key.
             // The search result path needs restartInput for its older IME handoff fix.
             if (leavingSearchEditor) inputMethod.restartInput(view)
-            RemoteTrace.event("IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
+            RemoteTrace.event { "IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}" }
         }
     }
     fun back() {
@@ -1186,7 +1189,7 @@ private fun Herrin() {
         }
     }
     LaunchedEffect(screen, splash, category) {
-        RemoteTrace.event("ROUTE screen=$screen category=$category focusId=$focusId")
+        RemoteTrace.event { "ROUTE screen=$screen category=$category focusId=$focusId" }
         if (!splash) {
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
@@ -1204,7 +1207,7 @@ private fun Herrin() {
                 return@LaunchedEffect
             runCatching { requester(id).requestFocus() }.onSuccess {
                 pendingToolbarFocus = null
-                RemoteTrace.event("RESTORE target=$id completed")
+                RemoteTrace.event { "RESTORE target=$id completed" }
             }.onFailure {
                 if (screen == "browse") runCatching { requester("nav-$category").requestFocus() }
             }
@@ -1492,7 +1495,7 @@ private fun Herrin() {
                         OutlinedTextField(query, { query = it }, Modifier.testTag("search-input")
                             .focusProperties { down = requester("search-filter-全部") }
                             .focusRequester(requester("search-input"))
-                            .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event("INPUT focus=${it.isFocused}") }
+                            .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event { "INPUT focus=${it.isFocused}" } }
                             .fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1846,7 +1849,7 @@ private fun Herrin() {
                             LaunchedEffect(item.id) {
                                 if (isSearch && focusId == "card-${displayKey(item)}") {
                                     requester("card-${displayKey(item)}").requestFocus()
-                                    RemoteTrace.event("RESTORE search card=${displayKey(item)} attached")
+                                    RemoteTrace.event { "RESTORE search card=${displayKey(item)} attached" }
                                 }
                             }
                             val homeRail = !isSearch && category == "首页" && recommendedFilms.isNotEmpty()
@@ -3279,17 +3282,17 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
         .graphicsLayer { translationY = -lift * liftPx }
         .onFocusChanged {
             focused = it.isFocused
-            RemoteTrace.event("POSTER ${film.id} focus=$focused")
+            RemoteTrace.event { "POSTER ${film.id} focus=$focused" }
             if (it.isFocused) onFocus()
         }
         .border(if (focused) 2.dp else 1.dp, stroke, shape)
         .clip(shape).background(Color(0xFF101821))
         .onPreviewKeyEvent { event ->
             // Keep native Compose clickable as the single source of key activation.
-            RemoteTrace.event("POSTER ${film.id} key=${event.nativeKeyEvent.keyCode} type=${event.type} focus=$focused")
+            RemoteTrace.event { "POSTER ${film.id} key=${event.nativeKeyEvent.keyCode} type=${event.type} focus=$focused" }
             false
         }
-        .clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
+        .clickable { RemoteTrace.event { "POSTER ${film.id} CLICK clickable" }; onClick() }) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxWidth().weight(1f).testTag("poster-image-${film.id}"),
                 contentAlignment = Alignment.Center) {
