@@ -38,13 +38,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import java.util.concurrent.Semaphore
 
 /** Copyright-safe fallback artwork is bundled, even when external provider images are unavailable. */
 private fun Film.isOriginalDemo() = id in setOf("orbit", "tide", "dawn", "night", "return", "blue") &&
@@ -169,6 +170,7 @@ private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap?
         // Rapid cursor movement should not fetch high-res hero pictures for
         // titles that were only focused for a few milliseconds.
         if (hero) delay(110)
+        val requestJob = currentCoroutineContext()[Job]
         poster = withContext(Dispatchers.IO) {
             runCatching {
                 val urls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
@@ -177,7 +179,7 @@ private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap?
                 urls.distinct().firstNotNullOfOrNull {
                     cache.load(it,
                         allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null,
-                        hero = hero)
+                        hero = hero, cancelled = { requestJob?.isActive == false })
                 }
             }.getOrNull()
         }
@@ -202,14 +204,16 @@ class AuthorizedPosterCache(
         // Stable stripes prevent repeat downloads for the same image; do not
         // serialize every poster behind one global network lock.
         private val imageLocks = Array(64) { Any() }
-        private val networkSlots = Semaphore(4, true)
+        private val networkSlots = PosterRequestBudget()
     }
 
     private data class MemoryEntry(
         val bitmap: Bitmap, val updated: Long, val diskSize: Long
     )
 
-    fun load(raw: String, allowHttp: Boolean = false, hero: Boolean = false): Bitmap? {
+    fun load(raw: String, allowHttp: Boolean = false, hero: Boolean = false,
+             cancelled: () -> Boolean = { false }): Bitmap? {
+        if (cancelled()) return null
         val url = (if (allowHttp) TvBoxUrl.normalize(raw, true) else AuthorizedUrls.https(raw))
             ?: return null
         val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
@@ -237,6 +241,7 @@ class AuthorizedPosterCache(
 
         memoryHit()?.let { return it }
         synchronized(stripe) {
+            if (cancelled()) return null
             memoryHit()?.let { return it }
             val existing = file.takeIf { it.isFile && it.length() in 1..8_000_000 }
             if (existing != null) {
@@ -248,8 +253,9 @@ class AuthorizedPosterCache(
 
             // Limit image network/decoder contention on resource-constrained
             // Android TVs. Do not expose cookies or trigger Spider scripts.
-            networkSlots.acquire()
+            if (!networkSlots.acquire(hero = hero, cancelled = cancelled)) return null
             try {
+                if (cancelled()) return null
                 val connection = openConnection(url).apply {
                     connectTimeout = 7000
                     readTimeout = 8000
@@ -264,6 +270,7 @@ class AuthorizedPosterCache(
                     connection.inputStream.use { stream ->
                         val chunk = ByteArray(8192)
                         while (true) {
+                            if (cancelled()) return null
                             val count = stream.read(chunk)
                             if (count < 0) break
                             if (data.size() + count > 8_000_000) return null
@@ -271,7 +278,12 @@ class AuthorizedPosterCache(
                         }
                     }
                     val bytes = data.toByteArray()
+                    if (cancelled()) return null
                     val bitmap = decode(bytes, hero) ?: return null
+                    if (cancelled()) {
+                        bitmap.recycle()
+                        return null
+                    }
                     // Directory enumeration, sorting and disk-usage walks are
                     // expensive when 60+ posters arrive on a cold TV home.
                     // Store first, then prune at most once per 16 image writes.
@@ -287,7 +299,7 @@ class AuthorizedPosterCache(
                     connection.disconnect()
                 }
             } finally {
-                networkSlots.release()
+                networkSlots.release(hero = hero)
             }
         }
     }
