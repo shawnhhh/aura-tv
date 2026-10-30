@@ -1045,8 +1045,8 @@ private fun Herrin() {
     // must not trigger a global Compose recomposition on every remote press.
     val settingsFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     val settingsIntent = remember { CompactSettingsIntent() }
-    LaunchedEffect(screen, settingsTvBoxOnly) {
-        if (screen != "settings" || !settingsTvBoxOnly) {
+    LaunchedEffect(screen, settingsTvBoxOnly, configInputFocused) {
+        if (screen != "settings" || !settingsTvBoxOnly || configInputFocused) {
             settingsFocusJob[0]?.cancel()
             settingsIntent.clear()
         }
@@ -2107,8 +2107,14 @@ private fun Herrin() {
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
                     .onPreviewKeyEvent { event ->
-                        if (screen != "settings" || !settingsTvBoxOnly ||
-                            event.type != KeyEventType.KeyDown) false
+                        // An active TV text editor owns its arrow keys. Only the
+                        // non-editing focus stops use compact-row navigation.
+                        if (!CompactSettingsKeyPolicy.intercept(
+                                onSettings = screen == "settings",
+                                compact = settingsTvBoxOnly,
+                                editorFocused = configInputFocused,
+                                keyDown = event.type == KeyEventType.KeyDown,
+                                code = event.nativeKeyEvent.keyCode)) false
                         else {
                             val code = event.nativeKeyEvent.keyCode
                             val target = when (code) {
