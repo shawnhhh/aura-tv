@@ -41,7 +41,7 @@ for metric_file in (
     out / 'test-evidence' / 'herrin-test-evidence' / 'remote-performance.log',
 ):
     if metric_file.is_file():
-        metric_log += '\\n' + '\\n'.join(
+        metric_log += '\n' + '\n'.join(
             'HerrinPerf: ' + line
             for line in metric_file.read_text(errors='replace').splitlines()
         )
