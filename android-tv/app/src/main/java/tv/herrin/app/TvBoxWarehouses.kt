@@ -277,9 +277,14 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
         }
     }
 
-    suspend fun load(input: String, allowHttp: Boolean = false): TvBoxConfig = withContext(Dispatchers.IO) {
+    suspend fun load(input: String, allowHttp: Boolean = false,
+                     preferCached: Boolean = false): TvBoxConfig = withContext(Dispatchers.IO) {
         val address = TvBoxUrl.normalize(input, allowHttp)
             ?: return@withContext TvBoxConfig.Error("只接受 HTTPS；如需读取 HTTP，请先手动开启本次授权")
+        // The TV must not block its initial home screen for an 8s+ unreliable
+        // provider timeout when there is already a validated local warehouse.
+        // Explicit 'apply/refresh' calls still use the network by default.
+        if (preferCached) cached(address)?.let { return@withContext it }
         val connection = try { URL(address).openConnection() as HttpURLConnection }
         catch (_: Exception) { return@withContext cached(address) ?: TvBoxConfig.Error("无法建立配置连接") }
         try {

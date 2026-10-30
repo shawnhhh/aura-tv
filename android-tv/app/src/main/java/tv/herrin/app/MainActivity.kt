@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -76,9 +78,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 internal object RemoteTrace {
     private const val TAG = "HerrinRemote"
     fun event(message: String) {
-        if (Log.isLoggable(TAG, Log.DEBUG)) {
-            Log.d(TAG, message)
-        }
+        if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, message)
+    }
+    // Release builds may receive dozens of D-pad events per second. Avoid
+    // allocating strings/focus diagnostics unless adb explicitly enables it.
+    inline fun event(message: () -> String) {
+        if (Log.isLoggable("HerrinRemote", Log.DEBUG)) Log.d("HerrinRemote", message())
     }
 }
 
@@ -89,9 +94,9 @@ class MainActivity : ComponentActivity() {
         val originalCallback = window.callback
         window.callback = object : android.view.Window.Callback by originalCallback {
             override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-                RemoteTrace.event("ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}")
+                RemoteTrace.event { "ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}" }
                 val handled = originalCallback.dispatchKeyEvent(event)
-                RemoteTrace.event("ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled")
+                RemoteTrace.event { "ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled" }
                 return handled
             }
         }
@@ -117,7 +122,7 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
     val focusedScale = if (quiet) 1.028f else 1.042f
     val scale by animateFloatAsState(
         targetValue = if (focused && !reduced) focusedScale else 1f,
-        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.84f, stiffness = 460f),
+        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.89f, stiffness = 760f),
         label = "tv-pill-focus-scale"
     )
     val liftPx = with(LocalDensity.current) { 2.dp.toPx() }
@@ -128,10 +133,11 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
         quiet -> Color.Transparent
         else -> Color(0x99343840)
     }
-    val fill by animateColorAsState(targetFill, if (reduced) snap() else tween(190),
-        label = "tv-pill-fill")
-    val contentColor by animateColorAsState(if (focused) Color(0xFF111318) else Color.White,
-        if (reduced) snap() else tween(190), label = "tv-pill-content")
+    // Primary D-pad selection must become visibly white in the SAME frame.
+    // Previous 190ms animated background/text colors left a perceptible lag
+    // even after native focus had already moved.
+    val fill = targetFill
+    val contentColor = if (focused) Color(0xFF111318) else Color.White
     Box(modifier
         .graphicsLayer {
             scaleX = scale
@@ -328,6 +334,7 @@ private fun Herrin() {
     // Applying a source is the explicit user action that permits its Spider.
     // On subsequent launches, auto-run only the exact previously accepted JAR+MD5.
     var tvBoxRunSpiderAfterApply by remember { mutableStateOf(false) }
+    var tvBoxColdStartRequest by remember { mutableStateOf(false) }
     var spiderActive by remember { mutableStateOf(false) }
     var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
     var playerRetryEpoch by remember { mutableIntStateOf(0) }
@@ -355,6 +362,7 @@ private fun Herrin() {
     var tvBoxSelectedName by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         if (configuredTvBoxUrl.isNotBlank()) {
+            tvBoxColdStartRequest = true
             tvBoxRequest = configuredTvBoxUrl to true
             tvBoxLoadEpoch++
         }
@@ -362,6 +370,8 @@ private fun Herrin() {
     LaunchedEffect(tvBoxLoadEpoch) {
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
         val runSpiderAfterApply = tvBoxRunSpiderAfterApply
+        val preferCache = tvBoxColdStartRequest
+        tvBoxColdStartRequest = false
         tvBoxRunSpiderAfterApply = false
         tvBoxStatus = "正在读取 TVBox 配置…"
         vodImportFeedback = "读取中…"
@@ -373,8 +383,10 @@ private fun Herrin() {
         tvBoxHerrinCatalog = null
         val imported = tvBoxImportJsonRequest
         tvBoxImportJsonRequest = null
-        when (val result = if (imported != null) tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
-            else tvBoxRepository.load(address, tvBoxAllowHttp)) {
+        val loadedConfig = if (imported != null)
+            tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
+            else tvBoxRepository.load(address, tvBoxAllowHttp, preferCached = preferCache)
+        when (val result = loadedConfig) {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
                 tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}已识别 ${result.entries.size} 个仓库${if (result.ignored > 0) "；跳过 ${result.ignored} 个无效／重复条目" else ""}。选中下方仓库可预览。"
@@ -408,6 +420,12 @@ private fun Herrin() {
             }
             prefs.tvBoxWarehouseUrl = address
             configuredTvBoxUrl = address
+        }
+        // Cache-first on startup, refresh in the background for the next
+        // launch. Never replace the active browsing state mid-remote action.
+        if (preferCache && ((loadedConfig is TvBoxConfig.Single && loadedConfig.fromCache) ||
+                (loadedConfig is TvBoxConfig.Warehouses && loadedConfig.fromCache))) {
+            launch(Dispatchers.IO) { tvBoxRepository.load(address, tvBoxAllowHttp) }
         }
         if (settingsTvBoxOnly && tvBoxSingle != null) {
             // Import must activate an actual catalog, not just display 49 names
@@ -649,7 +667,10 @@ private fun Herrin() {
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
-    val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
+    // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
+    val catalogIdentity = remember(providerFilms) {
+        providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
+    }
     var metadataForceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var metadataCorrection by remember { mutableStateOf<Film?>(null) }
     var metadataScanDone by remember { mutableIntStateOf(0) }
@@ -659,32 +680,72 @@ private fun Herrin() {
         facetYear = null; facetCategory = null; facetRating = null
     }
     LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch) {
-        val eligible = providerFilms.orEmpty().take(240)
+        val eligible = providerFilms.orEmpty().take(ArtworkScrapePolicy.STARTUP_LIMIT)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
         if (metadataToken.isBlank()) return@LaunchedEffect
         val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
-        for (batch in unprocessed.chunked(3)) {
-            coroutineScope {
-                batch.forEach { original ->
-                    launch(Dispatchers.IO) {
-                        val info = runCatching { metadataResolver.lookup(original, metadataToken, forceRefresh = original.id in metadataForceIds) }
-                            .getOrNull()
-                        withContext(Dispatchers.Main.immediate) {
-                            if (info != null) {
-                                providerFilms = providerFilms?.map { current ->
-                                    if (current.id == original.id && current.metadataSource != "TMDB")
-                                        FilmMetadataEnrichment.apply(current, info)
-                                    else current
-                                }
-                            }
-                            metadataForceIds = metadataForceIds - original.id
-                            metadataScanDone++
+        // Network work stays at most three concurrent, but catalog publication
+        // is coalesced to one update per 12 items instead of one per item.
+        // This prevents dozens of whole-home regroupings during TV remote use.
+        for (batch in unprocessed.chunked(12)) {
+            val updates = mutableListOf<Pair<String, EnrichedArtwork?>>()
+            for (group in batch.chunked(3)) {
+                updates += coroutineScope {
+                    group.map { original ->
+                        async(Dispatchers.IO) {
+                            original.id to runCatching {
+                                metadataResolver.lookup(original, metadataToken,
+                                    forceRefresh = original.id in metadataForceIds)
+                            }.getOrNull()
                         }
-                    }
+                    }.awaitAll()
                 }
             }
+            val found = updates.mapNotNull { (id, artwork) ->
+                artwork?.let { id to it }
+            }.toMap()
+            withContext(Dispatchers.Main.immediate) {
+                if (found.isNotEmpty()) {
+                    providerFilms = providerFilms?.map { current ->
+                        val artwork = found[current.id]
+                        if (artwork != null && current.metadataSource != "TMDB")
+                            FilmMetadataEnrichment.apply(current, artwork)
+                        else current
+                    }
+                }
+                metadataForceIds = metadataForceIds - batch.map { it.id }.toSet()
+                metadataScanDone += batch.size
+            }
         }
+    }
+    // The initial enrichment queue is deliberately capped at 240 to avoid
+    // flooding a TV with hundreds of network requests. Posters beyond that
+    // cap are matched *on demand* after cursor dwell, instead of reintroducing
+    // a second TMDB client inside every visible PosterArtwork composable.
+    LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch) {
+        if (metadataToken.isBlank()) return@LaunchedEffect
+        delay(ArtworkScrapePolicy.FOCUS_DWELL_MS)
+        val candidates = providerFilms.orEmpty()
+        val index = candidates.indexOfFirst { it.id == filmId }
+        if (index < 0) return@LaunchedEffect
+        val selected = candidates[index]
+        if (!ArtworkScrapePolicy.shouldMatchFocused(index, selected.metadataSource == "TMDB"))
+            return@LaunchedEffect
+        val info = withContext(Dispatchers.IO) {
+            runCatching {
+                metadataResolver.lookup(selected, metadataToken,
+                    forceRefresh = selected.id in metadataForceIds)
+            }.getOrNull()
+        }
+        if (info != null) {
+            providerFilms = providerFilms?.map { current ->
+                if (current.id == selected.id && current.metadataSource != "TMDB")
+                    FilmMetadataEnrichment.apply(current, info)
+                else current
+            }
+        }
+        metadataForceIds = metadataForceIds - selected.id
     }
     var favorites by remember(catalogScope) { mutableStateOf(prefs.idsFor(catalogScope)) }
     var reduced by remember { mutableStateOf(prefs.reducedMotion) }
@@ -701,13 +762,15 @@ private fun Herrin() {
         if (!homeVisible) {
             sceneReveal.snapTo(0f)
         } else {
+            // A television's tab / Back action must respond immediately.
+            // Keep only the *first* entrance animation; no 260ms fade on
+            // every category and screen change.
             val firstEntrance = !hasEnteredHome
-            sceneReveal.snapTo(if (firstEntrance || reduceMotion) {
-                if (reduceMotion) 1f else 0f
-            } else 0.72f)
-            if (!reduceMotion) sceneReveal.animateTo(1f, tween(
-                durationMillis = if (firstEntrance) 460 else 260,
-                easing = FastOutSlowInEasing))
+            sceneReveal.snapTo(if (firstEntrance && !reduceMotion) 0f else 1f)
+            if (firstEntrance && !reduceMotion) {
+                sceneReveal.animateTo(1f, tween(durationMillis = 220,
+                    easing = FastOutSlowInEasing))
+            }
             hasEnteredHome = true
         }
     }
@@ -979,33 +1042,27 @@ private fun Herrin() {
                     it.index == index && it.offset - sourceOffset in -24..24
                 }
                 if (!alreadyAligned) {
-                    if (reduceMotion) to.scrollToItem(index, -sourceOffset)
-                    else {
-                        // Some TV Compose versions cannot settle an unattainable
-                        // edge offset. Bound the animation and finish deterministically.
-                        val reached = withTimeoutOrNull(1100) {
-                            to.animateScrollToItem(index, -sourceOffset)
-                            true
-                        } ?: false
-                        if (!reached) to.scrollToItem(index, -sourceOffset)
-                    }
+                    // D-pad focus is an immediate navigation operation, not
+                    // a one-second carousel animation. Compose the target
+                    // row at the requested offset in the next layout frame.
+                    to.scrollToItem(index, -sourceOffset)
                 }
                 val target = "$prefix${displayKey(destination[index])}"
                 repeat(3) {
                     withFrameNanos { }
                     if (runCatching { requester(target).requestFocus() }.isSuccess) {
-                        RemoteTrace.event("RAIL transfer target=$target x=$sourceOffset")
+                        RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
                         return@launch
                     }
                 }
-                RemoteTrace.event("RAIL target unattached=$target")
+                RemoteTrace.event { "RAIL target unattached=$target" }
             } finally {
                 transferringPosterFocus = false
             }
         }
     }
     fun details(f: Film) {
-        RemoteTrace.event("DETAILS invoked film=${f.id} from=$screen")
+        RemoteTrace.event { "DETAILS invoked film=${f.id} from=$screen" }
         cmsDetailStatus = ""
         filmId = f.id
         bypassGroupFilmId = null
@@ -1119,7 +1176,7 @@ private fun Herrin() {
             // reopens some television IMEs and swallows its first D-pad CENTER key.
             // The search result path needs restartInput for its older IME handoff fix.
             if (leavingSearchEditor) inputMethod.restartInput(view)
-            RemoteTrace.event("IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}")
+            RemoteTrace.event { "IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}" }
         }
     }
     fun back() {
@@ -1160,7 +1217,7 @@ private fun Herrin() {
         }
     }
     LaunchedEffect(screen, splash, category) {
-        RemoteTrace.event("ROUTE screen=$screen category=$category focusId=$focusId")
+        RemoteTrace.event { "ROUTE screen=$screen category=$category focusId=$focusId" }
         if (!splash) {
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
@@ -1178,7 +1235,7 @@ private fun Herrin() {
                 return@LaunchedEffect
             runCatching { requester(id).requestFocus() }.onSuccess {
                 pendingToolbarFocus = null
-                RemoteTrace.event("RESTORE target=$id completed")
+                RemoteTrace.event { "RESTORE target=$id completed" }
             }.onFailure {
                 if (screen == "browse") runCatching { requester("nav-$category").requestFocus() }
             }
@@ -1374,18 +1431,25 @@ private fun Herrin() {
             }
             "browse", "search" -> {
                 val isSearch = screen == "search"
-                val filtered = if (isSearch) showCatalog.search(
-                    query, searchCategory, searchNewestFirst
-                ) else if (category == "我的") showCatalog.favorites(favorites)
-                else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
-                // History drives the first shelf only for films with actual saved playback.
-                // On a fresh installation the same rail shows browseable demo suggestions.
-                val watched = if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
-                    showCatalog.watchProgress(shown) { source, entry, option ->
-                        watchHistory.load(catalogScope, source.id, entry.number, option.id)
-                    }?.let { shown to it.updatedAtMs }
-                }.sortedByDescending { it.second }.map { it.first }
+                // Focus color animations can recompose every frame: searching,
+                // regrouping and reading playback history must NOT run per frame.
+                val filtered = remember(showCatalog, films, category, isSearch,
+                    query, searchCategory, searchNewestFirst, favorites) {
+                    if (isSearch) showCatalog.search(query, searchCategory, searchNewestFirst)
+                    else if (category == "我的") showCatalog.favorites(favorites)
+                    else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
+                }
+                // History is recomputed on returning from playback or when the
+                // source/catalog changes, not on every D-pad/animation frame.
+                val watched = remember(isSearch, category, filtered, showCatalog,
+                    watchHistory, catalogScope, screen) {
+                    if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
+                        showCatalog.watchProgress(shown) { source, entry, option ->
+                            watchHistory.load(catalogScope, source.id, entry.number, option.id)
+                        }?.let { shown to it.updatedAtMs }
+                    }.sortedByDescending { it.second }.map { it.first }
                     else emptyList()
+                }
                 val railFilms = if (watched.isNotEmpty()) watched else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
                 val recommendedFilms = if (!isSearch && category == "首页") browseFilms.asReversed() else emptyList()
@@ -1459,7 +1523,7 @@ private fun Herrin() {
                         OutlinedTextField(query, { query = it }, Modifier.testTag("search-input")
                             .focusProperties { down = requester("search-filter-全部") }
                             .focusRequester(requester("search-input"))
-                            .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event("INPUT focus=${it.isFocused}") }
+                            .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event { "INPUT focus=${it.isFocused}" } }
                             .fillMaxWidth().padding(vertical = 8.dp),
                             label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1813,7 +1877,7 @@ private fun Herrin() {
                             LaunchedEffect(item.id) {
                                 if (isSearch && focusId == "card-${displayKey(item)}") {
                                     requester("card-${displayKey(item)}").requestFocus()
-                                    RemoteTrace.event("RESTORE search card=${displayKey(item)} attached")
+                                    RemoteTrace.event { "RESTORE search card=${displayKey(item)} attached" }
                                 }
                             }
                             val homeRail = !isSearch && category == "首页" && recommendedFilms.isNotEmpty()
@@ -1831,8 +1895,7 @@ private fun Herrin() {
                                     if (homeRail && event.type == KeyEventType.KeyDown &&
                                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
                                         uiScope.launch {
-                                            if (reduceMotion) browseScroll.scrollTo(browseScroll.maxValue)
-                                            else browseScroll.animateScrollTo(browseScroll.maxValue)
+                                            browseScroll.scrollTo(browseScroll.maxValue)
                                             transferPosterFocus(railState, recommendState, index,
                                                 recommendedFilms, "recommend-")
                                         }
@@ -1842,9 +1905,11 @@ private fun Herrin() {
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
                                 onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { openMovie(item) },
                                 progress = if (!isSearch && category == "首页") {
-                                    showCatalog.watchProgress(item) { source, part, option ->
-                                        watchHistory.load(catalogScope, source.id, part.number, option.id)
-                                    }?.fraction
+                                    remember(item.id, showCatalog, catalogScope, screen) {
+                                        showCatalog.watchProgress(item) { source, part, option ->
+                                            watchHistory.load(catalogScope, source.id, part.number, option.id)
+                                        }?.fraction
+                                    }
                                 } else null)
                         }
                     }
@@ -1868,8 +1933,7 @@ private fun Herrin() {
                                         if (event.type == KeyEventType.KeyDown &&
                                             event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
                                             uiScope.launch {
-                                                if (reduceMotion) browseScroll.scrollTo(0)
-                                                else browseScroll.animateScrollTo(0)
+                                                browseScroll.scrollTo(0)
                                                 transferPosterFocus(recommendState, railState, index,
                                                     railFilms, "card-")
                                             }
@@ -3235,27 +3299,28 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
     // Keep artwork dimensions fixed. Enlarging the whole focus target used to
     // crop neighboring cards and made TV posters appear to change size.
     val lift by animateFloatAsState(if (focused && !reduced) 2.5f else 0f,
-        if (reduced) snap() else tween(200, easing = FastOutSlowInEasing),
+        if (reduced) snap() else tween(105, easing = FastOutSlowInEasing),
         label = "poster-focus-lift")
-    val stroke by animateColorAsState(if (focused) Color(0xFFF6F7FA) else Color(0x665E6A78),
-        if (reduced) snap() else tween(190), label = "poster-focus-outline")
+    // Draw focus instantly, animate only the compositor translation;
+    // do not invalidate the image/border for 190ms on every key press.
+    val stroke = if (focused) Color(0xFFF6F7FA) else Color(0x665E6A78)
     val shape = RoundedCornerShape(13.dp)
     val liftPx = with(LocalDensity.current) { 1.dp.toPx() }
     Box(modifier.width(217.dp).height(116.dp)
         .graphicsLayer { translationY = -lift * liftPx }
         .onFocusChanged {
             focused = it.isFocused
-            RemoteTrace.event("POSTER ${film.id} focus=$focused")
+            RemoteTrace.event { "POSTER ${film.id} focus=$focused" }
             if (it.isFocused) onFocus()
         }
         .border(if (focused) 2.dp else 1.dp, stroke, shape)
         .clip(shape).background(Color(0xFF101821))
         .onPreviewKeyEvent { event ->
             // Keep native Compose clickable as the single source of key activation.
-            RemoteTrace.event("POSTER ${film.id} key=${event.nativeKeyEvent.keyCode} type=${event.type} focus=$focused")
+            RemoteTrace.event { "POSTER ${film.id} key=${event.nativeKeyEvent.keyCode} type=${event.type} focus=$focused" }
             false
         }
-        .clickable { RemoteTrace.event("POSTER ${film.id} CLICK clickable"); onClick() }) {
+        .clickable { RemoteTrace.event { "POSTER ${film.id} CLICK clickable" }; onClick() }) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxWidth().weight(1f).testTag("poster-image-${film.id}"),
                 contentAlignment = Alignment.Center) {

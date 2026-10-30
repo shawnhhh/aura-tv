@@ -3,6 +3,7 @@ package tv.herrin.app
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -38,13 +39,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.Semaphore
 
 /** Copyright-safe fallback artwork is bundled, even when external provider images are unavailable. */
 private fun Film.isOriginalDemo() = id in setOf("orbit", "tide", "dawn", "night", "return", "blue") &&
@@ -55,10 +56,10 @@ fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = Con
     val poster = rememberAuthorizedPoster(film, hero = true)
     val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
         animationSpec = tween(280), label = "poster-fade-in")
-    val hasExternalImage = film.artworkUrl != null || film.backdropUrl != null ||
-        (!film.isOriginalDemo() && LocalContext.current
-            .getSharedPreferences("herrin", Context.MODE_PRIVATE)
-            .getString("tmdb_read_token", "").orEmpty().isNotBlank())
+    // External titles without an image show a neutral backdrop, not a
+    // misleading demo movie photo. No preferences I/O during every frame.
+    val hasExternalImage = !film.isOriginalDemo() ||
+        film.artworkUrl != null || film.backdropUrl != null
     Box(modifier, contentAlignment = Alignment.CenterEnd) {
         if (!hasExternalImage) Image(painterResource(film.artwork), film.title,
             Modifier.fillMaxSize(), contentScale = contentScale)
@@ -90,12 +91,11 @@ fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = Con
 @Composable
 fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
     val poster = rememberAuthorizedPoster(film)
-    val remoteArtwork = !film.artworkUrl.isNullOrBlank() ||
-        (!film.isOriginalDemo() && LocalContext.current
-            .getSharedPreferences("herrin", Context.MODE_PRIVATE)
-            .getString("tmdb_read_token", "").orEmpty().isNotBlank())
+    // Constant-time presentation identity. Avoid SharedPreferences lookups
+    // during focus/scroll recompositions across dozens of poster cards.
+    val remoteArtwork = !film.isOriginalDemo() || !film.artworkUrl.isNullOrBlank()
     val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
-        animationSpec = if (reduced) snap() else tween(280), label = "card-poster-fade")
+        animationSpec = if (reduced) snap() else tween(120), label = "card-poster-fade")
     Box(modifier, contentAlignment = Alignment.Center) {
         if (remoteArtwork) {
             // Source images load asynchronously. Never impersonate a real title
@@ -107,8 +107,8 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
                     color = Color(0x708BA0B8))
             }
         } else {
-            Image(painterResource(film.artwork), null, Modifier.fillMaxSize().blur(10.dp),
-                contentScale = ContentScale.Crop, alpha = 0.24f)
+            Image(painterResource(film.artwork), null, Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop, alpha = 0.20f)
             Image(painterResource(film.artwork), film.title,
                 Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit)
         }
@@ -116,8 +116,11 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
             Box(Modifier.fillMaxSize().alpha(posterAlpha).testTag("poster-remote-ready")
                 .background(Color(0xFF101821))) {
                 val image = poster.asImageBitmap()
-                Image(image, null, Modifier.fillMaxSize().blur(12.dp),
-                    contentScale = ContentScale.Crop, alpha = 0.34f)
+                // A per-card RenderEffect blur forces expensive GPU offscreen passes
+                // whenever the viewer navigates quickly through the rail.
+                // Retain a dim source-image backdrop plus sharp foreground.
+                Image(image, null, Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop, alpha = 0.23f)
                 Box(Modifier.fillMaxSize().background(Color(0xA20C111A)))
                 Image(image, film.title, Modifier.fillMaxSize().padding(3.dp),
                     contentScale = ContentScale.Fit)
@@ -152,49 +155,27 @@ fun PersonPortrait(person: FilmPerson, modifier: Modifier = Modifier) {
 @Composable
 private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap? {
     val context = LocalContext.current
-    // TMDB requires a user-provided Read Access Token, never a bundled production credential.
-    // Reading SharedPreferences on composition lets the settings screen switch enrichment on/off.
-    val tmdbToken = context.getSharedPreferences("herrin", Context.MODE_PRIVATE)
-        .getString("tmdb_read_token", "").orEmpty()
     val url = if (hero) film.backdropUrl ?: film.artworkUrl else film.artworkUrl
-    var poster by remember(url, film.id, film.year, film.title, tmdbToken, hero) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(url, film.id, film.year, film.title, tmdbToken, hero) {
-        coroutineScope {
-            // Render the source poster as soon as it is available, even if the user's TMDB
-            // token is rejected, offline, rate-limited, or an 80-title shelf is still loading.
-            // Both paths run concurrently, and the original image cannot overwrite an upgrade.
-            var upgraded = false
-            launch {
-                val fallback = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val sourceUrls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
-                            else listOfNotNull(film.artworkUrl)
-                        val cache = AuthorizedPosterCache(context)
-                        sourceUrls.distinct().firstNotNullOfOrNull {
-                            cache.load(it,
-                            allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null,
-                            hero = hero)
-                        }
-                    }.getOrNull()
+    // TMDB matching is managed centrally by MainActivity's bounded catalogue
+    // enrichment worker. Do NOT start another TMDB request per visible card:
+    // that duplicated network, JSON parsing and image downloads during D-pad.
+    // The resulting enriched Film updates the URL and triggers this effect.
+    var poster by remember(url, film.id, hero) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(url, film.id, hero) {
+        // Rapid cursor movement should not fetch high-res hero pictures for
+        // titles that were only focused for a few milliseconds.
+        if (hero) delay(110)
+        poster = withContext(Dispatchers.IO) {
+            runCatching {
+                val urls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
+                    else listOfNotNull(film.artworkUrl)
+                val cache = AuthorizedPosterCache(context)
+                urls.distinct().firstNotNullOfOrNull {
+                    cache.load(it,
+                        allowHttp = film.id.startsWith("tvbox-") || film.spiderVodId != null,
+                        hero = hero)
                 }
-                if (!upgraded && fallback != null) poster = fallback
-            }
-            if (!film.isOriginalDemo() && tmdbToken.isNotBlank() && film.metadataSource != "TMDB") launch {
-                val enrichedBitmap = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val enriched = ArtworkMetadataResolver(File(context.cacheDir, "tmdb-artwork"))
-                            .lookup(film, tmdbToken)
-                        val urls = if (hero) listOfNotNull(enriched?.backdropUrl, enriched?.posterUrl)
-                            else listOfNotNull(enriched?.posterUrl)
-                        val cache = AuthorizedPosterCache(context)
-                        urls.firstNotNullOfOrNull { candidate -> cache.load(candidate, hero = hero) }
-                    }.getOrNull()
-                }
-                if (enrichedBitmap != null) {
-                    upgraded = true
-                    poster = enrichedBitmap
-                }
-            }
+            }.getOrNull()
         }
     }
     return poster
@@ -205,51 +186,102 @@ class AuthorizedPosterCache(
     private val context: Context,
     private val openConnection: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection }
 ) {
+    companion object {
+        // Bound decoded bitmaps (not just compressed JPEG bytes) across LazyRow
+        // disposal/recreation. Memory is capped, adapted to device heap size.
+        private val memory = object : LruCache<String, MemoryEntry>(
+            (Runtime.getRuntime().maxMemory() / 12L)
+                .coerceIn(8L * 1024 * 1024, 32L * 1024 * 1024).toInt()) {
+            override fun sizeOf(key: String, entry: MemoryEntry): Int =
+                entry.bitmap.byteCount.coerceAtLeast(1)
+        }
+        // Stable stripes prevent repeat downloads for the same image; do not
+        // serialize every poster behind one global network lock.
+        private val imageLocks = Array(64) { Any() }
+        private val networkSlots = Semaphore(4, true)
+    }
+
+    private data class MemoryEntry(
+        val bitmap: Bitmap, val updated: Long, val diskSize: Long
+    )
+
     fun load(raw: String, allowHttp: Boolean = false, hero: Boolean = false): Bitmap? {
-        // TVBox allows plain HTTP posters. Only explicitly imported TVBox
-        // catalogs may take this path; legacy catalog posters remain HTTPS-only.
         val url = (if (allowHttp) TvBoxUrl.normalize(raw, true) else AuthorizedUrls.https(raw))
             ?: return null
-        val key = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
+        val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
             .joinToString("") { "%02x".format(it) }
-        val dir = File(context.cacheDir, "authorized-posters")
-        val file = File(dir, "$key.img")
-        val existing = file.takeIf { it.isFile && it.length() in 1..8_000_000 }
-        if (existing != null) {
-            val bitmap = decode(existing.readBytes(), hero)
-            if (bitmap != null) return bitmap
-            existing.delete() // A damaged cached image must not permanently suppress network recovery.
+        val file = File(File(context.cacheDir, "authorized-posters"), "$digest.img")
+        val memoryKey = file.absolutePath + if (hero) ":hero" else ":tile"
+        val stripe = imageLocks[(digest.hashCode() and Int.MAX_VALUE) % imageLocks.size]
+
+        // A file that was cleared, replaced or corrupted must not keep its
+        // previous decoded bitmap alive in the LRU cache.
+        fun memoryHit(): Bitmap? {
+            val entry = memory.get(memoryKey) ?: return null
+            if (file.isFile && file.length() == entry.diskSize &&
+                file.lastModified() == entry.updated && !entry.bitmap.isRecycled) {
+                return entry.bitmap
+            }
+            memory.remove(memoryKey)
+            return null
         }
-        val connection = openConnection(url).apply {
-            connectTimeout = 7000
-            readTimeout = 8000
-            instanceFollowRedirects = false
-            setRequestProperty("Accept", "image/jpeg,image/png,image/webp")
+        fun rememberDecoded(image: Bitmap): Bitmap {
+            if (file.isFile) memory.put(memoryKey, MemoryEntry(
+                image, file.lastModified(), file.length()))
+            return image
         }
-        try {
-            if (connection.responseCode != 200) return null
-            val type = connection.contentType?.lowercase()?.substringBefore(';') ?: return null
-            if (type !in setOf("image/jpeg", "image/png", "image/webp")) return null
-            val data = java.io.ByteArrayOutputStream()
-            connection.inputStream.use { stream ->
-                val chunk = ByteArray(8192)
-                while (true) {
-                    val count = stream.read(chunk)
-                    if (count < 0) break
-                    if (data.size() + count > 8_000_000) return null
-                    data.write(chunk, 0, count)
+
+        memoryHit()?.let { return it }
+        synchronized(stripe) {
+            memoryHit()?.let { return it }
+            val existing = file.takeIf { it.isFile && it.length() in 1..8_000_000 }
+            if (existing != null) {
+                val decoded = decode(existing.readBytes(), hero)
+                if (decoded != null) return rememberDecoded(decoded)
+                existing.delete()
+                memory.remove(memoryKey)
+            }
+
+            // Limit image network/decoder contention on resource-constrained
+            // Android TVs. Do not expose cookies or trigger Spider scripts.
+            networkSlots.acquire()
+            try {
+                val connection = openConnection(url).apply {
+                    connectTimeout = 7000
+                    readTimeout = 8000
+                    instanceFollowRedirects = false
+                    setRequestProperty("Accept", "image/jpeg,image/png,image/webp")
                 }
+                try {
+                    if (connection.responseCode != 200) return null
+                    val type = connection.contentType?.lowercase()?.substringBefore(';') ?: return null
+                    if (type !in setOf("image/jpeg", "image/png", "image/webp")) return null
+                    val data = java.io.ByteArrayOutputStream()
+                    connection.inputStream.use { stream ->
+                        val chunk = ByteArray(8192)
+                        while (true) {
+                            val count = stream.read(chunk)
+                            if (count < 0) break
+                            if (data.size() + count > 8_000_000) return null
+                            data.write(chunk, 0, count)
+                        }
+                    }
+                    val bytes = data.toByteArray()
+                    val bitmap = decode(bytes, hero) ?: return null
+                    file.parentFile?.mkdirs()
+                    val cached = file.parentFile?.listFiles()?.sortedBy { it.lastModified() }.orEmpty()
+                    if (cached.size > 150 || cached.sumOf { it.length() } > 100_000_000L) {
+                        cached.take(25).forEach { it.delete() }
+                    }
+                    runCatching { file.writeBytes(bytes) }
+                    return rememberDecoded(bitmap)
+                } finally {
+                    connection.disconnect()
+                }
+            } finally {
+                networkSlots.release()
             }
-            val bytes = data.toByteArray()
-            val bitmap = decode(bytes, hero) ?: return null
-            dir.mkdirs()
-            val cached = dir.listFiles()?.sortedBy { it.lastModified() }.orEmpty()
-            if (cached.size > 150 || cached.sumOf { it.length() } > 100_000_000L) {
-                cached.take(25).forEach { it.delete() }
-            }
-            runCatching { file.writeBytes(bytes) }
-            return bitmap
-        } finally { connection.disconnect() }
+        }
     }
 
     private fun decode(bytes: ByteArray, hero: Boolean): Bitmap? {
@@ -258,8 +290,8 @@ class AuthorizedPosterCache(
         if (bounds.outWidth < 1 || bounds.outHeight < 1 ||
             bounds.outWidth > 10000 || bounds.outHeight > 10000) return null
         var sample = 1
-        val maxWidth = if (hero) 2560 else 1200
-        val maxHeight = if (hero) 1440 else 1600
+        val maxWidth = if (hero) 2560 else 640
+        val maxHeight = if (hero) 1440 else 960
         while (bounds.outWidth / sample > maxWidth || bounds.outHeight / sample > maxHeight) sample *= 2
         return BitmapFactory.decodeByteArray(
             bytes, 0, bytes.size,
