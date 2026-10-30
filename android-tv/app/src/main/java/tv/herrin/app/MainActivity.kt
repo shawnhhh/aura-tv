@@ -120,6 +120,8 @@ class MainActivity : ComponentActivity() {
         val originalCallback = window.callback
         window.callback = object : android.view.Window.Callback by originalCallback {
             override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+                if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0)
+                    RemoteFocusLatencyProbe.keyDown(event.keyCode)
                 RemoteTrace.event { "ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}" }
                 val handled = originalCallback.dispatchKeyEvent(event)
                 RemoteTrace.event { "ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled" }
@@ -3333,7 +3335,10 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
         .onFocusChanged {
             focused = it.isFocused
             RemoteTrace.event { "POSTER ${film.id} focus=$focused" }
-            if (it.isFocused) onFocus()
+            if (it.isFocused) {
+                RemoteFocusLatencyProbe.posterFocused(film.id)
+                onFocus()
+            }
         }
         .border(if (focused) 2.dp else 1.dp, stroke, shape)
         .clip(shape).background(Color(0xFF101821))
