@@ -1203,12 +1203,19 @@ private fun Herrin() {
             return
         }
         filmId = item.id
-        val first = item.playbackEpisodes.firstOrNull()
-        val option = first?.lines?.firstOrNull()
+        val selectedCmsFilm = !spiderActive && activeCmsSite != null &&
+            !item.cmsVodId.isNullOrBlank()
+        // A CMS list can already contain several playback lines. Only the
+        // licensed HTTPS resolver may decide which is actually playable;
+        // do not blindly choose its first line before entering the player.
+        val chosen = if (selectedCmsFilm) CmsOneTapPlaybackPolicy.firstPlayable(item)
+            else item.playbackEpisodes.firstNotNullOfOrNull { source ->
+                source.lines.firstOrNull()?.let { source.number to it.id }
+            }
         when {
-            first != null && option != null -> {
-                episode = first.number
-                line = option.id
+            chosen != null -> {
+                episode = chosen.first
+                line = chosen.second
                 screen = "player"
             }
             spiderActive && item.spiderVodId != null -> {
@@ -1218,9 +1225,9 @@ private fun Herrin() {
                 screen = "player"
             }
             CmsOneTapPlaybackPolicy.resolveSelectedFilmInPlayer(
-                siteSelected = activeCmsSite != null, groupedSeason = false,
+                siteSelected = selectedCmsFilm, groupedSeason = false,
                 spiderActive = spiderActive, cmsVodId = item.cmsVodId,
-                hasPlayableEpisode = first != null && option != null) -> {
+                hasPlayableEpisode = chosen != null) -> {
                 cmsPlaybackFailedId = null
                 cmsPlaybackPendingId = item.id
                 episode = 1
