@@ -310,7 +310,9 @@ private fun AuthorizedPlaybackSession(
         // this timer; while paused the controls remain available for resuming.
         if (!isLive && controlsVisible && player.isPlaying &&
             playbackState == Player.STATE_READY && !showVerification && errorMessage == null) {
-            delay(8_000)
+            // Compact controls clear quickly so they do not obstruct film.
+            // An explicitly expanded TV settings sheet gets more time.
+            delay(if (advancedControlsVisible) 8_000 else 4_500)
             controlsVisible = false
             if (!testDiagnostics) advancedControlsVisible = false
             playerRootFocus.requestFocus()
@@ -544,11 +546,11 @@ private fun AuthorizedPlaybackSession(
         if (PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.86f).padding(bottom = 36.dp)
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.78f).padding(bottom = 24.dp)
                 .onFocusChanged { transportFocused = it.hasFocus }
-                .background(Color(0xE9151820), RoundedCornerShape(20.dp))
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .background(Color(0xDE151820), RoundedCornerShape(18.dp))
+                .padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(elapsed(shownPosition), color = Color.White, modifier = Modifier.testTag("player-position-label"))
@@ -566,7 +568,7 @@ private fun AuthorizedPlaybackSession(
             Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0xFF434857))) {
                 Box(Modifier.fillMaxWidth(percent).fillMaxHeight().background(Color.White))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = { applyRemoteSeek(-10_000L) },
                     modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
