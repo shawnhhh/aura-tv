@@ -1070,22 +1070,41 @@ private fun Herrin() {
         // Cancelled jobs do not hold a global boolean lock. Rapid alternating
         // UP/DOWN requests can supersede pending layout/focus restoration.
         posterFocusJob[0] = uiScope.launch {
-            // The viewport scroll and focus transfer are ONE cancellable
-            // transaction. Otherwise an old outer scroll coroutine can execute
-            // after newer D-pad input and steal the viewport.
-            vertical.scrollTo(if (toBottom) vertical.maxValue else 0)
+            // FocusRequester.requestFocus() returns Unit in this Compose version.
+            // The onFocus callback, however, updates focusId synchronously,
+            // so validate the actual destination instead of a nonthrowing call.
+            fun requestActualFocus(): Boolean {
+                if (runCatching { requester(target).requestFocus() }.isFailure) return false
+                return focusId == target
+            }
             val aligned = to.layoutInfo.visibleItemsInfo.any {
                 it.index == index && it.offset - sourceOffset in -24..24
             }
+            val verticalTarget = if (toBottom) vertical.maxValue else 0
+            // For an already-attached destination, move the focus immediately
+            // BEFORE any scrolling or waiting for another render frame.
+            // Keep scroll and focus inside this cancellable latest-key job.
+            if (aligned && requestActualFocus()) {
+                if (vertical.value != verticalTarget) vertical.scrollTo(verticalTarget)
+                RemoteTrace.event { "RAIL immediate target=$target x=$sourceOffset" }
+                return@launch
+            }
+            if (vertical.value != verticalTarget) vertical.scrollTo(verticalTarget)
             if (!aligned) to.scrollToItem(index, -sourceOffset)
+            // A LazyRow may attach during scrollToItem, so try once in this
+            // frame before the three-frame offscreen-item recovery path.
+            if (requestActualFocus()) {
+                RemoteTrace.event { "RAIL post-scroll immediate target=$target" }
+                return@launch
+            }
             repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
                 withFrameNanos { }
-                if (runCatching { requester(target).requestFocus() }.isSuccess) {
-                    RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
+                if (requestActualFocus()) {
+                    RemoteTrace.event { "RAIL attached target=$target x=$sourceOffset" }
                     return@launch
                 }
             }
-            RemoteTrace.event { "RAIL target unattached=$target" }
+            RemoteTrace.event { "RAIL focus not confirmed target=$target" }
         }
     }
     fun details(f: Film) {
