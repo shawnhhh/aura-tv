@@ -580,22 +580,31 @@ private fun AuthorizedPlaybackSession(
                 }
                 Button(onClick = { applyRemoteSeek(10_000L) },
                     modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
-                Button(onClick = {
-                    player.setPlaybackSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
-                    uiEpoch++
-                }, modifier = Modifier.testTag("transport-speed")) {
-                    Text("倍速: ${player.playbackParameters.speed}×")
+                if (advancedControlsVisible) {
+                    Button(onClick = {
+                        player.setPlaybackSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
+                        uiEpoch++
+                    }, modifier = Modifier.testTag("transport-speed")) {
+                        Text("倍速: ${player.playbackParameters.speed}×")
+                    }
+                    Button(
+                        onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
+                        enabled = audios.size > 1, modifier = Modifier.testTag("transport-audio")
+                    ) { Text("音轨: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)) }
+                    Button(
+                        onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
+                        enabled = captions.isNotEmpty(), modifier = Modifier.testTag("transport-subtitle")
+                    ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
                 }
-                Button(
-                    onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
-                    enabled = audios.size > 1, modifier = Modifier.testTag("transport-audio")
-                ) { Text("音轨: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)) }
-                Button(
-                    onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
-                    enabled = captions.isNotEmpty(), modifier = Modifier.testTag("transport-subtitle")
-                ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
+                Button(onClick = {
+                    advancedControlsVisible = !advancedControlsVisible
+                    controlsInteractionEpoch++
+                }, modifier = Modifier.focusRequester(moreControl)
+                    .testTag("transport-more")) {
+                    Text(if (advancedControlsVisible) "收起" else "更多")
+                }
             }
-            if (onLineSelection != null || onEpisodeSelection != null) {
+            if (advancedControlsVisible && (onLineSelection != null || onEpisodeSelection != null)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                     onLineSelection?.let { select ->
                         Button(onClick = select, modifier = Modifier.focusRequester(selectionControl).testTag("transport-lines")) { Text("线路") }
@@ -607,25 +616,26 @@ private fun AuthorizedPlaybackSession(
                     }
                 }
             }
-            DanmakuControls(danmaku.value, { danmaku.value = it })
-            // Do not relocate the removed upper-left Return/Verification text:
-            // TV Back already exits playback; normal controls contain only
-            // actual viewing actions such as the user-selected aspect mode.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = {
-                    viewportMode = viewportMode.toggle()
-                    playbackPreferences.playbackFillScreen =
-                        viewportMode == PlaybackViewportMode.FILL
-                    controlsInteractionEpoch++
-                }, modifier = Modifier.testTag("transport-viewport-mode")) {
-                    Text("画面：" + viewportMode.label)
-                }
-                if (testDiagnostics) {
-                    Button(onClick = { showVerification = !showVerification
-                        controlsInteractionEpoch++ },
-                        modifier = Modifier.testTag("player-verification-toggle")) {
-                        Text(if (showVerification) "收起播放信息" else "播放信息")
+            if (advancedControlsVisible) {
+                DanmakuControls(danmaku.value, { danmaku.value = it })
+                // Playback options are intentionally collapsed until requested.
+                // Removed upper-left Back/Verification text never returns here.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = {
+                        viewportMode = viewportMode.toggle()
+                        playbackPreferences.playbackFillScreen =
+                            viewportMode == PlaybackViewportMode.FILL
+                        controlsInteractionEpoch++
+                    }, modifier = Modifier.testTag("transport-viewport-mode")) {
+                        Text("画面：" + viewportMode.label)
+                    }
+                    if (testDiagnostics) {
+                        Button(onClick = { showVerification = !showVerification
+                            controlsInteractionEpoch++ },
+                            modifier = Modifier.testTag("player-verification-toggle")) {
+                            Text(if (showVerification) "收起播放信息" else "播放信息")
+                        }
                     }
                 }
             }
