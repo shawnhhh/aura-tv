@@ -92,7 +92,9 @@ class M437MetadataScrapingTest {
         resolver.lookup(film(), token, forceRefresh = true)
         assertEquals(4, requests)
         resolver.lookup(film("不同影片"), token)
-        assertEquals(5, requests) // Only the new title is searched; no warehouse or Spider work.
+        // An unmatched title now checks both official TMDB media categories
+        // before caching a negative result; neither query touches the warehouse.
+        assertEquals(6, requests)
         cache.walkTopDown().filter { it.isFile }.forEach { assertFalse(it.readText().contains(token)) }
     }
 
