@@ -14,12 +14,16 @@ class RemotePerfReportTest(unittest.TestCase):
             "end_to_idle_p95_ms=145 frame_p95_ms=18.21 "
             "frames_total=100 frames_over_16_67ms=22 "
             "frames_over_33_33ms=3 long_frame_pct=22.00\n"
+            "10-30 13:12:07.200 I HerrinPerf: m443_rapid_burst_events=20 "
+            "last_focus_correct=1 burst_to_final_focus_ms=1270\n"
         )
         metrics = parse_remote_performance(log)
         self.assertEqual(32, metrics["vertical"]["focus_success"])
         self.assertEqual(40, metrics["horizontal"]["events"])
         self.assertEqual(22, metrics["horizontal"]["frames_over_16_67ms"])
         self.assertEqual(22.0, metrics["horizontal"]["long_frame_pct"])
+        self.assertEqual(20, metrics["burst"]["events"])
+        self.assertEqual(1, metrics["burst"]["last_focus_correct"])
         formatted = "\n".join(render_markdown(metrics))
         self.assertIn("48.12ms", formatted)
         self.assertIn("22.0%", formatted)
