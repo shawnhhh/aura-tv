@@ -224,6 +224,12 @@ internal class ArtworkMetadataResolver(
     fun manualMatch(film: Film): TmdbManualMatch? = corrections.get(film)
     fun setManualMatch(film: Film, match: TmdbManualMatch?) = corrections.set(film, match)
 
+    /** A token verified by the official configuration endpoint may be retried
+     * immediately after its previous authentication cooldown. */
+    fun clearAuthCooldown(token: String) {
+        if (token.isNotBlank()) rejectedTokens.remove(hash(token.trim()))
+    }
+
     fun lookup(film: Film, readAccessToken: String, forceRefresh: Boolean = false): EnrichedArtwork? {
         val token = readAccessToken.trim()
         if (!Regex("^[A-Za-z0-9._~-]{20,1000}$").matches(token) || film.title.isBlank()) return null
