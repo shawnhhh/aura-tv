@@ -79,6 +79,19 @@ class M453BufferingRemoteFocusInstrumentedTest {
             org.junit.Assert.assertNotEquals("Aspect mode must toggle without a player restart",
                 before, after)
 
+            // An expanded submenu must permit UP to return to the previous
+            // row. The old parent key interceptor hid every control on UP,
+            // making multi-row TV settings awkward or impossible to navigate.
+            compose.onNodeWithTag("transport-viewport-mode")
+                .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            compose.waitForIdle()
+            compose.onNodeWithTag("transport-viewport-mode").assertIsFocused()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
+                KeyEvent.KEYCODE_DPAD_UP)
+            compose.waitForIdle()
+            compose.onNodeWithTag("transport-more").assertExists()
+            compose.onNodeWithTag("transport-viewport-mode").assertExists()
+
             // Return to compact HUD without removing or relocating the user's
             // explicitly deleted upper-left technical labels.
             compose.onNodeWithTag("transport-more")
