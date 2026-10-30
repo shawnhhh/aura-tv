@@ -89,6 +89,8 @@ class M454CmsOneTapRecoveryInstrumentedTest {
                 runCatching {
                     compose.onNodeWithTag("player-startup-error").assertIsDisplayed()
                     compose.onNodeWithTag("player-startup-retry").assertIsDisplayed()
+                    compose.onNodeWithTag("player-startup-back")
+                        .assertTextEquals("返回片库")
                 }.isSuccess
             }
             assertEquals("Only one selected detail may be fetched on first click",
