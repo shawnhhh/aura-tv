@@ -74,6 +74,23 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+/** Elapsed uptime from Activity launch to first interactive home.
+ * Measure cold starts on TCL separately; Compose timing excludes process spawn. */
+internal object StartupTiming {
+    private var startedAt: Long = 0
+    @Volatile var lastComposeReadyMs: Long = -1
+        private set
+    fun start() {
+        startedAt = SystemClock.elapsedRealtime()
+        lastComposeReadyMs = -1
+    }
+    fun finish() {
+        if (startedAt <= 0 || lastComposeReadyMs >= 0) return
+        lastComposeReadyMs = SystemClock.elapsedRealtime() - startedAt
+        Log.i("HerrinStartup", "activity_to_home_ms=$lastComposeReadyMs")
+    }
+}
+
 /** Enabled explicitly by adb setprop log.tag.HerrinRemote DEBUG in diagnostics. */
 internal object RemoteTrace {
     private const val TAG = "HerrinRemote"
@@ -82,13 +99,15 @@ internal object RemoteTrace {
     }
     // Release builds may receive dozens of D-pad events per second. Avoid
     // allocating strings/focus diagnostics unless adb explicitly enables it.
-    inline fun event(message: () -> String) {
-        if (Log.isLoggable("HerrinRemote", Log.DEBUG)) Log.d("HerrinRemote", message())
+    fun event(message: () -> String) {
+        // Lint validates matching tags, and the message is still lazy.
+        if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, message())
     }
 }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartupTiming.start()
         super.onCreate(savedInstanceState)
         // Observe through the public Window.Callback contract without calling AndroidX restricted APIs.
         val originalCallback = window.callback
@@ -3040,7 +3059,8 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
     LaunchedEffect(exiting, reduced) {
         if (exiting) {
             if (reduced) opacity.snapTo(0f)
-            else opacity.animateTo(0f, tween(460, easing = FastOutSlowInEasing))
+            else opacity.animateTo(0f, tween(340, easing = FastOutSlowInEasing))
+            StartupTiming.finish()
             onFinished()
         }
     }
@@ -3359,56 +3379,38 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
 
 @Composable
 internal fun Splash(reduced: Boolean, done: () -> Unit) {
-    val collapse = remember { Animatable(0f) }
-    val reveal = remember { Animatable(0f) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(reduced) {
-        focus.requestFocus()
-        if (reduced) { done(); return@LaunchedEffect }
-        // A gentle wordmark reveal precedes a staggered, eased collapse to H.
-        // Total is roughly 2.7 s, with no sudden full-screen replacement.
-        reveal.animateTo(1f, tween(durationMillis = 380, easing = FastOutSlowInEasing))
-        delay(150)
-        collapse.animateTo(1f, tween(durationMillis = 1550, easing = FastOutSlowInEasing))
-        delay(650)
+        runCatching { focus.requestFocus() }
+        // Let the underlying home compose on the very next frame. This is
+        // branding, not an artificial 2.7-second loading screen.
+        withFrameNanos { }
+        if (!reduced) delay(100)
         done()
     }
-    val collapsed by remember { derivedStateOf { collapse.value >= 0.999f } }
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080B10))
-        .testTag("splash").focusRequester(focus)
-        .onPreviewKeyEvent { event ->
-            val code = event.nativeKeyEvent.keyCode
-            if (event.type == KeyEventType.KeyDown &&
-                (code == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                    code == android.view.KeyEvent.KEYCODE_ENTER ||
-                    code == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER)) {
-                done()
-                true
-            } else false
-        }.focusable(), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(330.dp)) {
-            drawCircle(Brush.radialGradient(listOf(
-                Color(0x1DFFFFFF).copy(alpha = 0.11f * collapse.value), Color.Transparent)),
-                radius = size.minDimension / 2f)
-        }
-        // All movement is in GPU layers; H settles at the true center without
-        // relayout. Trailing letters fade in reverse order as the mark closes.
-        val cell = minOf(94.dp, (maxWidth - 80.dp) / 6)
-        val stepPx = with(LocalDensity.current) { cell.toPx() }
-        "HERRIN".forEachIndexed { index, letter ->
-            if (index == 0 || !collapsed) {
-                Text(letter.toString(), modifier = Modifier.width(cell).graphicsLayer {
-                    val progress = collapse.value
-                    translationX = (index - (5f - 5f * progress) / 2f) * stepPx
-                    alpha = if (index == 0) 1f else reveal.value *
-                        (1f - ((5f * progress - (5f - index)) / 1.1f).coerceIn(0f, 1f))
-                    if (index == 0) {
-                        scaleX = 1f + 0.035f * progress
-                        scaleY = scaleX
-                    }
-                }, textAlign = TextAlign.Center, fontSize = (cell.value * 0.91f).sp,
-                    fontWeight = FontWeight.Medium, color = Color.White)
-            }
-        }
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(Color(0xFF080B10))
+            .testTag("splash").focusRequester(focus)
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    event.nativeKeyEvent.keyCode in setOf(
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                        android.view.KeyEvent.KEYCODE_ENTER,
+                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                    )) {
+                    done()
+                    true
+                } else false
+            }.focusable(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Same vector asset as the OS starting-window background. There is no
+        // interim H-only state, letter-by-letter collapse or font switching.
+        Image(
+            painterResource(R.drawable.launch_wordmark),
+            contentDescription = "HERRIN",
+            modifier = Modifier.width(420.dp).height(84.dp)
+                .testTag("splash-wordmark")
+        )
     }
 }
