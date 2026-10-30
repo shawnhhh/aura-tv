@@ -36,6 +36,31 @@ class RemotePerfReportTest(unittest.TestCase):
         self.assertIn("未采集", "\n".join(lines))
         self.assertNotIn("0ms", "\n".join(lines))
 
+    def test_same_emulator_render_baseline_is_reported_only_when_measured(self):
+        line = (
+            "I HerrinPerf: m445_redraw_frames=24 redraw_p95_ms=189.41 "
+            "navigation_frames=51 navigation_p95_ms=206.28 "
+            "navigation_to_redraw_ratio=1.09"
+        )
+        metrics = parse_remote_performance(line)
+        self.assertEqual(24, metrics["frame_baseline"]["redraw_frames"])
+        self.assertEqual(1.09, metrics["frame_baseline"]["navigation_to_redraw_ratio"])
+        report = "\n".join(render_markdown(metrics))
+        self.assertIn("189.41ms", report)
+        self.assertIn("206.28ms", report)
+        self.assertIn("1.09", report)
+        self.assertNotIn("82.00", report)
+
+    def test_missing_redraw_samples_are_explicitly_unavailable(self):
+        line = (
+            "I HerrinPerf: m445_redraw_frames=0 redraw_p95_ms=unavailable "
+            "navigation_frames=10 navigation_p95_ms=220.00 "
+            "navigation_to_redraw_ratio=unavailable"
+        )
+        metrics = parse_remote_performance(line)["frame_baseline"]
+        self.assertNotIn("redraw_p95_ms", metrics)
+        self.assertNotIn("navigation_to_redraw_ratio", metrics)
+
     def test_non_herrin_tag_and_unavailable_are_ignored(self):
         log = (
             "I OtherTag: m443_horizontal_dpad_events=40 focus_success=40\n"

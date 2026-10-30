@@ -16,13 +16,27 @@ _ALLOWED_INTS = (
 _PAIR = re.compile(r"([a-zA-Z0-9_.]+)=([0-9.]+|unavailable)")
 _START = re.compile(r"\bm443_(vertical|horizontal)_dpad_events=(\d+)\b")
 _BURST = re.compile(r"\bm443_rapid_burst_events=(\d+)\b")
+_FRAMEBASE = re.compile(r"\bm445_redraw_frames=(\d+)\b")
 
 
 def parse_remote_performance(logcat: str) -> dict:
     """Latest sample per direction, or empty dict if the probe did not run."""
     results = {}
     for line in logcat.splitlines():
-        if "HerrinPerf" not in line or "m443_" not in line:
+        if "HerrinPerf" not in line or not ("m443_" in line or "m445_" in line):
+            continue
+        framebase = _FRAMEBASE.search(line)
+        if framebase:
+            fields = dict(_PAIR.findall(line[framebase.end():]))
+            baseline = {"redraw_frames": int(framebase.group(1))}
+            for key in ("navigation_frames",):
+                if key in fields and fields[key] != "unavailable":
+                    baseline[key] = int(fields[key])
+            for key in ("redraw_p95_ms", "navigation_p95_ms",
+                        "navigation_to_redraw_ratio"):
+                if key in fields and fields[key] != "unavailable":
+                    baseline[key] = float(fields[key])
+            results["frame_baseline"] = baseline
             continue
         burst = _BURST.search(line)
         if burst:
@@ -80,6 +94,16 @@ def render_markdown(performance: dict) -> list[str]:
                   f"{burst.get('events')} 次，最终焦点" +
                   ("正确" if burst.get("last_focus_correct") == 1 else "错误") +
                   f"，总耗时 {burst.get('burst_to_final_focus_ms')}ms。"]
+    baseline = performance.get("frame_baseline")
+    if baseline:
+        lines += ["", "## 相同模拟器：固定画面重绘与方向键切换对照", "",
+                  "| 固定画面重绘 P95 | 方向键切换 P95 | 比值（切换/重绘） |",
+                  "| ---: | ---: | ---: |",
+                  f"| {baseline.get('redraw_p95_ms', '未采集')}ms | "
+                  f"{baseline.get('navigation_p95_ms', '未采集')}ms | "
+                  f"{baseline.get('navigation_to_redraw_ratio', '未采集')} |",
+                  "", "固定画面重绘使用同一个主页视口的 decorView.invalidate，"
+                  "仅作模拟器图形环境基线；和 Compose 实际重组不能严格等同。"]
     lines += [
         "",
         "长帧：总合成时间 >16.67ms（按 60Hz 计算）；严重长帧：>33.33ms。"
