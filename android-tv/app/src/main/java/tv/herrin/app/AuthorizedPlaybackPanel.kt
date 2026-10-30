@@ -79,7 +79,9 @@ fun AuthorizedPlaybackPanel(
     focusRestoreEpoch: Int = 0,
     onLineSelection: (() -> Unit)? = null,
     onEpisodeSelection: (() -> Unit)? = null,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** Instrumentation-only diagnostics; never shown in the consumer player. */
+    testDiagnostics: Boolean = false
 ) {
     // A media replacement owns a fresh composition, including callbacks,
     // effects, focus nodes and native surfaces. No outgoing resource can be
@@ -87,7 +89,7 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onBack)
+            onLineSelection, onEpisodeSelection, onBack, testDiagnostics)
     }
 }
 
@@ -104,10 +106,15 @@ private fun AuthorizedPlaybackSession(
     focusRestoreEpoch: Int,
     onLineSelection: (() -> Unit)?,
     onEpisodeSelection: (() -> Unit)?,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    testDiagnostics: Boolean
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val playbackPreferences = remember(context) { Preferences(context) }
+    var viewportMode by remember(media) {
+        mutableStateOf(PlaybackViewportMode.fromStoredFill(playbackPreferences.playbackFillScreen))
+    }
     val danmaku = rememberDanmakuSettings()
     var errorMessage by remember(media) { mutableStateOf<String?>(null) }
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
@@ -444,13 +451,17 @@ private fun AuthorizedPlaybackSession(
                 // One TV focus system: native view renders video and subtitles only;
                 // the Compose row below provides seek, play, tracks and a progress timeline.
                 useController = false
+                resizeMode = viewportMode.resizeMode
                 isFocusable = false
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 keepScreenOn = true
                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 setPadding(0, 0, 0, 0)
             } },
-            update = { it.player = player },
+            update = {
+                it.resizeMode = viewportMode.resizeMode
+                it.player = player
+            },
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
@@ -473,18 +484,16 @@ private fun AuthorizedPlaybackSession(
                     }
                 }
             }
-        } else if ((controlsVisible && hasDecodedVideo) || showVerification || errorMessage != null)
-            Column(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Button(onClick = { requestBack("visible-button") }) {
-                Text(if (isLive) "返回频道" else "返回详情")
-            }
-            // Movie metadata/technical resolver messages are not shown over the film.
-            Button(onClick = { showVerification = !showVerification },
-                modifier = Modifier.testTag("player-verification-toggle")) {
-                Text(if (showVerification) "收起实播状态" else "查看实播状态")
-            }
-            if (showVerification) {
+        } else if ((testDiagnostics && showVerification) || errorMessage != null ||
+            (controlsVisible && activeVariant > 0 && playbackState != Player.STATE_READY) ||
+            (controlsVisible && playbackState == Player.STATE_ENDED))
+            // No permanent top-left text or buttons over the video.
+            // Diagnostics appear only when deliberately opened from the
+            // bottom control row; genuine playback errors remain actionable.
+            Column(Modifier.align(Alignment.Center).fillMaxWidth(0.72f)
+                .background(Color(0xDD101722), RoundedCornerShape(14.dp))
+                .padding(22.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            if (testDiagnostics && showVerification) {
                 val _observeVerification = verificationTick + uiEpoch
                 val counters = player.videoDecoderCounters
                 Text(PlaybackAcceptance.summary(player.playbackState,
@@ -590,6 +599,27 @@ private fun AuthorizedPlaybackSession(
                 }
             }
             DanmakuControls(danmaku.value, { danmaku.value = it })
+            // Do not relocate the removed upper-left Return/Verification text:
+            // TV Back already exits playback; normal controls contain only
+            // actual viewing actions such as the user-selected aspect mode.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = {
+                    viewportMode = viewportMode.toggle()
+                    playbackPreferences.playbackFillScreen =
+                        viewportMode == PlaybackViewportMode.FILL
+                    controlsInteractionEpoch++
+                }, modifier = Modifier.testTag("transport-viewport-mode")) {
+                    Text("画面：" + viewportMode.label)
+                }
+                if (testDiagnostics) {
+                    Button(onClick = { showVerification = !showVerification
+                        controlsInteractionEpoch++ },
+                        modifier = Modifier.testTag("player-verification-toggle")) {
+                        Text(if (showVerification) "收起播放信息" else "播放信息")
+                    }
+                }
+            }
         }
     }
 }

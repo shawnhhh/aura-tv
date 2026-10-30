@@ -69,6 +69,10 @@ class Preferences(context: Context) : FavoritesStore {
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
+    /** Default full-bleed TV playback. Fit can be selected for uncropped cinema. */
+    var playbackFillScreen: Boolean
+        get() = prefs.getBoolean("playback_fill_screen", true)
+        set(value) { prefs.edit().putBoolean("playback_fill_screen", value).apply() }
     /** Optional personal TMDB API Read Access Token; empty disables metadata calls. */
     var tmdbReadToken: String
         get() = prefs.getString("tmdb_read_token", "") ?: ""

@@ -87,7 +87,10 @@ class PlaybackTestActivity : ComponentActivity() {
                         onBack = {
                             android.util.Log.i("HerrinPlayerBack", "debug onBack invoked showing=$showing")
                             showing = false
-                        }
+                        },
+                        // Diagnostics are available solely in this isolated
+                        // debug/test fixture, never in the real HERRIN player.
+                        testDiagnostics = true
                     )
                 } else Text("Playback released")
             }

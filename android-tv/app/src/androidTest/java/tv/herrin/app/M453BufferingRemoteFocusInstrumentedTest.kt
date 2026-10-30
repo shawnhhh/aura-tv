@@ -25,6 +25,37 @@ import org.junit.runner.RunWith
 class M453BufferingRemoteFocusInstrumentedTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun ordinaryPlayerHasNoUpperLeftTextNorRelocatedDebugButtons() {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        server.start()
+        val media = PlaybackMedia(server.url("/clean-player.mp4").toString())
+        try {
+            // This is the actual consumer player entry, NOT PlaybackTestActivity
+            // with its explicit isolated testDiagnostics=true.
+            compose.setContent {
+                AuthorizedPlaybackPanel(media = media, onBack = {})
+            }
+            compose.waitUntil(7_000) {
+                runCatching {
+                    compose.onNodeWithTag("transport-toggle").assertExists()
+                    compose.onNodeWithTag("transport-viewport-mode").assertExists()
+                }.isSuccess
+            }
+            compose.onNodeWithTag("player-verification-toggle").assertDoesNotExist()
+            compose.onNodeWithTag("player-back-control").assertDoesNotExist()
+            compose.onNodeWithTag("player-verification-status").assertDoesNotExist()
+            compose.onNodeWithTag("player-journey-status").assertDoesNotExist()
+            compose.onNodeWithTag("transport-viewport-mode")
+                .assertTextContains("画面：", substring = true)
+            compose.onNodeWithTag("transport-viewport-mode").performClick()
+            compose.onNodeWithTag("player-verification-toggle").assertDoesNotExist()
+            compose.onNodeWithTag("player-back-control").assertDoesNotExist()
+        } finally {
+            server.shutdown()
+        }
+    }
+
     @Test fun remoteDownFocusesTransportEvenWhenNoMediaBytesHaveArrived() {
         val server = MockWebServer()
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))

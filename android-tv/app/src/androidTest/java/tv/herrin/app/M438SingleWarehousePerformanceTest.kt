@@ -162,7 +162,7 @@ class M438SingleWarehousePerformanceTest {
                 .put("vod_id", "performance-16")
                 .put("vod_name", "性能影片 16")
                 .put("vod_play_from", "授权模拟线路")
-                .put("vod_play_url", "正片\$https://192.0.2.1/fixture.mp4"))
+                .put("vod_play_url", "正片\$https://192.0.2.1/fixture.mp4")))
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
                 .setBody(detail.toString()))
             remote(KeyEvent.KEYCODE_DPAD_CENTER)
