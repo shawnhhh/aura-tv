@@ -19,9 +19,15 @@ internal object CmsOneTapPlaybackPolicy {
         siteSelected && !groupedSeason && !spiderActive &&
             !cmsVodId.isNullOrBlank() && !hasPlayableEpisode
 
-    /** The selected source must provide a real episode/line before playing. */
+    /**
+     * Pick the first episode with an actual URL accepted by the licensed
+     * Media3 resolver. A CMS may list an opaque/HTTP link first and a valid
+     * HTTPS direct stream second; the old first-line heuristic selected the
+     * unplayable entry and made a one-tap film appear broken.
+     */
     fun firstPlayable(film: Film): Pair<Int, String>? =
         film.playbackEpisodes.firstNotNullOfOrNull { episode ->
-            episode.lines.firstOrNull()?.let { episode.number to it.id }
+            episode.lines.firstOrNull { AuthorizedUrls.https(it.uri) != null }
+                ?.let { episode.number to it.id }
         }
 }
