@@ -36,8 +36,10 @@ internal object RemoteFocusLatencyProbe {
 
     fun keyDown(keyCode: Int) {
         if (!measuring) return
-        if (keyCode !in setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)) return
+        if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT &&
+            keyCode != KeyEvent.KEYCODE_DPAD_RIGHT &&
+            keyCode != KeyEvent.KEYCODE_DPAD_UP &&
+            keyCode != KeyEvent.KEYCODE_DPAD_DOWN) return
         synchronized(this) {
             if (!measuring) return
             pendingAtNanos = SystemClock.elapsedRealtimeNanos()
