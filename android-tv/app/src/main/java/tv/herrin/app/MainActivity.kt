@@ -1179,50 +1179,9 @@ private fun Herrin() {
         screen = "detail"
     }
     fun openMovie(item: Film) {
-        // Catalog artwork is now the primary "play" action, as on consumer TVs.
-        // Grouped seasons retain a details/season-picker entry.
-        if (providerFilms == null || showCatalog.groupFor(item.id) != null) {
-            details(item)
-            return
-        }
-        // A one-tap player may originate from Search, My, or a filtered
-        // catalog rather than Home. Player Back -> Detail -> Back must restore
-        // that original screen, not a stale detail-session destination.
-        returnScreen = screen
-        filmId = item.id
-        val selectedCmsFilm = !spiderActive && activeCmsSite != null &&
-            !item.cmsVodId.isNullOrBlank()
-        // A CMS list can already contain several playback lines. Only the
-        // licensed HTTPS resolver may decide which is actually playable;
-        // do not blindly choose its first line before entering the player.
-        val chosen = if (selectedCmsFilm) CmsOneTapPlaybackPolicy.firstPlayable(item)
-            else item.playbackEpisodes.firstNotNullOfOrNull { source ->
-                source.lines.firstOrNull()?.let { source.number to it.id }
-            }
-        when {
-            chosen != null -> {
-                episode = chosen.first
-                line = chosen.second
-                screen = "player"
-            }
-            spiderActive && item.spiderVodId != null -> {
-                // Resolve missing episodes while the fullscreen loader is shown.
-                episode = 1
-                line = "pending"
-                screen = "player"
-            }
-            CmsOneTapPlaybackPolicy.resolveSelectedFilmInPlayer(
-                siteSelected = selectedCmsFilm, groupedSeason = false,
-                spiderActive = spiderActive, cmsVodId = item.cmsVodId,
-                hasPlayableEpisode = chosen != null) -> {
-                cmsPlaybackFailedId = null
-                cmsPlaybackPendingId = item.id
-                episode = 1
-                line = "pending"
-                screen = "player"
-            }
-            else -> details(item)
-        }
+        // The user chooses a film first, then its real episode and source.
+        // Never start playback merely because a poster was selected.
+        details(item)
     }
     fun selectDetailSeason(seasonNumber: Int) {
         val section = seasonLayout?.sections?.firstOrNull { it.number == seasonNumber } ?: return
