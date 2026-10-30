@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -649,7 +651,10 @@ private fun Herrin() {
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
-    val catalogIdentity = providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
+    // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
+    val catalogIdentity = remember(providerFilms) {
+        providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
+    }
     var metadataForceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var metadataCorrection by remember { mutableStateOf<Film?>(null) }
     var metadataScanDone by remember { mutableIntStateOf(0) }
@@ -664,25 +669,37 @@ private fun Herrin() {
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
         if (metadataToken.isBlank()) return@LaunchedEffect
         val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
-        for (batch in unprocessed.chunked(3)) {
-            coroutineScope {
-                batch.forEach { original ->
-                    launch(Dispatchers.IO) {
-                        val info = runCatching { metadataResolver.lookup(original, metadataToken, forceRefresh = original.id in metadataForceIds) }
-                            .getOrNull()
-                        withContext(Dispatchers.Main.immediate) {
-                            if (info != null) {
-                                providerFilms = providerFilms?.map { current ->
-                                    if (current.id == original.id && current.metadataSource != "TMDB")
-                                        FilmMetadataEnrichment.apply(current, info)
-                                    else current
-                                }
-                            }
-                            metadataForceIds = metadataForceIds - original.id
-                            metadataScanDone++
+        // Network work stays at most three concurrent, but catalog publication
+        // is coalesced to one update per 12 items instead of one per item.
+        // This prevents dozens of whole-home regroupings during TV remote use.
+        for (batch in unprocessed.chunked(12)) {
+            val updates = mutableListOf<Pair<String, EnrichedArtwork?>>()
+            for (group in batch.chunked(3)) {
+                updates += coroutineScope {
+                    group.map { original ->
+                        async(Dispatchers.IO) {
+                            original.id to runCatching {
+                                metadataResolver.lookup(original, metadataToken,
+                                    forceRefresh = original.id in metadataForceIds)
+                            }.getOrNull()
                         }
+                    }.awaitAll()
+                }
+            }
+            val found = updates.mapNotNull { (id, artwork) ->
+                artwork?.let { id to it }
+            }.toMap()
+            withContext(Dispatchers.Main.immediate) {
+                if (found.isNotEmpty()) {
+                    providerFilms = providerFilms?.map { current ->
+                        val artwork = found[current.id]
+                        if (artwork != null && current.metadataSource != "TMDB")
+                            FilmMetadataEnrichment.apply(current, artwork)
+                        else current
                     }
                 }
+                metadataForceIds = metadataForceIds - batch.map { it.id }.toSet()
+                metadataScanDone += batch.size
             }
         }
     }
@@ -701,13 +718,15 @@ private fun Herrin() {
         if (!homeVisible) {
             sceneReveal.snapTo(0f)
         } else {
+            // A television's tab / Back action must respond immediately.
+            // Keep only the *first* entrance animation; no 260ms fade on
+            // every category and screen change.
             val firstEntrance = !hasEnteredHome
-            sceneReveal.snapTo(if (firstEntrance || reduceMotion) {
-                if (reduceMotion) 1f else 0f
-            } else 0.72f)
-            if (!reduceMotion) sceneReveal.animateTo(1f, tween(
-                durationMillis = if (firstEntrance) 460 else 260,
-                easing = FastOutSlowInEasing))
+            sceneReveal.snapTo(if (firstEntrance && !reduceMotion) 0f else 1f)
+            if (firstEntrance && !reduceMotion) {
+                sceneReveal.animateTo(1f, tween(durationMillis = 220,
+                    easing = FastOutSlowInEasing))
+            }
             hasEnteredHome = true
         }
     }
@@ -979,16 +998,10 @@ private fun Herrin() {
                     it.index == index && it.offset - sourceOffset in -24..24
                 }
                 if (!alreadyAligned) {
-                    if (reduceMotion) to.scrollToItem(index, -sourceOffset)
-                    else {
-                        // Some TV Compose versions cannot settle an unattainable
-                        // edge offset. Bound the animation and finish deterministically.
-                        val reached = withTimeoutOrNull(1100) {
-                            to.animateScrollToItem(index, -sourceOffset)
-                            true
-                        } ?: false
-                        if (!reached) to.scrollToItem(index, -sourceOffset)
-                    }
+                    // D-pad focus is an immediate navigation operation, not
+                    // a one-second carousel animation. Compose the target
+                    // row at the requested offset in the next layout frame.
+                    to.scrollToItem(index, -sourceOffset)
                 }
                 val target = "$prefix${displayKey(destination[index])}"
                 repeat(3) {
@@ -1831,8 +1844,7 @@ private fun Herrin() {
                                     if (homeRail && event.type == KeyEventType.KeyDown &&
                                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
                                         uiScope.launch {
-                                            if (reduceMotion) browseScroll.scrollTo(browseScroll.maxValue)
-                                            else browseScroll.animateScrollTo(browseScroll.maxValue)
+                                            browseScroll.scrollTo(browseScroll.maxValue)
                                             transferPosterFocus(railState, recommendState, index,
                                                 recommendedFilms, "recommend-")
                                         }
@@ -1868,8 +1880,7 @@ private fun Herrin() {
                                         if (event.type == KeyEventType.KeyDown &&
                                             event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
                                             uiScope.launch {
-                                                if (reduceMotion) browseScroll.scrollTo(0)
-                                                else browseScroll.animateScrollTo(0)
+                                                browseScroll.scrollTo(0)
                                                 transferPosterFocus(recommendState, railState, index,
                                                     railFilms, "card-")
                                             }
