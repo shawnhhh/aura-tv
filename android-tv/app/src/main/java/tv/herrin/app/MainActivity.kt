@@ -2336,9 +2336,9 @@ private fun Herrin() {
                             item { Text(if (metadataToken.isBlank())
                                 "未启用自动刮削：没有配置 TMDB API Read Access Token，当前显示影视源海报。" +
                                     "配置后自动匹配海报、背景、简介、评分和演员资料。"
-                                else "已开启 TMDB 智能刮削：已处理 $metadataScanDone/$metadataScanTotal，" +
-                                    "匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
-                                    "保留原影视源的播放地址和选集。",
+                                else "TMDB 匹配检查：已尝试 $metadataScanDone/$metadataScanTotal，" +
+                                    "成功匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
+                                    "连通性和令牌验证结果见下方；播放地址与选集仍由影视源提供。",
                                 modifier = Modifier.testTag("compact-metadata-status"),
                                 color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
                             item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
