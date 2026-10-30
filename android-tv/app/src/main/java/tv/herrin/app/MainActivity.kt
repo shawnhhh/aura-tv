@@ -330,6 +330,7 @@ private fun Herrin() {
     // Applying a source is the explicit user action that permits its Spider.
     // On subsequent launches, auto-run only the exact previously accepted JAR+MD5.
     var tvBoxRunSpiderAfterApply by remember { mutableStateOf(false) }
+    var tvBoxColdStartRequest by remember { mutableStateOf(false) }
     var spiderActive by remember { mutableStateOf(false) }
     var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
     var playerRetryEpoch by remember { mutableIntStateOf(0) }
@@ -357,6 +358,7 @@ private fun Herrin() {
     var tvBoxSelectedName by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         if (configuredTvBoxUrl.isNotBlank()) {
+            tvBoxColdStartRequest = true
             tvBoxRequest = configuredTvBoxUrl to true
             tvBoxLoadEpoch++
         }
@@ -364,6 +366,8 @@ private fun Herrin() {
     LaunchedEffect(tvBoxLoadEpoch) {
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
         val runSpiderAfterApply = tvBoxRunSpiderAfterApply
+        val preferCache = tvBoxColdStartRequest
+        tvBoxColdStartRequest = false
         tvBoxRunSpiderAfterApply = false
         tvBoxStatus = "正在读取 TVBox 配置…"
         vodImportFeedback = "读取中…"
@@ -375,8 +379,10 @@ private fun Herrin() {
         tvBoxHerrinCatalog = null
         val imported = tvBoxImportJsonRequest
         tvBoxImportJsonRequest = null
-        when (val result = if (imported != null) tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
-            else tvBoxRepository.load(address, tvBoxAllowHttp)) {
+        val loadedConfig = if (imported != null)
+            tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
+            else tvBoxRepository.load(address, tvBoxAllowHttp, preferCached = preferCache)
+        when (val result = loadedConfig) {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
                 tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}已识别 ${result.entries.size} 个仓库${if (result.ignored > 0) "；跳过 ${result.ignored} 个无效／重复条目" else ""}。选中下方仓库可预览。"
@@ -410,6 +416,12 @@ private fun Herrin() {
             }
             prefs.tvBoxWarehouseUrl = address
             configuredTvBoxUrl = address
+        }
+        // Cache-first on startup, refresh in the background for the next
+        // launch. Never replace the active browsing state mid-remote action.
+        if (preferCache && ((loadedConfig is TvBoxConfig.Single && loadedConfig.fromCache) ||
+                (loadedConfig is TvBoxConfig.Warehouses && loadedConfig.fromCache))) {
+            launch(Dispatchers.IO) { tvBoxRepository.load(address, tvBoxAllowHttp) }
         }
         if (settingsTvBoxOnly && tvBoxSingle != null) {
             // Import must activate an actual catalog, not just display 49 names
