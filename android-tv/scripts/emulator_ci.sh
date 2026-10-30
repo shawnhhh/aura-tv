@@ -23,6 +23,7 @@ collect() {
 trap collect EXIT
 # Parse/report reliability must be tested before claiming an emulator pass.
 python3 -m unittest discover -s scripts -p 'test_remote_perf_report.py' -v
+python3 -m unittest discover -s scripts -p 'test_verify_full_tv_suite.py' -v
 gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/build.log
 adb logcat -G 16M || true
 adb shell setprop log.tag.HerrinRemote DEBUG
@@ -30,3 +31,5 @@ bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
 # Shell-owned evidence survives the package uninstall performed by AGP.
 adb shell rm -rf /data/local/tmp/herrin-test-evidence
 gradle :app:connectedDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log
+# Do not report success if instrumentation skipped essential remote/playback cases.
+python3 scripts/verify_full_tv_suite.py 2>&1 | tee build/emulator-evidence/full-suite-gate.log

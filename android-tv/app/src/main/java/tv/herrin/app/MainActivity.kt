@@ -370,6 +370,10 @@ private fun Herrin() {
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
     var cmsDetailStatus by remember { mutableStateOf("") }
+    // Only the selected CMS title may resolve its missing episodes inside
+    // the regular player loading surface. No catalog-wide eager scans.
+    var cmsPlaybackPendingId by remember { mutableStateOf<String?>(null) }
+    var cmsPlaybackFailedId by remember { mutableStateOf<String?>(null) }
     var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseUrl) }
     // Large pasted backups should never be marshalled into an Activity saved-state Bundle.
     var tvBoxJsonDraft by remember { mutableStateOf("") }
@@ -643,6 +647,14 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    LaunchedEffect(screen, filmId) {
+        // A Back press during a slow CMS request must not leave a stale
+        // pending lookup that can later attach to an unrelated navigation.
+        if (screen != "player") {
+            cmsPlaybackPendingId = null
+            cmsPlaybackFailedId = null
+        }
+    }
     var facetsReturnScreen by rememberSaveable { mutableStateOf("browse") }
     var facetActor by rememberSaveable { mutableStateOf<String?>(null) }
     var facetDirector by rememberSaveable { mutableStateOf<String?>(null) }
@@ -856,6 +868,31 @@ private fun Herrin() {
             }
         }
     }
+    // Keep the selected-title CMS network coroutine OUTSIDE the giant
+    // Herrin() Compose JVM method (64 KiB bytecode limit).
+    CmsOneTapPlaybackEffect(
+        screen = screen, film = film, site = activeCmsSite,
+        spiderActive = spiderActive, pendingFilmId = cmsPlaybackPendingId,
+        retryEpoch = playerRetryEpoch, allowHttp = tvBoxAllowHttp,
+        repository = tvBoxVodRepo,
+        onReady = { resolved, chosen ->
+            providerFilms = providerFilms?.map { current ->
+                if (current.id == resolved.id)
+                    FilmMetadataEnrichment.mergeSourceDetails(current, resolved)
+                else current
+            }
+            episode = chosen.first
+            line = chosen.second
+            cmsPlaybackFailedId = null
+            cmsPlaybackPendingId = null
+        },
+        onFailure = { id ->
+            if (cmsPlaybackPendingId == id) {
+                cmsPlaybackFailedId = id
+                cmsPlaybackPendingId = null
+            }
+        }
+    )
     var groupDetailStatus by remember { mutableStateOf("") }
     // A catalog listing often has no playbackEpisodes until ac=detail/Spider
     // details. Resolve ONLY the selected show's members, on demand, bounded,
@@ -1148,17 +1185,38 @@ private fun Herrin() {
             details(item)
             return
         }
+        // A one-tap player may originate from Search, My, or a filtered
+        // catalog rather than Home. Player Back -> Detail -> Back must restore
+        // that original screen, not a stale detail-session destination.
+        returnScreen = screen
         filmId = item.id
-        val first = item.playbackEpisodes.firstOrNull()
-        val option = first?.lines?.firstOrNull()
+        val selectedCmsFilm = !spiderActive && activeCmsSite != null &&
+            !item.cmsVodId.isNullOrBlank()
+        // A CMS list can already contain several playback lines. Only the
+        // licensed HTTPS resolver may decide which is actually playable;
+        // do not blindly choose its first line before entering the player.
+        val chosen = if (selectedCmsFilm) CmsOneTapPlaybackPolicy.firstPlayable(item)
+            else item.playbackEpisodes.firstNotNullOfOrNull { source ->
+                source.lines.firstOrNull()?.let { source.number to it.id }
+            }
         when {
-            first != null && option != null -> {
-                episode = first.number
-                line = option.id
+            chosen != null -> {
+                episode = chosen.first
+                line = chosen.second
                 screen = "player"
             }
             spiderActive && item.spiderVodId != null -> {
                 // Resolve missing episodes while the fullscreen loader is shown.
+                episode = 1
+                line = "pending"
+                screen = "player"
+            }
+            CmsOneTapPlaybackPolicy.resolveSelectedFilmInPlayer(
+                siteSelected = selectedCmsFilm, groupedSeason = false,
+                spiderActive = spiderActive, cmsVodId = item.cmsVodId,
+                hasPlayableEpisode = chosen != null) -> {
+                cmsPlaybackFailedId = null
+                cmsPlaybackPendingId = item.id
                 episode = 1
                 line = "pending"
                 screen = "player"
@@ -2031,11 +2089,16 @@ private fun Herrin() {
                 }
             }
             "detail", "player", "settings" -> {
+                val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
+                val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
                 val licensed = if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty())
                     LicensedPlaybackResolver.resolve(film, episode, line) else null
                 val licensedMedia = (licensed as? PlaybackResult.Ready)?.media
-                val testMedia = if (screen == "player" && !spiderActive) AuthorizedUrls.https(prefs.testMediaUrl) else null
+                // The independent testing URL must not start playing while a
+                // selected CMS film is still resolving its real licensed source.
+                val testMedia = if (screen == "player" && !spiderActive &&
+                    activeCmsSite == null) AuthorizedUrls.https(prefs.testMediaUrl) else null
                 val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
                     val historyLine = if (licensedMedia != null) line else "independent-test"
@@ -2075,35 +2138,31 @@ private fun Herrin() {
                             playbackPicker = null
                         }, onDismiss = { playbackPicker = null })
                 } else if (screen == "player") {
-                    // Playback-first: never expose Spider/JAR resolution as an intermediate detail view.
-                    val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable || !spiderActive
-                    val offlineDemonstration = !sourceConfigured && !spiderActive && film.playbackEpisodes.isEmpty()
-                    Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
-                        .testTag("player-startup-surface"),
-                        contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            if (!playbackUnavailable) {
-                                CircularProgressIndicator(color = Color.White,
-                                    modifier = Modifier.size(40.dp))
-                                Text("正在打开影片…", fontSize = 21.sp,
-                                    modifier = Modifier.testTag("player-startup-label"))
-                            } else {
-                                Text(if (offlineDemonstration) "播放演示" else "暂时无法播放", fontSize = 24.sp,
-                                    modifier = Modifier.testTag(if (offlineDemonstration) "player-demo-status" else "player-startup-error"))
-                                Text(if (offlineDemonstration)
-                                    "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
-                                    else "请重试，或返回选集切换播放线路。",
-                                    color = Color(0xFFBCCADB), fontSize = 16.sp)
-                                if (spiderActive) {
-                                    TvButton("重新播放", modifier = Modifier.testTag("player-startup-retry"),
-                                        reduced = reduceMotion) { playerRetryEpoch++ }
-                                }
+                    val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable ||
+                        (!spiderActive && !cmsWaiting)
+                    val offlineDemonstration = !sourceConfigured && !spiderActive &&
+                        film.playbackEpisodes.isEmpty()
+                    PlayerStartupSurface(
+                        loading = !playbackUnavailable,
+                        offlineDemonstration = offlineDemonstration,
+                        cmsFailed = cmsFailed,
+                        retryAvailable = spiderActive || cmsFailed,
+                        reducedMotion = reduceMotion,
+                        onRetry = {
+                            if (cmsFailed) {
+                                cmsPlaybackFailedId = null
+                                cmsPlaybackPendingId = film.id
                             }
-                            TvButton("返回选集", modifier = Modifier.testTag("player-startup-back"),
-                                reduced = reduceMotion) { screen = "detail" }
+                            playerRetryEpoch++
+                        },
+                        onBack = {
+                            if (cmsFailed) {
+                                cmsPlaybackPendingId = null
+                                cmsPlaybackFailedId = null
+                                screen = returnScreen
+                            } else screen = "detail"
                         }
-                    }
+                    )
                 } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
                     .onPreviewKeyEvent { event ->
@@ -2481,7 +2540,7 @@ private fun Herrin() {
                                                         filmId = loaded.films.first().id
                                                         category = "首页"
                                                         screen = "browse"
-                                                        tvBoxStatus = "已读取 ${loaded.films.size} 部影片；可直接播放的 HTTPS 线路会显示在影片详情中"
+                                                        tvBoxStatus = "已读取 ${loaded.films.size} 部影片；点击海报即可尝试播放有权限的 HTTPS 线路"
                                                     }
                                                 }
                                             }
