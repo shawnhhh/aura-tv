@@ -79,7 +79,9 @@ fun AuthorizedPlaybackPanel(
     focusRestoreEpoch: Int = 0,
     onLineSelection: (() -> Unit)? = null,
     onEpisodeSelection: (() -> Unit)? = null,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** Instrumentation-only diagnostics; never shown in the consumer player. */
+    testDiagnostics: Boolean = false
 ) {
     // A media replacement owns a fresh composition, including callbacks,
     // effects, focus nodes and native surfaces. No outgoing resource can be
@@ -87,7 +89,7 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onBack)
+            onLineSelection, onEpisodeSelection, onBack, testDiagnostics)
     }
 }
 
@@ -104,7 +106,8 @@ private fun AuthorizedPlaybackSession(
     focusRestoreEpoch: Int,
     onLineSelection: (() -> Unit)?,
     onEpisodeSelection: (() -> Unit)?,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    testDiagnostics: Boolean
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -481,7 +484,7 @@ private fun AuthorizedPlaybackSession(
                     }
                 }
             }
-        } else if (showVerification || errorMessage != null ||
+        } else if ((testDiagnostics && showVerification) || errorMessage != null ||
             (controlsVisible && activeVariant > 0 && playbackState != Player.STATE_READY) ||
             (controlsVisible && playbackState == Player.STATE_ENDED))
             // No permanent top-left text or buttons over the video.
@@ -490,7 +493,7 @@ private fun AuthorizedPlaybackSession(
             Column(Modifier.align(Alignment.Center).fillMaxWidth(0.72f)
                 .background(Color(0xDD101722), RoundedCornerShape(14.dp))
                 .padding(22.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            if (showVerification) {
+            if (testDiagnostics && showVerification) {
                 val _observeVerification = verificationTick + uiEpoch
                 val counters = player.videoDecoderCounters
                 Text(PlaybackAcceptance.summary(player.playbackState,
@@ -596,12 +599,11 @@ private fun AuthorizedPlaybackSession(
                 }
             }
             DanmakuControls(danmaku.value, { danmaku.value = it })
-            // Remote-only actions stay in the temporary transport surface;
-            // the upper-left of a playing film remains completely clean.
+            // Do not relocate the removed upper-left Return/Verification text:
+            // TV Back already exits playback; normal controls contain only
+            // actual viewing actions such as the user-selected aspect mode.
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { requestBack("transport-back") },
-                    modifier = Modifier.testTag("player-back-control")) { Text("返回") }
                 Button(onClick = {
                     viewportMode = viewportMode.toggle()
                     playbackPreferences.playbackFillScreen =
@@ -610,10 +612,12 @@ private fun AuthorizedPlaybackSession(
                 }, modifier = Modifier.testTag("transport-viewport-mode")) {
                     Text("画面：" + viewportMode.label)
                 }
-                Button(onClick = { showVerification = !showVerification
-                    controlsInteractionEpoch++ },
-                    modifier = Modifier.testTag("player-verification-toggle")) {
-                    Text(if (showVerification) "收起播放信息" else "播放信息")
+                if (testDiagnostics) {
+                    Button(onClick = { showVerification = !showVerification
+                        controlsInteractionEpoch++ },
+                        modifier = Modifier.testTag("player-verification-toggle")) {
+                        Text(if (showVerification) "收起播放信息" else "播放信息")
+                    }
                 }
             }
         }
