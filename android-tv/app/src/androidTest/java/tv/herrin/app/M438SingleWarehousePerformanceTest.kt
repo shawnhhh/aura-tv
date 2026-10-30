@@ -162,7 +162,32 @@ class M438SingleWarehousePerformanceTest {
                 .put("vod_id", "performance-16")
                 .put("vod_name", "性能影片 16")
                 .put("vod_play_from", "授权模拟线路")
-                .put("vod_play_url", "正片\\$https://192.0.2.1/fixture.mp4")))
+                .put("vod_play_url", "正片" + ')))
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody(detail.toString()))
+            remote(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.waitUntil(10_000) {
+                runCatching {
+                    compose.onNodeWithTag("film-detail-list").assertExists()
+                    compose.onNodeWithTag("detail-choose-episode").assertExists()
+                }.isSuccess
+            }
+            compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
+            compose.waitUntil(10_000) { server.requestCount >= 3 }
+            assertEquals("Only chosen film may request CMS details", 3, server.requestCount)
+            compose.onNodeWithTag("film-detail-list")
+                .performScrollToNode(hasTestTag("episode-1"))
+            compose.onNodeWithTag("episode-1").performClick()
+            compose.waitUntil(10_000) {
+                runCatching { compose.onNodeWithTag("player-root-focus").assertExists() }.isSuccess
+            }
+            assertEquals("Episode click must not fetch any unrelated title", 3, server.requestCount)
+            Log.i("HerrinPerf", "m457_detail_episode_cms_sites=12 listed_films=60 " +
+                "selected_detail_requests=1 episode_chosen=1 player_opened=1")
+        }
+    }
+}
+ + "https://192.0.2.1/fixture.mp4")))
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
                 .setBody(detail.toString()))
             remote(KeyEvent.KEYCODE_DPAD_CENTER)
