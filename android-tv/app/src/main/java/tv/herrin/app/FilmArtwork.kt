@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -97,7 +98,7 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
             .getSharedPreferences("herrin", Context.MODE_PRIVATE)
             .getString("tmdb_read_token", "").orEmpty().isNotBlank())
     val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
-        animationSpec = if (reduced) snap() else tween(280), label = "card-poster-fade")
+        animationSpec = if (reduced) snap() else tween(120), label = "card-poster-fade")
     Box(modifier, contentAlignment = Alignment.Center) {
         if (remoteArtwork) {
             // Source images load asynchronously. Never impersonate a real title
@@ -164,6 +165,10 @@ private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap?
     val url = if (hero) film.backdropUrl ?: film.artworkUrl else film.artworkUrl
     var poster by remember(url, film.id, film.year, film.title, tmdbToken, hero) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(url, film.id, film.year, film.title, tmdbToken, hero) {
+        // The hero artwork follows D-pad film selection. Wait briefly until
+        // the cursor settles so rapid navigation does not start dozens of
+        // heavy 2560px image downloads and blurs for skipped movies.
+        if (hero) delay(110)
         coroutineScope {
             // Render the source poster as soon as it is available, even if the user's TMDB
             // token is rejected, offline, rate-limited, or an 80-title shelf is still loading.
