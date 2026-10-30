@@ -1072,39 +1072,34 @@ private fun Herrin() {
             }
         }
     }
-    var transferringPosterFocus by remember { mutableStateOf(false) }
+    // A second D-pad command supersedes an in-flight cross-row transition.
+    // Never drop the command behind a boolean "transferring" flag.
+    var posterTransferJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun transferPosterFocus(from: LazyListState, to: LazyListState,
-                            fromIndex: Int, destination: List<Film>, prefix: String) {
-        if (transferringPosterFocus || destination.isEmpty()) return
-        transferringPosterFocus = true
-        uiScope.launch {
-            try {
-                val index = fromIndex.coerceIn(0, destination.lastIndex)
-                val sourceOffset = from.layoutInfo.visibleItemsInfo
-                    .firstOrNull { it.index == fromIndex }?.offset?.coerceAtLeast(0) ?: 0
-                // Keep the destination at approximately the same horizontal screen
-                // position. LazyRow may not have composed an off-screen target yet.
-                val alreadyAligned = to.layoutInfo.visibleItemsInfo.any {
-                    it.index == index && it.offset - sourceOffset in -24..24
-                }
-                if (!alreadyAligned) {
-                    // D-pad focus is an immediate navigation operation, not
-                    // a one-second carousel animation. Compose the target
-                    // row at the requested offset in the next layout frame.
-                    to.scrollToItem(index, -sourceOffset)
-                }
-                val target = "$prefix${displayKey(destination[index])}"
-                repeat(3) {
-                    withFrameNanos { }
-                    if (runCatching { requester(target).requestFocus() }.isSuccess) {
-                        RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
-                        return@launch
-                    }
-                }
-                RemoteTrace.event { "RAIL target unattached=$target" }
-            } finally {
-                transferringPosterFocus = false
+                            fromIndex: Int, destination: List<Film>, prefix: String,
+                            scrollPage: suspend () -> Unit) {
+        if (destination.isEmpty()) return
+        posterTransferJob?.cancel()
+        posterTransferJob = uiScope.launch {
+            // Do vertical scroll and horizontal focus restoration in ONE job.
+            // No nested launch between the D-pad event and the target FocusRequester.
+            scrollPage()
+            val index = fromIndex.coerceIn(0, destination.lastIndex)
+            val sourceOffset = from.layoutInfo.visibleItemsInfo
+                .firstOrNull { it.index == fromIndex }?.offset?.coerceAtLeast(0) ?: 0
+            val alreadyAligned = to.layoutInfo.visibleItemsInfo.any {
+                it.index == index && it.offset - sourceOffset in -24..24
             }
+            if (!alreadyAligned) to.scrollToItem(index, -sourceOffset)
+            val target = "$prefix${displayKey(destination[index])}"
+            repeat(3) {
+                withFrameNanos { }
+                if (runCatching { requester(target).requestFocus() }.isSuccess) {
+                    RemoteTrace.event { "RAIL transfer target=$target x=$sourceOffset" }
+                    return@launch
+                }
+            }
+            RemoteTrace.event { "RAIL target unattached=$target" }
         }
     }
     fun details(f: Film) {
@@ -1945,10 +1940,9 @@ private fun Herrin() {
                                 .onPreviewKeyEvent { event ->
                                     if (homeRail && event.type == KeyEventType.KeyDown &&
                                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                                        uiScope.launch {
+                                        transferPosterFocus(railState, recommendState, index,
+                                            recommendedFilms, "recommend-") {
                                             browseScroll.scrollTo(browseScroll.maxValue)
-                                            transferPosterFocus(railState, recommendState, index,
-                                                recommendedFilms, "recommend-")
                                         }
                                         true
                                     } else false
@@ -1983,10 +1977,9 @@ private fun Herrin() {
                                     .onPreviewKeyEvent { event ->
                                         if (event.type == KeyEventType.KeyDown &&
                                             event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                                            uiScope.launch {
+                                            transferPosterFocus(recommendState, railState, index,
+                                                railFilms, "card-") {
                                                 browseScroll.scrollTo(0)
-                                                transferPosterFocus(recommendState, railState, index,
-                                                    railFilms, "card-")
                                             }
                                             true
                                         } else false
