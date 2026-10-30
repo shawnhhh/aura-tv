@@ -144,6 +144,25 @@ class HerrinUiSmokeTest {
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("settings").assertIsDisplayed()
     }
+    @Test fun sourceSiteExplanationIsConsumerFriendlyWithoutRuntimeWords() {
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("settings-source-sites")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.waitUntil(5_000) {
+            runCatching {
+                compose.onNodeWithTag("source-plugin-limitations").assertIsDisplayed()
+            }.isSuccess
+        }
+        val text = compose.onNodeWithTag("source-plugin-limitations").fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.Text]
+            .joinToString(" ") { it.text }
+        assertTrue("Missing plain-language authorization caveat", text.contains("登录授权"))
+        assertTrue("Missing supported direct-source guidance", text.contains("无需登录"))
+        assertTrue("Technical runtime names must not be shown in consumer browse",
+            !text.contains("Spider") && !text.contains("JAR") && !text.contains("子进程"))
+    }
+
     @Test fun compactSettingsDpadMovesThroughBothInputsAndActionsWithoutSkippingRows() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
