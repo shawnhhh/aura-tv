@@ -1268,9 +1268,10 @@ private fun Herrin() {
         }
     }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
-        // Defer decoding and drawing the large hero until after splash: loading the
-        // artwork underneath an opaque splash causes avoidable startup frame stalls.
-        if (homeVisible && (!sourceConfigured || films.isNotEmpty())) {
+        // Compose the lightweight home structure behind the fading logo, but
+        // defer the large image decode until the logo is completely gone.
+        // On resource-limited TVs this avoids competing with first-frame UI.
+        if (!splash && (!sourceConfigured || films.isNotEmpty())) {
             Crossfade(targetState = displayFilm, animationSpec = if (reduceMotion) tween(0)
                 else tween(360, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
                 FilmArtwork(hero, Modifier.fillMaxSize())
