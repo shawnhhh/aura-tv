@@ -712,6 +712,8 @@ private fun Herrin() {
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
     var tmdbConnectivity by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED) }
     LaunchedEffect(metadataToken) {
+        tmdbConnectivity = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
+            else TmdbProbeState.CHECKING
         val result = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
             else withContext(Dispatchers.IO) { TmdbConnectivityProbe.check(metadataToken) }
         tmdbConnectivity = result
@@ -734,11 +736,15 @@ private fun Herrin() {
         facetActor = null; facetDirector = null; facetRegion = null
         facetYear = null; facetCategory = null; facetRating = null
     }
-    LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch) {
+    LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
         val eligible = providerFilms.orEmpty().take(ArtworkScrapePolicy.STARTUP_LIMIT)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
-        if (metadataToken.isBlank()) return@LaunchedEffect
+        // A configuration-only success never authorizes bulk search. Wait for
+        // a real TMDB search endpoint response; otherwise 0/20 looks like
+        // twenty bad movie names when the API is rate-limited or blocked.
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
+            return@LaunchedEffect
         val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
         // Network work stays at most three concurrent, but catalog publication
         // is coalesced to one update per 12 items instead of one per item.
@@ -778,8 +784,9 @@ private fun Herrin() {
     // flooding a TV with hundreds of network requests. Posters beyond that
     // cap are matched *on demand* after cursor dwell, instead of reintroducing
     // a second TMDB client inside every visible PosterArtwork composable.
-    LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch) {
-        if (metadataToken.isBlank()) return@LaunchedEffect
+    LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
+            return@LaunchedEffect
         delay(ArtworkScrapePolicy.FOCUS_DWELL_MS)
         val candidates = providerFilms.orEmpty()
         val index = candidates.indexOfFirst { it.id == filmId }
@@ -2342,7 +2349,7 @@ private fun Herrin() {
                                     "配置后自动匹配海报、背景、简介、评分和演员资料。"
                                 else "TMDB 匹配检查：已尝试 $metadataScanDone/$metadataScanTotal，" +
                                     "成功匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
-                                    "连通性和令牌验证结果见下方；播放地址与选集仍由影视源提供。",
+                                    "只有搜索接口验证通过才会开始刮削；播放地址与选集仍由影视源提供。",
                                 modifier = Modifier.testTag("compact-metadata-status"),
                                 color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
                             item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
