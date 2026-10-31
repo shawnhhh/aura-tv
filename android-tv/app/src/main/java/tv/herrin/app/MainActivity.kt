@@ -2119,12 +2119,15 @@ private fun Herrin() {
                     // must not read the mutable episode after the user chooses the next one.
                     val historyEpisode = episode
                     val previous = watchHistory.load(catalogScope, film.id, historyEpisode, historyLine)
-                    key(catalogScope, film.id, historyEpisode, historyLine) {
+                    // Re-resolving playerContent must reconstruct the player even
+                    // when a provider returns the same URI and headers again.
+                    key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
                         startPositionMs = previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
+                        onRefreshSource = if (spiderActive) ({ playerRetryEpoch++ }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
