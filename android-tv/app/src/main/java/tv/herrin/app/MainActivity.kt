@@ -2181,37 +2181,11 @@ private fun Herrin() {
                             } else screen = "detail"
                         }
                     )
-                } else LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize()
-                    .background(Color(0xAA080B10))
-                    .onPreviewKeyEvent { event ->
-                        // An active TV text editor owns its arrow keys. Only the
-                        // non-editing focus stops use compact-row navigation.
-                        if (!CompactSettingsKeyPolicy.intercept(
-                                onSettings = screen == "settings",
-                                compact = settingsTvBoxOnly,
-                                editorFocused = configInputFocused,
-                                keyDown = event.type == KeyEventType.KeyDown,
-                                code = event.nativeKeyEvent.keyCode)) false
-                        else {
-                            val code = event.nativeKeyEvent.keyCode
-                            val target = when (code) {
-                                android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                                    settingsIntent.next(focusId, false, lastMovieSettingsAction)
-                                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                                    settingsIntent.next(focusId, true, lastMovieSettingsAction)
-                                else -> null
-                            }
-                            if (target == null) false else {
-                                moveCompactSettingsFocus(target)
-                                true
-                            }
-                        }
-                    }, state = settingsListState,
-                    contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
-                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
-                        reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() } }
-                    if (screen == "settings") {
+                } else {
+                    // Isolate these large DSL blocks into independent methods.
+                    // MainActivityKt.Herrin otherwise violates the JVM 64-KiB
+                    // per-method bytecode limit when TVBox and player UI grow.
+                    fun androidx.compose.foundation.lazy.LazyListScope.renderSettingsItems() {
                         item { Text(if (settingsTvBoxOnly) "设置 · 内容来源" else "高级设置", fontSize = 32.sp) }
                         if (!settingsTvBoxOnly) {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
@@ -2830,7 +2804,9 @@ private fun Herrin() {
 
                         item { Text("HERRIN M4.25 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、演职员头像、上映日期、片长与影片分类。\n影视首页右上角「筛选」可按 TMDB 评分、演员、导演、地区及年份组合筛选。\n当前影视点内，同一作品被拆成多个季条目时可整合为统一海报、季标签和16:9单集卡；原始来源和播放线路均保留。\n跨不同影视点的内容尚未统一扫描整合；缺乏可靠季集标签时可进入原始条目。\n详情页媒体规格严格区分影视源标称与播放器已识别格式，未知内容播放后再识别。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
-                    } else {
+                    
+                    }
+                    fun androidx.compose.foundation.lazy.LazyListScope.renderDetailItems() {
                         item { Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                             Text(if (screen == "player" && !spiderActive) "播放演示"
                                 else if (screen == "detail") displayFilm.title else film.title,
@@ -3127,7 +3103,41 @@ private fun Herrin() {
                             }
 
                         }
+                    
                     }
+                    LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize()
+                    .background(Color(0xAA080B10))
+                    .onPreviewKeyEvent { event ->
+                        // An active TV text editor owns its arrow keys. Only the
+                        // non-editing focus stops use compact-row navigation.
+                        if (!CompactSettingsKeyPolicy.intercept(
+                                onSettings = screen == "settings",
+                                compact = settingsTvBoxOnly,
+                                editorFocused = configInputFocused,
+                                keyDown = event.type == KeyEventType.KeyDown,
+                                code = event.nativeKeyEvent.keyCode)) false
+                        else {
+                            val code = event.nativeKeyEvent.keyCode
+                            val target = when (code) {
+                                android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                    settingsIntent.next(focusId, false, lastMovieSettingsAction)
+                                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                                    settingsIntent.next(focusId, true, lastMovieSettingsAction)
+                                else -> null
+                            }
+                            if (target == null) false else {
+                                moveCompactSettingsFocus(target)
+                                true
+                            }
+                        }
+                    }, state = settingsListState,
+                    contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
+                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
+                        reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() } }
+                    if (screen == "settings") renderSettingsItems()
+                    else renderDetailItems()
+                }
                 }
             }
         }
