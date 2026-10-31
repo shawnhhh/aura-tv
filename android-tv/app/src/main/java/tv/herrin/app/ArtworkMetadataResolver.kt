@@ -464,9 +464,22 @@ internal class ArtworkMetadataResolver(
 }
 
 internal class ArtworkAuthenticationFailure : Exception()
+internal class ArtworkRateLimitFailure : Exception()
 
 internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
+    // Requests are performed on IO threads. Three concurrent lookup workers
+    // alone can still burst >40 requests per 10 seconds when results are fast.
+    // Bound *all* API calls (configuration, search, details) without UI blocking.
+    private val paceLock = Any()
+    private var nextRequestAtMs = 0L
+    private fun paceRequest() = synchronized(paceLock) {
+        val now = System.nanoTime() / 1_000_000
+        val delay = nextRequestAtMs - now
+        if (delay > 0) Thread.sleep(delay)
+        nextRequestAtMs = System.nanoTime() / 1_000_000 + 320L
+    }
     override fun load(url: String, readAccessToken: String): String? {
+        paceRequest()
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 3500
             readTimeout = 4500
@@ -475,8 +488,10 @@ internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
             setRequestProperty("Authorization", "Bearer $readAccessToken")
         }
         return try {
-            if (connection.responseCode in setOf(401, 403)) throw ArtworkAuthenticationFailure()
-            if (connection.responseCode != 200 ||
+            val status = connection.responseCode
+            if (status in setOf(401, 403)) throw ArtworkAuthenticationFailure()
+            if (status == 429) throw ArtworkRateLimitFailure()
+            if (status != 200 ||
                 !connection.contentType.orEmpty().startsWith("application/json")) return null
             if (connection.contentLengthLong > 1_000_000) return null
             connection.inputStream.use { stream ->
