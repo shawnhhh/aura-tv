@@ -488,23 +488,24 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
             val raw = spider.playerContent(selected.title, selected.uri, activeVipFlags)
             val direct = SpiderVodCodec.player(raw, allowHttp, activeSiteHeaders)
-            val resolved = if (direct is PlaybackResult.Unavailable) {
-                val response = runCatching { JSONObject(raw) }.getOrNull()
-                val webUrl = response?.optString("url").orEmpty()
-                val named = response?.optString("playUrl").orEmpty()
-                    .takeIf { it.startsWith("parse:") }?.removePrefix("parse:")
-                val wanted = (response?.optInt("parse", 0) ?: 0) != 0 ||
-                    (response?.optInt("jx", 0) ?: 0) != 0 || named != null
-                val parser = if (wanted) {
-                    if (named != null)
-                        activeJsonParsers.firstOrNull { it.name == named }
-                    else TvBoxJsonPlayback.choose(webUrl, selected.title, activeJsonParsers)
-                } else null
-                if (parser != null && TvBoxUrl.normalize(webUrl, allowHttp) != null)
-                    kotlinx.coroutines.runBlocking {
-                        TvBoxJsonPlayback.resolve(parser, webUrl, allowHttp)
-                    }
-                else direct
+            val response = runCatching { JSONObject(raw) }.getOrNull()
+            val webUrl = response?.optString("url").orEmpty()
+            val named = response?.optString("playUrl").orEmpty()
+                .takeIf { it.startsWith("parse:") }?.removePrefix("parse:")
+            // FongMi may select a parser by its configured flag even with
+            // parse=0. A parser must never intercept a known direct media URL.
+            val declaredMedia = PlaybackFormatRetry.declaredMime(
+                response?.optString("format")) != null
+            val parser = if (named != null)
+                activeJsonParsers.firstOrNull { it.name == named }
+                else if (!declaredMedia)
+                    TvBoxJsonPlayback.choose(webUrl, selected.title, activeJsonParsers)
+                else null
+            val resolved = if (parser != null &&
+                TvBoxUrl.normalize(webUrl, allowHttp) != null) {
+                kotlinx.coroutines.runBlocking {
+                    TvBoxJsonPlayback.resolve(parser, webUrl, allowHttp)
+                }
             } else direct
             resolved.also {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
