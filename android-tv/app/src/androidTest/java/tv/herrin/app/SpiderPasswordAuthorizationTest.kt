@@ -25,7 +25,7 @@ class SpiderPasswordAuthorizationTest {
                 """{"inputs":[{"name":"share_pass","type":"password","required":true,
                       "maxLength":20}],"buttons":[{"id":"confirm","label":"确认"}]}""") {
                 returned = it
-                SpiderAuthorizationUi.clear(owner)
+                SpiderAuthorizationUi.receive(owner, 137, 4, null) { }
             }
         }
         compose.onNodeWithTag("spider-authorization-dialog").assertIsDisplayed()
