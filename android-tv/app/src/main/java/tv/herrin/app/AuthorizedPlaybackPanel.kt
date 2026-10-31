@@ -79,6 +79,8 @@ fun AuthorizedPlaybackPanel(
     focusRestoreEpoch: Int = 0,
     onLineSelection: (() -> Unit)? = null,
     onEpisodeSelection: (() -> Unit)? = null,
+    /** Re-run the source's playerContent; differs from replaying a stale signed URL. */
+    onRefreshSource: (() -> Unit)? = null,
     onBack: () -> Unit,
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
     testDiagnostics: Boolean = false
@@ -89,7 +91,7 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onBack, testDiagnostics)
+            onLineSelection, onEpisodeSelection, onRefreshSource, onBack, testDiagnostics)
     }
 }
 
@@ -106,6 +108,7 @@ private fun AuthorizedPlaybackSession(
     focusRestoreEpoch: Int,
     onLineSelection: (() -> Unit)?,
     onEpisodeSelection: (() -> Unit)?,
+    onRefreshSource: (() -> Unit)?,
     onBack: () -> Unit,
     testDiagnostics: Boolean
 ) {
@@ -536,6 +539,15 @@ private fun AuthorizedPlaybackSession(
                 Button(onClick = { retryPlayback() },
                     modifier = Modifier.focusRequester(retryControl)
                         .testTag("player-retry")) { Text("重试播放") }
+                // A stale signed CDN URL or a dead Spider session cannot be
+                // repaired by Media3 retrying that *same* URI. Invoke the
+                // source's original playerContent again only on explicit tap.
+                onRefreshSource?.let { refresh ->
+                    Button(onClick = refresh,
+                        modifier = Modifier.testTag("player-refresh-source")) {
+                        Text("重新解析播放地址")
+                    }
+                }
                 // Network errors are often source-specific, not decoder bugs.
                 // Offer the original user's actual lines/episodes without
                 // forcing another failed retry on the same URL.
