@@ -639,7 +639,7 @@ private fun AuthorizedPlaybackSession(
                 }
             }
             if (advancedControlsVisible) {
-                DanmakuControls(danmaku.value, { danmaku.value = it })
+                DanmakuControls(danmaku.value, { danmaku.value = it }, sourceCount = media.danmakuSources.size)
                 // Playback options are intentionally collapsed until requested.
                 // Removed upper-left Back/Verification text never returns here.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
