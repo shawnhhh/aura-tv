@@ -187,12 +187,26 @@ internal object TmdbRegionNames {
 }
 
 internal object ArtworkMatch {
+    // A provider can label season two "庆余年2" while TMDB says "庆余年 第二季".
+    // Canonicalize only explicit season ordinals, never arbitrary partial titles.
+    // Candidate uniqueness and release-year checks below still apply.
+    private val seasonOrdinal = Regex("第([一二三四五六七八九十]|[1-9][0-9]?)季")
+    private val seasonDigits = mapOf(
+        "一" to "1", "二" to "2", "三" to "3", "四" to "4",
+        "五" to "5", "六" to "6", "七" to "7", "八" to "8",
+        "九" to "9", "十" to "10"
+    )
+    private fun matchKey(name: String): String = ArtworkTitle.normalize(name)
+        .replace(seasonOrdinal) { match ->
+            seasonDigits[match.groupValues[1]] ?: match.groupValues[1]
+        }
+
     /** Exact canonical title only. Ambiguous sequels/remakes must fall back to source artwork. */
     fun best(title: String, year: String, options: List<ArtworkSearchCandidate>): ArtworkSearchCandidate? {
-        val target = ArtworkTitle.normalize(title)
+        val target = matchKey(title)
         if (target.length < 2) return null
         val matching = options.filter { candidate ->
-            candidate.names.any { ArtworkTitle.normalize(it) == target } &&
+            candidate.names.any { matchKey(it) == target } &&
                 (candidate.posterPath != null || candidate.backdropPath != null)
         }
         if (matching.isEmpty()) return null
@@ -242,7 +256,7 @@ internal class ArtworkMetadataResolver(
         // Do not silently skip these films: try the official movie catalog first,
         // then the TV catalog when no unambiguous exact-title match is found.
         val category = manual?.mediaType ?: identity.mediaType ?: "movie"
-        val key = hash("detail-v5|$category|$queryTitle|${identity.year}|${manual?.id}|${hash(token)}")
+        val key = hash("detail-v6|$category|$queryTitle|${identity.year}|${manual?.id}|${hash(token)}")
         val file = File(cacheRoot, "$key.json")
         if (!forceRefresh && file.isFile && file.length() in 1..16384) {
             val parsed = runCatching { JSONObject(file.readText()) }.getOrNull()
