@@ -49,6 +49,43 @@ internal object PlaybackFailureHints {
         }
     }
 
+    /**
+     * Network failures often have the same Media3 code, but very different
+     * remedies. Identify the root cause without ever exposing media URL,
+     * tokens, headers, private hostnames or provider exception messages.
+     */
+    fun networkHint(errorCodeName: String, httpStatus: Int?, error: Throwable,
+                    failedUrl: String): String? {
+        if (category(errorCodeName, httpStatus) != Category.NETWORK || httpStatus != null)
+            return null
+        val host = runCatching { java.net.URI(failedUrl).host?.lowercase() }.getOrNull()
+        val localSpider = host in setOf("127.0.0.1", "::1", "[::1]", "localhost")
+        val failures = causes(error)
+        return when {
+            failures.any { it is java.net.UnknownHostException } ->
+                "播放服务器域名解析失败（DNS）；请检查电视网络的 DNS 或切换线路"
+            failures.any { it is javax.net.ssl.SSLHandshakeException ||
+                    it is java.security.cert.CertificateException } ->
+                "HTTPS 握手或证书验证失败；请检查电视系统时间与来源的 HTTPS 设置"
+            failures.any { it is java.net.ConnectException } ->
+                if (localSpider)
+                    "本机 Spider 播放代理无法连接；请重新应用该影视站点，再选择集数播放"
+                else "播放服务器拒绝连接或目标端口不可用；请切换播放线路"
+            failures.any { it is java.net.NoRouteToHostException } ->
+                "电视无法找到播放服务器的网络路由；请检查网络或切换线路"
+            failures.any { it is java.net.SocketTimeoutException } ->
+                if (localSpider)
+                    "本机 Spider 代理响应超时；请重新应用该影视站点"
+                else "播放服务器响应超时；请检查网络后再试或切换线路"
+            failures.any { it is java.net.SocketException } ->
+                if (localSpider) "本机 Spider 代理连接已断开；请重新应用该影视站点"
+                else "播放服务器中断了网络连接；请重试或切换线路"
+            else -> if (localSpider)
+                "本机 Spider 播放代理未响应；请重新应用该影视站点"
+            else "播放服务器连接失败；请核对影视源、网盘授权和电视网络"
+        }
+    }
+
     fun hint(errorCodeName: String, httpStatus: Int?): String = when (category(errorCodeName, httpStatus)) {
         Category.AUTHENTICATION -> "服务器要求身份验证（401）；核对本线路授权及会话是否过期"
         Category.FORBIDDEN -> "服务器拒绝访问（403）；核对本线路权限、Referer/Cookie 和地址是否过期"

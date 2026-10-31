@@ -1,0 +1,288 @@
+name: HERRIN FanTaiYing Live Source Probe
+on:
+  push:
+    branches: ['feat/herrin-m457-details-tmdb-launch-recovery-20261030']
+    paths: ['.github/workflows/herrin-fantaiying-live-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe actual FanTaiYing TVBox configuration and available media
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, ipaddress, json, os, socket
+          from pathlib import Path
+          from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qsl
+          from urllib.request import Request, build_opener, HTTPRedirectHandler
+          from urllib.error import HTTPError
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          opener = build_opener(NoRedirect())
+          sources = ['http://www.饭太硬.net/tv', 'http://www.饭太硬.xyz/tv',
+                     'http://www.饭太硬.com/tv', 'http://饭太硬.com/tv']
+          report = {'sources': [], 'cms': [], 'config': 'unavailable',
+                    'playback': 'not_attempted', 'full_playback_verified': False,
+                    'physical_tcl_tested': False}
+          def host(url):
+              try: return urlsplit(url).hostname.encode('idna').decode('ascii')
+              except Exception: return 'invalid'
+          def safe(url):
+              p = urlsplit(url)
+              if p.scheme not in ('http','https') or not p.hostname or p.username or p.password:
+                  raise ValueError('invalid_url')
+              h = host(url)
+              if h.endswith(('.local','.internal')) or h == 'localhost':
+                  raise ValueError('private_host')
+              try:
+                  ip = ipaddress.ip_address(h)
+                  if not ip.is_global: raise ValueError('private_ip')
+              except ValueError as e:
+                  if str(e) == 'private_ip': raise
+              for addr in socket.getaddrinfo(h, p.port or (443 if p.scheme=='https' else 80),
+                                             type=socket.SOCK_STREAM):
+                  if not ipaddress.ip_address(addr[4][0]).is_global:
+                      raise ValueError('nonpublic_dns')
+              return urlunsplit((p.scheme, h + (':' + str(p.port) if p.port else ''),
+                                 p.path or '/', p.query, ''))
+          def fetch(url, limit=1048576, media=False):
+              headers={'User-Agent':'HERRIN/0.4.57-live-probe',
+                       'Accept':'application/json,text/plain,*/*'}
+              if media: headers['Range']='bytes=0-262143'
+              req = Request(safe(url), headers=headers)
+              try:
+                  with opener.open(req, timeout=8) as r:
+                      data = r.read(limit+1)
+                      if len(data)>limit: raise ValueError('oversize')
+                      return r.status,r.headers.get('Content-Type',''),data
+              except HTTPError as e:
+                  return e.code,e.headers.get('Content-Type',''),b''
+          def config(data):
+              if data.startswith(b'\xff\xd8'):
+                  end=data.rfind(b'\xff\xd9')
+                  if end<0: raise ValueError('bad_jpeg_wrapper')
+                  head,sep,enc=data[end+2:].strip().decode('ascii').partition('**')
+                  if not sep or not (4<=len(head)<=64 and head.isalnum()):
+                      raise ValueError('bad_jpeg_wrapper')
+                  data=base64.b64decode(enc,validate=True)
+              text=data.decode('utf-8-sig')
+              # Mirror HERRIN's comment stripping without executing JS/plugin code.
+              out=[]; i=0; quoted=False; escaped=False; line=False; block=False
+              while i<len(text):
+                  c=text[i]; n=text[i+1] if i+1<len(text) else ''
+                  if line:
+                      if c in '\r\n': line=False; out.append(c)
+                  elif block:
+                      if c in '\r\n': out.append(c)
+                      if c=='*' and n=='/': block=False; i+=1
+                  elif quoted:
+                      out.append(c)
+                      if escaped: escaped=False
+                      elif c=='\\': escaped=True
+                      elif c=='"': quoted=False
+                  elif c=='"': quoted=True; out.append(c)
+                  elif c=='/' and n=='/': line=True; i+=1
+                  elif c=='/' and n=='*': block=True; i+=1
+                  else: out.append(c)
+                  i+=1
+              obj=json.loads(''.join(out))
+              if not isinstance(obj,dict) or not any(k in obj for k in ('sites','urls','lives')):
+                  raise ValueError('not_tvbox_json')
+              return obj
+          def cms_url(api,id=None):
+              p=urlsplit(api)
+              query=[(k,v) for k,v in parse_qsl(p.query,keep_blank_values=True)
+                     if k.lower() not in ('ac','pg','ids','id','wd','t','pagesize')]
+              query.extend([('ac','detail'),('pg' if id is None else 'ids',
+                                                '1' if id is None else str(id)[:256])])
+              return urlunsplit((p.scheme,p.netloc,p.path,urlencode(query),''))
+          selected=None
+          for u in sources:
+              item={'host':host(u),'http':None,'tvbox_config':False}
+              try:
+                  code,mime,data=fetch(u)
+                  item['http']=code
+                  item['content_type']=mime.split(';')[0][:42]
+                  item['bytes']=len(data)
+                  if code==200:
+                      parsed=config(data)
+                      item['tvbox_config']=True
+                      item['sites']=len(parsed.get('sites',[]) or [])
+                      if selected is None: selected=parsed
+              except Exception as e:
+                  item['error']=type(e).__name__ if not isinstance(e,ValueError) else str(e)[:50]
+              report['sources'].append(item)
+          if selected is not None:
+              report['config']='valid_tvbox_json'
+              entries=selected.get('sites',[]) or []
+              report['total_sites']=len(entries)
+              report['plugin_sites']=sum(isinstance(x,dict) and
+                  str(x.get('api','')).startswith('csp_') for x in entries)
+              # Compare the real csp_ plugin specifications to HERRIN's
+              # strict HTTPS + ;md5; JAR validation before any plugin execution.
+              default_jar=str(selected.get('spider','') or '')
+              plugin_specs=[str(x.get('jar') or default_jar) for x in entries
+                            if isinstance(x,dict) and str(x.get('api','')).startswith('csp_')]
+              eligible=[spec for spec in plugin_specs if ';md5;' in spec and
+                        spec.startswith('https://') and len(spec.rsplit(';md5;',1)[-1])==32]
+              report['spider_compatibility']={
+                  'plugin_sites':len(plugin_specs),
+                  'https_md5_eligible':len(eligible),
+                  'unsupported_jar_spec':len(plugin_specs)-len(eligible),
+                  'default_jar_host':host(default_jar.split(';md5;')[0]) if default_jar else None}
+              # Check whether HERRIN can truly accept the current JAR (full
+              # 16-MB download, MD5 equality, classes.dex, native ABI entries).
+              # Never load/execute downloaded provider code in this probe.
+              if eligible:
+                  jar_spec=eligible[0]
+                  jar_probe,expected_md5=jar_spec.rsplit(';md5;',1)
+                  try:
+                      from hashlib import md5
+                      from io import BytesIO
+                      from zipfile import ZipFile, BadZipFile
+                      jcode,jmime,jbytes=fetch(jar_probe,limit=16*1024*1024)
+                      result=report['spider_compatibility']
+                      result['full_jar_http']=jcode
+                      result['full_jar_bytes']=len(jbytes)
+                      result['full_jar_md5_match']=md5(jbytes).hexdigest().lower()==expected_md5.lower()
+                      if jcode==200 and result['full_jar_md5_match']:
+                          with ZipFile(BytesIO(jbytes)) as archive:
+                              names=set(archive.namelist())
+                              result['contains_classes_dex']='classes.dex' in names
+                              native = ['assets/ftyguard_v8.so', 'assets/ftyguard_v7.so']
+                              result['native_abi_assets']=[name for name in native if name in names]
+                              result['native_asset_bytes']={name:archive.getinfo(name).file_size
+                                                            for name in native if name in names}
+                              result['native_within_herrin_512kb_limit']=all(
+                                  archive.getinfo(name).file_size <= 512*1024
+                                  for name in native if name in names)
+                              result['jar_compatible_for_dex_load']=result['contains_classes_dex']
+                              # Read only DEX structural class definitions (no
+                              # loading/execution). Verify advertised csp_* site
+                              # class names are actually present in the JAR.
+                              import struct, re
+                              def dex_classes(payload):
+                                  if len(payload)<112 or payload[:4]!=b'dex\n': return set()
+                                  sc,so=struct.unpack_from('<II',payload,0x38)
+                                  tc,to=struct.unpack_from('<II',payload,0x40)
+                                  cc,co=struct.unpack_from('<II',payload,0x60)
+                                  if sc>200000 or tc>200000 or cc>100000 or \
+                                     so+sc*4>len(payload) or to+tc*4>len(payload) or \
+                                     co+cc*32>len(payload): return set()
+                                  def get_string(idx):
+                                      if idx>=sc:return ''
+                                      pos=struct.unpack_from('<I',payload,so+4*idx)[0]
+                                      if pos>=len(payload):return ''
+                                      for _ in range(5):
+                                          ch=payload[pos];pos+=1
+                                          if ch<128:break
+                                      end=payload.find(b'\x00',pos,pos+600)
+                                      return payload[pos:end].decode('utf-8','replace') if end>pos else ''
+                                  descriptors=set()
+                                  for idx in range(cc):
+                                      ti=struct.unpack_from('<I',payload,co+32*idx)[0]
+                                      if ti<tc:
+                                          si=struct.unpack_from('<I',payload,to+4*ti)[0]
+                                          descriptors.add(get_string(si))
+                                  return descriptors
+                              classes=set()
+                              for dex_name in names:
+                                  if re.fullmatch(r'classes(\d+)?\.dex',dex_name):
+                                      classes.update(dex_classes(archive.read(dex_name)))
+                              advertised={
+                                  'Lcom/github/catvod/spider/'+str(x['api'])[4:]+';'
+                                  for x in entries if isinstance(x,dict) and
+                                      str(x.get('api','')).startswith('csp_')}
+                              missing=advertised-classes
+                              result['dex_class_count']=len(classes)
+                              result['dex_spider_declared']=len(advertised)
+                              result['dex_spider_present']=len(advertised & classes)
+                              result['dex_spider_missing']=len(missing)
+                              result['dex_spider_missing_classes']=[
+                                  s.removeprefix('Lcom/github/catvod/spider/').removesuffix(';')
+                                  for s in sorted(missing)][:20]
+                              result['dex_ygp_guard_present']=('Lcom/github/catvod/spider/YGPGuard;' in classes)
+                              result['dex_init_present']='Lcom/github/catvod/spider/Init;' in classes
+                  except Exception as e:
+                      report['spider_compatibility']['full_jar_error']=type(e).__name__
+              report['spider_sites_preview']=[
+                  {'key':str(x.get('key',''))[:48],'api':str(x.get('api',''))[:70],
+                   'name':str(x.get('name',''))[:45]}
+                  for x in entries if isinstance(x,dict) and
+                     str(x.get('api','')).startswith('csp_')][:10]
+              if eligible:
+                  jar_probe=eligible[0].split(';md5;')[0]
+                  try:
+                      jar_status,jar_mime,jar_bytes=fetch(jar_probe,limit=262144,media=True)
+                      report['spider_compatibility']['jar_http']=jar_status
+                      report['spider_compatibility']['jar_zip_header']=jar_bytes.startswith(b'PK')
+                  except Exception as e:
+                      report['spider_compatibility']['jar_probe_error']=type(e).__name__
+              for site in (x for x in entries if isinstance(x,dict)
+                           and str(x.get('api','')).startswith(('http://','https://'))):
+                  if len(report['cms'])>=3: break
+                  api=site['api']
+                  row={'api_host':host(api),'listed':False,'detail':False}
+                  try:
+                      status,_,data=fetch(cms_url(api))
+                      row['list_http']=status
+                      if status==200:
+                          catalog=json.loads(data)
+                          items=catalog.get('list',[]) if isinstance(catalog,dict) else []
+                          row['listed']=isinstance(items,list) and bool(items)
+                          if row['listed'] and isinstance(items[0],dict) and items[0].get('vod_id'):
+                              vod_id=items[0]['vod_id']
+                              status,_,data=fetch(cms_url(api,vod_id))
+                              row['detail_http']=status
+                              if status==200:
+                                  details=json.loads(data)
+                                  found=next((x for x in details.get('list',[]) if isinstance(x,dict)
+                                      and str(x.get('vod_id'))==str(vod_id)),None)
+                                  if found:
+                                      row['detail']=True
+                                      lines=str(found.get('vod_play_url','')).split('$$$')
+                                      direct=[]
+                                      for line in lines[:2]:
+                                          for e in line.split('#')[:2]:
+                                              u=e.partition('$')[2] or e
+                                              if u.startswith(('http://','https://')): direct.append(u)
+                                      row['direct_media_candidates']=len(direct)
+                                      if direct:
+                                          try:
+                                              status,mime,data=fetch(direct[0],limit=262144,media=True)
+                                              row['media_http']=status
+                                              row['media_type']=mime.split(';')[0][:42]
+                                              row['media_signature']=('hls_manifest' if data.startswith(b'#EXTM3U') else
+                                                  'mp4_header' if len(data)>8 and data[4:8]==b'ftyp' else
+                                                  'ts_packets' if data.startswith(b'G') else 'unknown_or_parser_required')
+                                              report['playback']='media_endpoint_probed_not_decoded'
+                                          except Exception as e:
+                                              row['media_error']=type(e).__name__
+                  except Exception as e:
+                      row['error']=type(e).__name__
+                  report['cms'].append(row)
+          if report['playback']=='not_attempted':
+              report['playback']='no_verified_direct_media_to_play'
+          Path('fantaiying-live-probe.json').write_text(
+              json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as s:
+              s.write('## 饭太硬真实公网接口诊断\n')
+              s.write('该检测不代表 TCL 真机或真实视频解码成功；仅验证配置、CMS 和有限媒体响应。\n\n')
+              for x in report['sources']:
+                  s.write(f"{x['host']}: HTTP {x['http']}, TVBox JSON={x['tvbox_config']}, {x.get('error','')}\n")
+              s.write(f"\n配置：{report['config']}；播放验证：{report['playback']}\n")
+          PY
+      - name: Upload structured diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-fantaiying-live-probe
+          path: fantaiying-live-probe.json
+          if-no-files-found: warn
+          retention-days: 14

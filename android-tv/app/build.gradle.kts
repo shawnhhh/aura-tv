@@ -10,11 +10,16 @@ android {
         applicationId = "tv.herrin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 61
-        versionName = "0.4.56-alpha"
+        versionCode = 62
+        versionName = "0.4.57-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
+    // Live provider tests are opt-in, only compiled when explicitly requested.
+    // The ordinary 113-case TV suite never downloads or executes remote Spider code.
+    if (project.providers.gradleProperty("herrinLiveSourceTest").orNull == "true") {
+        sourceSets.getByName("androidTest").java.srcDir("src/liveAndroidTest/java")
+    }
     // Optional stable self-distribution signature. Never commit keys or passwords.
     // Missing values produce normal debug builds; the release workflow refuses
     // to upload unsigned APKs.
@@ -57,6 +62,8 @@ dependencies {
     implementation("com.hierynomus:smbj:0.15.0")
     implementation("androidx.startup:startup-runtime:1.2.0")
     implementation("com.google.zxing:core:3.5.4")
+    // Matches FongMi Java Spider.proxy() single NanoHTTPD.Response ABI.
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

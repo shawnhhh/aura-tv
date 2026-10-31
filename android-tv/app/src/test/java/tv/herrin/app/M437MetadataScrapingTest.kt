@@ -29,6 +29,24 @@ class M437MetadataScrapingTest {
         assertEquals("2001 太空漫游", ArtworkTitle.searchQuery("2001 太空漫游"))
         assertEquals("Blade Runner 2049", ArtworkTitle.searchQuery("Blade Runner 2049"))
         assertEquals("tv", ArtworkTitle.identify(film("原创剧集").copy(category = "国产剧", episodes = 8)).mediaType)
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人1080P国语中字"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人【BD国语】"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人【4K·HDR·国语中字】"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人4K国语中字"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人BD国语"))
+        assertEquals("1917", ArtworkTitle.searchQuery("1917"))
+        assertEquals("庆余年 第二季", ArtworkTitle.searchQuery("庆余年 第二季【4K·国语】"))
+    }
+
+    @Test fun `concatenated TVBox quality labels no longer produce zero metadata matches`() {
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            if (url.contains("/search/movie?")) search else detail
+        })
+        val source = film("星光旅人1080P国语中字")
+        val found = resolver.lookup(source, token)
+        assertNotNull(found)
+        assertEquals("https://image.tmdb.org/t/p/w780/original-poster.jpg", found?.posterUrl)
+        assertEquals(source.playbackEpisodes, FilmMetadataEnrichment.apply(source, found!!).playbackEpisodes)
     }
 
     @Test fun `real HTTP mock returns official display fields while stream identity stays intact`() {
@@ -76,7 +94,10 @@ class M437MetadataScrapingTest {
         resolver.setManualMatch(enriched, null)
         assertNull(resolver.manualMatch(original))
         assertNull(resolver.lookup(original, token))
-        assertEquals(1, urls.size)
+        // A title with an unknown CMS genre must now attempt a movie search
+        // instead of quietly skipping metadata enrichment.
+        assertEquals(2, urls.size)
+        assertTrue(urls.last().contains("/search/movie?"))
         cache.walkTopDown().filter { it.isFile }.forEach { assertFalse(it.readText().contains(token)) }
     }
 
@@ -92,7 +113,9 @@ class M437MetadataScrapingTest {
         resolver.lookup(film(), token, forceRefresh = true)
         assertEquals(4, requests)
         resolver.lookup(film("不同影片"), token)
-        assertEquals(5, requests) // Only the new title is searched; no warehouse or Spider work.
+        // An unmatched title now checks both official TMDB media categories
+        // before caching a negative result; neither query touches the warehouse.
+        assertEquals(6, requests)
         cache.walkTopDown().filter { it.isFile }.forEach { assertFalse(it.readText().contains(token)) }
     }
 

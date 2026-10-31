@@ -79,6 +79,8 @@ fun AuthorizedPlaybackPanel(
     focusRestoreEpoch: Int = 0,
     onLineSelection: (() -> Unit)? = null,
     onEpisodeSelection: (() -> Unit)? = null,
+    /** Re-run the source's playerContent; differs from replaying a stale signed URL. */
+    onRefreshSource: (() -> Unit)? = null,
     onBack: () -> Unit,
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
     testDiagnostics: Boolean = false
@@ -89,7 +91,7 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onBack, testDiagnostics)
+            onLineSelection, onEpisodeSelection, onRefreshSource, onBack, testDiagnostics)
     }
 }
 
@@ -106,6 +108,7 @@ private fun AuthorizedPlaybackSession(
     focusRestoreEpoch: Int,
     onLineSelection: (() -> Unit)?,
     onEpisodeSelection: (() -> Unit)?,
+    onRefreshSource: (() -> Unit)?,
     onBack: () -> Unit,
     testDiagnostics: Boolean
 ) {
@@ -224,7 +227,16 @@ private fun AuthorizedPlaybackSession(
                         prepare()
                         play()
                     } else {
-                        errorMessage = PlaybackFailureHints.hint(error.errorCodeName, httpStatus) +
+                        // Only use the failed request's destination to classify
+                        // loopback proxy vs remote DNS/TLS errors. Never show the
+                        // actual URL, query, headers, token or private hostname.
+                        val failedUrl = PlaybackFailureHints.causes(error)
+                            .filterIsInstance<HttpDataSource.HttpDataSourceException>()
+                            .firstOrNull()?.dataSpec?.uri?.toString() ?: retries.current.uri
+                        val actionable = PlaybackFailureHints.networkHint(
+                            error.errorCodeName, httpStatus, error, failedUrl)
+                            ?: PlaybackFailureHints.hint(error.errorCodeName, httpStatus)
+                        errorMessage = actionable +
                             "（${PlaybackFailureHints.safeCode(error.errorCodeName)}" +
                             "${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
                             "; 地址 ${activeVariant + 1}/${candidates.size}）"
@@ -527,6 +539,30 @@ private fun AuthorizedPlaybackSession(
                 Button(onClick = { retryPlayback() },
                     modifier = Modifier.focusRequester(retryControl)
                         .testTag("player-retry")) { Text("重试播放") }
+                // A stale signed CDN URL or a dead Spider session cannot be
+                // repaired by Media3 retrying that *same* URI. Invoke the
+                // source's original playerContent again only on explicit tap.
+                onRefreshSource?.let { refresh ->
+                    Button(onClick = refresh,
+                        modifier = Modifier.testTag("player-refresh-source")) {
+                        Text("重新解析播放地址")
+                    }
+                }
+                // Network errors are often source-specific, not decoder bugs.
+                // Offer the original user's actual lines/episodes without
+                // forcing another failed retry on the same URL.
+                if (onLineSelection != null || onEpisodeSelection != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (onLineSelection != null) Button(onClick = onLineSelection,
+                            modifier = Modifier.testTag("player-error-change-line")) {
+                            Text("切换线路")
+                        }
+                        if (onEpisodeSelection != null) Button(onClick = onEpisodeSelection,
+                            modifier = Modifier.testTag("player-error-change-episode")) {
+                            Text("返回选集")
+                        }
+                    }
+                }
             } else if (activeVariant > 0 && playbackState != Player.STATE_READY) {
                 Text("正在尝试备用播放地址 ${activeVariant + 1} / ${candidates.size}",
                     color = Color(0xFFCFD7E4), modifier = Modifier.testTag("player-fallback-status"))
@@ -624,7 +660,7 @@ private fun AuthorizedPlaybackSession(
                 }
             }
             if (advancedControlsVisible) {
-                DanmakuControls(danmaku.value, { danmaku.value = it })
+                DanmakuControls(danmaku.value, { danmaku.value = it }, sourceCount = media.danmakuSources.size)
                 // Playback options are intentionally collapsed until requested.
                 // Removed upper-left Back/Verification text never returns here.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,

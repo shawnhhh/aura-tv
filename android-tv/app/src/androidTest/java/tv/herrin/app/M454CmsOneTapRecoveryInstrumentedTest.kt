@@ -86,24 +86,34 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             assertEquals(2, server.requestCount)
             compose.onNodeWithTag(tag).performClick()
             compose.waitUntil(12_000) {
+                runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess
+            }
+            compose.waitUntil(12_000) { server.requestCount >= 3 }
+            compose.waitUntil(12_000) {
                 runCatching {
-                    compose.onNodeWithTag("player-startup-error").assertIsDisplayed()
-                    compose.onNodeWithTag("player-startup-retry").assertIsDisplayed()
-                    compose.onNodeWithTag("player-startup-back")
-                        .assertTextEquals("返回片库")
+                    compose.onNodeWithTag("film-detail-list")
+                        .performScrollToNode(hasTestTag("cms-detail-retry"))
+                    compose.onNodeWithTag("cms-detail-retry").assertExists()
                 }.isSuccess
             }
-            assertEquals("Only one selected detail may be fetched on first click",
-                3, server.requestCount)
             compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
-
-            // Retry stays on the consumer player surface and requests the
-            // *same* film ID, not whatever the wrong response contained.
-            compose.onNodeWithTag("player-startup-retry").performClick()
+            assertEquals("Detail only queries the selected title once", 3, server.requestCount)
+            // A wrong vod_id is rejected; retry from the detail page, never
+            // play another movie's response.
+            compose.onNodeWithTag("cms-detail-retry").performClick()
+            compose.waitUntil(12_000) {
+                runCatching {
+                    compose.onNodeWithTag("film-detail-list")
+                        .performScrollToNode(hasTestTag("episode-1"))
+                    compose.onNodeWithTag("episode-1").assertExists()
+                }.isSuccess
+            }
+            assertEquals("Retry only the selected CMS film", 4, server.requestCount)
+            compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
+            compose.onNodeWithTag("episode-1").performClick()
             compose.waitUntil(12_000) {
                 runCatching { compose.onNodeWithTag("player-root-focus").assertExists() }.isSuccess
             }
-            assertEquals("Retry only the selected CMS title", 4, server.requestCount)
             // The source, not HERRIN, supplied the accepted playable address.
         }
     }
@@ -158,10 +168,25 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             assertEquals(2, server.requestCount)
             compose.onNodeWithTag(tag).performClick()
             compose.waitUntil(10_000) {
+                runCatching {
+                    compose.onNodeWithTag("film-detail-list").assertExists()
+                }.isSuccess
+            }
+            compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
+            assertEquals("Already listed film needs no second CMS detail request",
+                2, server.requestCount)
+            compose.waitUntil(10_000) {
+                runCatching {
+                    compose.onNodeWithTag("film-detail-list")
+                        .performScrollToNode(hasTestTag("episode-1"))
+                    compose.onNodeWithTag("episode-1").assertExists()
+                }.isSuccess
+            }
+            compose.onNodeWithTag("episode-1").performClick()
+            compose.waitUntil(10_000) {
                 runCatching { compose.onNodeWithTag("player-root-focus").assertExists() }.isSuccess
             }
-            assertEquals("Listing already contains a valid HTTPS line: do not refetch CMS details",
-                2, server.requestCount)
+            assertEquals("Only selected episode starts playback", 2, server.requestCount)
             compose.onNodeWithTag("player-startup-error").assertDoesNotExist()
         }
     }

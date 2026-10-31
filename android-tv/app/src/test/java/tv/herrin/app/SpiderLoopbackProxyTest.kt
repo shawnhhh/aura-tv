@@ -43,6 +43,79 @@ class SpiderLoopbackProxyTest {
         }
     }
 
+    @Test fun currentFongMiSingleNanoHttpdResponsePreservesHttp206MediaBytes() {
+        val bytes = byteArrayOf(8, 7, 6, 5, 4)
+        SpiderLoopbackProxy("nano-site") { params ->
+            assertEquals("nano-site", params["siteKey"])
+            val response = fi.iki.elonen.NanoHTTPD.newChunkedResponse(
+                fi.iki.elonen.NanoHTTPD.Response.Status.PARTIAL_CONTENT,
+                "video/mp4", ByteArrayInputStream(bytes))
+            response.addHeader("Content-Range", "bytes 2-6/30")
+            response.addHeader("Accept-Ranges", "bytes")
+            response.addHeader("X-Private-Metadata", "DO_NOT_LEAK")
+            arrayOf(response)
+        }.use { proxy ->
+            val connection = request(proxy.url)
+            assertEquals(206, connection.responseCode)
+            assertEquals("bytes 2-6/30", connection.getHeaderField("Content-Range"))
+            assertEquals("bytes", connection.getHeaderField("Accept-Ranges"))
+            assertNull(connection.getHeaderField("X-Private-Metadata"))
+            assertArrayEquals(bytes, connection.inputStream.use { it.readBytes() })
+            connection.disconnect()
+        }
+    }
+
+    @Test fun currentFongMiSingleNanoResponseRejectsRedirectInsteadOfOpenProxy() {
+        SpiderLoopbackProxy("nano-site") {
+            val response = fi.iki.elonen.NanoHTTPD.newFixedLengthResponse(
+                fi.iki.elonen.NanoHTTPD.Response.Status.REDIRECT,
+                "text/plain", "")
+            response.addHeader("Location", "http://127.0.0.1:1234/internal")
+            arrayOf(response)
+        }.use { proxy ->
+            val connection = request(proxy.url)
+            assertEquals(502, connection.responseCode)
+            assertNull(connection.getHeaderField("Location"))
+            connection.disconnect()
+        }
+    }
+
+    @Test fun forwardsBoundedMedia3RangeHeaderToPluginAndReturns206WithoutCredentials() {
+        val bytes = "streaming".toByteArray(StandardCharsets.UTF_8)
+        var captured: Map<String, String>? = null
+        SpiderLoopbackProxy("range-site") { params ->
+            captured = params
+            arrayOf(206, "video/mp4", ByteArrayInputStream(bytes.copyOfRange(2, 6)),
+                mapOf("Content-Range" to "bytes 2-5/9", "Accept-Ranges" to "bytes"))
+        }.use { proxy ->
+            val conn = request(proxy.url + "&range=bytes%3D0-1")
+            conn.setRequestProperty("Range", "bytes=2-5")
+            conn.setRequestProperty("Authorization", "Bearer PRIVATE_CREDENTIAL")
+            assertEquals(206, conn.responseCode)
+            assertEquals("bytes 2-5/9", conn.getHeaderField("Content-Range"))
+            assertArrayEquals(bytes.copyOfRange(2, 6), conn.inputStream.use { it.readBytes() })
+            assertEquals("bytes=2-5", captured?.get("range"))
+            assertFalse(captured.orEmpty().containsKey("authorization"))
+            assertFalse(captured.orEmpty().values.any { it.contains("PRIVATE_CREDENTIAL") })
+            assertFalse(captured.orEmpty().containsKey("session"))
+            conn.disconnect()
+        }
+    }
+
+    @Test fun rejectsMalformedRangeBeforePluginCallback() {
+        val count = AtomicInteger()
+        SpiderLoopbackProxy("range-site") {
+            count.incrementAndGet()
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            val conn = request(proxy.url)
+            conn.setRequestProperty("Range", "bytes=0-99,100-200")
+            assertEquals(400, conn.responseCode)
+            assertEquals(0, count.get())
+            conn.disconnect()
+        }
+    }
+
     @Test fun rejectsForgedTokenSiteOriginAndMethod() {
         val count = AtomicInteger()
         SpiderLoopbackProxy("private-site") {

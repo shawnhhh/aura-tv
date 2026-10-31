@@ -4,6 +4,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PlaybackFailureHintsTest {
+    @Test fun networkConnectionFailureIdentifiesActualCauseWithoutExposingPrivateUrl() {
+        val errors = listOf(
+            java.net.UnknownHostException("private.example?token=SECRET") to "DNS",
+            java.net.SocketTimeoutException("private.example?token=SECRET") to "超时",
+            javax.net.ssl.SSLHandshakeException("private.example?token=SECRET") to "HTTPS",
+            java.net.ConnectException("private.example?token=SECRET") to "拒绝连接"
+        )
+        errors.forEach { (cause, expected) ->
+            val error = RuntimeException("wrapper", cause)
+            val hint = PlaybackFailureHints.networkHint("ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+                null, error, "https://private.example/watch?token=SECRET")
+            assertNotNull(hint)
+            assertTrue("$expected missing in: $hint", hint!!.contains(expected))
+            assertFalse(hint.contains("SECRET"))
+            assertFalse(hint.contains("private.example"))
+        }
+    }
+
+    @Test fun refusedLocalSpiderProxyIsDifferentFromRemoteServerAndDoesNotLeakSession() {
+        val error = RuntimeException(java.net.ConnectException("Connection refused"))
+        val hint = PlaybackFailureHints.networkHint("ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+            null, error, "http://127.0.0.1:48591/proxy?session=private-session")
+        assertTrue(hint.orEmpty().contains("Spider"))
+        assertFalse(hint.orEmpty().contains("private-session"))
+        assertNull(PlaybackFailureHints.networkHint("ERROR_CODE_IO_BAD_HTTP_STATUS",
+            401, error, "http://127.0.0.1:48591/proxy?session=private-session"))
+    }
+
     @Test fun `HTTP error advice identifies authorization, expired URLs, throttling, and server outage`() {
         assertTrue(PlaybackFailureHints.hint("ERROR_CODE_IO_BAD_HTTP_STATUS", 403).contains("服务器拒绝"))
         assertTrue(PlaybackFailureHints.hint("ERROR_CODE_IO_BAD_HTTP_STATUS", 404).contains("失效"))

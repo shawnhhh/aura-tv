@@ -4,6 +4,7 @@ import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,9 +44,13 @@ fun rememberDanmakuSettings(): MutableState<DanmakuSettings> {
 /** TV buttons use normal D-pad focus. The parent can place this row in its control sheet. */
 @Composable
 fun DanmakuControls(settings: DanmakuSettings, onChange: (DanmakuSettings) -> Unit,
-                    modifier: Modifier = Modifier) {
+                    modifier: Modifier = Modifier, sourceCount: Int? = null) {
     val value = settings.normalized()
-    Row(modifier.testTag("danmaku-controls"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.testTag("danmaku-controls"),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (sourceCount == 0) Text("当前线路没有提供弹幕数据；请尝试其他弹幕线路。",
+            modifier = Modifier.testTag("danmaku-no-source"))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = { onChange(value.copy(enabled = !value.enabled)) },
             modifier = Modifier.testTag("danmaku-toggle")) {
             Text(if (value.enabled) "弹幕：开" else "弹幕：关")
@@ -62,6 +67,7 @@ fun DanmakuControls(settings: DanmakuSettings, onChange: (DanmakuSettings) -> Un
             value.fontSize < 24f -> 24f; value.fontSize < 32f -> 32f
             value.fontSize < 40f -> 40f; else -> 16f })) },
             modifier = Modifier.testTag("danmaku-size")) { Text("字号 ${value.fontSize.toInt()}") }
+        }
     }
 }
 

@@ -17,6 +17,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import fi.iki.elonen.NanoHTTPD
 
 /**
  * CatVod Java Spider.proxy() bridge, strictly loopback-only in the :spider process.
@@ -86,7 +87,10 @@ internal class SpiderLoopbackProxy(
         }
         val response = try {
             // Only the active Spider's own callback; no unrestricted URL fetching.
-            handler(params.filterKeys { it != "session" })
+            // FongMi Java Spider supports either a 3-4 element array or one
+            // NanoHTTPD.Response object. Adapt only its public response API;
+            // do not run its own HTTP server or reuse its socket/session.
+            adaptResponse(handler(params.filterKeys { it != "session" }))
         } catch (_: Throwable) {
             failure(output, 502)
             return
@@ -149,6 +153,22 @@ internal class SpiderLoopbackProxy(
         }
     }
 
+    private fun adaptResponse(raw: Array<out Any?>?): Array<out Any?>? {
+        val nano = raw?.singleOrNull() as? NanoHTTPD.Response ?: return raw
+        val headers = linkedMapOf<String, String>()
+        for (key in listOf("Content-Range", "Accept-Ranges", "Cache-Control",
+                "ETag", "Last-Modified")) {
+            val value = nano.getHeader(key)
+            if (!value.isNullOrBlank()) headers[key] = value
+        }
+        return arrayOf(
+            nano.status?.requestStatus ?: 502,
+            nano.mimeType ?: "application/octet-stream",
+            nano.data ?: java.io.ByteArrayInputStream(byteArrayOf()),
+            headers
+        )
+    }
+
     private fun failure(out: OutputStream, status: Int) {
         val code = if (status in setOf(400, 403, 405, 502)) status else 502
         val body = "Local Spider proxy rejected the request"
@@ -170,6 +190,7 @@ internal class SpiderLoopbackProxy(
             parts[1].length > 4096) throw IllegalArgumentException("Invalid HTTP request")
         var host: String? = null
         var origin = false
+        var range: String? = null
         for (index in 0 until MAX_HEADERS) {
             val line = readLine(input) ?: throw IllegalArgumentException("Invalid headers")
             if (line.isEmpty()) break
@@ -179,6 +200,15 @@ internal class SpiderLoopbackProxy(
             val value = line.substring(indexOfColon + 1).trim()
             if (key == "host") host = value
             if (key == "origin") origin = true
+            // FongMi forwards request headers to Spider.proxy(params). Media3
+            // uses Range for seekable streams. Forward ONLY bounded byte ranges,
+            // never Cookie/Authorization or arbitrary caller-supplied headers.
+            if (key == "range") {
+                if (range != null || value.length > 48 ||
+                    !value.matches(Regex("(?i)bytes=(?:[0-9]{1,18}-[0-9]{0,18}|-[0-9]{1,18})")))
+                    throw IllegalArgumentException("Invalid byte range")
+                range = value
+            }
         }
         if (origin || host != "127.0.0.1:" + port) throw IllegalArgumentException("Wrong host")
         val target = URI(parts[1])
@@ -197,6 +227,9 @@ internal class SpiderLoopbackProxy(
                 throw IllegalArgumentException("Invalid parameter")
             params[key] = value
         }
+        // HTTP request headers override same-named query keys, as in CatVod
+        // NanoHTTPD. A plugin sees range via params["range"] (lowercase).
+        range?.let { params["range"] = it }
         return parts[0] to params
     }
 

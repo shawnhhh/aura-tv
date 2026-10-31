@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -349,6 +351,36 @@ private fun Herrin() {
     // Treat the private TMDB token as a password: never display a saved token,
     // log it, or put the value into Android saved-instance-state bundles.
     var tmdbTokenDraft by remember { mutableStateOf("") }
+    // Never put secret fragments in rememberSaveable / Android saved-state.
+    var tmdbTokenSplitMode by remember { mutableStateOf(false) }
+    var tmdbTokenPart1 by remember { mutableStateOf("") }
+    var tmdbTokenPart2 by remember { mutableStateOf("") }
+    var tmdbTokenPart3 by remember { mutableStateOf("") }
+    fun candidateTmdbToken(): String? = TmdbTokenEntry.assemble(
+        tmdbTokenDraft, listOf(tmdbTokenPart1, tmdbTokenPart2, tmdbTokenPart3),
+        tmdbTokenSplitMode
+    )
+    fun clearTmdbInput() {
+        tmdbTokenDraft = ""
+        tmdbTokenPart1 = ""
+        tmdbTokenPart2 = ""
+        tmdbTokenPart3 = ""
+    }
+    fun toggleTmdbSplitInput() {
+        if (tmdbTokenSplitMode) {
+            tmdbTokenDraft = tmdbTokenPart1 + tmdbTokenPart2 + tmdbTokenPart3
+            tmdbTokenPart1 = ""
+            tmdbTokenPart2 = ""
+            tmdbTokenPart3 = ""
+        } else {
+            val parts = TmdbTokenEntry.split(tmdbTokenDraft)
+            tmdbTokenPart1 = parts[0]
+            tmdbTokenPart2 = parts[1]
+            tmdbTokenPart3 = parts[2]
+            tmdbTokenDraft = ""
+        }
+        tmdbTokenSplitMode = !tmdbTokenSplitMode
+    }
     var tmdbSettingsStatus by remember { mutableStateOf(if (prefs.tmdbReadToken.isBlank())
         "尚未配置；仅使用影视源自带的海报" else "已配置 TMDB；会优先匹配高清背景图") }
     var configUrlDraft by rememberSaveable { mutableStateOf(prefs.catalogUrl) }
@@ -370,6 +402,7 @@ private fun Herrin() {
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
     var cmsDetailStatus by remember { mutableStateOf("") }
+    var detailLoadEpoch by remember { mutableIntStateOf(0) }
     // Only the selected CMS title may resolve its missing episodes inside
     // the regular player loading surface. No catalog-wide eager scans.
     var cmsPlaybackPendingId by remember { mutableStateOf<String?>(null) }
@@ -707,6 +740,20 @@ private fun Herrin() {
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
+    var tmdbConnectivity by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED) }
+    LaunchedEffect(metadataToken) {
+        tmdbConnectivity = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
+            else TmdbProbeState.CHECKING
+        val result = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
+            else withContext(Dispatchers.IO) { TmdbConnectivityProbe.check(metadataToken) }
+        tmdbConnectivity = result
+        if (result == TmdbProbeState.CONNECTED) {
+            metadataResolver.clearAuthCooldown(metadataToken)
+            // First scan can have been skipped while a previous 401 cooldown
+            // was active. One verified rescan avoids a misleading 20/20 zero.
+            metadataRescanEpoch++
+        }
+    }
     // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
     val catalogIdentity = remember(providerFilms) {
         providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
@@ -719,11 +766,15 @@ private fun Herrin() {
         facetActor = null; facetDirector = null; facetRegion = null
         facetYear = null; facetCategory = null; facetRating = null
     }
-    LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch) {
+    LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
         val eligible = providerFilms.orEmpty().take(ArtworkScrapePolicy.STARTUP_LIMIT)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
-        if (metadataToken.isBlank()) return@LaunchedEffect
+        // A configuration-only success never authorizes bulk search. Wait for
+        // a real TMDB search endpoint response; otherwise 0/20 looks like
+        // twenty bad movie names when the API is rate-limited or blocked.
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
+            return@LaunchedEffect
         val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
         // Network work stays at most three concurrent, but catalog publication
         // is coalesced to one update per 12 items instead of one per item.
@@ -763,8 +814,9 @@ private fun Herrin() {
     // flooding a TV with hundreds of network requests. Posters beyond that
     // cap are matched *on demand* after cursor dwell, instead of reintroducing
     // a second TMDB client inside every visible PosterArtwork composable.
-    LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch) {
-        if (metadataToken.isBlank()) return@LaunchedEffect
+    LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
+            return@LaunchedEffect
         delay(ArtworkScrapePolicy.FOCUS_DWELL_MS)
         val candidates = providerFilms.orEmpty()
         val index = candidates.indexOfFirst { it.id == filmId }
@@ -791,7 +843,9 @@ private fun Herrin() {
     var reduced by remember { mutableStateOf(prefs.reducedMotion) }
     val systemReduced = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     val reduceMotion = reduced || systemReduced
-    var splash by rememberSaveable { mutableStateOf(true) }
+    // A genuinely new Activity launch should replay the HERRIN slide;
+    // restoring old saved-instance-state must not skip the startup curtain.
+    var splash by remember { mutableStateOf(true) }
     // Keep the finished H mark above the first home frames while it dissolves;
     // removing it before the hero is drawn causes a visible black flash.
     var splashExiting by remember { mutableStateOf(false) }
@@ -837,7 +891,7 @@ private fun Herrin() {
     fun displayKey(item: Film): String = showCatalog.groupFor(item.id)?.key ?: item.id
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
-    LaunchedEffect(screen, filmId, spiderActive, showGroup?.key) {
+    LaunchedEffect(screen, filmId, spiderActive, showGroup?.key, detailLoadEpoch) {
         if (showGroup == null && spiderActive && screen == "detail" &&
             film.spiderVodId != null && film.playbackEpisodes.isEmpty()) {
             spiderStatus = "正在读取 ${film.title} 的详情和选集…"
@@ -853,7 +907,7 @@ private fun Herrin() {
     // Standard CMS responses often list only title/poster on ac=detail&pg=1.
     // Like TVBox, fetch ac=detail&ids=<vod_id> only when entering that film's
     // detail surface; no stream URL is inferred from the listing itself.
-    LaunchedEffect(screen, filmId, activeCmsSite?.apiUrl, showGroup?.key) {
+    LaunchedEffect(screen, filmId, activeCmsSite?.apiUrl, showGroup?.key, detailLoadEpoch) {
         val site = activeCmsSite
         if (showGroup == null && !spiderActive && screen == "detail" && site != null &&
             film.cmsVodId != null && film.playbackEpisodes.isEmpty()) {
@@ -1179,50 +1233,9 @@ private fun Herrin() {
         screen = "detail"
     }
     fun openMovie(item: Film) {
-        // Catalog artwork is now the primary "play" action, as on consumer TVs.
-        // Grouped seasons retain a details/season-picker entry.
-        if (providerFilms == null || showCatalog.groupFor(item.id) != null) {
-            details(item)
-            return
-        }
-        // A one-tap player may originate from Search, My, or a filtered
-        // catalog rather than Home. Player Back -> Detail -> Back must restore
-        // that original screen, not a stale detail-session destination.
-        returnScreen = screen
-        filmId = item.id
-        val selectedCmsFilm = !spiderActive && activeCmsSite != null &&
-            !item.cmsVodId.isNullOrBlank()
-        // A CMS list can already contain several playback lines. Only the
-        // licensed HTTPS resolver may decide which is actually playable;
-        // do not blindly choose its first line before entering the player.
-        val chosen = if (selectedCmsFilm) CmsOneTapPlaybackPolicy.firstPlayable(item)
-            else item.playbackEpisodes.firstNotNullOfOrNull { source ->
-                source.lines.firstOrNull()?.let { source.number to it.id }
-            }
-        when {
-            chosen != null -> {
-                episode = chosen.first
-                line = chosen.second
-                screen = "player"
-            }
-            spiderActive && item.spiderVodId != null -> {
-                // Resolve missing episodes while the fullscreen loader is shown.
-                episode = 1
-                line = "pending"
-                screen = "player"
-            }
-            CmsOneTapPlaybackPolicy.resolveSelectedFilmInPlayer(
-                siteSelected = selectedCmsFilm, groupedSeason = false,
-                spiderActive = spiderActive, cmsVodId = item.cmsVodId,
-                hasPlayableEpisode = chosen != null) -> {
-                cmsPlaybackFailedId = null
-                cmsPlaybackPendingId = item.id
-                episode = 1
-                line = "pending"
-                screen = "player"
-            }
-            else -> details(item)
-        }
+        // The user chooses a film first, then its real episode and source.
+        // Never start playback merely because a poster was selected.
+        details(item)
     }
     fun selectDetailSeason(seasonNumber: Int) {
         val section = seasonLayout?.sections?.firstOrNull { it.number == seasonNumber } ?: return
@@ -1383,27 +1396,8 @@ private fun Herrin() {
                 0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
             )))
         }
-        if (homeVisible) when (screen) {
-            "live-player" -> {
-                val selected = activeLiveChannel
-                if (selected != null) {
-                    LiveTvSurface(
-                        channels = liveChannels,
-                        selected = selected,
-                        onChannel = { channel ->
-                            activeLiveChannel = channel
-                            activeLiveIndex = liveChannels.indexOfFirst { it.url == channel.url }
-                        },
-                        favorites = liveFavorites,
-                        favoriteScope = liveFavoriteScope,
-                        onBack = { category = "首页"; focusId = "nav-首页"; screen = "browse" },
-                        reduced = reduceMotion
-                    )
-                } else {
-                    Text("当前未选中直播频道", Modifier.padding(50.dp))
-                }
-            }
-            "facets" -> {
+        // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
+        @Composable fun renderFacetScreen() {
                 val matches = showCatalog.collapse(FilmFacetFilters.results(films, facetSelection))
                 val facetsScroll = rememberScrollState()
                 val metadataMatched = films.count { it.metadataSource == "TMDB" }
@@ -1472,8 +1466,11 @@ private fun Herrin() {
                         }
                     }
                 }
-            }
-            "sites" -> {
+            
+        }
+
+        // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
+        @Composable fun renderSitesScreen() {
                 val selected = tvBoxSingle
                 LazyColumn(Modifier.fillMaxSize().testTag("site-list"),
                     contentPadding = PaddingValues(horizontal = 44.dp, vertical = 24.dp),
@@ -1552,8 +1549,11 @@ private fun Herrin() {
                         }
                     }
                 }
-            }
-            "browse", "search" -> {
+            
+        }
+
+        // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
+        @Composable fun renderBrowseSearch() {
                 val isSearch = screen == "search"
                 // Focus color animations can recompose every frame: searching,
                 // regrouping and reading playback history must NOT run per frame.
@@ -1727,12 +1727,12 @@ private fun Herrin() {
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton(if (providerFilms == null) "▶ 播放演示" else if (film.playbackEpisodes.isNotEmpty()) "▶ 播放" else "查看选集",
+                            TvButton(if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
                                 selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },
                                 modifier = Modifier.testTag("play")
                                     .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
                                     .focusRequester(requester("play"))) {
-                                if (showGroup != null || providerFilms != null && film.playbackEpisodes.isEmpty()) details(film)
+                                if (showGroup != null || providerFilms != null) details(film)
                                 else {
                                     returnScreen = "browse"
                                     episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
@@ -2087,7 +2087,32 @@ private fun Herrin() {
                         }
                     )
                 }
+            
+        }
+
+        if (homeVisible) when (screen) {
+            "live-player" -> {
+                val selected = activeLiveChannel
+                if (selected != null) {
+                    LiveTvSurface(
+                        channels = liveChannels,
+                        selected = selected,
+                        onChannel = { channel ->
+                            activeLiveChannel = channel
+                            activeLiveIndex = liveChannels.indexOfFirst { it.url == channel.url }
+                        },
+                        favorites = liveFavorites,
+                        favoriteScope = liveFavoriteScope,
+                        onBack = { category = "首页"; focusId = "nav-首页"; screen = "browse" },
+                        reduced = reduceMotion
+                    )
+                } else {
+                    Text("当前未选中直播频道", Modifier.padding(50.dp))
+                }
             }
+            "facets" -> renderFacetScreen()
+            "sites" -> renderSitesScreen()
+            "browse", "search" -> renderBrowseSearch()
             "detail", "player", "settings" -> {
                 val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
                 val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
@@ -2106,12 +2131,15 @@ private fun Herrin() {
                     // must not read the mutable episode after the user chooses the next one.
                     val historyEpisode = episode
                     val previous = watchHistory.load(catalogScope, film.id, historyEpisode, historyLine)
-                    key(catalogScope, film.id, historyEpisode, historyLine) {
+                    // Re-resolving playerContent must reconstruct the player even
+                    // when a provider returns the same URI and headers again.
+                    key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
                         startPositionMs = previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
+                        onRefreshSource = if (spiderActive) ({ playerRetryEpoch++ }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
@@ -2148,6 +2176,8 @@ private fun Herrin() {
                         cmsFailed = cmsFailed,
                         retryAvailable = spiderActive || cmsFailed,
                         reducedMotion = reduceMotion,
+                        failureHint = (spiderResolved as? PlaybackResult.Unavailable)
+                            ?.reason?.let(PlayerStartupHints::forSpiderFailure),
                         onRetry = {
                             if (cmsFailed) {
                                 cmsPlaybackFailedId = null
@@ -2163,37 +2193,11 @@ private fun Herrin() {
                             } else screen = "detail"
                         }
                     )
-                } else LazyColumn(Modifier.testTag("settings-list").fillMaxSize()
-                    .background(Color(0xAA080B10))
-                    .onPreviewKeyEvent { event ->
-                        // An active TV text editor owns its arrow keys. Only the
-                        // non-editing focus stops use compact-row navigation.
-                        if (!CompactSettingsKeyPolicy.intercept(
-                                onSettings = screen == "settings",
-                                compact = settingsTvBoxOnly,
-                                editorFocused = configInputFocused,
-                                keyDown = event.type == KeyEventType.KeyDown,
-                                code = event.nativeKeyEvent.keyCode)) false
-                        else {
-                            val code = event.nativeKeyEvent.keyCode
-                            val target = when (code) {
-                                android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                                    settingsIntent.next(focusId, false, lastMovieSettingsAction)
-                                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                                    settingsIntent.next(focusId, true, lastMovieSettingsAction)
-                                else -> null
-                            }
-                            if (target == null) false else {
-                                moveCompactSettingsFocus(target)
-                                true
-                            }
-                        }
-                    }, state = settingsListState,
-                    contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
-                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
-                        reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() } }
-                    if (screen == "settings") {
+                } else {
+                    // Isolate these large DSL blocks into independent methods.
+                    // MainActivityKt.Herrin otherwise violates the JVM 64-KiB
+                    // per-method bytecode limit when TVBox and player UI grow.
+                    fun androidx.compose.foundation.lazy.LazyListScope.renderSettingsItems() {
                         item { Text(if (settingsTvBoxOnly) "设置 · 内容来源" else "高级设置", fontSize = 32.sp) }
                         if (!settingsTvBoxOnly) {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
@@ -2364,30 +2368,38 @@ private fun Herrin() {
                             item { Text(if (metadataToken.isBlank())
                                 "未启用自动刮削：没有配置 TMDB API Read Access Token，当前显示影视源海报。" +
                                     "配置后自动匹配海报、背景、简介、评分和演员资料。"
-                                else "已开启 TMDB 智能刮削：已处理 $metadataScanDone/$metadataScanTotal，" +
-                                    "匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
-                                    "保留原影视源的播放地址和选集。",
+                                else "TMDB 匹配检查：已尝试 $metadataScanDone/$metadataScanTotal，" +
+                                    "成功匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
+                                    "只有搜索接口验证通过才会开始刮削；播放地址与选集仍由影视源提供。",
                                 modifier = Modifier.testTag("compact-metadata-status"),
                                 color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
-                            item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
-                                Modifier.fillMaxWidth().testTag("compact-tmdb-token"),
-                                label = { Text("TMDB API Read Access Token（粘贴后保存）") },
-                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            item { TmdbTokenEntryFields(
+                                compact = true, reducedMotion = reduceMotion,
+                                splitMode = tmdbTokenSplitMode, onToggle = { toggleTmdbSplitInput() },
+                                single = tmdbTokenDraft, onSingle = { tmdbTokenDraft = it },
+                                first = tmdbTokenPart1, onFirst = { tmdbTokenPart1 = it },
+                                second = tmdbTokenPart2, onSecond = { tmdbTokenPart2 = it },
+                                third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it }
+                            ) }
                             item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 TvButton("保存并开始刮削",
                                     modifier = Modifier.testTag("compact-tmdb-save"), reduced = reduceMotion) {
-                                    val value = tmdbTokenDraft.trim()
-                                    if (value.length >= 40 && !value.any(Char::isWhitespace)) {
+                                    val value = candidateTmdbToken()
+                                    if (value != null) {
                                         prefs.tmdbReadToken = value
+                                        metadataResolver.clearAuthCooldown(value)
+                                        metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
+                                        providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataToken = value
-                                        tmdbTokenDraft = ""
+                                        clearTmdbInput()
                                         metadataRescanEpoch++
-                                        tmdbSettingsStatus = "TMDB 已保存并开始匹配影视资料"
+                                        tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
                                 TvButton("重新刮削",
                                     modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
                                     if (metadataToken.isNotBlank()) {
+                                        metadataResolver.clearAuthCooldown(metadataToken)
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataRescanEpoch++
@@ -2397,6 +2409,20 @@ private fun Herrin() {
                             } }
                             item { Text(tmdbSettingsStatus, color = Color(0xFFCFD7E4),
                                 modifier = Modifier.testTag("compact-tmdb-feedback")) }
+                            if (metadataToken.isNotBlank()) item {
+                                Text(tmdbConnectivity.text,
+                                    modifier = Modifier.testTag("compact-tmdb-connectivity"),
+                                    color = if (tmdbConnectivity == TmdbProbeState.CONNECTED)
+                                        Color(0xFFB3E8D2) else Color(0xFFFFD49D))
+                            }
+                            if (tmdbConnectivity == TmdbProbeState.CONNECTED &&
+                                metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
+                                providerFilms.orEmpty().none { it.metadataSource == "TMDB" }) item {
+                                Text("已连通 TMDB，但本轮没有可靠的同名匹配。请检查影视源片名、电影/剧集分类，" +
+                                    "或在影片详情中手动纠正匹配；不会误用其他影片的海报。",
+                                    modifier = Modifier.testTag("compact-tmdb-no-matches"),
+                                    color = Color(0xFFFFD49D))
+                            }
                         }
                         item { Text("直播源", fontSize = 22.sp) }
                         item {
@@ -2713,20 +2739,29 @@ private fun Herrin() {
                             onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
                         item { Text("可选高清海报元数据（TMDB）", fontSize = 21.sp) }
                         item { Text("TMDB 需要你自己的 API Read Access Token。仅在你主动保存 Token 后匹配影片元数据；匹配不确定时保留影视源海报。", color = Color(0xFFCDD8E6)) }
-                        item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
-                            Modifier.fillMaxWidth().testTag("tmdb-token-input")
-                                .onFocusChanged { configInputFocused = it.isFocused },
-                            label = { Text("TMDB API Read Access Token（留空则不修改）") },
-                            visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                        item { TmdbTokenEntryFields(
+                            compact = false, reducedMotion = reduceMotion,
+                            splitMode = tmdbTokenSplitMode, onToggle = { toggleTmdbSplitInput() },
+                            single = tmdbTokenDraft, onSingle = { tmdbTokenDraft = it },
+                            first = tmdbTokenPart1, onFirst = { tmdbTokenPart1 = it },
+                            second = tmdbTokenPart2, onSecond = { tmdbTokenPart2 = it },
+                            third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it }
+                        ) }
                         item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton("保存 TMDB Token", modifier = Modifier.testTag("tmdb-token-save"),
                                 reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
-                                val value = tmdbTokenDraft.trim()
-                                if (value.isNotEmpty() && value.length >= 40 && !value.any(Char::isWhitespace)) {
+                                val value = candidateTmdbToken()
+                                if (value != null) {
                                     prefs.tmdbReadToken = value
+                                    metadataResolver.clearAuthCooldown(value)
+                                    // Saving the SAME token must still retry old negative results;
+                                    // match the compact-settings action and never require relaunch.
+                                    metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
+                                    providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                     metadataToken = value
-                                    tmdbTokenDraft = ""
-                                    tmdbSettingsStatus = "已保存；正在匹配海报与影视资料"
+                                    clearTmdbInput()
+                                    metadataRescanEpoch++
+                                    tmdbSettingsStatus = "已保存；正在重新匹配海报与影视资料"
                                 } else tmdbSettingsStatus = "请输入完整的 TMDB API Read Access Token"
                             }
                             TvButton("停用高清刮削", modifier = Modifier.testTag("tmdb-token-clear"),
@@ -2734,7 +2769,7 @@ private fun Herrin() {
                                 prefs.tmdbReadToken = ""
                                 metadataToken = ""
                                 providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
-                                tmdbTokenDraft = ""
+                                clearTmdbInput()
                                 tmdbSettingsStatus = "已停用 TMDB 网络匹配，改用源内海报"
                             }
                         } }
@@ -2781,7 +2816,9 @@ private fun Herrin() {
 
                         item { Text("HERRIN M4.25 Alpha · 原生 Android TV\n影视播放源只提供播放线路，TMDB 独立补充海报、简介、评分、演职员头像、上映日期、片长与影片分类。\n影视首页右上角「筛选」可按 TMDB 评分、演员、导演、地区及年份组合筛选。\n当前影视点内，同一作品被拆成多个季条目时可整合为统一海报、季标签和16:9单集卡；原始来源和播放线路均保留。\n跨不同影视点的内容尚未统一扫描整合；缺乏可靠季集标签时可进入原始条目。\n详情页媒体规格严格区分影视源标称与播放器已识别格式，未知内容播放后再识别。\n在高级设置配置个人 TMDB API Token 后启用刮削；不采集未经授权的豆瓣评分。\n直播上下键换台，选频道即播；TVBox 网页解析/受保护线路尚未保证兼容。\n方向键移动 · 确定选择 · 返回上一级", lineHeight = 28.sp) }
                         }
-                    } else {
+                    
+                    }
+                    fun androidx.compose.foundation.lazy.LazyListScope.renderDetailItems() {
                         item { Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                             Text(if (screen == "player" && !spiderActive) "播放演示"
                                 else if (screen == "detail") displayFilm.title else film.title,
@@ -2871,8 +2908,18 @@ private fun Herrin() {
                         }
                         // Third-party playback resolution stays internal, not on the movie details UI.
                         if (!spiderActive && film.cmsVodId != null && cmsDetailStatus.isNotBlank())
-                            item { Text(cmsDetailStatus, color = Color(0xFFE2C38B),
-                                modifier = Modifier.testTag("cms-detail-status")) }
+                            item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(cmsDetailStatus, color = Color(0xFFE2C38B),
+                                    modifier = Modifier.testTag("cms-detail-status"))
+                                if (film.playbackEpisodes.isEmpty() &&
+                                    !cmsDetailStatus.startsWith("正在")) {
+                                    TvButton("重新读取选集", modifier = Modifier.testTag("cms-detail-retry"),
+                                        reduced = reduceMotion) {
+                                        cmsDetailStatus = "正在重新读取选集…"
+                                        detailLoadEpoch++
+                                    }
+                                }
+                            } }
                         if (screen == "player") {
                             if (!spiderActive) item { var status by remember { mutableStateOf("正在准备演示…") }
                                 LaunchedEffect(film.id, episode, line) {
@@ -2890,7 +2937,7 @@ private fun Herrin() {
                             } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                TvButton(when {
+                                if (providerFilms == null) TvButton(when {
                                     showGroup != null && groupResume != null ->
                                         "▶ 继续播放 第${groupResume.first.season}季 第${groupResume.first.number}集 ${formatSeasonClock(groupResume.second.positionMs)}"
                                     showGroup != null && groupSection?.episodes?.isNotEmpty() == true ->
@@ -2923,7 +2970,9 @@ private fun Herrin() {
                                     else if (seasonLayout != null && detailSeasonEntries.isNotEmpty())
                                         playSeasonEpisode(detailSeasonSource ?: detailSeasonEntries.first())
                                     else screen = "player"
-                                }
+                                } else Text("请选择下方具体集数或播放线路",
+                                    modifier = Modifier.testTag("detail-choose-episode"),
+                                    color = Color(0xFFBDD8F0))
                                 val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
                                     ?: (film.id in favorites)
                                 TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
@@ -2934,7 +2983,7 @@ private fun Herrin() {
                                     favorites = prefs.idsFor(catalogScope)
                                 }
                             } }
-                            if (showGroup == null && resume != null && seasonLayout == null) {
+                            if (providerFilms == null && showGroup == null && resume != null && seasonLayout == null) {
                                 item { Text("继续播放 · 已观看 ${resume.positionMs / 1000} 秒 / ${resume.durationMs / 1000} 秒",
                                     fontSize = 17.sp, color = Color(0xFFD4E6FD)) }
                                 item { TvButton("从头播放", reduced = reduceMotion) {
@@ -3013,7 +3062,9 @@ private fun Herrin() {
                                                     },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 episode = entry.number
-                                                line = entry.lines.first().id
+                                                line = entry.lines.firstOrNull {
+                                                    AuthorizedUrls.https(it.uri) != null
+                                                }?.id ?: entry.lines.firstOrNull()?.id ?: line
                                                 screen = "player"
                                             }
                                         }
@@ -3064,7 +3115,41 @@ private fun Herrin() {
                             }
 
                         }
+                    
                     }
+                    LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize()
+                    .background(Color(0xAA080B10))
+                    .onPreviewKeyEvent { event ->
+                        // An active TV text editor owns its arrow keys. Only the
+                        // non-editing focus stops use compact-row navigation.
+                        if (!CompactSettingsKeyPolicy.intercept(
+                                onSettings = screen == "settings",
+                                compact = settingsTvBoxOnly,
+                                editorFocused = configInputFocused,
+                                keyDown = event.type == KeyEventType.KeyDown,
+                                code = event.nativeKeyEvent.keyCode)) false
+                        else {
+                            val code = event.nativeKeyEvent.keyCode
+                            val target = when (code) {
+                                android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                    settingsIntent.next(focusId, false, lastMovieSettingsAction)
+                                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                                    settingsIntent.next(focusId, true, lastMovieSettingsAction)
+                                else -> null
+                            }
+                            if (target == null) false else {
+                                moveCompactSettingsFocus(target)
+                                true
+                            }
+                        }
+                    }, state = settingsListState,
+                    contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
+                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
+                        reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() } }
+                    if (screen == "settings") renderSettingsItems()
+                    else renderDetailItems()
+                }
                 }
             }
         }
@@ -3157,20 +3242,29 @@ internal fun SeasonBrowser(
     }
 }
 
-/** The static H remains on top until the destination has had time to render. */
+/** The full HERRIN splash slides off-screen to reveal the composed home. */
 @Composable
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit) {
-    val opacity = remember { Animatable(1f) }
+    val slide = remember { Animatable(0f) }
+    var curtainWidth by remember { mutableIntStateOf(0) }
     LaunchedEffect(exiting, reduced) {
         if (exiting) {
-            if (reduced) opacity.snapTo(0f)
-            else opacity.animateTo(0f, tween(LaunchMotion.FADE_MS, easing = FastOutSlowInEasing))
+            if (reduced) slide.snapTo(1f)
+            else slide.animateTo(1f, tween(LaunchMotion.FADE_MS,
+                easing = FastOutSlowInEasing))
             StartupTiming.finish()
             onFinished()
         }
     }
-    Box(Modifier.fillMaxSize().testTag("splash-curtain").graphicsLayer { alpha = opacity.value }) {
+    // Offset the *laid-out* curtain, not just its render layer. The launcher
+    // now really leaves the viewport and its spatial position is observable
+    // to accessibility/UI tests on TV devices (including screen readers).
+    // The lambdas run at layout time, without recomposing the home per frame.
+    Box(Modifier.fillMaxSize()
+        .onSizeChanged { curtainWidth = it.width }
+        .offset { IntOffset((slide.value * curtainWidth).toInt(), 0) }
+        .testTag("splash-curtain")) {
         Splash(reduced, onReady)
     }
 }

@@ -11,14 +11,32 @@ import java.util.function.Function
 internal object SpiderAuthorizationProtocol {
     const val MAX_CHARS = 350_000
     const val TIMEOUT_MS = 120_000L
-    class Button(val id: String, val label: String, val close: Boolean, val enabled: Boolean)
+    class Button(val id: String, val label: String, val close: Boolean, val enabled: Boolean, val skipValidation: Boolean = false)
     // Deliberately not data classes: toString must never expose the QR payload.
-    class Options(val qr: String?, val image: String?, val buttons: List<Button>, val busy: Boolean = false)
+    class Input(val name: String, val label: String, val type: String,
+                val required: Boolean, val maxLength: Int, val enabled: Boolean)
+    class Options(val qr: String?, val image: String?, val buttons: List<Button>,
+                  val inputs: List<Input> = emptyList(), val busy: Boolean = false)
 
     fun parse(raw: String): Options {
         require(raw.length <= MAX_CHARS) { "Authorization payload too large" }
         val json = JSONObject(raw)
-        require((json.optJSONArray("inputs")?.length() ?: 0) == 0) { "Authorization input forms are unsupported" }
+        val rawInputs = json.optJSONArray("inputs") ?: JSONArray()
+        require(rawInputs.length() <= 3) { "Authorization form has too many fields" }
+        val inputs = (0 until rawInputs.length()).map { index ->
+            val entry = rawInputs.getJSONObject(index)
+            val name = entry.getString("name")
+            require(name.matches(Regex("[A-Za-z0-9_.-]{1,64}"))) { "Invalid authorization input name" }
+            val type = entry.optString("type", "text")
+            require(type in listOf("text", "password", "number", "phone")) { "Unsupported authorization input type" }
+            val maximum = entry.optInt("maxLength", 512)
+            require(maximum in 1..512) { "Invalid authorization input maxLength" }
+            Input(name, if (type == "password" || name.contains("pass", true) ||
+                name.contains("pwd", true) || name.contains("code", true)) "网盘访问码 / 密码"
+                else "授权内容", type, entry.optBoolean("required", false),
+                maximum, entry.optBoolean("enabled", true))
+        }
+        require(inputs.map { it.name }.distinct().size == inputs.size) { "Duplicate authorization fields" }
         val qr = json.optString("qrcode").takeIf { it.isNotEmpty() }
         val image = json.optString("image").takeIf { it.isNotEmpty() }
         require(qr == null || qr.length <= 4096) { "Authorization QR payload too large" }
@@ -36,10 +54,10 @@ internal object SpiderAuthorizationProtocol {
                 "取消", "cancel", "关闭", "close" -> "取消"
                 else -> if (index == 0) "确认" else "操作 ${index + 1}"
             }
-            Button(id, label, button.optBoolean("close", true), button.optBoolean("enabled", true))
+            Button(id, label, button.optBoolean("close", true), button.optBoolean("enabled", true), button.optJSONArray("validate")?.length() == 0)
         }
         require(buttons.map { it.id }.distinct().size == buttons.size) { "Duplicate authorization action" }
-        return Options(qr, image, buttons)
+        return Options(qr, image, buttons, inputs)
     }
 
     fun publicPayload(raw: String): String {
@@ -47,14 +65,42 @@ internal object SpiderAuthorizationProtocol {
         return JSONObject().apply {
             options.qr?.let { put("qrcode", it) }
             options.image?.let { put("image", it) }
+            put("inputs", JSONArray().apply { options.inputs.forEach { field ->
+                put(JSONObject().put("name", field.name).put("label", field.label)
+                    .put("type", field.type).put("required", field.required)
+                    .put("maxLength", field.maxLength).put("enabled", field.enabled))
+            } })
             put("buttons", JSONArray().apply { options.buttons.forEach { button ->
                 put(JSONObject().put("id", button.id).put("label", button.label)
-                    .put("close", button.close).put("enabled", button.enabled))
+                    .put("close", button.close).put("enabled", button.enabled)
+                    .put("skipValidation", button.skipValidation))
             } })
         }.toString()
     }
 
-    fun event(id: String): String = JSONObject().put("button", id).put("values", JSONObject()).toString()
+    fun event(id: String, values: JSONObject = JSONObject()): String =
+        JSONObject().put("button", id).put("values", values).toString()
+
+    /** Validate the app-supplied event before it reaches any plugin callback. */
+    fun validatedEvent(options: Options, action: String): String? {
+        val source = runCatching {
+            if (action.trimStart().startsWith("{")) JSONObject(action)
+            else JSONObject().put("button", action).put("values", JSONObject())
+        }.getOrNull() ?: return null
+        val id = source.optString("button")
+        val selected = options.buttons.firstOrNull { it.id == id && it.enabled } ?: return null
+        val values = source.optJSONObject("values") ?: JSONObject()
+        if (values.keys().asSequence().any { name -> options.inputs.none { it.name == name } })
+            return null
+        val clean = JSONObject()
+        for (input in options.inputs) {
+            val value = values.optString(input.name)
+            if (value.length > input.maxLength || (!input.enabled && value.isNotEmpty())) return null
+            if (!selected.skipValidation && input.required && input.enabled && value.isBlank()) return null
+            clean.put(input.name, value)
+        }
+        return event(id, clean)
+    }
 }
 
 /** Process-local broker. Only the current same-app IPC operation owns the callback and result. */
@@ -83,9 +129,11 @@ internal class SpiderAuthorizationSession(private val publish: (Int, String?) ->
     @Synchronized fun action(id: Int, buttonId: String?) {
         val current = active?.takeIf { it.id == id } ?: return
         if (buttonId == null) { cancel(); return }
-        val button = current.options.buttons.firstOrNull { it.id == buttonId && it.enabled } ?: return
-        if (current.busy) return
-        val event = SpiderAuthorizationProtocol.event(button.id)
+        if (current.busy || buttonId.length > 2400) return
+        val event = SpiderAuthorizationProtocol.validatedEvent(current.options, buttonId)
+            ?: return
+        val confirmed = JSONObject(event).getString("button")
+        val button = current.options.buttons.firstOrNull { it.id == confirmed && it.enabled } ?: return
         if (current.callback == null) { current.result.complete(event); return }
         current.busy = true
         val future = try { current.callback.apply(event) } catch (_: Exception) {

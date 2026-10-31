@@ -66,6 +66,44 @@ class SpiderAuthorizationProtocolTest {
         assertFalse(response.complete("""{"token":"private","qrcode":"private"}"""))
         assertNull(updates.last())
     }
+
+    @Test fun cloudSharePasswordFormReturnsValueOnlyToOwningSpiderNotPublicUi() {
+        val source = """{"title":"private-token","message":"secret-share",
+            "inputs":[{"name":"share_password","label":"provider-secret-label",
+                       "type":"password","required":true,"maxLength":12}],
+            "buttons":[{"id":"submit","label":"确认"}]}"""
+        val public = SpiderAuthorizationProtocol.publicPayload(source)
+        assertFalse(public.contains("private-token"))
+        assertFalse(public.contains("secret-share"))
+        assertFalse(public.contains("provider-secret-label"))
+        val ui = JSONObject(public).getJSONArray("inputs").getJSONObject(0)
+        assertEquals("share_password", ui.getString("name"))
+        assertEquals("password", ui.getString("type"))
+        val brokerEvents = mutableListOf<String>()
+        val session = SpiderAuthorizationSession { _, published -> if (published != null) brokerEvents += published }
+        val submitted = session.show(source, null)
+        val password = "private-8527"
+        val wrong = SpiderAuthorizationProtocol.event("submit",
+            JSONObject().put("share_password", "a".repeat(20)))
+        session.action(1, wrong)
+        assertFalse(submitted.isDone)
+        session.action(1, SpiderAuthorizationProtocol.event("submit",
+            JSONObject().put("share_password", password)))
+        val result = JSONObject(submitted.get())
+        assertEquals(password, result.getJSONObject("values").getString("share_password"))
+        assertTrue(brokerEvents.none { it.contains(password) })
+    }
+
+    @Test fun cloudShareFormRejectsUnknownInjectedFieldsAndMissingRequiredPassword() {
+        val options = SpiderAuthorizationProtocol.parse(
+            """{"inputs":[{"name":"passcode","type":"password","required":true}]}""")
+        assertNull(SpiderAuthorizationProtocol.validatedEvent(options, "ok"))
+        assertNull(SpiderAuthorizationProtocol.validatedEvent(options,
+            SpiderAuthorizationProtocol.event("ok", JSONObject().put("other", "secret"))))
+        assertNotNull(SpiderAuthorizationProtocol.validatedEvent(options,
+            SpiderAuthorizationProtocol.event("ok", JSONObject().put("passcode", "1234"))))
+    }
+
     @Test fun unsupportedFormsRemoteImagesOversizeAndDuplicateButtonsFailExplicitly() {
         for (raw in listOf("""{"inputs":[{"id":"password"}]}""", """{"image":"https://example.invalid/image"}""",
             """{"buttons":[{"id":"same"},{"id":"same"}]}""", "x".repeat(SpiderAuthorizationProtocol.MAX_CHARS + 1))) {

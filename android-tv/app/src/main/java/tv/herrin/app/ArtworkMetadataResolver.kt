@@ -38,6 +38,11 @@ internal object ArtworkTitle {
     private val technical = "(?:2160[Pp]|1080[Pp]|720[Pp]|[48][Kk]|[Hh][Dd][Rr](?:10\\+?)?|[Dd]olby[ ._-]?[Vv]ision|[Dd][Vv]|杜比视界|杜比|蓝光|超清|高清|国语中字|国语|国配|粤语|双语|中文字幕|中字|字幕|无字幕|简繁|内嵌字幕|[Ww][Ee][Bb][- ]?[Dd][Ll]|[Bb][Dd][Rr]ip|[Bb][Dd]|[Hh][Dd]|[Hh]\\.?26[45]|[Xx]26[45]|[Hh][Ee][Vv][Cc]|[Aa][Aa][Cc]|[Dd][Tt][Ss]|[Aa][Tt][Mm][Oo][Ss]|完整版|完结|全集|更新至?\\d+集)"
     private val brackets = Regex("[\\[【(（]([^\\]】)）]{1,100})[\\]】)）]")
     private val tag = Regex("(?i)(?<![\\p{L}\\p{N}])$technical(?![\\p{L}\\p{N}])")
+    // Source filenames often concatenate flags without separators:
+    // "Movie1080P国语中字" and "Movie【BD国语】".
+    // Strip only known complete technical suffix tokens, never arbitrary words.
+    private val bareTechnical = Regex(technical)
+    private val trailingTechnical = Regex("(?:$technical)$")
     private val trailingChineseTag = Regex("(?:国语中字|国语|粤语|国配|中文字幕|中字|无字幕|内嵌字幕|杜比视界|超清|高清|蓝光|完整版|全集|完结)$")
     private val separatedYear = Regex("(?<![\\p{L}\\p{N}])((?:19|20)\\d{2})(?![\\p{L}\\p{N}])")
 
@@ -51,7 +56,8 @@ internal object ArtworkTitle {
         val type = when {
             film.category in listOf("电影", "纪录片") -> "movie"
             film.category in listOf("剧集", "电视剧", "动漫", "动画", "综艺") -> "tv"
-            film.category.contains("电影") || film.category.equals("movie", true) -> "movie"
+            film.category.contains("电影") || film.category.equals("movie", true) ||
+                film.category.endsWith("片") -> "movie"
             film.category.contains("剧") || film.category.equals("tv", true) || film.episodes > 1 -> "tv"
             else -> null
         }
@@ -62,7 +68,9 @@ internal object ArtworkTitle {
         val normalized = Normalizer.normalize(raw.trim(), Normalizer.Form.NFKC)
         var clean = normalized.replace(brackets) { result ->
             val contents = result.groupValues[1]
-            if (tag.containsMatchIn(contents) || contents.matches(Regex("(?:19|20)\\d{2}"))) " "
+            val flagsOnly = contents.replace(bareTechnical, " ")
+                .replace(Regex("[\\s._+\\-·|]+"), "").isEmpty()
+            if (flagsOnly || contents.matches(Regex("(?:19|20)\\d{2}"))) " "
             else result.value
         }.replace(Regex("[_.·]+"), " ")
         clean = clean.replace(tag, " ")
@@ -72,7 +80,11 @@ internal object ArtworkTitle {
                 match.groupValues[1].toInt() <= java.time.Year.now().value + 1) " " else match.value
         }
         var last: String
-        do { last = clean; clean = clean.trim().replace(trailingChineseTag, "") } while (last != clean)
+        do {
+            last = clean
+            clean = clean.trim().replace(trailingChineseTag, "")
+                .replace(trailingTechnical, "")
+        } while (last != clean)
         clean = clean.replace(Regex("[ \\t-]+"), " ").trim(' ', '-', '[', ']', '【', '】')
         return clean.ifBlank { normalized }
     }
@@ -186,12 +198,26 @@ internal object TmdbRegionNames {
 }
 
 internal object ArtworkMatch {
+    // A provider can label season two "庆余年2" while TMDB says "庆余年 第二季".
+    // Canonicalize only explicit season ordinals, never arbitrary partial titles.
+    // Candidate uniqueness and release-year checks below still apply.
+    private val seasonOrdinal = Regex("第([一二三四五六七八九十]|[1-9][0-9]?)季")
+    private val seasonDigits = mapOf(
+        "一" to "1", "二" to "2", "三" to "3", "四" to "4",
+        "五" to "5", "六" to "6", "七" to "7", "八" to "8",
+        "九" to "9", "十" to "10"
+    )
+    private fun matchKey(name: String): String = ArtworkTitle.normalize(name)
+        .replace(seasonOrdinal) { match ->
+            seasonDigits[match.groupValues[1]] ?: match.groupValues[1]
+        }
+
     /** Exact canonical title only. Ambiguous sequels/remakes must fall back to source artwork. */
     fun best(title: String, year: String, options: List<ArtworkSearchCandidate>): ArtworkSearchCandidate? {
-        val target = ArtworkTitle.normalize(title)
+        val target = matchKey(title)
         if (target.length < 2) return null
         val matching = options.filter { candidate ->
-            candidate.names.any { ArtworkTitle.normalize(it) == target } &&
+            candidate.names.any { matchKey(it) == target } &&
                 (candidate.posterPath != null || candidate.backdropPath != null)
         }
         if (matching.isEmpty()) return null
@@ -224,6 +250,12 @@ internal class ArtworkMetadataResolver(
     fun manualMatch(film: Film): TmdbManualMatch? = corrections.get(film)
     fun setManualMatch(film: Film, match: TmdbManualMatch?) = corrections.set(film, match)
 
+    /** A token verified by the official configuration endpoint may be retried
+     * immediately after its previous authentication cooldown. */
+    fun clearAuthCooldown(token: String) {
+        if (token.isNotBlank()) rejectedTokens.remove(hash(token.trim()))
+    }
+
     fun lookup(film: Film, readAccessToken: String, forceRefresh: Boolean = false): EnrichedArtwork? {
         val token = readAccessToken.trim()
         if (!Regex("^[A-Za-z0-9._~-]{20,1000}$").matches(token) || film.title.isBlank()) return null
@@ -231,8 +263,11 @@ internal class ArtworkMetadataResolver(
         val queryTitle = identity.title
         if (queryTitle.isBlank()) return null
         val manual = manualMatch(film)
-        val category = manual?.mediaType ?: identity.mediaType ?: return null
-        val key = hash("detail-v5|$category|$queryTitle|${identity.year}|${manual?.id}|${hash(token)}")
+        // CMS type_name is often a genre such as 科幻、悬疑 or simply 未知.
+        // Do not silently skip these films: try the official movie catalog first,
+        // then the TV catalog when no unambiguous exact-title match is found.
+        val category = manual?.mediaType ?: identity.mediaType ?: "movie"
+        val key = hash("detail-v6|$category|$queryTitle|${identity.year}|${manual?.id}|${hash(token)}")
         val file = File(cacheRoot, "$key.json")
         if (!forceRefresh && file.isFile && file.length() in 1..16384) {
             val parsed = runCatching { JSONObject(file.readText()) }.getOrNull()
@@ -261,34 +296,61 @@ internal class ArtworkMetadataResolver(
             // Transport errors are retryable; a failed network is not a negative title match.
             if (response == null) return null
             val root = runCatching { JSONObject(response) }.getOrNull() ?: return null
+            var matchedCategory = category
             val candidate = if (manual != null) {
                 if (root.optInt("id") != manual.id || root.optBoolean("adult")) return null
                 candidates(JSONArray().put(root), category).singleOrNull()
             } else {
                 val results = root.optJSONArray("results") ?: return null
-                ArtworkMatch.best(queryTitle, identity.year.orEmpty(), candidates(results, category))
+                val primary = ArtworkMatch.best(queryTitle, identity.year.orEmpty(),
+                    candidates(results, category))
+                if (primary != null) primary else {
+                    // TVBox site type_name is often absent/misclassified. Search
+                    // the other OFFICIAL TMDB media type only if the first query
+                    // was valid but produced no exact, year-consistent match.
+                    // A fuzzy or ambiguous hit is never automatically accepted.
+                    val other = if (category == "movie") "tv" else "movie"
+                    val url = "https://api.themoviedb.org/3/search/$other?query=" +
+                        URLEncoder.encode(queryTitle, "UTF-8") +
+                        "&language=zh-CN&include_adult=false&page=1"
+                    val otherResponse = try { fetcher.load(url, token) }
+                        catch (auth: ArtworkAuthenticationFailure) {
+                            rejectedTokens[tokenKey] = System.currentTimeMillis() + 30L * 60 * 1000
+                            return null
+                        } catch (_: Exception) { null }
+                    // If the alternate request failed, don't poison the cache:
+                    // this is a connection problem, not an absent movie.
+                    if (otherResponse == null) return null
+                    val otherList = runCatching { JSONObject(otherResponse).optJSONArray("results") }
+                        .getOrNull() ?: return null
+                    ArtworkMatch.best(queryTitle, identity.year.orEmpty(),
+                        candidates(otherList, other)).also {
+                        if (it != null) matchedCategory = other
+                    }
+                }
             } ?: run { cacheNegative(file); return null }
-            // Manual corrections already fetched detail, while automatic matches add one credit call.
-            val detail = if (manual != null) TmdbCreditsParser.parse(response, category)
+            // Manual corrections already fetched detail; otherwise read the
+            // matched category's credits, never the original misclassified tab.
+            val detail = if (manual != null) TmdbCreditsParser.parse(response, matchedCategory)
             else candidate.tmdbId?.let { tmdbId ->
-                val url = "https://api.themoviedb.org/3/$category/$tmdbId" +
+                val url = "https://api.themoviedb.org/3/$matchedCategory/$tmdbId" +
                     "?append_to_response=credits&language=zh-CN"
                 val creditResponse = runCatching { fetcher.load(url, token) }.getOrNull()
-                TmdbCreditsParser.parse(creditResponse, category)
+                TmdbCreditsParser.parse(creditResponse, matchedCategory)
             } ?: TmdbCredits()
             val synopsis = candidate.synopsis.trim().take(1300).takeIf { it.isNotBlank() }
             val rating = candidate.rating?.takeIf { it.isFinite() && it in 0.0..10.0 &&
                 candidate.voteCount >= 10 }
             val genres = TmdbGenreClassification.labels(candidate.genreIds)
-            val classified = TmdbGenreClassification.category(film.category, category,
+            val classified = TmdbGenreClassification.category(film.category, matchedCategory,
                 candidate.genreIds)
             val picture = EnrichedArtwork(
                 image("w780", candidate.posterPath), image("original", candidate.backdropPath),
                 synopsis, candidate.year?.toString(), rating, genres, classified,
                 candidate.originalTitle?.take(160), detail.actors, detail.directors, detail.regions,
                 detail.releaseDate ?: candidate.releaseDate, detail.runtimeMinutes, detail.people,
-                if (category == "tv") candidate.tmdbId else null,
-                candidate.names.firstOrNull { it.isNotBlank() }?.take(160), candidate.tmdbId, category
+                if (matchedCategory == "tv") candidate.tmdbId else null,
+                candidate.names.firstOrNull { it.isNotBlank() }?.take(160), candidate.tmdbId, matchedCategory
             )
             if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null) return null
             persist(file, JSONObject().put("poster", picture.posterUrl ?: "")
@@ -426,10 +488,23 @@ internal class ArtworkMetadataResolver(
     }
 }
 
-private class ArtworkAuthenticationFailure : Exception()
+internal class ArtworkAuthenticationFailure : Exception()
+internal class ArtworkRateLimitFailure : Exception()
 
 internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
+    // Requests are performed on IO threads. Three concurrent lookup workers
+    // alone can still burst >40 requests per 10 seconds when results are fast.
+    // Bound *all* API calls (configuration, search, details) without UI blocking.
+    private val paceLock = Any()
+    private var nextRequestAtMs = 0L
+    private fun paceRequest() = synchronized(paceLock) {
+        val now = System.nanoTime() / 1_000_000
+        val delay = nextRequestAtMs - now
+        if (delay > 0) Thread.sleep(delay)
+        nextRequestAtMs = System.nanoTime() / 1_000_000 + 320L
+    }
     override fun load(url: String, readAccessToken: String): String? {
+        paceRequest()
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 3500
             readTimeout = 4500
@@ -438,8 +513,10 @@ internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
             setRequestProperty("Authorization", "Bearer $readAccessToken")
         }
         return try {
-            if (connection.responseCode in setOf(401, 403)) throw ArtworkAuthenticationFailure()
-            if (connection.responseCode != 200 ||
+            val status = connection.responseCode
+            if (status in setOf(401, 403)) throw ArtworkAuthenticationFailure()
+            if (status == 429) throw ArtworkRateLimitFailure()
+            if (status != 200 ||
                 !connection.contentType.orEmpty().startsWith("application/json")) return null
             if (connection.contentLengthLong > 1_000_000) return null
             connection.inputStream.use { stream ->

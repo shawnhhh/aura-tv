@@ -480,8 +480,15 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithText("我的收藏").assertExists()
         compose.onNodeWithTag("card-orbit").assertIsDisplayed()
         compose.activityRule.scenario.recreate()
+        // An Activity recreation intentionally replays the full HERRIN curtain.
+        // Wait for the new home to become interactive before reading LazyRow bounds.
+        compose.waitUntil(15_000) {
+            runCatching {
+                compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+                compose.onNodeWithTag("card-orbit").assertIsDisplayed()
+            }.isSuccess
+        }
         compose.waitForIdle()
-        compose.onNodeWithTag("card-orbit").assertIsDisplayed()
         capture("favorites-persisted")
         focus("card-orbit"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         activate("♥ 已收藏 · 取消")
@@ -509,11 +516,11 @@ http://example.org/live/channel.m3u8
     @Test fun filmDetailShowsUnknownMediaSpecInsteadOfInventingDolbyOrHdr() {
         focus("details")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("detail-media-spec"))
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-media-spec"))
         compose.onNodeWithTag("detail-media-spec")
             .assertTextContains("播放后识别", substring = true)
             .assertIsDisplayed()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("detail-synopsis"))
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-synopsis"))
         compose.onNodeWithTag("detail-synopsis").assertExists()
         compose.onNodeWithTag("detail-source-claims").assertDoesNotExist()
     }
@@ -541,7 +548,14 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithText("当前使用离线演示目录").assertExists()
         capture("media-settings-saved")
         compose.activityRule.scenario.recreate()
-        compose.waitForIdle()
+        // After a real Activity restart, even a restored settings screen stays
+        // behind the launch curtain until its normal slide completes.
+        compose.waitUntil(15_000) {
+            runCatching {
+                compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+                compose.onNodeWithTag("settings-list").assertExists()
+            }.isSuccess
+        }
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
         compose.onNodeWithTag("config-media-url").assertTextContains("https://media.example.org/authorized.mp4")
         // Leave the restored editor before Back, just as a remote user moves to a control.

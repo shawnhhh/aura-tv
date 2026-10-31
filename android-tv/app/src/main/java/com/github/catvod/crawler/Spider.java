@@ -30,6 +30,46 @@ public abstract class Spider {
     public final Js js = new Js();
     public final Dialog dialog = new Dialog();
 
+    /**
+     * Match FongMi's current Spider binary interface as well as the older
+     * getProxyUrl/dialog-field interface. Downloaded CatVod DEX invokes these
+     * concrete method descriptors; missing them causes NoSuchMethodError.
+     *
+     * All proxyUrl variants deliberately use 127.0.0.1. Unlike FongMi, HERRIN
+     * does not expose an unauthenticated TV LAN proxy even when local=false.
+     */
+    public JSONObject dialog(JSONObject options) throws Exception {
+        return dialog.show(options);
+    }
+
+    public JSONObject dialog(JSONObject options, Dialog.Callback callback) throws Exception {
+        return dialog.show(options, callback);
+    }
+
+    public final void closeDialog() {
+        dialog.close();
+    }
+
+    public String proxyUrl() {
+        return getProxyUrl();
+    }
+
+    public String proxyUrl(Map<String, String> params) {
+        return getProxyUrl(params);
+    }
+
+    public String proxyUrl(Map<String, String> params, boolean local) {
+        return getProxyUrl(params);
+    }
+
+    public String danmakuUrl(String id) {
+        return getDanmakuUrl(id);
+    }
+
+    public static String danmakuUrl(String siteKey, String id) {
+        return getDanmakuUrl(siteKey, id);
+    }
+
     public static Dns safeDns() {
         return OkHttp.dns();
     }
