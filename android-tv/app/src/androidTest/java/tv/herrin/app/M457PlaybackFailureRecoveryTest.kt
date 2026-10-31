@@ -30,12 +30,21 @@ class M457PlaybackFailureRecoveryTest {
                     onBack = {}
                 )
             }
-            compose.waitUntil(15_000) {
-                runCatching {
-                    compose.onNodeWithTag("player-error").assertExists()
-                    compose.onNodeWithTag("player-error-change-line").assertExists()
-                    compose.onNodeWithTag("player-error-change-episode").assertExists()
-                }.isSuccess
+            // Distinguish an absent Media3 HTTP request from a rendered-player
+            // failure. The provider must receive the deliberately bad request.
+            compose.waitUntil(15_000) { server.requestCount > 0 }
+            try {
+                compose.waitUntil(20_000) {
+                    runCatching {
+                        compose.onNodeWithTag("player-error").assertExists()
+                        compose.onNodeWithTag("player-error-change-line").assertExists()
+                        compose.onNodeWithTag("player-error-change-episode").assertExists()
+                    }.isSuccess
+                }
+            } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
+                throw AssertionError("HTTP 404 reached server (requests=" +
+                    server.requestCount + ") but recovery controls were absent: " +
+                    compose.onRoot().printToString().take(2200), error)
             }
             compose.onNodeWithTag("player-error-change-line").performClick()
             compose.onNodeWithTag("player-error-change-episode").performClick()
