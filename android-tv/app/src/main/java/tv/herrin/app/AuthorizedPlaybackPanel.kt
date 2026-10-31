@@ -224,7 +224,16 @@ private fun AuthorizedPlaybackSession(
                         prepare()
                         play()
                     } else {
-                        errorMessage = PlaybackFailureHints.hint(error.errorCodeName, httpStatus) +
+                        // Only use the failed request's destination to classify
+                        // loopback proxy vs remote DNS/TLS errors. Never show the
+                        // actual URL, query, headers, token or private hostname.
+                        val failedUrl = PlaybackFailureHints.causes(error)
+                            .filterIsInstance<HttpDataSource.HttpDataSourceException>()
+                            .firstOrNull()?.dataSpec?.uri?.toString() ?: retries.current.uri
+                        val actionable = PlaybackFailureHints.networkHint(
+                            error.errorCodeName, httpStatus, error, failedUrl)
+                            ?: PlaybackFailureHints.hint(error.errorCodeName, httpStatus)
+                        errorMessage = actionable +
                             "（${PlaybackFailureHints.safeCode(error.errorCodeName)}" +
                             "${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
                             "; 地址 ${activeVariant + 1}/${candidates.size}）"
