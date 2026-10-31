@@ -11,7 +11,7 @@ import java.util.function.Function
 internal object SpiderAuthorizationProtocol {
     const val MAX_CHARS = 350_000
     const val TIMEOUT_MS = 120_000L
-    class Button(val id: String, val label: String, val close: Boolean, val enabled: Boolean)
+    class Button(val id: String, val label: String, val close: Boolean, val enabled: Boolean, val skipValidation: Boolean = false)
     // Deliberately not data classes: toString must never expose the QR payload.
     class Input(val name: String, val label: String, val type: String,
                 val required: Boolean, val maxLength: Int, val enabled: Boolean)
@@ -54,7 +54,7 @@ internal object SpiderAuthorizationProtocol {
                 "取消", "cancel", "关闭", "close" -> "取消"
                 else -> if (index == 0) "确认" else "操作 ${index + 1}"
             }
-            Button(id, label, button.optBoolean("close", true), button.optBoolean("enabled", true))
+            Button(id, label, button.optBoolean("close", true), button.optBoolean("enabled", true), button.optJSONArray("validate")?.length() == 0)
         }
         require(buttons.map { it.id }.distinct().size == buttons.size) { "Duplicate authorization action" }
         return Options(qr, image, buttons, inputs)
@@ -72,7 +72,8 @@ internal object SpiderAuthorizationProtocol {
             } })
             put("buttons", JSONArray().apply { options.buttons.forEach { button ->
                 put(JSONObject().put("id", button.id).put("label", button.label)
-                    .put("close", button.close).put("enabled", button.enabled))
+                    .put("close", button.close).put("enabled", button.enabled)
+                    .put("skipValidation", button.skipValidation))
             } })
         }.toString()
     }
@@ -87,7 +88,7 @@ internal object SpiderAuthorizationProtocol {
             else JSONObject().put("button", action).put("values", JSONObject())
         }.getOrNull() ?: return null
         val id = source.optString("button")
-        if (options.buttons.none { it.id == id && it.enabled }) return null
+        val selected = options.buttons.firstOrNull { it.id == id && it.enabled } ?: return null
         val values = source.optJSONObject("values") ?: JSONObject()
         if (values.keys().asSequence().any { name -> options.inputs.none { it.name == name } })
             return null
@@ -95,7 +96,7 @@ internal object SpiderAuthorizationProtocol {
         for (input in options.inputs) {
             val value = values.optString(input.name)
             if (value.length > input.maxLength || (!input.enabled && value.isNotEmpty())) return null
-            if (input.required && input.enabled && value.isBlank()) return null
+            if (!selected.skipValidation && input.required && input.enabled && value.isBlank()) return null
             clean.put(input.name, value)
         }
         return event(id, clean)
