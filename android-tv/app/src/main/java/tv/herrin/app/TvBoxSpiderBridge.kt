@@ -369,6 +369,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var active: Spider? = null
     private var activeKey: String? = null
     private var activeVipFlags: List<String> = emptyList()
+    private var activeJsonParsers: List<TvBoxJsonParse> = emptyList()
     private var activeSiteHeaders: Map<String, String> = emptyMap()
     private var activeHttpHost: SpiderHttpSessionHost? = null
     private var activeLoopbackProxy: SpiderLoopbackProxy? = null
@@ -460,6 +461,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         // Passing emptyList() prevented some plugins from generating the same
         // playable result as TVBox for an otherwise identical episode ID.
         activeVipFlags = config.vipFlags.take(32)
+        activeJsonParsers = config.jsonParsers.take(16)
         activeSiteHeaders = site.headers
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
         val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
@@ -484,8 +486,28 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val spider = active ?: error("站点 Spider 尚未加载")
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
-            SpiderVodCodec.player(spider.playerContent(selected.title, selected.uri, activeVipFlags),
-                allowHttp, activeSiteHeaders).also {
+            val raw = spider.playerContent(selected.title, selected.uri, activeVipFlags)
+            val direct = SpiderVodCodec.player(raw, allowHttp, activeSiteHeaders)
+            val response = runCatching { JSONObject(raw) }.getOrNull()
+            val webUrl = response?.optString("url").orEmpty()
+            val named = response?.optString("playUrl").orEmpty()
+                .takeIf { it.startsWith("parse:") }?.removePrefix("parse:")
+            // FongMi may select a parser by its configured flag even with
+            // parse=0. A parser must never intercept a known direct media URL.
+            val declaredMedia = PlaybackFormatRetry.declaredMime(
+                response?.optString("format")) != null
+            val parser = if (named != null)
+                activeJsonParsers.firstOrNull { it.name == named }
+                else if (!declaredMedia)
+                    TvBoxJsonPlayback.choose(webUrl, selected.title, activeJsonParsers)
+                else null
+            val resolved = if (parser != null &&
+                TvBoxUrl.normalize(webUrl, allowHttp) != null) {
+                kotlinx.coroutines.runBlocking {
+                    TvBoxJsonPlayback.resolve(parser, webUrl, allowHttp)
+                }
+            } else direct
+            resolved.also {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             }
         }) {
@@ -502,6 +524,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         active = null
         activeKey = null
         activeVipFlags = emptyList()
+        activeJsonParsers = emptyList()
         activeSiteHeaders = emptyMap()
         activeHttpHost?.clear()
         activeHttpHost = null
