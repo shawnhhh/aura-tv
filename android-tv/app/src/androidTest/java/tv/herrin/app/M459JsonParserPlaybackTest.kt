@@ -26,7 +26,7 @@ class M459JsonParserPlaybackTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
-                    if (request.path?.startsWith("/parse?url=") == true)
+                    if (request.path?.startsWith("/parse?url=https://watch.example.test/film/42.html") == true)
                         return MockResponse().setResponseCode(200)
                             .setHeader("Content-Type", "application/json")
                             .setBody("""{"code":200,"url":"http://127.0.0.1:${server.port}/media.mp4","format":"video/mp4"}""")
@@ -41,8 +41,19 @@ class M459JsonParserPlaybackTest {
             val source = "https://watch.example.test/film/42.html"
             val parser = TvBoxJsonParse("Test JSON",
                 server.url("/parse?url=").toString())
-            assertEquals(parser, TvBoxJsonPlayback.choose(source, "official", listOf(parser)))
-            val resolved = runBlocking { TvBoxJsonPlayback.resolve(parser, source, allowHttp = true) }
+            // The exact upstream FongMi explicit parse:name directive must
+            // travel through the playback router and deliver playable Media3.
+            val route = FongMiPlaybackRouter.route(
+                """{"parse":0,"playUrl":"parse:Test JSON",
+                    "url":"https://watch.example.test/film/42.html"}""",
+                "official", listOf(parser), allowHttp = true)
+            assertTrue(route is FongMiPlayRoute.JsonParser)
+            val selected = route as FongMiPlayRoute.JsonParser
+            assertEquals(parser, selected.parser)
+            assertEquals(source, selected.originalUrl)
+            val resolved = runBlocking {
+                TvBoxJsonPlayback.resolve(selected.parser, selected.originalUrl, allowHttp = true)
+            }
             assertTrue(resolved is PlaybackResult.Ready)
             val media = (resolved as PlaybackResult.Ready).media
             assertEquals("http://127.0.0.1:${server.port}/media.mp4", media.uri)

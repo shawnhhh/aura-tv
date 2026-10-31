@@ -487,26 +487,20 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
             val raw = spider.playerContent(selected.title, selected.uri, activeVipFlags)
-            val direct = SpiderVodCodec.player(raw, allowHttp, activeSiteHeaders)
-            val response = runCatching { JSONObject(raw) }.getOrNull()
-            val webUrl = response?.optString("url").orEmpty()
-            val named = response?.optString("playUrl").orEmpty()
-                .takeIf { it.startsWith("parse:") }?.removePrefix("parse:")
-            // FongMi may select a parser by its configured flag even with
-            // parse=0. A parser must never intercept a known direct media URL.
-            val declaredMedia = PlaybackFormatRetry.declaredMime(
-                response?.optString("format")) != null
-            val parser = if (named != null)
-                activeJsonParsers.firstOrNull { it.name == named }
-                else if (!declaredMedia)
-                    TvBoxJsonPlayback.choose(webUrl, selected.title, activeJsonParsers)
-                else null
-            val resolved = if (parser != null &&
-                TvBoxUrl.normalize(webUrl, allowHttp) != null) {
-                kotlinx.coroutines.runBlocking {
-                    TvBoxJsonPlayback.resolve(parser, webUrl, allowHttp)
+            // Reuse the upstream FongMi ParseJob routing precedence within
+            // HERRIN's existing isolated Spider playback process. The result
+            // is still just PlaybackMedia; no film metadata or UI is mutated.
+            val decision = FongMiPlaybackRouter.route(
+                raw, selected.title, activeJsonParsers, allowHttp, activeSiteHeaders)
+            val resolved = when (decision) {
+                is FongMiPlayRoute.Direct -> decision.playback
+                is FongMiPlayRoute.JsonParser -> kotlinx.coroutines.runBlocking {
+                    TvBoxJsonPlayback.resolve(
+                        decision.parser, decision.originalUrl, allowHttp)
                 }
-            } else direct
+                is FongMiPlayRoute.Unavailable ->
+                    PlaybackResult.Unavailable(decision.message)
+            }
             resolved.also {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             }

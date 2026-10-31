@@ -13,7 +13,6 @@ import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
-import java.net.URLEncoder
 import java.util.Locale
 
 /**
@@ -40,7 +39,11 @@ internal object TvBoxJsonPlayback {
     fun parserUrl(parser: TvBoxJsonParse, sourceUrl: String, allowHttp: Boolean): String? {
         if (TvBoxUrl.normalize(sourceUrl, allowHttp) == null ||
             TvBoxUrl.normalize(parser.prefix, allowHttp) == null) return null
-        val address = parser.prefix + URLEncoder.encode(sourceUrl, Charsets.UTF_8.name())
+        // FongMi ParseJob.jsonParse uses parse.url + webUrl verbatim.
+        // Encoding the entire nested URL changes the API contract for
+        // popular TVBox JSON parsers, so follow upstream concatenation.
+        // The source and parser prefix were separately normalized above.
+        val address = parser.prefix + sourceUrl
         return TvBoxUrl.normalize(address, allowHttp)
     }
 
@@ -55,19 +58,41 @@ internal object TvBoxJsonPlayback {
         val path = URI(url).path.orEmpty().lowercase(Locale.ROOT)
         if (path.endsWith(".html") || path.endsWith(".htm"))
             return PlaybackResult.Unavailable("JSON 解析接口仍返回网页，未得到视频地址")
-        val responseHeaders = TvBoxHeaderCodec.decode(root.optJSONObject("header")
-            ?: data?.optJSONObject("header"))
-        // Response headers are not authorized to pass arbitrary cookies or
-        // bearer tokens to a possibly unrelated video host.
-        val headers = responseHeaders.ifEmpty { parser.headers }.filterKeys {
-            it.equals("User-Agent", true) || it.equals("Referer", true)
+        // Upstream ParseJob accepts headers either as an object or as
+        // top-level User-Agent/Referer/ua fields in the returned JSON.
+        val objectHeaders = TvBoxHeaderCodec.decode(
+            root.optJSONObject("header") ?: data?.optJSONObject("header"))
+        val directHeaders = buildMap<String, String> {
+            for (key in listOf("User-Agent", "Referer", "ua")) {
+                val value = root.optString(key).trim().ifBlank { data?.optString(key).orEmpty().trim() }
+                if (value.length in 1..2_048 && '\r' !in value && '\n' !in value)
+                    put(if (key == "ua") "User-Agent" else key, value)
+            }
         }
+        // A parser-provided Cookie/Authorization can only be used on the
+        // parser's own origin. Never send saved site credentials to CDN hosts.
+        val parserOrigin = runCatching { URI(parser.prefix) }.getOrNull()
+        val mediaOrigin = runCatching { URI(url) }.getOrNull()
+        val sameOrigin = parserOrigin != null && mediaOrigin != null &&
+            parserOrigin.scheme.equals(mediaOrigin.scheme, ignoreCase = true) &&
+            parserOrigin.host.equals(mediaOrigin.host, ignoreCase = true) &&
+            (if (parserOrigin.port < 0) defaultPort(parserOrigin.scheme) else parserOrigin.port) ==
+            (if (mediaOrigin.port < 0) defaultPort(mediaOrigin.scheme) else mediaOrigin.port)
+        val headers = (objectHeaders + directHeaders).ifEmpty { parser.headers }
+            .filterKeys { key ->
+                key.equals("User-Agent", true) || key.equals("Referer", true) ||
+                    (sameOrigin && (key.equals("Cookie", true) ||
+                        key.equals("Authorization", true)))
+            }
         val format = root.optString("format").ifBlank { data?.optString("format").orEmpty() }
         return PlaybackResult.Ready(PlaybackMedia(
             uri = url, headers = headers, allowHttpRedirects = allowHttp,
             declaredMime = PlaybackFormatRetry.declaredMime(format)
         ))
     }
+
+    private fun defaultPort(scheme: String?): Int =
+        if (scheme.equals("https", ignoreCase = true)) 443 else 80
 
     suspend fun resolve(
         parser: TvBoxJsonParse, sourceUrl: String, allowHttp: Boolean
