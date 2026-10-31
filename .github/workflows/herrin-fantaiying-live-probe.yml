@@ -162,6 +162,48 @@ jobs:
                                   archive.getinfo(name).file_size <= 512*1024
                                   for name in native if name in names)
                               result['jar_compatible_for_dex_load']=result['contains_classes_dex']
+                              # Read only DEX structural class definitions (no
+                              # loading/execution). Verify advertised csp_* site
+                              # class names are actually present in the JAR.
+                              import struct, re
+                              def dex_classes(payload):
+                                  if len(payload)<112 or payload[:4]!=b'dex\n': return set()
+                                  sc,so=struct.unpack_from('<II',payload,0x38)
+                                  tc,to=struct.unpack_from('<II',payload,0x40)
+                                  cc,co=struct.unpack_from('<II',payload,0x60)
+                                  if sc>200000 or tc>200000 or cc>100000 or \
+                                     so+sc*4>len(payload) or to+tc*4>len(payload) or \
+                                     co+cc*32>len(payload): return set()
+                                  def get_string(idx):
+                                      if idx>=sc:return ''
+                                      pos=struct.unpack_from('<I',payload,so+4*idx)[0]
+                                      if pos>=len(payload):return ''
+                                      for _ in range(5):
+                                          ch=payload[pos];pos+=1
+                                          if ch<128:break
+                                      end=payload.find(b'\x00',pos,pos+600)
+                                      return payload[pos:end].decode('utf-8','replace') if end>pos else ''
+                                  descriptors=set()
+                                  for idx in range(cc):
+                                      ti=struct.unpack_from('<I',payload,co+32*idx)[0]
+                                      if ti<tc:
+                                          si=struct.unpack_from('<I',payload,to+4*ti)[0]
+                                          descriptors.add(get_string(si))
+                                  return descriptors
+                              classes=set()
+                              for dex_name in names:
+                                  if re.fullmatch(r'classes(\d+)?\.dex',dex_name):
+                                      classes.update(dex_classes(archive.read(dex_name)))
+                              advertised={
+                                  'Lcom/github/catvod/spider/'+str(x['api'])[4:]+';'
+                                  for x in entries if isinstance(x,dict) and
+                                      str(x.get('api','')).startswith('csp_')}
+                              missing=advertised-classes
+                              result['dex_class_count']=len(classes)
+                              result['dex_spider_declared']=len(advertised)
+                              result['dex_spider_present']=len(advertised & classes)
+                              result['dex_spider_missing']=len(missing)
+                              result['dex_init_present']='Lcom/github/catvod/spider/Init;' in classes
                   except Exception as e:
                       report['spider_compatibility']['full_jar_error']=type(e).__name__
               report['spider_sites_preview']=[
