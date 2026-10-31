@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -3174,6 +3176,7 @@ internal fun SeasonBrowser(
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit) {
     val slide = remember { Animatable(0f) }
+    var curtainWidth by remember { mutableIntStateOf(0) }
     LaunchedEffect(exiting, reduced) {
         if (exiting) {
             if (reduced) slide.snapTo(1f)
@@ -3183,8 +3186,14 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
             onFinished()
         }
     }
-    Box(Modifier.fillMaxSize().testTag("splash-curtain")
-        .graphicsLayer { translationX = slide.value * size.width }) {
+    // Offset the *laid-out* curtain, not just its render layer. The launcher
+    // now really leaves the viewport and its spatial position is observable
+    // to accessibility/UI tests on TV devices (including screen readers).
+    // The lambdas run at layout time, without recomposing the home per frame.
+    Box(Modifier.fillMaxSize()
+        .onSizeChanged { curtainWidth = it.width }
+        .offset { IntOffset((slide.value * curtainWidth).toInt(), 0) }
+        .testTag("splash-curtain")) {
         Splash(reduced, onReady)
     }
 }
