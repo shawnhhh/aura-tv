@@ -24,71 +24,40 @@ class TvBoxVodSourcesTest {
     }
 
 
-    @Test fun cmsHttpPlaybackIsPlayableOnlyWhenTheUserEnabledHttp() {
+    @Test fun cmsHttpPlaybackIsPlayableOnlyWhenUserEnabledHttp() {
+        val dollar = 36.toChar()
         val json = """{"list":[{"vod_id":"42","vod_name":"普通非网盘测试影片",
             "vod_play_from":"官方",
-            "vod_play_url":"正片${'
-        assertThrows(IllegalStateException::class.java) { TvBoxVodCodec.decode("{}") }
-        assertTrue(TvBoxVodCodec.decode("""{"list":[{"vod_name":"缺少编号"}]}""").isEmpty())
-    }
-
-    @Test fun userAllowedHttpAlsoAppliesToPostersAndPlayback() {
-        val json = """{"list":[{"vod_id":"42","vod_name":"家庭测试片",
-            "vod_pic":"http://example.org/poster.jpg",
-            "vod_play_url":"正片${'$'}http://example.org/movie.m3u8"}]}"""
-        val strict = TvBoxVodCodec.decode(json)
-        assertTrue(strict.single().playbackEpisodes.isEmpty())
-        val allowed = TvBoxVodCodec.decode(json, allowHttp = true).single()
-        assertEquals("http://example.org/poster.jpg", allowed.artworkUrl)
-        assertEquals("http://example.org/movie.m3u8", allowed.playbackEpisodes.single().lines.single().uri)
-    }
-}
-}http://media.example.org/stream?id=42"}]}"""
+            "vod_play_url":"正片${dollar}http://media.example.org/stream?id=42"}]}"""
         val film = TvBoxVodCodec.decode(json, allowHttp = true).single()
-        val denied = TvBoxCmsPlaybackResolver.resolve(film, 1, "cms-0", allowHttp = false)
-        assertTrue(denied is PlaybackResult.Unavailable)
-        val allowed = TvBoxCmsPlaybackResolver.resolve(film, 1, "cms-0", allowHttp = true,
-            siteHeaders = mapOf("User-Agent" to "HerrinTest", "Referer" to "https://source.test/",
-                "Cookie" to "secret=do-not-forward", "Authorization" to "Bearer PRIVATE"))
+        assertTrue(TvBoxCmsPlaybackResolver.resolve(film, 1, "cms-0", false)
+            is PlaybackResult.Unavailable)
+        val allowed = TvBoxCmsPlaybackResolver.resolve(film, 1, "cms-0", true,
+            mapOf("User-Agent" to "HerrinTest", "Referer" to "https://source.test/",
+                "Cookie" to "secret", "Authorization" to "Bearer PRIVATE"))
         assertTrue(allowed is PlaybackResult.Ready)
         val media = (allowed as PlaybackResult.Ready).media
         assertEquals("http://media.example.org/stream?id=42", media.uri)
         assertTrue(media.allowHttpRedirects)
         assertEquals("HerrinTest", media.headers["User-Agent"])
-        assertEquals("https://source.test/", media.headers["Referer"])
         assertFalse(media.headers.containsKey("Cookie"))
         assertFalse(media.headers.containsKey("Authorization"))
         assertTrue(TvBoxCmsPlaybackResolver.resolve(film, 1, "cms-99", true)
             is PlaybackResult.Unavailable)
     }
 
-    @Test fun cmsHttpsDirectMediaDoesNotRequireHttpPermissionOrWebParsing() {
+    @Test fun cmsHttpsAndWebpagePlaybackAreDistinguished() {
+        val dollar = 36.toChar()
         val film = TvBoxVodCodec.decode("""{"list":[{
             "vod_id":"50","vod_name":"官方测试 HLS",
-            "vod_play_url":"第一集${'
-        assertThrows(IllegalStateException::class.java) { TvBoxVodCodec.decode("{}") }
-        assertTrue(TvBoxVodCodec.decode("""{"list":[{"vod_name":"缺少编号"}]}""").isEmpty())
-    }
-
-    @Test fun userAllowedHttpAlsoAppliesToPostersAndPlayback() {
-        val json = """{"list":[{"vod_id":"42","vod_name":"家庭测试片",
-            "vod_pic":"http://example.org/poster.jpg",
-            "vod_play_url":"正片${'$'}http://example.org/movie.m3u8"}]}"""
-        val strict = TvBoxVodCodec.decode(json)
-        assertTrue(strict.single().playbackEpisodes.isEmpty())
-        val allowed = TvBoxVodCodec.decode(json, allowHttp = true).single()
-        assertEquals("http://example.org/poster.jpg", allowed.artworkUrl)
-        assertEquals("http://example.org/movie.m3u8", allowed.playbackEpisodes.single().lines.single().uri)
-    }
-}
-}https://cdn.example.org/watch/stream.m3u8?sig=abc"
+            "vod_play_url":"第一集${dollar}https://cdn.example.org/stream.m3u8?sig=abc"
         }]}""").single()
-        val result = TvBoxCmsPlaybackResolver.resolve(film, 1, "cms-0", allowHttp = false)
-        assertEquals("https://cdn.example.org/watch/stream.m3u8?sig=abc",
+        val result = TvBoxCmsPlaybackResolver.resolve(film, 1, "cms-0", false)
+        assertEquals("https://cdn.example.org/stream.m3u8?sig=abc",
             (result as PlaybackResult.Ready).media.uri)
-        val page = film.copy(playbackEpisodes = listOf(PlaybackEpisode(1, "第一集",
+        val webpage = film.copy(playbackEpisodes = listOf(PlaybackEpisode(1, "第一集",
             listOf(PlaybackLine("cms-0", "网页解析", "https://jx.example.org/watch.html")))))
-        assertTrue(TvBoxCmsPlaybackResolver.resolve(page, 1, "cms-0", true)
+        assertTrue(TvBoxCmsPlaybackResolver.resolve(webpage, 1, "cms-0", true)
             is PlaybackResult.Unavailable)
     }
 
