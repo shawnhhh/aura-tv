@@ -20,11 +20,14 @@ class M457PlaybackFailureRecoveryTest {
         MockWebServer().use { server ->
             server.start()
             server.enqueue(MockResponse().setResponseCode(404))
+            // MockWebServer.url() can perform reverse DNS; resolve it on the
+            // instrumentation thread, never during Compose's main-thread draw.
+            val failingMediaUrl = server.url("/missing-film.mp4").toString()
             var lineChoices = 0
             var episodeChoices = 0
             compose.setContent {
                 AuthorizedPlaybackPanel(
-                    media = PlaybackMedia(server.url("/missing-film.mp4").toString()),
+                    media = PlaybackMedia(failingMediaUrl),
                     onLineSelection = { lineChoices++ },
                     onEpisodeSelection = { episodeChoices++ },
                     onBack = {}
