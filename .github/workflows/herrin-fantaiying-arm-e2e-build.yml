@@ -1,0 +1,45 @@
+name: HERRIN ARM FanTaiYing E2E APK (Compile Only)
+on:
+  push:
+    branches: ['feat/herrin-m457-details-tmdb-launch-recovery-20261030']
+    paths:
+      - 'android-tv/app/src/liveAndroidTest/**'
+      - 'android-tv/app/build.gradle.kts'
+      - '.github/workflows/herrin-fantaiying-arm-e2e-build.yml'
+      - 'android-tv/scripts/run_fantaiying_arm_e2e.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile-live-arm-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: android-tv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK
+        run: |
+          sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          test -x "$sdk_manager"
+          "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile optional ARM live source test without executing untrusted Spider
+        run: gradle -PherrinLiveSourceTest=true :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+      - name: Upload paired APKs and run script
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-arm-fantaiying-e2e-compile-only
+          path: |
+            android-tv/app/build/outputs/apk/debug/*.apk
+            android-tv/app/build/outputs/apk/androidTest/debug/*.apk
+            android-tv/scripts/run_fantaiying_arm_e2e.sh
+          if-no-files-found: error
+          retention-days: 14
