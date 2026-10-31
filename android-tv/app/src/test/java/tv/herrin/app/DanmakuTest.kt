@@ -18,12 +18,26 @@ class DanmakuTest {
         assertFalse(DanmakuProtocol.decodeSources(source).single().toString().contains("private"))
     }
     @Test fun invalidOrUnknownServiceSchemesNeverBecomeSources() {
-        listOf("http://example.test/a.xml", "file:///private", "javascript:alert(1)",
+        listOf("file:///private", "javascript:alert(1)",
             "live://plugin/id", "https://user:secret@example.test/a.xml", "https://127.0.0.1/a",
             "https://localhost/a", "[invalid", "").forEach {
             assertTrue("rejected $it", DanmakuProtocol.decodeSources(it).isEmpty())
         }
     }
+    @Test fun explicitlyEnabledHttpSidecarFromRealTvboxCanRenderAndPrivateLocalHostsStayBlocked() {
+        val http = DanmakuProtocol.decodeSources("http://public-media.example.test/episode.xml")
+        assertEquals(1, http.size)
+        var count = 0
+        val repo = DanmakuRepository { count++; original }
+        assertTrue(repo.load(http.single(), false).isEmpty())
+        assertEquals(0, count)
+        assertEquals(4, repo.load(http.single(), true).size)
+        assertEquals(1, count)
+        assertTrue(DanmakuProtocol.decodeSources("http://127.0.0.1/secret.xml").isEmpty())
+        assertTrue(DanmakuProtocol.decodeSources("http://localhost/secret.xml").isEmpty())
+        assertTrue(DanmakuProtocol.decodeSources("https://user:pass@somewhere.example/d.xml").isEmpty())
+    }
+
     @Test fun originalXmlDecodesSecondsModesColorsAndEntities() {
         val comments = DanmakuProtocol.parseXml(original)
         assertEquals(listOf(0L, 1500L, 10000L, 20000L), comments.map { it.timeMs })
