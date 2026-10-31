@@ -170,6 +170,7 @@ internal class SpiderLoopbackProxy(
             parts[1].length > 4096) throw IllegalArgumentException("Invalid HTTP request")
         var host: String? = null
         var origin = false
+        var range: String? = null
         for (index in 0 until MAX_HEADERS) {
             val line = readLine(input) ?: throw IllegalArgumentException("Invalid headers")
             if (line.isEmpty()) break
@@ -179,6 +180,15 @@ internal class SpiderLoopbackProxy(
             val value = line.substring(indexOfColon + 1).trim()
             if (key == "host") host = value
             if (key == "origin") origin = true
+            // FongMi forwards request headers to Spider.proxy(params). Media3
+            // uses Range for seekable streams. Forward ONLY bounded byte ranges,
+            // never Cookie/Authorization or arbitrary caller-supplied headers.
+            if (key == "range") {
+                if (range != null || value.length > 48 ||
+                    !value.matches(Regex("(?i)bytes=(?:[0-9]{1,18}-[0-9]{0,18}|-[0-9]{1,18})")))
+                    throw IllegalArgumentException("Invalid byte range")
+                range = value
+            }
         }
         if (origin || host != "127.0.0.1:" + port) throw IllegalArgumentException("Wrong host")
         val target = URI(parts[1])
@@ -197,6 +207,9 @@ internal class SpiderLoopbackProxy(
                 throw IllegalArgumentException("Invalid parameter")
             params[key] = value
         }
+        // HTTP request headers override same-named query keys, as in CatVod
+        // NanoHTTPD. A plugin sees range via params["range"] (lowercase).
+        range?.let { params["range"] = it }
         return parts[0] to params
     }
 
