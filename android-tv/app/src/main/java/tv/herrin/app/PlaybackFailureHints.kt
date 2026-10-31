@@ -82,7 +82,7 @@ internal object PlaybackFailureHints {
                 else "播放服务器中断了网络连接；请重试或切换线路"
             else -> if (localSpider)
                 "本机 Spider 播放代理未响应；请重新应用该影视站点"
-            else "播放服务器连接失败；请核对影视源、网盘授权和电视网络"
+            else "播放服务器连接失败；请核对影视源、电视网络或切换线路"
         }
     }
 

@@ -161,6 +161,38 @@ class TvBoxSpiderBridgeTest {
         assertTrue(SpiderVodCodec.player("""{"parse":0,"url":"http://example.org/film.mp4"}""", true) is PlaybackResult.Ready)
     }
 
+
+    @Test fun `declared HLS allows signed extensionless media without enabling webpage parsing`() {
+        val signed = SpiderVodCodec.player("""{
+            "parse":1, "format":"application/vnd.apple.mpegurl",
+            "url":"https://video.example.org/secure/play?id=42&sig=test"
+        }""", false)
+        assertTrue(signed is PlaybackResult.Ready)
+        assertEquals("https://video.example.org/secure/play?id=42&sig=test",
+            (signed as PlaybackResult.Ready).media.uri)
+        assertEquals(PlaybackFormatRetry.HLS, signed.media.declaredMime)
+        val webpage = SpiderVodCodec.player("""{
+            "parse":1, "url":"https://video.example.org/secure/play?id=42"
+        }""", false)
+        assertTrue(webpage is PlaybackResult.Unavailable)
+        assertTrue(SpiderVodCodec.player("""{
+            "jx":1, "format":"text/html", "url":"https://video.example.org/watch"
+        }""", false) is PlaybackResult.Unavailable)
+    }
+
+    @Test fun `spider playback accepts a single url array and direct url arrays`() {
+        val one = SpiderVodCodec.player("""{
+            "url":["https://video.example.org/primary.m3u8"]
+        }""", false)
+        assertEquals("https://video.example.org/primary.m3u8",
+            (one as PlaybackResult.Ready).media.uri)
+        val many = SpiderVodCodec.player("""{
+            "url":["https://video.example.org/a.mp4","https://video.example.org/b.mp4"]
+        }""", false)
+        assertEquals(listOf("https://video.example.org/b.mp4"),
+            (many as PlaybackResult.Ready).media.alternateUris)
+    }
+
     @Test fun `catalog fallback visits film categories after empty home and failed category`() {
         val visited = mutableListOf<String>()
         val films = SpiderCatalogBrowser.browse(site,

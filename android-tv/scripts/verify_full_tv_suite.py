@@ -21,6 +21,7 @@ REQUIRED_CLASSES = (
     "M454CmsOneTapRecoveryInstrumentedTest",
     "M456NativeFullscreenPlayerTest",
     "M457PlaybackFailureRecoveryTest",
+    "M458CmsHttpPlaybackTest",
     "AuthorizedCatalogIntegrationTest",
     "TvBoxVodIntegrationTest",
     "TvBoxWarehouseIntegrationTest",
