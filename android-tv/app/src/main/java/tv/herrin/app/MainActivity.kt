@@ -2164,6 +2164,8 @@ private fun Herrin() {
                         cmsFailed = cmsFailed,
                         retryAvailable = spiderActive || cmsFailed,
                         reducedMotion = reduceMotion,
+                        failureHint = (spiderResolved as? PlaybackResult.Unavailable)
+                            ?.reason?.let(PlayerStartupHints::forSpiderFailure),
                         onRetry = {
                             if (cmsFailed) {
                                 cmsPlaybackFailedId = null
