@@ -35,11 +35,13 @@ class M457PlaybackFailureRecoveryTest {
             val failingMediaUrl = "http://127.0.0.1:${server.port}/missing-film.mp4"
             var lineChoices = 0
             var episodeChoices = 0
+            var freshSourceRequests = 0
             compose.setContent {
                 AuthorizedPlaybackPanel(
                     media = PlaybackMedia(failingMediaUrl),
                     onLineSelection = { lineChoices++ },
                     onEpisodeSelection = { episodeChoices++ },
+                    onRefreshSource = { freshSourceRequests++ },
                     onBack = {}
                 )
             }
@@ -53,6 +55,7 @@ class M457PlaybackFailureRecoveryTest {
                             .assertTextContains("HTTP 404", substring = true)
                         compose.onNodeWithTag("player-error-change-line").assertExists()
                         compose.onNodeWithTag("player-error-change-episode").assertExists()
+                        compose.onNodeWithTag("player-refresh-source").assertExists()
                     }.isSuccess
                 }
             } catch (error: androidx.compose.ui.test.ComposeTimeoutException) {
@@ -62,9 +65,11 @@ class M457PlaybackFailureRecoveryTest {
             }
             compose.onNodeWithTag("player-error-change-line").performClick()
             compose.onNodeWithTag("player-error-change-episode").performClick()
+            compose.onNodeWithTag("player-refresh-source").performClick()
             compose.runOnIdle {
                 assertEquals(1, lineChoices)
                 assertEquals(1, episodeChoices)
+                assertEquals(1, freshSourceRequests)
             }
         }
     }
