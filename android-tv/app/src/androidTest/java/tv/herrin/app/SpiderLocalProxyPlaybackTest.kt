@@ -24,6 +24,44 @@ class SpiderLocalProxyPlaybackTest {
     @get:Rule val compose = createEmptyComposeRule()
     private val inst = InstrumentationRegistry.getInstrumentation()
 
+    @Test fun currentAndLegacyFongMiSpiderMethodsResolveAndShareSecureLoopbackPort() {
+        // Real binary JARs are linked against exact Java method descriptors.
+        // Missing proxyUrl(Map, boolean) or dialog(JSONObject, Callback) in the
+        // vendored Spider superclass fails before playerContent can play.
+        val clazz = Spider::class.java
+        assertNotNull(clazz.getMethod("proxyUrl"))
+        assertNotNull(clazz.getMethod("proxyUrl", Map::class.java))
+        assertNotNull(clazz.getMethod("proxyUrl", Map::class.java, java.lang.Boolean.TYPE))
+        assertNotNull(clazz.getMethod("danmakuUrl", String::class.java))
+        assertNotNull(clazz.getMethod("danmakuUrl", String::class.java, String::class.java))
+        assertNotNull(clazz.getMethod("dialog", JSONObject::class.java))
+        assertNotNull(clazz.getMethod("dialog", JSONObject::class.java,
+            com.github.catvod.utils.Dialog.Callback::class.java))
+        SpiderLoopbackProxy("abi-site") { params ->
+            assertEquals("test", params["part"])
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(7, 8, 9)))
+        }.use { proxy ->
+            Proxy.set(proxy.port, proxy.token)
+            try {
+                val spider = object : Spider() {}
+                spider.siteKey = "abi-site"
+                val options = mapOf("part" to "test")
+                val current = spider.proxyUrl(options)
+                val legacy = spider.getProxyUrl(options)
+                assertEquals(legacy, current)
+                assertEquals(current, spider.proxyUrl(options, false))
+                assertEquals(current, spider.proxyUrl(options, true))
+                assertTrue(current.startsWith("http://127.0.0.1:"))
+                val request = java.net.URL(current).openConnection() as java.net.HttpURLConnection
+                request.connectTimeout = 2_000
+                request.readTimeout = 2_000
+                assertEquals(200, request.responseCode)
+                assertArrayEquals(byteArrayOf(7, 8, 9), request.inputStream.use { it.readBytes() })
+                request.disconnect()
+            } finally { Proxy.set(-1, "") }
+        }
+    }
+
     @Test fun extensionlessSpiderProxyHlsRecoversFromProgressiveAndRendersSegments() {
         val hls = inst.context.assets.open("synthetic-hls.m3u8")
             .bufferedReader().use { it.readText() }
