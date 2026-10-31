@@ -98,8 +98,11 @@ internal fun SpiderAuthorizationHost() {
         dismissOnBackPress = true, dismissOnClickOutside = false, securePolicy = SecureFlagPolicy.SecureOn)) {
         Column(Modifier.width(560.dp).background(Color(0xFF17191D)).padding(28.dp)
             .testTag("spider-authorization-dialog"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("扫码授权", style = MaterialTheme.typography.headlineSmall, color = Color.White)
-            Text(if (busy) "正在确认授权状态…" else "请使用对应平台扫描二维码，完成后选择确认。二维码将在两分钟后失效。",
+            Text(if (current.options.inputs.isNotEmpty()) "网盘访问授权" else "扫码授权",
+                style = MaterialTheme.typography.headlineSmall, color = Color.White)
+            Text(if (busy) "正在确认授权状态…" else if (current.options.inputs.isNotEmpty())
+                "请填写来源要求的访问码；若同时提供二维码，也可以扫码授权。"
+                else "请使用对应平台扫描二维码，完成后选择确认。二维码将在两分钟后失效。",
                 color = Color.White, modifier = Modifier.testTag("spider-authorization-status"))
             if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = "授权二维码",
                 modifier = Modifier.size(240.dp).testTag("spider-authorization-qr"))
@@ -129,7 +132,7 @@ internal fun SpiderAuthorizationHost() {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 current.options.buttons.forEachIndexed { index, button ->
                     Button(onClick = {
-                        if (current.options.inputs.any {
+                        if (!button.skipValidation && current.options.inputs.any {
                                 it.enabled && it.required && formValues[it.name].isNullOrBlank()
                             }) {
                             formFeedback = "请填写来源要求的网盘访问码或授权内容"
