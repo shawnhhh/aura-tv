@@ -109,6 +109,42 @@ internal object TvBoxVodCodec {
     }
 }
 
+/**
+ * CMS VOD entries are different from version-1 HTTPS-only user catalogs.
+ * A user-applied TVBox CMS may explicitly permit HTTP; the old generic
+ * LicensedPlaybackResolver rejected these already-validated URLs at play time.
+ *
+ * Keep the selected episode and line exact. Do not attempt to interpret JX
+ * pages as media URLs or forward site credentials to an unrelated CDN.
+ */
+internal object TvBoxCmsPlaybackResolver {
+    fun resolve(
+        film: Film, episode: Int, line: String, allowHttp: Boolean,
+        siteHeaders: Map<String, String> = emptyMap()
+    ): PlaybackResult {
+        if (film.cmsVodId.isNullOrBlank())
+            return PlaybackResult.Unavailable("当前影片不是 CMS 影视条目")
+        val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
+            ?.lines?.firstOrNull { it.id == line }
+            ?: return PlaybackResult.Unavailable("请选择此集有效的 CMS 播放线路")
+        val url = TvBoxUrl.normalize(selected.uri, allowHttp)
+            ?: return PlaybackResult.Unavailable("该线路不是允许访问的 HTTP(S) 媒体地址")
+        val path = java.net.URI(url).path.orEmpty().lowercase(java.util.Locale.ROOT)
+        if (path.endsWith(".html") || path.endsWith(".htm"))
+            return PlaybackResult.Unavailable("该线路返回网页解析入口，而非视频文件")
+        // CMS site authentication is scoped to its API. A selected video may
+        // be hosted on a different CDN: never send its Cookie/Authorization.
+        val publicHeaders = siteHeaders.filterKeys { key ->
+            key.equals("User-Agent", ignoreCase = true) ||
+                key.equals("Referer", ignoreCase = true)
+        }
+        return PlaybackResult.Ready(PlaybackMedia(
+            uri = url, headers = publicHeaders, subtitles = selected.subtitles,
+            allowHttpRedirects = allowHttp
+        ))
+    }
+}
+
 internal class TvBoxVodRepository {
     suspend fun load(site: TvBoxSite, allowHttp: Boolean): TvBoxVodResult = withContext(Dispatchers.IO) {
         val endpoint = TvBoxCmsEndpoint.address(site.apiUrl.orEmpty(), allowHttp = allowHttp)
