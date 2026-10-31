@@ -43,6 +43,42 @@ class SpiderLoopbackProxyTest {
         }
     }
 
+    @Test fun forwardsBoundedMedia3RangeHeaderToPluginAndReturns206WithoutCredentials() {
+        val bytes = "streaming".toByteArray(StandardCharsets.UTF_8)
+        var captured: Map<String, String>? = null
+        SpiderLoopbackProxy("range-site") { params ->
+            captured = params
+            arrayOf(206, "video/mp4", ByteArrayInputStream(bytes.copyOfRange(2, 6)),
+                mapOf("Content-Range" to "bytes 2-5/9", "Accept-Ranges" to "bytes"))
+        }.use { proxy ->
+            val conn = request(proxy.url + "&range=bytes%3D0-1")
+            conn.setRequestProperty("Range", "bytes=2-5")
+            conn.setRequestProperty("Authorization", "Bearer PRIVATE_CREDENTIAL")
+            assertEquals(206, conn.responseCode)
+            assertEquals("bytes 2-5/9", conn.getHeaderField("Content-Range"))
+            assertArrayEquals(bytes.copyOfRange(2, 6), conn.inputStream.use { it.readBytes() })
+            assertEquals("bytes=2-5", captured?.get("range"))
+            assertFalse(captured.orEmpty().containsKey("authorization"))
+            assertFalse(captured.orEmpty().values.any { it.contains("PRIVATE_CREDENTIAL") })
+            assertFalse(captured.orEmpty().containsKey("session"))
+            conn.disconnect()
+        }
+    }
+
+    @Test fun rejectsMalformedRangeBeforePluginCallback() {
+        val count = AtomicInteger()
+        SpiderLoopbackProxy("range-site") {
+            count.incrementAndGet()
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            val conn = request(proxy.url)
+            conn.setRequestProperty("Range", "bytes=0-99,100-200")
+            assertEquals(400, conn.responseCode)
+            assertEquals(0, count.get())
+            conn.disconnect()
+        }
+    }
+
     @Test fun rejectsForgedTokenSiteOriginAndMethod() {
         val count = AtomicInteger()
         SpiderLoopbackProxy("private-site") {
