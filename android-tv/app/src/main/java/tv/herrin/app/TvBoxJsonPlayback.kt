@@ -65,7 +65,7 @@ internal object TvBoxJsonPlayback {
         val directHeaders = buildMap<String, String> {
             for (key in listOf("User-Agent", "Referer", "ua")) {
                 val value = root.optString(key).trim().ifBlank { data?.optString(key).orEmpty().trim() }
-                if (value.length in 1..2_048 && '\\r' !in value && '\\n' !in value)
+                if (value.length in 1..2_048 && '\r' !in value && '\n' !in value)
                     put(if (key == "ua") "User-Agent" else key, value)
             }
         }
