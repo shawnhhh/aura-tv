@@ -2382,39 +2382,14 @@ private fun Herrin() {
                                     "只有搜索接口验证通过才会开始刮削；播放地址与选集仍由影视源提供。",
                                 modifier = Modifier.testTag("compact-metadata-status"),
                                 color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
-                            item { TvButton(
-                                if (tmdbTokenSplitMode) "改为单框输入"
-                                else "跨屏输入限200字？切换分段粘贴",
-                                modifier = Modifier.testTag("compact-tmdb-split-toggle"),
-                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
-                                toggleTmdbSplitInput()
-                            } }
-                            if (tmdbTokenSplitMode) {
-                                item { Text("每段最多200字，不必凑满200字。按顺序粘贴，三段自动拼接；请检查是否漏字或多字。测试阶段明文显示。",
-                                    color = Color(0xFFCDD8E6),
-                                    modifier = Modifier.testTag("compact-tmdb-split-help")) }
-                                item { OutlinedTextField(tmdbTokenPart1,
-                                    { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart1 = it },
-                                    Modifier.fillMaxWidth().testTag("compact-tmdb-part-1"),
-                                    label = { Text("Token 第1段：${tmdbTokenPart1.length}/200") },
-                                    visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                                item { OutlinedTextField(tmdbTokenPart2,
-                                    { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart2 = it },
-                                    Modifier.fillMaxWidth().testTag("compact-tmdb-part-2"),
-                                    label = { Text("Token 第2段：${tmdbTokenPart2.length}/200") },
-                                    visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                                item { OutlinedTextField(tmdbTokenPart3,
-                                    { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart3 = it },
-                                    Modifier.fillMaxWidth().testTag("compact-tmdb-part-3"),
-                                    label = { Text("Token 第3段（可选）：${tmdbTokenPart3.length}/200") },
-                                    visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                            } else {
-                                item { OutlinedTextField(tmdbTokenDraft,
-                                    { tmdbTokenDraft = it.take(TmdbTokenEntry.MAX_LENGTH) },
-                                    Modifier.fillMaxWidth().testTag("compact-tmdb-token"),
-                                    label = { Text("TMDB API Read Access Token（粘贴后保存）") },
-                                    visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                            }
+                            item { TmdbTokenEntryFields(
+                                compact = true, reducedMotion = reduceMotion,
+                                splitMode = tmdbTokenSplitMode, onToggle = { toggleTmdbSplitInput() },
+                                single = tmdbTokenDraft, onSingle = { tmdbTokenDraft = it },
+                                first = tmdbTokenPart1, onFirst = { tmdbTokenPart1 = it },
+                                second = tmdbTokenPart2, onSecond = { tmdbTokenPart2 = it },
+                                third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it }
+                            ) }
                             item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 TvButton("保存并开始刮削",
                                     modifier = Modifier.testTag("compact-tmdb-save"), reduced = reduceMotion) {
@@ -2773,39 +2748,14 @@ private fun Herrin() {
                             onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
                         item { Text("可选高清海报元数据（TMDB）", fontSize = 21.sp) }
                         item { Text("TMDB 需要你自己的 API Read Access Token。仅在你主动保存 Token 后匹配影片元数据；匹配不确定时保留影视源海报。", color = Color(0xFFCDD8E6)) }
-                        item { TvButton(
-                            if (tmdbTokenSplitMode) "改为单框输入"
-                            else "跨屏输入限200字？切换分段粘贴",
-                            modifier = Modifier.testTag("tmdb-split-toggle"),
-                            reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
-                            toggleTmdbSplitInput()
-                        } }
-                        if (tmdbTokenSplitMode) {
-                            item { Text("每段最多200字，不要求第1段填满。按顺序粘贴，自动拼接；测试阶段明文显示，请勿在他人面前操作。",
-                                color = Color(0xFFCDD8E6), modifier = Modifier.testTag("tmdb-split-help")) }
-                            item { OutlinedTextField(tmdbTokenPart1,
-                                { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart1 = it },
-                                Modifier.fillMaxWidth().testTag("tmdb-token-part-1"),
-                                label = { Text("Token 第1段：${tmdbTokenPart1.length}/200") },
-                                visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                            item { OutlinedTextField(tmdbTokenPart2,
-                                { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart2 = it },
-                                Modifier.fillMaxWidth().testTag("tmdb-token-part-2"),
-                                label = { Text("Token 第2段：${tmdbTokenPart2.length}/200") },
-                                visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                            item { OutlinedTextField(tmdbTokenPart3,
-                                { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart3 = it },
-                                Modifier.fillMaxWidth().testTag("tmdb-token-part-3"),
-                                label = { Text("Token 第3段（可选）：${tmdbTokenPart3.length}/200") },
-                                visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                        } else {
-                            item { OutlinedTextField(tmdbTokenDraft,
-                                { tmdbTokenDraft = it.take(TmdbTokenEntry.MAX_LENGTH) },
-                                Modifier.fillMaxWidth().testTag("tmdb-token-input")
-                                    .onFocusChanged { configInputFocused = it.isFocused },
-                                label = { Text("TMDB API Read Access Token（留空则不修改）") },
-                                visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, singleLine = true) }
-                        }
+                        item { TmdbTokenEntryFields(
+                            compact = false, reducedMotion = reduceMotion,
+                            splitMode = tmdbTokenSplitMode, onToggle = { toggleTmdbSplitInput() },
+                            single = tmdbTokenDraft, onSingle = { tmdbTokenDraft = it },
+                            first = tmdbTokenPart1, onFirst = { tmdbTokenPart1 = it },
+                            second = tmdbTokenPart2, onSecond = { tmdbTokenPart2 = it },
+                            third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it }
+                        ) }
                         item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton("保存 TMDB Token", modifier = Modifier.testTag("tmdb-token-save"),
                                 reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
