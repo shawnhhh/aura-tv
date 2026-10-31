@@ -32,6 +32,7 @@ internal fun PlayerStartupSurface(
     cmsFailed: Boolean,
     retryAvailable: Boolean,
     reducedMotion: Boolean,
+    failureHint: String? = null,
     onRetry: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -55,10 +56,12 @@ internal fun PlayerStartupSurface(
                         "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
                     cmsFailed ->
                         "该影视点没有提供可用的播放线路，可重新播放或返回片库更换影片。"
+                    failureHint != null -> failureHint
                     else -> "请重试，或返回选集切换播放线路。"
-                }, color = Color(0xFFBCCADB), fontSize = 16.sp)
+                }, color = Color(0xFFBCCADB), fontSize = 16.sp,
+                    modifier = Modifier.testTag("player-startup-failure-hint"))
                 if (retryAvailable) {
-                    TvButton("重新播放",
+                    TvButton(if (failureHint != null) "重新向来源解析" else "重新播放",
                         modifier = Modifier.testTag("player-startup-retry"),
                         reduced = reducedMotion, onClick = onRetry)
                 }
