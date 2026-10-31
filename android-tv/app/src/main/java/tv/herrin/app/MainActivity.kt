@@ -2116,12 +2116,26 @@ private fun Herrin() {
             "detail", "player", "settings" -> {
                 val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
                 val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
+                val cmsLine = if (screen == "player" && activeCmsSite != null &&
+                    film.cmsVodId != null && !spiderActive)
+                    film.playbackEpisodes.firstOrNull { it.number == episode }
+                        ?.lines?.firstOrNull { it.id == line } else null
+                val cmsJsonParser = cmsLine?.let { selected ->
+                    TvBoxJsonPlayback.choose(selected.uri, selected.title,
+                        tvBoxSingle?.jsonParsers.orEmpty())
+                }
+                // Do not hand a JSON-parse watch page directly to Media3.
+                val parsedCms = if (cmsLine != null && cmsJsonParser != null)
+                    CmsJsonPlayback(cmsLine.uri, cmsJsonParser, tvBoxAllowHttp, playerRetryEpoch)
+                    else null
+                val cmsParseWaiting = cmsJsonParser != null && parsedCms == null
                 val licensed = if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
-                        if (activeCmsSite != null && film.cmsVodId != null)
-                            TvBoxCmsPlaybackResolver.resolve(film, episode, line, tvBoxAllowHttp,
+                        if (activeCmsSite != null && film.cmsVodId != null) {
+                            if (cmsJsonParser != null) parsedCms
+                            else TvBoxCmsPlaybackResolver.resolve(film, episode, line, tvBoxAllowHttp,
                                 activeCmsSite?.headers.orEmpty())
-                        else LicensedPlaybackResolver.resolve(film, episode, line)
+                        } else LicensedPlaybackResolver.resolve(film, episode, line)
                     } else null
                 val licensedMedia = (licensed as? PlaybackResult.Ready)?.media
                 // The independent testing URL must not start playing while a
@@ -2143,7 +2157,7 @@ private fun Herrin() {
                         startPositionMs = previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
-                        onRefreshSource = if (spiderActive) ({ playerRetryEpoch++ }) else null,
+                        onRefreshSource = if (spiderActive || cmsJsonParser != null) ({ playerRetryEpoch++ }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
@@ -2171,17 +2185,18 @@ private fun Herrin() {
                         }, onDismiss = { playbackPicker = null })
                 } else if (screen == "player") {
                     val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable ||
-                        (!spiderActive && !cmsWaiting)
+                        (!spiderActive && !cmsWaiting && !cmsParseWaiting)
                     val offlineDemonstration = !sourceConfigured && !spiderActive &&
                         film.playbackEpisodes.isEmpty()
                     PlayerStartupSurface(
                         loading = !playbackUnavailable,
                         offlineDemonstration = offlineDemonstration,
                         cmsFailed = cmsFailed,
-                        retryAvailable = spiderActive || cmsFailed,
+                        retryAvailable = spiderActive || cmsFailed || cmsJsonParser != null,
                         reducedMotion = reduceMotion,
-                        failureHint = (spiderResolved as? PlaybackResult.Unavailable)
-                            ?.reason?.let(PlayerStartupHints::forSpiderFailure),
+                        failureHint = (parsedCms as? PlaybackResult.Unavailable)?.reason
+                            ?: (spiderResolved as? PlaybackResult.Unavailable)
+                                ?.reason?.let(PlayerStartupHints::forSpiderFailure),
                         onRetry = {
                             if (cmsFailed) {
                                 cmsPlaybackFailedId = null
