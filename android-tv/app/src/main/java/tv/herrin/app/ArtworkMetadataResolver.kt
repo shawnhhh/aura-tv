@@ -38,6 +38,11 @@ internal object ArtworkTitle {
     private val technical = "(?:2160[Pp]|1080[Pp]|720[Pp]|[48][Kk]|[Hh][Dd][Rr](?:10\\+?)?|[Dd]olby[ ._-]?[Vv]ision|[Dd][Vv]|杜比视界|杜比|蓝光|超清|高清|国语中字|国语|国配|粤语|双语|中文字幕|中字|字幕|无字幕|简繁|内嵌字幕|[Ww][Ee][Bb][- ]?[Dd][Ll]|[Bb][Dd][Rr]ip|[Bb][Dd]|[Hh][Dd]|[Hh]\\.?26[45]|[Xx]26[45]|[Hh][Ee][Vv][Cc]|[Aa][Aa][Cc]|[Dd][Tt][Ss]|[Aa][Tt][Mm][Oo][Ss]|完整版|完结|全集|更新至?\\d+集)"
     private val brackets = Regex("[\\[【(（]([^\\]】)）]{1,100})[\\]】)）]")
     private val tag = Regex("(?i)(?<![\\p{L}\\p{N}])$technical(?![\\p{L}\\p{N}])")
+    // Source filenames often concatenate flags without separators:
+    // "Movie1080P国语中字" and "Movie【BD国语】".
+    // Strip only known complete technical suffix tokens, never arbitrary words.
+    private val bareTechnical = Regex(technical)
+    private val trailingTechnical = Regex("(?:$technical)$")
     private val trailingChineseTag = Regex("(?:国语中字|国语|粤语|国配|中文字幕|中字|无字幕|内嵌字幕|杜比视界|超清|高清|蓝光|完整版|全集|完结)$")
     private val separatedYear = Regex("(?<![\\p{L}\\p{N}])((?:19|20)\\d{2})(?![\\p{L}\\p{N}])")
 
@@ -63,7 +68,9 @@ internal object ArtworkTitle {
         val normalized = Normalizer.normalize(raw.trim(), Normalizer.Form.NFKC)
         var clean = normalized.replace(brackets) { result ->
             val contents = result.groupValues[1]
-            if (tag.containsMatchIn(contents) || contents.matches(Regex("(?:19|20)\\d{2}"))) " "
+            val flagsOnly = contents.replace(bareTechnical, " ")
+                .replace(Regex("[\\s._+\\-·|]+"), "").isEmpty()
+            if (flagsOnly || contents.matches(Regex("(?:19|20)\\d{2}"))) " "
             else result.value
         }.replace(Regex("[_.·]+"), " ")
         clean = clean.replace(tag, " ")
@@ -73,7 +80,11 @@ internal object ArtworkTitle {
                 match.groupValues[1].toInt() <= java.time.Year.now().value + 1) " " else match.value
         }
         var last: String
-        do { last = clean; clean = clean.trim().replace(trailingChineseTag, "") } while (last != clean)
+        do {
+            last = clean
+            clean = clean.trim().replace(trailingChineseTag, "")
+                .replace(trailingTechnical, "")
+        } while (last != clean)
         clean = clean.replace(Regex("[ \\t-]+"), " ").trim(' ', '-', '[', ']', '【', '】')
         return clean.ifBlank { normalized }
     }
