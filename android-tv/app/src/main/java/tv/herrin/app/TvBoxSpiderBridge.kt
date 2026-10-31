@@ -98,13 +98,14 @@ internal object SpiderVodCodec {
             TvBoxUrl.normalize(it, allowHttp)
         }.distinct().take(8)
         val needsWebParser = data.optInt("parse", 0) != 0 || data.optInt("jx", 0) != 0
-        // A provider occasionally sets parse=1 even while returning a direct
-        // media file. Accept an actual manifest/file URL; never open a web
-        // parsing page, sniff a browser, or invoke an unknown third-party JX.
-        val playable = if (!needsWebParser) options else options.filter {
-            it.substringBefore('?').substringBefore('#').lowercase().let { path ->
-                path.endsWith(".m3u8") || path.endsWith(".mp4") || path.endsWith(".mpd")
-            }
+        val declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format"))
+        // Spider may mark parse=1 for a signed extensionless *media* endpoint.
+        // Accept that URL only when Spider explicitly declares a Media3 media
+        // format. Without that evidence, a JX webpage is not a direct stream.
+        val playable = if (!needsWebParser) options else options.filterIndexed { index, url ->
+            val path = url.substringBefore('?').lowercase(java.util.Locale.ROOT)
+            path.endsWith(".m3u8") || path.endsWith(".mp4") ||
+                path.endsWith(".mpd") || (index == 0 && declaredMime != null)
         }
         if (needsWebParser && playable.isEmpty())
             return PlaybackResult.Unavailable("此线路需要网页解析器，请切换返回直链的授权线路")
@@ -135,14 +136,16 @@ internal object SpiderVodCodec {
         }
         return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles,
             alternateUris = playable.drop(1), allowHttpRedirects = allowHttp,
-            declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format")),
+            declaredMime = declaredMime,
             danmakuSources = DanmakuProtocol.decodeSources(data.opt("danmaku"))))
     }
 
     /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */
     private fun playerUrls(raw: Any?): List<String> = when (raw) {
         is String -> listOf(raw)
-        is JSONArray -> (1 until raw.length() step 2).map { raw.optString(it) }
+        // Some CatVod spiders return [url] or [url1, url2] instead of
+        // [qualityLabel, url] pairs. Safe URL normalization below discards labels.
+        is JSONArray -> (0 until minOf(raw.length(), 32)).map { raw.optString(it) }
         is JSONObject -> {
             val choices = raw.optJSONArray("values") ?: JSONArray()
             val urls = (0 until minOf(choices.length(), 20)).mapNotNull {
