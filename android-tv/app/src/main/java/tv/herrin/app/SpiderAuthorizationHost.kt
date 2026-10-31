@@ -5,6 +5,8 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.OutlinedTextField
@@ -96,7 +98,8 @@ internal fun SpiderAuthorizationHost() {
     }
     Dialog(onDismissRequest = { SpiderAuthorizationUi.cancel(current) }, properties = DialogProperties(
         dismissOnBackPress = true, dismissOnClickOutside = false, securePolicy = SecureFlagPolicy.SecureOn)) {
-        Column(Modifier.width(560.dp).background(Color(0xFF17191D)).padding(28.dp)
+        Column(Modifier.width(560.dp).heightIn(max = 620.dp)
+            .background(Color(0xFF17191D)).verticalScroll(rememberScrollState()).padding(28.dp)
             .testTag("spider-authorization-dialog"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(if (current.options.inputs.isNotEmpty()) "网盘访问授权" else "扫码授权",
                 style = MaterialTheme.typography.headlineSmall, color = Color.White)
