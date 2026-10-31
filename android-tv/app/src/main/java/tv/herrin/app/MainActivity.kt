@@ -1396,27 +1396,8 @@ private fun Herrin() {
                 0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
             )))
         }
-        if (homeVisible) when (screen) {
-            "live-player" -> {
-                val selected = activeLiveChannel
-                if (selected != null) {
-                    LiveTvSurface(
-                        channels = liveChannels,
-                        selected = selected,
-                        onChannel = { channel ->
-                            activeLiveChannel = channel
-                            activeLiveIndex = liveChannels.indexOfFirst { it.url == channel.url }
-                        },
-                        favorites = liveFavorites,
-                        favoriteScope = liveFavoriteScope,
-                        onBack = { category = "首页"; focusId = "nav-首页"; screen = "browse" },
-                        reduced = reduceMotion
-                    )
-                } else {
-                    Text("当前未选中直播频道", Modifier.padding(50.dp))
-                }
-            }
-            "facets" -> {
+        // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
+        @Composable fun renderFacetScreen() {
                 val matches = showCatalog.collapse(FilmFacetFilters.results(films, facetSelection))
                 val facetsScroll = rememberScrollState()
                 val metadataMatched = films.count { it.metadataSource == "TMDB" }
@@ -1485,8 +1466,11 @@ private fun Herrin() {
                         }
                     }
                 }
-            }
-            "sites" -> {
+            
+        }
+
+        // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
+        @Composable fun renderSitesScreen() {
                 val selected = tvBoxSingle
                 LazyColumn(Modifier.fillMaxSize().testTag("site-list"),
                     contentPadding = PaddingValues(horizontal = 44.dp, vertical = 24.dp),
@@ -1565,8 +1549,11 @@ private fun Herrin() {
                         }
                     }
                 }
-            }
-            "browse", "search" -> {
+            
+        }
+
+        // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
+        @Composable fun renderBrowseSearch() {
                 val isSearch = screen == "search"
                 // Focus color animations can recompose every frame: searching,
                 // regrouping and reading playback history must NOT run per frame.
@@ -2100,7 +2087,32 @@ private fun Herrin() {
                         }
                     )
                 }
+            
+        }
+
+        if (homeVisible) when (screen) {
+            "live-player" -> {
+                val selected = activeLiveChannel
+                if (selected != null) {
+                    LiveTvSurface(
+                        channels = liveChannels,
+                        selected = selected,
+                        onChannel = { channel ->
+                            activeLiveChannel = channel
+                            activeLiveIndex = liveChannels.indexOfFirst { it.url == channel.url }
+                        },
+                        favorites = liveFavorites,
+                        favoriteScope = liveFavoriteScope,
+                        onBack = { category = "首页"; focusId = "nav-首页"; screen = "browse" },
+                        reduced = reduceMotion
+                    )
+                } else {
+                    Text("当前未选中直播频道", Modifier.padding(50.dp))
+                }
             }
+            "facets" -> renderFacetScreen()
+            "sites" -> renderSitesScreen()
+            "browse", "search" -> renderBrowseSearch()
             "detail", "player", "settings" -> {
                 val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
                 val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
