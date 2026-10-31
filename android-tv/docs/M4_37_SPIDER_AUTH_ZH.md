@@ -9,19 +9,20 @@ SpiderDialog 的 JSON 协议，独立实现跨进程桥，未复制其 UI 源码
 
 `TvBoxSpiderService` 注册 Runtime.dialog 并通过同应用 Messenger 发送
 AUTH_SHOW/AUTH_ACTION/AUTH_CLOSE。当前调用号与弹窗号共同限定会话；迟到事件不能唤起旧会话。
-主 Activity 根部挂载 `SpiderAuthorizationHost()`。UI 只生成二维码和固定中文提示，
+主 Activity 根部挂载 `SpiderAuthorizationHost()`。UI 生成二维码、固定中文提示及受控的用户访问码输入，
 不打印二维码内容，不把地址放进 accessibility semantics。授权窗口使用 SecureOn，
 防止个人扫码内容进入截图、录屏、CI 截图。
 
 支持 FongMi/CatVod 的 `qrcode`、内嵌 base64 `image`、1–3 个 `buttons`，
-按钮事件 `{button,values:{}}`、原插件线程 `onAction` 回调，以及 `qrcode/image/close` 更新。
+以及至多3个安全边界受控的 text/password/number/phone 输入框（每项最多512字符），
+按钮事件 `{button,values:{name:用户输入}}`、原插件线程 `onAction` 回调，以及 `qrcode/image/close` 更新。
 合法授权 Cookie/Token 的交换与保存仍由原插件及其平台完成，主界面不提取、不保存、不回显这些值。
 回调执行通过 SDK 自带的 action queue 回到调用 Dialog.show 的插件线程，不在 UI 主线程执行插件。
 非关闭按钮可检查状态、刷新二维码或注销；注销按钮动作由插件实现。
 取消、Back、源切换、bridge.close、进程断开、120 秒超时均释放 pending future/二维码。
 为了容纳两分钟扫码，工作调用最长150秒，子进程 watchdog160秒，主进程IPC165秒。
 
-不支持依赖 Activity/WebView 的自建二维码、带输入表单的 Dialog、平台 DRM、未知私有授权协议，
+不支持依赖 Activity/WebView 的自建二维码、复杂 select/multiselect 表单、平台 DRM、未知私有授权协议，
 这些路径明确失败；不能把支持 Runtime.dialog 等同全部网盘插件均已验收。
 插件自有持久化凭据不由此通用桥读取或跨站复制；用户应通过其注销动作清除平台会话。
 
@@ -30,3 +31,11 @@ AUTH_SHOW/AUTH_ACTION/AUTH_CLOSE。当前调用号与弹窗号共同限定会话
 所有二维码与 token 为原创假数据，无外部平台、账号、Cookie。
 本地 Gradle 尝试被环境网络对 jitpack.io 的403阻断，不能声称这些新增测试本地已通过；
 最终结果以集成分支 GitHub Actions 为准。
+
+## M4.57 追加：网盘密码输入与来源二维码
+
+- 标准 `Runtime.dialog` 请求如果包含密码 / 访问码输入框，电视以焦点可导航的表单显示，返回值经当前会话 IPC 传给发起请求的插件；不会进入公开弹窗 JSON、日志、缓存或系统 saved-state。
+- 若来源同时提供 `qrcode` 或图片，则与访问码一起展示；若来源只要求密码，就不伪造二维码。来源从未发起二维码授权时，HERRIN 无法代替平台生成真实登录二维码。
+- 用户要求的 TMDB Token 明文仅用于当前 Alpha 版设置输入框，**不适用于网盘密码**，网盘密码仍掩码显示且 SecureOn。
+- 密码表单仅兼容标准 CatVod Runtime.dialog，无法代替需要原生 Activity / WebView / 未集成 JS/Python 模块的第三方插件功能。
+- 未用真实 115、夸克、阿里云盘账号验证登录成功；需要实机该来源的明确授权交互。
