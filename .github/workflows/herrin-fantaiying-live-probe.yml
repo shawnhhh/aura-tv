@@ -203,6 +203,10 @@ jobs:
                               result['dex_spider_declared']=len(advertised)
                               result['dex_spider_present']=len(advertised & classes)
                               result['dex_spider_missing']=len(missing)
+                              result['dex_spider_missing_classes']=[
+                                  s.removeprefix('Lcom/github/catvod/spider/').removesuffix(';')
+                                  for s in sorted(missing)][:20]
+                              result['dex_ygp_guard_present']=('Lcom/github/catvod/spider/YGPGuard;' in classes)
                               result['dex_init_present']='Lcom/github/catvod/spider/Init;' in classes
                   except Exception as e:
                       report['spider_compatibility']['full_jar_error']=type(e).__name__
