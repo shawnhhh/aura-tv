@@ -1,5 +1,7 @@
 package tv.herrin.app
 
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 import java.net.UnknownHostException
@@ -62,6 +64,25 @@ class M457TmdbConnectivityProbeTest {
                 ArtworkJsonFetcher { _, _ -> throw UnknownHostException("no network") }))
         assertEquals(TmdbProbeState.SERVER_UNAVAILABLE,
             TmdbConnectivityProbe.check(goodToken, ArtworkJsonFetcher { _, _ -> null }))
+    }
+
+    @Test fun realHttp429IsDiagnosedWithoutTreatingItAsBadMovieTitles() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"images":{}}"""))
+            server.enqueue(MockResponse().setResponseCode(429)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"status_code":25,"status_message":"Your request count is over the allowed limit."}"""))
+            val status = TmdbConnectivityProbe.check(goodToken, ArtworkJsonFetcher { url, token ->
+                val uri = java.net.URI(url)
+                NetworkArtworkFetcher.load(server.url(uri.rawPath + (uri.rawQuery?.let { "?$it" } ?: "")).toString(), token)
+            })
+            assertEquals(TmdbProbeState.RATE_LIMITED, status)
+            assertEquals(2, server.requestCount)
+            assertEquals("Bearer $goodToken", server.takeRequest().getHeader("Authorization"))
+            assertEquals("Bearer $goodToken", server.takeRequest().getHeader("Authorization"))
+        }
     }
 
     @Test fun outputDoesNotExposePersonalToken() {
