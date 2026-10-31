@@ -10,6 +10,7 @@ import java.io.IOException
  */
 internal enum class TmdbProbeState(val text: String) {
     NOT_CONFIGURED("尚未配置 TMDB 令牌"),
+    CHECKING("正在验证 TMDB 令牌和影片搜索接口…"),
     INVALID_FORMAT("TMDB 令牌格式不正确，请使用 API 读访问令牌（v4）"),
     CONNECTED("TMDB 配置与影片搜索接口均已连接，可以查询海报和影片资料"),
     SEARCH_UNAVAILABLE("TMDB 配置接口可访问，但影片搜索接口没有返回有效结果；请检查限流或网络代理"),
