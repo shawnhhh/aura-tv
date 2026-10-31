@@ -2117,8 +2117,12 @@ private fun Herrin() {
                 val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
                 val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
                 val licensed = if (spiderActive && screen == "player") spiderResolved
-                    else if (screen == "player" && film.playbackEpisodes.isNotEmpty())
-                    LicensedPlaybackResolver.resolve(film, episode, line) else null
+                    else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
+                        if (activeCmsSite != null && film.cmsVodId != null)
+                            TvBoxCmsPlaybackResolver.resolve(film, episode, line, tvBoxAllowHttp,
+                                activeCmsSite?.headers.orEmpty())
+                        else LicensedPlaybackResolver.resolve(film, episode, line)
+                    } else null
                 val licensedMedia = (licensed as? PlaybackResult.Ready)?.media
                 // The independent testing URL must not start playing while a
                 // selected CMS film is still resolving its real licensed source.
