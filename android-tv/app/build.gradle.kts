@@ -62,6 +62,8 @@ dependencies {
     implementation("com.hierynomus:smbj:0.15.0")
     implementation("androidx.startup:startup-runtime:1.2.0")
     implementation("com.google.zxing:core:3.5.4")
+    // Matches FongMi Java Spider.proxy() single NanoHTTPD.Response ABI.
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
