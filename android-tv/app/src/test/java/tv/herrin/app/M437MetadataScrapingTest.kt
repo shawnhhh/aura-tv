@@ -29,6 +29,24 @@ class M437MetadataScrapingTest {
         assertEquals("2001 太空漫游", ArtworkTitle.searchQuery("2001 太空漫游"))
         assertEquals("Blade Runner 2049", ArtworkTitle.searchQuery("Blade Runner 2049"))
         assertEquals("tv", ArtworkTitle.identify(film("原创剧集").copy(category = "国产剧", episodes = 8)).mediaType)
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人1080P国语中字"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人【BD国语】"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人【4K·HDR·国语中字】"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人4K国语中字"))
+        assertEquals("星光旅人", ArtworkTitle.searchQuery("星光旅人BD国语"))
+        assertEquals("1917", ArtworkTitle.searchQuery("1917"))
+        assertEquals("庆余年 第二季", ArtworkTitle.searchQuery("庆余年 第二季【4K·国语】"))
+    }
+
+    @Test fun `concatenated TVBox quality labels no longer produce zero metadata matches`() {
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            if (url.contains("/search/movie?")) search else detail
+        })
+        val source = film("星光旅人1080P国语中字")
+        val found = resolver.lookup(source, token)
+        assertNotNull(found)
+        assertEquals("https://image.tmdb.org/t/p/w780/original-poster.jpg", found?.posterUrl)
+        assertEquals(source.playbackEpisodes, FilmMetadataEnrichment.apply(source, found!!).playbackEpisodes)
     }
 
     @Test fun `real HTTP mock returns official display fields while stream identity stays intact`() {
