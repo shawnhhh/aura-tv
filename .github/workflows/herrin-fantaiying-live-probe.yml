@@ -135,6 +135,36 @@ jobs:
                   'https_md5_eligible':len(eligible),
                   'unsupported_jar_spec':len(plugin_specs)-len(eligible),
                   'default_jar_host':host(default_jar.split(';md5;')[0]) if default_jar else None}
+              # Check whether HERRIN can truly accept the current JAR (full
+              # 16-MB download, MD5 equality, classes.dex, native ABI entries).
+              # Never load/execute downloaded provider code in this probe.
+              if eligible:
+                  jar_spec=eligible[0]
+                  jar_probe,expected_md5=jar_spec.rsplit(';md5;',1)
+                  try:
+                      from hashlib import md5
+                      from io import BytesIO
+                      from zipfile import ZipFile, BadZipFile
+                      jcode,jmime,jbytes=fetch(jar_probe,limit=16*1024*1024)
+                      result=report['spider_compatibility']
+                      result['full_jar_http']=jcode
+                      result['full_jar_bytes']=len(jbytes)
+                      result['full_jar_md5_match']=md5(jbytes).hexdigest().lower()==expected_md5.lower()
+                      if jcode==200 and result['full_jar_md5_match']:
+                          with ZipFile(BytesIO(jbytes)) as archive:
+                              names=set(archive.namelist())
+                              result['contains_classes_dex']='classes.dex' in names
+                              result['native_abi_assets']=[
+                                  name for name in ('assets/ftyguard_v8.so',
+                                                    'assets/ftyguard_v7.so') if name in names]
+                              result['jar_compatible_for_dex_load']=result['contains_classes_dex']
+                  except Exception as e:
+                      report['spider_compatibility']['full_jar_error']=type(e).__name__
+              report['spider_sites_preview']=[
+                  {'key':str(x.get('key',''))[:48],'api':str(x.get('api',''))[:70],
+                   'name':str(x.get('name',''))[:45]}
+                  for x in entries if isinstance(x,dict) and
+                     str(x.get('api','')).startswith('csp_')][:10]
               if eligible:
                   jar_probe=eligible[0].split(';md5;')[0]
                   try:
