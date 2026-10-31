@@ -351,6 +351,36 @@ private fun Herrin() {
     // Treat the private TMDB token as a password: never display a saved token,
     // log it, or put the value into Android saved-instance-state bundles.
     var tmdbTokenDraft by remember { mutableStateOf("") }
+    // Never put secret fragments in rememberSaveable / Android saved-state.
+    var tmdbTokenSplitMode by remember { mutableStateOf(false) }
+    var tmdbTokenPart1 by remember { mutableStateOf("") }
+    var tmdbTokenPart2 by remember { mutableStateOf("") }
+    var tmdbTokenPart3 by remember { mutableStateOf("") }
+    fun candidateTmdbToken(): String? = TmdbTokenEntry.assemble(
+        tmdbTokenDraft, listOf(tmdbTokenPart1, tmdbTokenPart2, tmdbTokenPart3),
+        tmdbTokenSplitMode
+    )
+    fun clearTmdbInput() {
+        tmdbTokenDraft = ""
+        tmdbTokenPart1 = ""
+        tmdbTokenPart2 = ""
+        tmdbTokenPart3 = ""
+    }
+    fun toggleTmdbSplitInput() {
+        if (tmdbTokenSplitMode) {
+            tmdbTokenDraft = tmdbTokenPart1 + tmdbTokenPart2 + tmdbTokenPart3
+            tmdbTokenPart1 = ""
+            tmdbTokenPart2 = ""
+            tmdbTokenPart3 = ""
+        } else {
+            val parts = TmdbTokenEntry.split(tmdbTokenDraft)
+            tmdbTokenPart1 = parts[0]
+            tmdbTokenPart2 = parts[1]
+            tmdbTokenPart3 = parts[2]
+            tmdbTokenDraft = ""
+        }
+        tmdbTokenSplitMode = !tmdbTokenSplitMode
+    }
     var tmdbSettingsStatus by remember { mutableStateOf(if (prefs.tmdbReadToken.isBlank())
         "尚未配置；仅使用影视源自带的海报" else "已配置 TMDB；会优先匹配高清背景图") }
     var configUrlDraft by rememberSaveable { mutableStateOf(prefs.catalogUrl) }
@@ -2352,21 +2382,50 @@ private fun Herrin() {
                                     "只有搜索接口验证通过才会开始刮削；播放地址与选集仍由影视源提供。",
                                 modifier = Modifier.testTag("compact-metadata-status"),
                                 color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
-                            item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
-                                Modifier.fillMaxWidth().testTag("compact-tmdb-token"),
-                                label = { Text("TMDB API Read Access Token（粘贴后保存）") },
-                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            item { TvButton(
+                                if (tmdbTokenSplitMode) "改为单框输入"
+                                else "跨屏输入限200字？切换分段粘贴",
+                                modifier = Modifier.testTag("compact-tmdb-split-toggle"),
+                                reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                                toggleTmdbSplitInput()
+                            } }
+                            if (tmdbTokenSplitMode) {
+                                item { Text("按顺序将 Token 分成每段不超过200字，依次粘贴；不要漏字或增加空格。第3段可留空。",
+                                    color = Color(0xFFCDD8E6),
+                                    modifier = Modifier.testTag("compact-tmdb-split-help")) }
+                                item { OutlinedTextField(tmdbTokenPart1,
+                                    { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart1 = it },
+                                    Modifier.fillMaxWidth().testTag("compact-tmdb-part-1"),
+                                    label = { Text("Token 第1段：${tmdbTokenPart1.length}/200") },
+                                    visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                                item { OutlinedTextField(tmdbTokenPart2,
+                                    { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart2 = it },
+                                    Modifier.fillMaxWidth().testTag("compact-tmdb-part-2"),
+                                    label = { Text("Token 第2段：${tmdbTokenPart2.length}/200") },
+                                    visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                                item { OutlinedTextField(tmdbTokenPart3,
+                                    { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart3 = it },
+                                    Modifier.fillMaxWidth().testTag("compact-tmdb-part-3"),
+                                    label = { Text("Token 第3段（可选）：${tmdbTokenPart3.length}/200") },
+                                    visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            } else {
+                                item { OutlinedTextField(tmdbTokenDraft,
+                                    { tmdbTokenDraft = it.take(TmdbTokenEntry.MAX_LENGTH) },
+                                    Modifier.fillMaxWidth().testTag("compact-tmdb-token"),
+                                    label = { Text("TMDB API Read Access Token（粘贴后保存）") },
+                                    visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            }
                             item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 TvButton("保存并开始刮削",
                                     modifier = Modifier.testTag("compact-tmdb-save"), reduced = reduceMotion) {
-                                    val value = tmdbTokenDraft.trim()
-                                    if (value.length >= 40 && !value.any(Char::isWhitespace)) {
+                                    val value = candidateTmdbToken()
+                                    if (value != null) {
                                         prefs.tmdbReadToken = value
                                         metadataResolver.clearAuthCooldown(value)
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataToken = value
-                                        tmdbTokenDraft = ""
+                                        clearTmdbInput()
                                         metadataRescanEpoch++
                                         tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
@@ -2714,16 +2773,44 @@ private fun Herrin() {
                             onFocus = { focusId = "settings-refresh"; keyboard?.hide() }) { catalogRefresh++ } }
                         item { Text("可选高清海报元数据（TMDB）", fontSize = 21.sp) }
                         item { Text("TMDB 需要你自己的 API Read Access Token。仅在你主动保存 Token 后匹配影片元数据；匹配不确定时保留影视源海报。", color = Color(0xFFCDD8E6)) }
-                        item { OutlinedTextField(tmdbTokenDraft, { tmdbTokenDraft = it.take(500) },
-                            Modifier.fillMaxWidth().testTag("tmdb-token-input")
-                                .onFocusChanged { configInputFocused = it.isFocused },
-                            label = { Text("TMDB API Read Access Token（留空则不修改）") },
-                            visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                        item { TvButton(
+                            if (tmdbTokenSplitMode) "改为单框输入"
+                            else "跨屏输入限200字？切换分段粘贴",
+                            modifier = Modifier.testTag("tmdb-split-toggle"),
+                            reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
+                            toggleTmdbSplitInput()
+                        } }
+                        if (tmdbTokenSplitMode) {
+                            item { Text("将 Token 连续分成最多3段，每段不超过200字；依次粘贴，不能漏字、加空格或换行。",
+                                color = Color(0xFFCDD8E6), modifier = Modifier.testTag("tmdb-split-help")) }
+                            item { OutlinedTextField(tmdbTokenPart1,
+                                { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart1 = it },
+                                Modifier.fillMaxWidth().testTag("tmdb-token-part-1"),
+                                label = { Text("Token 第1段：${tmdbTokenPart1.length}/200") },
+                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            item { OutlinedTextField(tmdbTokenPart2,
+                                { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart2 = it },
+                                Modifier.fillMaxWidth().testTag("tmdb-token-part-2"),
+                                label = { Text("Token 第2段：${tmdbTokenPart2.length}/200") },
+                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                            item { OutlinedTextField(tmdbTokenPart3,
+                                { if (it.length <= TmdbTokenEntry.PART_LIMIT) tmdbTokenPart3 = it },
+                                Modifier.fillMaxWidth().testTag("tmdb-token-part-3"),
+                                label = { Text("Token 第3段（可选）：${tmdbTokenPart3.length}/200") },
+                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                        } else {
+                            item { OutlinedTextField(tmdbTokenDraft,
+                                { tmdbTokenDraft = it.take(TmdbTokenEntry.MAX_LENGTH) },
+                                Modifier.fillMaxWidth().testTag("tmdb-token-input")
+                                    .onFocusChanged { configInputFocused = it.isFocused },
+                                label = { Text("TMDB API Read Access Token（留空则不修改）") },
+                                visualTransformation = PasswordVisualTransformation(), singleLine = true) }
+                        }
                         item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton("保存 TMDB Token", modifier = Modifier.testTag("tmdb-token-save"),
                                 reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
-                                val value = tmdbTokenDraft.trim()
-                                if (value.isNotEmpty() && value.length >= 40 && !value.any(Char::isWhitespace)) {
+                                val value = candidateTmdbToken()
+                                if (value != null) {
                                     prefs.tmdbReadToken = value
                                     metadataResolver.clearAuthCooldown(value)
                                     // Saving the SAME token must still retry old negative results;
@@ -2731,7 +2818,7 @@ private fun Herrin() {
                                     metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                     providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                     metadataToken = value
-                                    tmdbTokenDraft = ""
+                                    clearTmdbInput()
                                     metadataRescanEpoch++
                                     tmdbSettingsStatus = "已保存；正在重新匹配海报与影视资料"
                                 } else tmdbSettingsStatus = "请输入完整的 TMDB API Read Access Token"
@@ -2741,7 +2828,7 @@ private fun Herrin() {
                                 prefs.tmdbReadToken = ""
                                 metadataToken = ""
                                 providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
-                                tmdbTokenDraft = ""
+                                clearTmdbInput()
                                 tmdbSettingsStatus = "已停用 TMDB 网络匹配，改用源内海报"
                             }
                         } }
