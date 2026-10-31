@@ -79,6 +79,11 @@ class HerrinSplashTest {
         val initialLeft = compose.onNodeWithTag("splash-curtain")
             .fetchSemanticsNode().boundsInRoot.left
         compose.runOnIdle { exiting = true }
+        // Let the LaunchedEffect start its Animatable before advancing the
+        // deterministic frame clock. Otherwise the first frame can consume
+        // the entire advance just to schedule the slide coroutine.
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(180)
         compose.onNodeWithTag("home-underlay").assertExists()
         compose.onNodeWithTag("splash-curtain").assertExists()
