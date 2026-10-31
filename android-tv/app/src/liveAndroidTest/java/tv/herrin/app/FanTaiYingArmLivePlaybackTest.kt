@@ -2,7 +2,6 @@ package tv.herrin.app
 
 import android.graphics.SurfaceTexture
 import android.os.Build
-import android.os.Process
 import android.util.Log
 import android.view.Surface
 import androidx.annotation.OptIn
@@ -65,7 +64,7 @@ class FanTaiYingArmLivePlaybackTest {
         val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
         assertTrue("This live plugin requires a physical ARM TV; device ABI=$abi",
             abi.startsWith("arm64") || abi.startsWith("armeabi"))
-        val siteKey = inst.arguments.getString("siteKey")?.takeIf { it.isNotBlank() } ?: "YGP"
+        val siteKey = InstrumentationRegistry.getArguments().getString("siteKey")?.takeIf { it.isNotBlank() } ?: "YGP"
 
         stage("config")
         val loaded = runBlocking {
