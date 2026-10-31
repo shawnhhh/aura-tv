@@ -15,6 +15,11 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
+    // Live provider tests are opt-in, only compiled when explicitly requested.
+    // The ordinary 113-case TV suite never downloads or executes remote Spider code.
+    if (project.providers.gradleProperty("herrinLiveSourceTest").orNull == "true") {
+        sourceSets.getByName("androidTest").java.srcDir("src/liveAndroidTest/java")
+    }
     // Optional stable self-distribution signature. Never commit keys or passwords.
     // Missing values produce normal debug builds; the release workflow refuses
     // to upload unsigned APKs.
