@@ -491,10 +491,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val resolved = if (direct is PlaybackResult.Unavailable) {
                 val response = runCatching { JSONObject(raw) }.getOrNull()
                 val webUrl = response?.optString("url").orEmpty()
-                val wanted = (response?.optInt("parse", 0) ?: 0) != 0 ||
-                    (response?.optInt("jx", 0) ?: 0) != 0
                 val named = response?.optString("playUrl").orEmpty()
                     .takeIf { it.startsWith("parse:") }?.removePrefix("parse:")
+                val wanted = (response?.optInt("parse", 0) ?: 0) != 0 ||
+                    (response?.optInt("jx", 0) ?: 0) != 0 || named != null
                 val parser = if (wanted) {
                     if (named != null)
                         activeJsonParsers.firstOrNull { it.name == named }
