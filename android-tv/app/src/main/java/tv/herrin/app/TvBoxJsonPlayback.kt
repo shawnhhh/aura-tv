@@ -18,7 +18,7 @@ import java.util.Locale
 
 /**
  * TVBox/FongMi type=1 JSON parse route. The user-applied warehouse provides
- * the exact parser endpoint. No WebView sniffing, JavaScript execution, DRM
+ * the exact parser endpoint. No browser-based sniffing, JavaScript execution, DRM
  * bypass, or open redirect-based URL discovery is performed.
  */
 internal object TvBoxJsonPlayback {
