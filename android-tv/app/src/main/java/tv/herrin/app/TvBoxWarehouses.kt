@@ -16,6 +16,10 @@ import java.security.MessageDigest
 
 /** TVBox metadata is untrusted; executable plugins require a separate, explicit opt-in. */
 internal data class TvBoxWarehouse(val name: String, val url: String)
+/** Explicit type=1 TVBox JSON parse endpoint from the applied warehouse. */
+internal data class TvBoxJsonParse(val name: String, val prefix: String,
+                                   val flags: List<String> = emptyList(),
+                                   val headers: Map<String, String> = emptyMap())
 internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null,
                               val key: String = "", val spiderApi: String? = null,
                               val extension: String = "", val jar: String? = null,
@@ -98,7 +102,8 @@ internal sealed interface TvBoxConfig {
     data class Single(val sites: List<TvBoxSite>, val lives: List<TvBoxLive>, val hasExternalEngine: Boolean,
                       val fromCache: Boolean = false, val wrappedInImage: Boolean = false,
                       val spiderJar: String? = null,
-                      val vipFlags: List<String> = emptyList()) : TvBoxConfig
+                      val vipFlags: List<String> = emptyList(),
+                      val jsonParsers: List<TvBoxJsonParse> = emptyList()) : TvBoxConfig
     data class HerrinCatalog(val address: String, val count: Int) : TvBoxConfig
     data class Error(val reason: String) : TvBoxConfig
 }
@@ -208,8 +213,24 @@ internal object TvBoxConfigParser {
             val flags = (0 until minOf(flagsJson.length(), 128)).mapNotNull { index ->
                 flagsJson.optString(index).trim().take(80).takeIf { it.isNotBlank() }
             }.distinct().take(32)
+            val parseItems = root.optJSONArray("parses") ?: JSONArray()
+            val jsonParsers = (0 until minOf(16, parseItems.length())).mapNotNull { index ->
+                val item = parseItems.optJSONObject(index) ?: return@mapNotNull null
+                if (item.optInt("type", 0) != 1) return@mapNotNull null
+                val address = TvBoxUrl.normalize(item.optString("url"), allowHttp = true)
+                    ?: return@mapNotNull null
+                // Only the configured type-1 JSON parser is evaluated here,
+                // never browser-based scripts or executable JAR parser plugins.
+                val ext = item.optJSONObject("ext")
+                val flagsArray = ext?.optJSONArray("flag") ?: JSONArray()
+                val parseFlags = (0 until minOf(flagsArray.length(), 32)).mapNotNull {
+                    flagsArray.optString(it).trim().take(80).takeIf(String::isNotEmpty)
+                }
+                TvBoxJsonParse(item.optString("name").take(64).ifBlank { "JSON 解析" },
+                    address, parseFlags, TvBoxHeaderCodec.decode(ext?.optJSONObject("header")))
+            }
             return TvBoxConfig.Single(sites, lives, spider != null || sites.any { it.needsAdapter },
-                spiderJar = spider, vipFlags = flags)
+                spiderJar = spider, vipFlags = flags, jsonParsers = jsonParsers)
         }
         if (root.optInt("version", -1) == 1 && root.optJSONArray("items") != null) {
             return TvBoxConfig.HerrinCatalog(origin, root.getJSONArray("items").length())

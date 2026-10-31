@@ -22,6 +22,7 @@ REQUIRED_CLASSES = (
     "M456NativeFullscreenPlayerTest",
     "M457PlaybackFailureRecoveryTest",
     "M458CmsHttpPlaybackTest",
+    "M459JsonParserPlaybackTest",
     "AuthorizedCatalogIntegrationTest",
     "TvBoxVodIntegrationTest",
     "TvBoxWarehouseIntegrationTest",
