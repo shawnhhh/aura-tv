@@ -123,6 +123,26 @@ jobs:
               report['total_sites']=len(entries)
               report['plugin_sites']=sum(isinstance(x,dict) and
                   str(x.get('api','')).startswith('csp_') for x in entries)
+              # Compare the real csp_ plugin specifications to HERRIN's
+              # strict HTTPS + ;md5; JAR validation before any plugin execution.
+              default_jar=str(selected.get('spider','') or '')
+              plugin_specs=[str(x.get('jar') or default_jar) for x in entries
+                            if isinstance(x,dict) and str(x.get('api','')).startswith('csp_')]
+              eligible=[spec for spec in plugin_specs if ';md5;' in spec and
+                        spec.startswith('https://') and len(spec.rsplit(';md5;',1)[-1])==32]
+              report['spider_compatibility']={
+                  'plugin_sites':len(plugin_specs),
+                  'https_md5_eligible':len(eligible),
+                  'unsupported_jar_spec':len(plugin_specs)-len(eligible),
+                  'default_jar_host':host(default_jar.split(';md5;')[0]) if default_jar else None}
+              if eligible:
+                  jar_probe=eligible[0].split(';md5;')[0]
+                  try:
+                      jar_status,jar_mime,jar_bytes=fetch(jar_probe,limit=262144,media=True)
+                      report['spider_compatibility']['jar_http']=jar_status
+                      report['spider_compatibility']['jar_zip_header']=jar_bytes.startswith(b'PK')
+                  except Exception as e:
+                      report['spider_compatibility']['jar_probe_error']=type(e).__name__
               for site in (x for x in entries if isinstance(x,dict)
                            and str(x.get('api','')).startswith(('http://','https://'))):
                   if len(report['cms'])>=3: break
