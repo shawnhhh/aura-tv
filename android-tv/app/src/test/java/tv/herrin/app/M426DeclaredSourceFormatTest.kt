@@ -24,16 +24,26 @@ class M426DeclaredSourceFormatTest {
         assertEquals(ready.headers, media.headers)
     }
 
-    @Test fun `DASH declaration is kept but webpage parse request still fails closed`() {
+    @Test fun `DASH declaration survives while signed HLS may use parse=1`() {
         val direct = SpiderVodCodec.player(
             """{"parse":0,"url":"https://video.example.test/manifest?sig=abc","format":"application/dash+xml"}""",
             allowHttp = false)
         assertEquals(PlaybackFormatRetry.DASH, (direct as PlaybackResult.Ready).media.declaredMime)
 
-        val webParse = SpiderVodCodec.player(
+        // A provider may set parse=1 for a signed extensionless HLS endpoint.
+        // Explicit trusted MIME must not be mistaken for a browser-only page.
+        val signedHls = SpiderVodCodec.player(
             """{"parse":1,"url":"https://video.example.test/player?id=2","format":"application/vnd.apple.mpegurl"}""",
             allowHttp = false)
-        assertTrue(webParse is PlaybackResult.Unavailable)
+        assertTrue(signedHls is PlaybackResult.Ready)
+        assertEquals(PlaybackFormatRetry.HLS,
+            (signedHls as PlaybackResult.Ready).media.declaredMime)
+
+        // A plain webpage or text/html format must still fail closed.
+        val webPage = SpiderVodCodec.player(
+            """{"parse":1,"url":"https://video.example.test/player?id=2","format":"text/html"}""",
+            allowHttp = false)
+        assertTrue(webPage is PlaybackResult.Unavailable)
     }
 
     @Test fun `HTML or arbitrary format cannot force Media3 to parse a web page as video`() {
