@@ -57,7 +57,7 @@ object DanmakuProtocol {
     fun isSafeUrl(url: String): Boolean = try {
         val uri = URI(url)
         val host = uri.host.orEmpty().lowercase()
-        url.length <= 4096 && uri.scheme.equals("https", true) && uri.userInfo == null &&
+        url.length <= 4096 && uri.scheme?.lowercase() in setOf("http", "https") && uri.userInfo == null &&
             uri.fragment == null && host.isNotBlank() && host != "localhost" &&
             !host.endsWith(".localhost") && !host.endsWith(".local") &&
             !host.contains(':') && !host.matches(Regex("[0-9.]+"))
