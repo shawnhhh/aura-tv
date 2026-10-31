@@ -28,7 +28,7 @@ class TvBoxJsonPlaybackTest {
         assertNull(TvBoxJsonPlayback.choose("https://watch.example.test/movie.m3u8",
             "官方线路", listOf(parser)))
         assertNull(TvBoxJsonPlayback.choose("javascript:alert(1)", "官方线路", listOf(parser)))
-        assertEquals("https://parser.test/api?url=https%3A%2F%2Fwatch.example.test%2Fview%3Fid%3D42%26session%3Da%2Fb",
+        assertEquals("https://parser.test/api?url=https://watch.example.test/view?id=42&session=a/b",
             TvBoxJsonPlayback.parserUrl(parser, url, false))
     }
 
