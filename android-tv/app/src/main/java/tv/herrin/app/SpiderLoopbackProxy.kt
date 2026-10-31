@@ -17,6 +17,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import fi.iki.elonen.NanoHTTPD
 
 /**
  * CatVod Java Spider.proxy() bridge, strictly loopback-only in the :spider process.
@@ -86,7 +87,10 @@ internal class SpiderLoopbackProxy(
         }
         val response = try {
             // Only the active Spider's own callback; no unrestricted URL fetching.
-            handler(params.filterKeys { it != "session" })
+            // FongMi Java Spider supports either a 3-4 element array or one
+            // NanoHTTPD.Response object. Adapt only its public response API;
+            // do not run its own HTTP server or reuse its socket/session.
+            adaptResponse(handler(params.filterKeys { it != "session" }))
         } catch (_: Throwable) {
             failure(output, 502)
             return
@@ -147,6 +151,22 @@ internal class SpiderLoopbackProxy(
                 output.flush()
             }
         }
+    }
+
+    private fun adaptResponse(raw: Array<out Any?>?): Array<out Any?>? {
+        val nano = raw?.singleOrNull() as? NanoHTTPD.Response ?: return raw
+        val headers = linkedMapOf<String, String>()
+        for (key in listOf("Content-Range", "Accept-Ranges", "Cache-Control",
+                "ETag", "Last-Modified")) {
+            val value = nano.getHeader(key)
+            if (!value.isNullOrBlank()) headers[key] = value
+        }
+        return arrayOf(
+            nano.status?.requestStatus ?: 502,
+            nano.mimeType ?: "application/octet-stream",
+            nano.data ?: java.io.ByteArrayInputStream(byteArrayOf()),
+            headers
+        )
     }
 
     private fun failure(out: OutputStream, status: Int) {
