@@ -154,9 +154,13 @@ jobs:
                           with ZipFile(BytesIO(jbytes)) as archive:
                               names=set(archive.namelist())
                               result['contains_classes_dex']='classes.dex' in names
-                              result['native_abi_assets']=[
-                                  name for name in ('assets/ftyguard_v8.so',
-                                                    'assets/ftyguard_v7.so') if name in names]
+                              native = ['assets/ftyguard_v8.so', 'assets/ftyguard_v7.so']
+                              result['native_abi_assets']=[name for name in native if name in names]
+                              result['native_asset_bytes']={name:archive.getinfo(name).file_size
+                                                            for name in native if name in names}
+                              result['native_within_herrin_512kb_limit']=all(
+                                  archive.getinfo(name).file_size <= 512*1024
+                                  for name in native if name in names)
                               result['jar_compatible_for_dex_load']=result['contains_classes_dex']
                   except Exception as e:
                       report['spider_compatibility']['full_jar_error']=type(e).__name__
