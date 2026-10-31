@@ -220,7 +220,7 @@ internal object TvBoxConfigParser {
                 val address = TvBoxUrl.normalize(item.optString("url"), allowHttp = true)
                     ?: return@mapNotNull null
                 // Only the configured type-1 JSON parser is evaluated here,
-                // never WebView scripts or executable JAR parser plugins.
+                // never browser-based scripts or executable JAR parser plugins.
                 val ext = item.optJSONObject("ext")
                 val flagsArray = ext?.optJSONArray("flag") ?: JSONArray()
                 val parseFlags = (0 until minOf(flagsArray.length(), 32)).mapNotNull {
