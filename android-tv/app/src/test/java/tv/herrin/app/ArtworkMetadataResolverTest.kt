@@ -34,6 +34,36 @@ class ArtworkMetadataResolverTest {
         assertNull(ArtworkMatch.best("城市之光3", "2026", choices))
     }
 
+    @Test fun `explicit Chinese season ordinals match same sequel but not another`() {
+        val choices = listOf(
+            ArtworkSearchCandidate(listOf("庆余年 第二季"), 2024, "/season2.jpg", null),
+            ArtworkSearchCandidate(listOf("庆余年 第三季"), 2026, "/season3.jpg", null)
+        )
+        assertEquals("/season2.jpg", ArtworkMatch.best("庆余年2", "2024", choices)?.posterPath)
+        assertEquals("/season2.jpg", ArtworkMatch.best("庆余年 第2季", "2024", choices)?.posterPath)
+        assertNull(ArtworkMatch.best("庆余年1", "2024", choices))
+        assertNull(ArtworkMatch.best("庆余年2", "2020", choices))
+        assertNull(ArtworkMatch.best("庆余年4", "", choices))
+    }
+
+    @Test fun `batch source season suffix can resolve actual poster without accepting fuzzy matches`() {
+        val calls = mutableListOf<String>()
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            calls += url
+            when {
+                "/search/tv?" in url -> """{"results":[{"id":24002,"name":"庆余年 第二季",
+                    "first_air_date":"2024-05-16","poster_path":"/safe.jpg"}]}"""
+                "/tv/24002?" in url -> """{"id":24002,"credits":{"cast":[]}}"""
+                else -> error("Unexpected TMDB route")
+            }
+        })
+        val result = resolver.lookup(film("庆余年2", "2024", "电视剧"), exampleToken)
+        assertEquals("https://image.tmdb.org/t/p/w780/safe.jpg", result?.posterUrl)
+        assertEquals("tv", result?.mediaType)
+        assertEquals(2, calls.size)
+        assertTrue(calls.first().contains("/search/tv?"))
+    }
+
     @Test fun `token absent or unsafe means no metadata HTTP request`() {
         var attempts = 0
         val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { _, _ ->
