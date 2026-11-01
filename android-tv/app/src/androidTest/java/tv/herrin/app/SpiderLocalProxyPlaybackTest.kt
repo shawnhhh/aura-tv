@@ -258,4 +258,39 @@ class SpiderLocalProxyPlaybackTest {
         }
     }
 
+    @Test fun legacyFongMiNoSiteKeyCallsStaticProxyHandlerNotInstanceHandler() {
+        val instanceCalls = AtomicInteger()
+        val staticCalls = AtomicInteger()
+        SpiderLoopbackProxy("static-java-site",
+            staticHandler = { params ->
+                staticCalls.incrementAndGet()
+                assertEquals("static", params["part"])
+                assertFalse(params.containsKey("__herrin_static"))
+                arrayOf(200, "video/mp4",
+                    ByteArrayInputStream(byteArrayOf(1, 7, 4, 6)))
+            }) {
+                instanceCalls.incrementAndGet()
+                arrayOf(200, "video/mp4",
+                    ByteArrayInputStream(byteArrayOf(0)))
+            }.use { proxy ->
+                val player = JSONObject().put("parse", 0).put("format", "mp4")
+                    .put("url", "proxy://do=jar&part=static").toString()
+                val rewritten = SpiderProxyPlayback.normalizePlayerResponse(
+                    player, "static-java-site", proxy)
+                assertNotNull(rewritten)
+                val url = JSONObject(rewritten!!).getString("url")
+                assertTrue(url.contains("__herrin_static=1"))
+                assertEquals(SpiderProxyPlayback.Health.READY,
+                    kotlinx.coroutines.runBlocking { SpiderProxyPlayback.diagnose(url) })
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                try {
+                    assertEquals(200, conn.responseCode)
+                    assertArrayEquals(byteArrayOf(1, 7, 4, 6),
+                        conn.inputStream.use { it.readBytes() })
+                } finally { conn.disconnect() }
+                assertEquals(1, staticCalls.get())
+                assertEquals(0, instanceCalls.get())
+            }
+    }
+
 }
