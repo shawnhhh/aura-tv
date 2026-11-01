@@ -28,7 +28,7 @@ public final class Fixture extends Spider {
         InputStream input = Fixture.class.getClassLoader().getResourceAsStream("m467-original.mp4");
         if (input == null) throw new IllegalStateException("Synthetic media resource missing");
         Map<String, String> headers = new HashMap<>();
-        headers.put("X-Herrin-Fixture-Route", route);
+        headers.put("Content-Language", route.equals("static") ? "en" : "zh");
         return new Object[] {200, "video/mp4", input, headers};
     }
 }

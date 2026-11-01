@@ -56,7 +56,8 @@ class M467JarPlaybackEndToEndTest {
                         request.connectTimeout = 3_000
                         request.readTimeout = 5_000
                         assertEquals(200, request.responseCode)
-                        assertEquals(route, request.getHeaderField("X-Herrin-Fixture-Route"))
+                        assertEquals(if (route == "static") "en" else "zh",
+                            request.getHeaderField("Content-Language"))
                         assertArrayEquals(mediaBytes, request.inputStream.use { it.readBytes() })
                     } finally { request.disconnect() }
                     if (round == 1 && oldUri != null) assertNotEquals(oldUri, media.uri)
