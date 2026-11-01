@@ -19,19 +19,19 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class M466DetailCastDpadTest {
-    @get:Rule val compose = createEmptyComposeRule()
+    @get:Rule val compose = createComposeRule()
 
     @Test fun dpadDownScrollsOffscreenCastIntoViewAndFocusesFirstActor() {
+        val episodeRequester = FocusRequester()
         compose.setContent {
             val list = rememberLazyListState()
             val first = remember { FocusRequester() }
@@ -41,9 +41,11 @@ class M466DetailCastDpadTest {
                 state = list) {
                 item {
                     Box(Modifier.width(300.dp).height(60.dp).testTag("cast-test-episode")
+                        .focusRequester(episodeRequester)
                         .onPreviewKeyEvent { event ->
                             event.type == KeyEventType.KeyDown &&
-                                event.key == Key.DirectionDown &&
+                                event.nativeKeyEvent.keyCode ==
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
                                 DetailCastFocus.move(scope, list, true, first) { castFocused }
                         }.focusable()) { Text("第1集") }
                 }
@@ -59,8 +61,7 @@ class M466DetailCastDpadTest {
                 }
             }
         }
-        compose.onNodeWithTag("cast-test-episode").performSemanticsAction(
-            androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }
+        compose.runOnIdle { episodeRequester.requestFocus() }
         compose.onNodeWithTag("cast-test-episode").assertIsFocused()
         compose.onNodeWithTag("cast-test-first-actor").assertDoesNotExist()
         compose.onNodeWithTag("cast-test-episode").performKeyInput {
