@@ -33,6 +33,7 @@ internal fun PlayerStartupSurface(
     retryAvailable: Boolean,
     reducedMotion: Boolean,
     failureHint: String? = null,
+    failureDiagnostic: String? = null,
     onRetry: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -60,6 +61,10 @@ internal fun PlayerStartupSurface(
                     else -> "请重试，或返回选集切换播放线路。"
                 }, color = Color(0xFFBCCADB), fontSize = 16.sp,
                     modifier = Modifier.testTag("player-startup-failure-hint"))
+                if (!failureDiagnostic.isNullOrBlank() && !offlineDemonstration) {
+                    Text(failureDiagnostic, color = Color(0xFFFFD0D0), fontSize = 15.sp,
+                        modifier = Modifier.testTag("player-startup-diagnostic"))
+                }
                 if (retryAvailable) {
                     TvButton(if (failureHint != null) "重新向来源解析" else "重新播放",
                         modifier = Modifier.testTag("player-startup-retry"),

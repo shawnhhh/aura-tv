@@ -53,6 +53,10 @@ class M457PlaybackFailureRecoveryTest {
                     runCatching {
                         compose.onNodeWithTag("player-error")
                             .assertTextContains("HTTP 404", substring = true)
+                        compose.onNodeWithTag("player-error")
+                            .assertTextContains("ERROR_CODE_IO_BAD_HTTP_STATUS", substring = true)
+                        compose.onNodeWithTag("player-error")
+                            .assertTextContains("失败阶段：Media3", substring = true)
                         compose.onNodeWithTag("player-error-change-line").assertExists()
                         compose.onNodeWithTag("player-error-change-episode").assertExists()
                         compose.onNodeWithTag("player-refresh-source").assertExists()
@@ -73,4 +77,27 @@ class M457PlaybackFailureRecoveryTest {
             }
         }
     }
+    @Test fun parserFailureBeforeMedia3DisplaysObservedHttpWithoutExposingPrivateUrl() {
+        compose.setContent {
+            PlayerStartupSurface(
+                loading = false,
+                offlineDemonstration = false,
+                cmsFailed = false,
+                retryAvailable = true,
+                reducedMotion = true,
+                failureHint = "请检查解析器授权后重试",
+                failureDiagnostic = PlaybackErrorReport.source("JSON",
+                    "JSON 解析接口 HTTP 响应异常（HTTP 403）；Cookie=PRIVATE"),
+                onRetry = {},
+                onBack = {}
+            )
+        }
+        compose.onNodeWithTag("player-startup-diagnostic")
+            .assertTextContains("SOURCE_HTTP_403", substring = true)
+        compose.onNodeWithTag("player-startup-diagnostic")
+            .assertTextContains("HTTP 403", substring = true)
+        compose.onNodeWithTag("player-startup-retry").assertExists()
+        compose.onNodeWithTag("player-startup-back").assertExists()
+    }
+
 }

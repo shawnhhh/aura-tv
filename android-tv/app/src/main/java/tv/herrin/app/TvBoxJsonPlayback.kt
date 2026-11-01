@@ -108,8 +108,9 @@ internal object TvBoxJsonPlayback {
             connection.setRequestProperty("Accept", "application/json, text/plain")
             for ((k, v) in parser.headers) if (k.equals("User-Agent", true) || k.equals("Referer", true))
                 connection.setRequestProperty(k, v)
-            if (connection.responseCode != 200)
-                return@withContext PlaybackResult.Unavailable("JSON 解析接口 HTTP 响应异常")
+            val status = connection.responseCode
+            if (status != 200)
+                return@withContext PlaybackResult.Unavailable("JSON 解析接口 HTTP 响应异常（HTTP $status）")
             val contentType = connection.contentType.orEmpty().lowercase(Locale.ROOT)
             if (contentType.startsWith("text/html") || contentType.startsWith("video/") ||
                 contentType.startsWith("image/"))
@@ -128,8 +129,16 @@ internal object TvBoxJsonPlayback {
                 }
             }
             decode(body.toString(Charsets.UTF_8.name()), parser, allowHttp)
+        } catch (_: java.net.UnknownHostException) {
+            PlaybackResult.Unavailable("JSON 解析接口 DNS 域名解析失败")
+        } catch (_: javax.net.ssl.SSLException) {
+            PlaybackResult.Unavailable("JSON 解析接口 TLS 握手失败")
+        } catch (_: java.net.SocketTimeoutException) {
+            PlaybackResult.Unavailable("JSON 解析接口请求超时")
+        } catch (_: java.net.ConnectException) {
+            PlaybackResult.Unavailable("JSON 解析接口 TCP 连接失败")
         } catch (_: Exception) {
-            PlaybackResult.Unavailable("JSON 解析接口连接失败或超时")
+            PlaybackResult.Unavailable("JSON 解析接口网络通信失败")
         } finally {
             connection.disconnect()
         }

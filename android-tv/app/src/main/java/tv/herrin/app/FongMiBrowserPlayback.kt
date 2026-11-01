@@ -156,13 +156,15 @@ internal object FongMiBrowserPlayback {
                             view: WebView, request: WebResourceRequest, error: WebResourceError
                         ) {
                             if (request.isForMainFrame)
-                                finish(PlaybackResult.Unavailable("网页解析入口无法加载"))
+                                finish(PlaybackResult.Unavailable(
+                                    "网页解析入口无法加载（WebView 错误 ${error.errorCode}）"))
                         }
                         override fun onReceivedHttpError(
                             view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse
                         ) {
                             if (request.isForMainFrame)
-                                finish(PlaybackResult.Unavailable("网页解析入口返回 HTTP 错误"))
+                                finish(PlaybackResult.Unavailable(
+                                    "网页解析入口返回 HTTP ${errorResponse.statusCode}"))
                         }
                         // FongMi's ParseWebView executes the parser's click
                         // script after HTML has loaded. Without this, many
