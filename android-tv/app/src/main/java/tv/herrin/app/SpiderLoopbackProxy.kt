@@ -17,7 +17,6 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import fi.iki.elonen.NanoHTTPD
 
 /**
  * CatVod Java Spider.proxy() bridge, strictly loopback-only in the :spider process.
@@ -26,10 +25,17 @@ import fi.iki.elonen.NanoHTTPD
  *
  * This is distinct from the separately audited MediaLoopbackProxy upstream service.
  * The Spider supplies InputStream bytes; HERRIN never fetches an arbitrary URL.
+ *
+ * Proxy response/dispatch semantics: FongMi/TV GPL-3.0, commit
+ * 5e191aaced194e5cac5668cc91908ecb65336222, server/process/Proxy.java and
+ * api/loader/BaseLoader.java. HERRIN host adaptation (2026-11-01): authenticated
+ * loopback transport, bounded concurrency, credential header filtering and
+ * explicit stream cancellation. See docs/m467/spider-proxy.md.
  */
 internal class SpiderLoopbackProxy(
     private val siteKey: String,
     private val staticHandler: ((Map<String, String>) -> Array<out Any?>?)? = null,
+    private val errorStatus: (Throwable) -> Int = { 502 },
     private val handler: (Map<String, String>) -> Array<out Any?>?
 ) : Closeable {
     private val closed = AtomicBoolean(false)
@@ -41,6 +47,7 @@ internal class SpiderLoopbackProxy(
         Thread(runnable, "Herrin Spider proxy response").apply { isDaemon = true }
     }
     private val sockets = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
+    private val streams = java.util.concurrent.ConcurrentHashMap.newKeySet<InputStream>()
     val port: Int get() = server.localPort
     val isOpen: Boolean get() = !closed.get() && !server.isClosed
     val token: String = ByteArray(24).also { SecureRandom().nextBytes(it) }.let {
@@ -101,14 +108,16 @@ internal class SpiderLoopbackProxy(
             // FongMi Java Spider supports either a 3-4 element array or one
             // NanoHTTPD.Response object. Adapt only its public response API;
             // do not run its own HTTP server or reuse its socket/session.
+            val isStatic = params["__herrin_static"] == "1"
             val forwarded = params.filterKeys {
-                it != "session" && it != "__herrin_static"
+                it != "session" && it != "__herrin_static" && !(isStatic && it == "siteKey")
             }
-            val callback = if (params["__herrin_static"] == "1")
-                staticHandler ?: handler else handler
-            adaptResponse(callback(forwarded))
-        } catch (_: Throwable) {
-            failure(output, 502)
+            val callback = if (isStatic) staticHandler else handler
+            adaptResponse(callback?.invoke(forwarded))
+        } catch (error: Throwable) {
+            // Match upstream RuntimeModule absence classification while keeping
+            // exception messages, paths and plugin credentials off the wire.
+            failure(output, errorStatus(error))
             return
         }
         if (response == null || response.size < 3 ||
@@ -120,8 +129,9 @@ internal class SpiderLoopbackProxy(
         val status = (response[0] as Number).toInt()
         val mime = (response[1] as String).trim()
         val body = response[2] as InputStream
-        body.use { stream ->
-            if (status !in listOf(200, 206) || mime.length !in 1..128 ||
+        streams.add(body)
+        try { body.use { stream ->
+            if (status !in 100..599 || mime.length !in 1..128 ||
                 mime.any { it == '\r' || it == '\n' || it.code < 32 }) {
                 failure(output, 502)
                 return
@@ -130,17 +140,21 @@ internal class SpiderLoopbackProxy(
             val safeHeaders = headers.entries.mapNotNull { (name, value) ->
                 val key = name as? String ?: return@mapNotNull null
                 val text = value as? String ?: return@mapNotNull null
-                if (key.lowercase() !in setOf("cache-control", "content-range", "accept-ranges",
-                        "etag", "last-modified") || text.length !in 1..512 ||
+                if (key.lowercase() !in RESPONSE_HEADERS || text.length !in 1..4096 ||
                     text.any { it == '\r' || it == '\n' || it.code < 32 })
                     null else key to text
-            }.take(8)
+            }
+            val location = safeHeaders.firstOrNull { it.first.equals("location", true) }?.second
+            if (status in 300..399 && (location == null || !safeRedirect(location))) {
+                failure(output, 502)
+                return
+            }
+            val noBody = method == "HEAD" || status in 100..199 || status == 204 || status == 304
             val head = buildString {
-                append(if (status == 206) "HTTP/1.1 206 Partial Content\r\n"
-                    else "HTTP/1.1 200 OK\r\n")
+                append("HTTP/1.1 "); append(status); append(" Proxy Response\r\n")
                 append("Content-Type: "); append(mime); append("\r\n")
                 append("Connection: close\r\n")
-                if (method == "HEAD") append("Content-Length: 0\r\n")
+                if (noBody) append("Content-Length: 0\r\n")
                 else append("Transfer-Encoding: chunked\r\n")
                 for ((key, value) in safeHeaders) {
                     append(key); append(": "); append(value); append("\r\n")
@@ -148,7 +162,7 @@ internal class SpiderLoopbackProxy(
                 append("Cache-Control: no-store\r\n\r\n")
             }
             output.write(head.toByteArray(StandardCharsets.US_ASCII))
-            if (method == "HEAD") return
+            if (noBody) return
             val buffer = ByteArray(16 * 1024)
             // A single MKV can exceed 10 GiB. The old 512 MiB ceiling
             // silently truncated large sources and broke range seeking.
@@ -167,14 +181,15 @@ internal class SpiderLoopbackProxy(
                 output.write(END_CHUNKS)
                 output.flush()
             }
-        }
+        } } finally { streams.remove(body) }
     }
 
     private fun adaptResponse(raw: Array<out Any?>?): Array<out Any?>? {
-        val nano = raw?.singleOrNull() as? NanoHTTPD.Response ?: return raw
+        // Execute upstream createResponse, including custom status handling,
+        // failed-stream closure and X-TV-Proxy-Error on origin failures.
+        val nano = FongMiProxyResponse.createResponse(raw)
         val headers = linkedMapOf<String, String>()
-        for (key in listOf("Content-Range", "Accept-Ranges", "Cache-Control",
-                "ETag", "Last-Modified")) {
+        for (key in RESPONSE_HEADERS) {
             val value = nano.getHeader(key)
             if (!value.isNullOrBlank()) headers[key] = value
         }
@@ -186,8 +201,15 @@ internal class SpiderLoopbackProxy(
         )
     }
 
+    private fun safeRedirect(value: String): Boolean = runCatching {
+        val uri = URI(value)
+        if (!uri.isAbsolute) return@runCatching !value.startsWith("//") && !value.contains("\\")
+        uri.scheme.lowercase() in setOf("http", "https") && uri.userInfo == null &&
+            uri.host != null && uri.host.lowercase() !in setOf("localhost", "127.0.0.1", "::1", "[::1]")
+    }.getOrDefault(false)
+
     private fun failure(out: OutputStream, status: Int) {
-        val code = if (status in setOf(400, 403, 405, 502)) status else 502
+        val code = if (status in setOf(400, 403, 405, 502, 503)) status else 502
         val body = "Local Spider proxy rejected the request"
         val bytes = body.toByteArray(StandardCharsets.US_ASCII)
         val text = "HTTP/1.1 " + code + " Error\r\nContent-Type: text/plain\r\n" +
@@ -208,13 +230,18 @@ internal class SpiderLoopbackProxy(
         var host: String? = null
         var origin = false
         var range: String? = null
+        var ended = false
+        val headers = linkedMapOf<String, String>()
         for (index in 0 until MAX_HEADERS) {
             val line = readLine(input) ?: throw IllegalArgumentException("Invalid headers")
-            if (line.isEmpty()) break
+            if (line.isEmpty()) { ended = true; break }
             val indexOfColon = line.indexOf(':')
             if (indexOfColon !in 1..80) throw IllegalArgumentException("Invalid header")
             val key = line.substring(0, indexOfColon).lowercase()
             val value = line.substring(indexOfColon + 1).trim()
+            if (!key.matches(Regex("[!#$%&'*+.^_`|~0-9a-z-]+")) ||
+                value.any { it.code < 32 && it != '\t' }) throw IllegalArgumentException("Invalid header")
+            if (key in REQUEST_HEADERS) headers[key] = value
             if (key == "host") host = value
             if (key == "origin") origin = true
             // FongMi forwards request headers to Spider.proxy(params). Media3
@@ -227,6 +254,7 @@ internal class SpiderLoopbackProxy(
                 range = value
             }
         }
+        if (!ended) throw IllegalArgumentException("Too many headers")
         if (origin || host != "127.0.0.1:" + port) throw IllegalArgumentException("Wrong host")
         val target = URI(parts[1])
         if (target.path !in setOf("/proxy", "/health") || target.fragment != null)
@@ -246,6 +274,7 @@ internal class SpiderLoopbackProxy(
         }
         // HTTP request headers override same-named query keys, as in CatVod
         // NanoHTTPD. A plugin sees range via params["range"] (lowercase).
+        params.putAll(headers)
         range?.let { params["range"] = it }
         return Triple(parts[0], params, target.path)
     }
@@ -268,6 +297,7 @@ internal class SpiderLoopbackProxy(
         if (!closed.compareAndSet(false, true)) return
         runCatching { server.close() }
         sockets.forEach { runCatching { it.close() } }
+        streams.forEach { runCatching { it.close() } }
         workers.shutdownNow()
         acceptor.interrupt()
     }
@@ -278,5 +308,13 @@ internal class SpiderLoopbackProxy(
         const val MAX_QUERY = 4_096
         val CRLF = "\r\n".toByteArray(StandardCharsets.US_ASCII)
         val END_CHUNKS = "0\r\n\r\n".toByteArray(StandardCharsets.US_ASCII)
+        val REQUEST_HEADERS = setOf("range", "if-range", "if-match", "if-none-match",
+            "if-modified-since", "if-unmodified-since", "accept", "accept-encoding",
+            "accept-language", "user-agent", "referer")
+        // The proxy must preserve media HTTP semantics without exporting a
+        // plugin's cookies, authentication challenges or private custom headers.
+        val RESPONSE_HEADERS = setOf("cache-control", "content-range", "accept-ranges",
+            "etag", "last-modified", "location", "content-encoding", "content-language",
+            "content-disposition", "expires", "vary", "retry-after", "x-tv-proxy-error")
     }
 }
