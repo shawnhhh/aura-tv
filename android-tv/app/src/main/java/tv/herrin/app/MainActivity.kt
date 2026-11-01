@@ -2124,15 +2124,22 @@ private fun Herrin() {
                     TvBoxJsonPlayback.choose(selected.uri, selected.title,
                         tvBoxSingle?.jsonParsers.orEmpty())
                 }
-                // Do not hand a JSON-parse watch page directly to Media3.
+                val cmsBrowserParser = if (cmsJsonParser == null) cmsLine?.let { selected ->
+                    FongMiBrowserPlayback.choose(selected.uri, selected.title,
+                        tvBoxSingle?.playbackParsers.orEmpty(), tvBoxAllowHttp)
+                } else null
+                // Only playback URL resolution changes. Existing UI, TMDB,
+                // film metadata and details remain completely untouched.
                 val parsedCms = if (cmsLine != null && cmsJsonParser != null)
                     CmsJsonPlayback(cmsLine.uri, cmsJsonParser, tvBoxAllowHttp, playerRetryEpoch)
-                    else null
-                val cmsParseWaiting = cmsJsonParser != null && parsedCms == null
+                else if (cmsLine != null && cmsBrowserParser != null)
+                    CmsBrowserPlayback(cmsLine.uri, cmsBrowserParser, tvBoxAllowHttp, playerRetryEpoch)
+                else null
+                val cmsParseWaiting = (cmsJsonParser != null || cmsBrowserParser != null) && parsedCms == null
                 val licensed = if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
-                            if (cmsJsonParser != null) parsedCms
+                            if (cmsJsonParser != null || cmsBrowserParser != null) parsedCms
                             else TvBoxCmsPlaybackResolver.resolve(film, episode, line, tvBoxAllowHttp,
                                 activeCmsSite?.headers.orEmpty())
                         } else LicensedPlaybackResolver.resolve(film, episode, line)
@@ -2157,7 +2164,7 @@ private fun Herrin() {
                         startPositionMs = previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
-                        onRefreshSource = if (spiderActive || cmsJsonParser != null) ({ playerRetryEpoch++ }) else null,
+                        onRefreshSource = if (spiderActive || cmsJsonParser != null || cmsBrowserParser != null) ({ playerRetryEpoch++ }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
@@ -2192,7 +2199,7 @@ private fun Herrin() {
                         loading = !playbackUnavailable,
                         offlineDemonstration = offlineDemonstration,
                         cmsFailed = cmsFailed,
-                        retryAvailable = spiderActive || cmsFailed || cmsJsonParser != null,
+                        retryAvailable = spiderActive || cmsFailed || cmsJsonParser != null || cmsBrowserParser != null,
                         reducedMotion = reduceMotion,
                         failureHint = (parsedCms as? PlaybackResult.Unavailable)?.reason
                             ?: (spiderResolved as? PlaybackResult.Unavailable)
