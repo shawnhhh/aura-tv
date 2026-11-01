@@ -98,6 +98,8 @@ internal object PlaybackErrorReport {
             raw.contains("授权") || raw.contains("密码") || raw.contains("登录") ->
                 "SOURCE_AUTH_REQUIRED"
             raw.contains("没有可用选集") -> "SOURCE_NO_EPISODES"
+            raw.contains("CMS 详情读取失败") -> "SOURCE_CMS_DETAIL_FAILED"
+            raw.contains("播放解析未返回结果") -> "SOURCE_NO_RESOLVED_MEDIA"
             raw.contains("代理") -> "SOURCE_PROXY_UNAVAILABLE"
             raw.contains("HTTP(S) 直链") || raw.contains("媒体地址") || raw.contains("播放地址") ->
                 "SOURCE_NO_MEDIA_URL"
@@ -105,7 +107,7 @@ internal object PlaybackErrorReport {
         }
         return buildString {
             append("失败阶段：").append(safeStage)
-            append("\n实际错误：").append(kind)
+            append("\n诊断分类：").append(kind)
             if (http != null) append("\nHTTP ").append(http).append("（实际状态码）")
             if (kind == "SOURCE_UNCLASSIFIED")
                 append("\n来源未提供可安全识别的错误码；未进入 Media3")
