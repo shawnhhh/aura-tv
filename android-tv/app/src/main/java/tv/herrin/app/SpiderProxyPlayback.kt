@@ -62,7 +62,7 @@ internal object SpiderProxyPlayback {
         } else {
             val uri = runCatching { URI(raw) }.getOrNull() ?: return null
             if (!local(uri) || uri.path != "/proxy") return raw
-            runCatching { query(uri.rawQuery) }.getOrNull() ?: return null
+            runCatching { query(proxy.compatibleQuery(uri.rawQuery)) }.getOrNull() ?: return null
         }
         if (parameters.isEmpty() && !(legacy && raw.substring(8).trim('?').isEmpty()))
             return null
