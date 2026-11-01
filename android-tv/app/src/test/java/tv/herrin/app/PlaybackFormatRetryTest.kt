@@ -80,7 +80,10 @@ class PlaybackFormatRetryTest {
     @Test fun denialDoesNotProbeMimeAndRateLimitStopsAutomaticRequests() {
         val denied = PlaybackFormatRetry.Session("https://media.test/primary", listOf(
             "https://media.test/backup.mp4"), null)
-        assertEquals(1, denied.next(3003, 403)?.candidateIndex)
+        assertNull(denied.next(3003, 403))
+        assertNull(denied.next(2004, 503)) // Denial exhausts this automatic session.
+        assertFalse(PlaybackFormatRetry.retryNextSource(2004, 401))
+        assertFalse(PlaybackFormatRetry.retryNextSource(2004, 403))
         val limited = PlaybackFormatRetry.Session("https://media.test/primary", listOf(
             "https://media.test/backup.mp4"), null)
         assertNull(limited.next(2004, 429))

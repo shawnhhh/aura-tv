@@ -33,6 +33,9 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.key
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,19 +49,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.common.Tracks
 
@@ -83,7 +80,9 @@ fun AuthorizedPlaybackPanel(
     onRefreshSource: (() -> Unit)? = null,
     onBack: () -> Unit,
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
-    testDiagnostics: Boolean = false
+    testDiagnostics: Boolean = false,
+    /** Budget belongs to the selected episode/line, including refreshed media URLs. */
+    recoverySession: FongMiPlaybackRecovery.Session = remember { FongMiPlaybackRecovery.Session() }
 ) {
     // A media replacement owns a fresh composition, including callbacks,
     // effects, focus nodes and native surfaces. No outgoing resource can be
@@ -91,7 +90,7 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onRefreshSource, onBack, testDiagnostics)
+            onLineSelection, onEpisodeSelection, onRefreshSource, onBack, testDiagnostics, recoverySession)
     }
 }
 
@@ -110,7 +109,8 @@ private fun AuthorizedPlaybackSession(
     onEpisodeSelection: (() -> Unit)?,
     onRefreshSource: (() -> Unit)?,
     onBack: () -> Unit,
-    testDiagnostics: Boolean
+    testDiagnostics: Boolean,
+    recoverySession: FongMiPlaybackRecovery.Session
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -147,6 +147,13 @@ private fun AuthorizedPlaybackSession(
     // Keep updates within one media session, while retaining the old session's
     // callbacks until its DisposableEffect has persisted and released its player.
     // A single shared State would route old onDispose progress into the new episode.
+    val recoveryScope = rememberCoroutineScope()
+    var pendingRecovery by remember { mutableStateOf<Job?>(null) }
+    var onLoadTimeout by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var playbackForeground by remember(lifecycle) {
+        mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+    }
+    val latestRefreshSource by rememberUpdatedState(onRefreshSource)
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media) {
@@ -154,35 +161,13 @@ private fun AuthorizedPlaybackSession(
     }
     val candidates = retries.candidates
     val journey = remember(media) { PlaybackJourneyTrace() }
-    fun itemFor(uri: String, candidateIndex: Int, mimeOverride: String? = null): MediaItem = MediaItem.Builder().setUri(uri).apply {
-        if (media.subtitles.isNotEmpty()) {
-            setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
-                MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subtitle.uri))
-                    .setMimeType(MimeTypes.TEXT_VTT).setLanguage(subtitle.language)
-                    .setLabel(subtitle.title)
-                    .setSelectionFlags(if (index == 0) C.SELECTION_FLAG_DEFAULT else 0)
-                    .build()
-            })
-        }
-        (mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))?.let(::setMimeType)
-    }.build()
+    fun itemFor(uri: String, candidateIndex: Int, mimeOverride: String? = null): MediaItem =
+        FongMiExoPlayerFactory.mediaItem(media, uri,
+            mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))
     val player = remember(media, context, lifecycle) {
         journey.begin(0, candidates.size, android.os.SystemClock.elapsedRealtime())
-        val http = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
-            .setConnectTimeoutMs(12_000)
-            .setReadTimeoutMs(12_000)
-            .setDefaultRequestProperties(media.headers)
-        val factory = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
-        // If a vendor MediaCodec fails initialization, try another compatible
-        // system decoder before declaring the selected source unplayable.
-        // Retain Android's hardware-first pipeline and HDR output behavior.
-        val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
-        ExoPlayer.Builder(context, renderers).setMediaSourceFactory(factory).build().apply {
-            setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
-            setHandleAudioBecomingNoisy(true)
-            addListener(object : Player.Listener {
+        FongMiExoPlayerFactory.create(context, media).apply {
+            val events = object : Player.Listener {
                 override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                     uiEpoch++
                 }
@@ -207,12 +192,53 @@ private fun AuthorizedPlaybackSession(
                     uiEpoch++
                 }
                 override fun onPlayerError(error: PlaybackException) {
+                    pendingRecovery?.cancel()
+                    recoverySession.cancelPending()
                     val httpStatus = PlaybackFailureHints.safeHttpStatus(
                         PlaybackFailureHints.causes(error)
                             .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                             .firstOrNull()?.responseCode)
                     journey.onFailure(PlaybackFailureHints.category(error.errorCodeName, httpStatus))
-                    val next = retries.next(error.errorCode, httpStatus)
+                    val failedUrl = PlaybackFailureHints.causes(error)
+                        .filterIsInstance<HttpDataSource.HttpDataSourceException>()
+                        .firstOrNull()?.dataSpec?.uri?.toString() ?: retries.current.uri
+                    val failure = FongMiPlaybackRecovery.classify(error.errorCodeName,
+                        httpStatus, error, failedUrl)
+                    val diagnostic = PlaybackErrorReport.media(error.errorCodeName,
+                        error.errorCode, httpStatus, error, failedUrl, activeVariant + 1, candidates.size)
+                    val plan = recoverySession.next(failure, latestRefreshSource != null, isLive)
+                    if (plan != null) {
+                        pendingRecovery?.cancel()
+                        val resumePosition = currentPosition.coerceAtLeast(0L)
+                        pendingRecovery = recoveryScope.launch {
+                            delay(plan.delayMs)
+                            if (!recoverySession.isCurrent(plan) || isReleased) return@launch
+                            when (plan.action) {
+                                FongMiPlaybackRecovery.Action.REFRESH_SOURCE -> {
+                                    latestProgressCallback(resumePosition,
+                                        duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L, false)
+                                    latestRefreshSource?.invoke()
+                                }
+                                FongMiPlaybackRecovery.Action.SEEK_LIVE -> {
+                                    seekToDefaultPosition()
+                                    prepare()
+                                }
+                                FongMiPlaybackRecovery.Action.RETRY_MEDIA -> {
+                                    // prepare() reopens the same DataSpec at the current position;
+                                    // retain Media3's Range behavior and the exact authorized headers.
+                                    if (!isLive && resumePosition > 0L) seekTo(resumePosition)
+                                    prepare()
+                                    play()
+                                }
+                            }
+                        }
+                        errorMessage = null
+                        return
+                    }
+                    val next = if (failure.kind !in setOf(FongMiPlaybackRecovery.Kind.AUTHENTICATION,
+                            FongMiPlaybackRecovery.Kind.NETWORK_POLICY,
+                            FongMiPlaybackRecovery.Kind.PROXY_CONNECTION))
+                        retries.next(error.errorCode, httpStatus) else null
                     if (next != null) {
                         // Retry only the exact provider-supplied URLs. The session owns
                         // both the per-address MIME and a finite monotonic retry budget.
@@ -227,24 +253,25 @@ private fun AuthorizedPlaybackSession(
                         prepare()
                         play()
                     } else {
-                        // Only use the failed request's destination to classify
-                        // loopback proxy vs remote DNS/TLS errors. Never show the
-                        // actual URL, query, headers, token or private hostname.
-                        val failedUrl = PlaybackFailureHints.causes(error)
-                            .filterIsInstance<HttpDataSource.HttpDataSourceException>()
-                            .firstOrNull()?.dataSpec?.uri?.toString() ?: retries.current.uri
-                        errorMessage = PlaybackErrorReport.media(
-                            errorCodeName = error.errorCodeName,
-                            numericCode = error.errorCode,
-                            httpStatus = httpStatus,
-                            error = error,
-                            failedUrl = failedUrl,
-                            attempt = activeVariant + 1,
-                            total = candidates.size
-                        )
+                        errorMessage = diagnostic
                     }
                 }
-            })
+            }
+            addListener(events)
+            onLoadTimeout = {
+                stop()
+                events.onPlayerError(PlaybackException("Host playback loading deadline",
+                    java.net.SocketTimeoutException(), PlaybackException.ERROR_CODE_TIMEOUT))
+            }
+        }
+    }
+    // FongMi PlayerManager.onPlayTimeout stops a load whose deadline elapsed.
+    // Use one deadline per buffering interval, independent of UI/tracks updates.
+    LaunchedEffect(player, playbackState, playbackForeground) {
+        if (playbackForeground && playbackState == Player.STATE_BUFFERING) {
+            delay(30_000L)
+            if (!player.isReleased && player.playbackState == Player.STATE_BUFFERING)
+                onLoadTimeout?.invoke()
         }
     }
     fun reportProgress() {
@@ -253,6 +280,8 @@ private fun AuthorizedPlaybackSession(
             player.playbackState == Player.STATE_ENDED)
     }
     fun retryPlayback() {
+        pendingRecovery?.cancel()
+        recoverySession.userRetry()
         val resumePosition = player.currentPosition.coerceAtLeast(0L)
         val first = retries.restart()
         journey.clearPreviousFailure()
@@ -342,7 +371,14 @@ private fun AuthorizedPlaybackSession(
         val session = MediaSession.Builder(context, player)
             .setId("herrin-${java.util.UUID.randomUUID()}").build()
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) { reportProgress(); player.pause() }
+            if (event == Lifecycle.Event.ON_START) playbackForeground = true
+            if (event == Lifecycle.Event.ON_STOP) {
+                playbackForeground = false
+                pendingRecovery?.cancel()
+                recoverySession.cancelPending()
+                reportProgress()
+                player.pause()
+            }
         }
         lifecycle.addObserver(observer)
         // Start only after this composition has committed and the outgoing
@@ -354,9 +390,12 @@ private fun AuthorizedPlaybackSession(
         player.prepare()
         player.playWhenReady = true
         onDispose {
+            pendingRecovery?.cancel()
+            recoverySession.cancelPending()
             reportProgress()
             lifecycle.removeObserver(observer)
             session.release()
+            onLoadTimeout = null
             player.stop()
             player.release()
         }
@@ -545,7 +584,7 @@ private fun AuthorizedPlaybackSession(
                 // repaired by Media3 retrying that *same* URI. Invoke the
                 // source's original playerContent again only on explicit tap.
                 onRefreshSource?.let { refresh ->
-                    Button(onClick = refresh,
+                    Button(onClick = { recoverySession.userRetry(); refresh() },
                         modifier = Modifier.testTag("player-refresh-source")) {
                         Text("重新解析播放地址")
                     }
