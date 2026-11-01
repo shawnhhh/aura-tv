@@ -129,7 +129,7 @@ internal fun GroupSeasonBrowser(
                                 event.type == KeyEventType.KeyDown &&
                                     event.nativeKeyEvent.keyCode ==
                                         android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
-                                    onMoveToCast()
+                                    entry.sources.size <= 1 && onMoveToCast()
                             },
                         onFocus = { onEpisodeFocus(entry) },
                         onClick = { onEpisodePlay(entry) })
