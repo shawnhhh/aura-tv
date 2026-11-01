@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * HERRIN host adaptation for FongMi ParseWebView's Sniffer boundary.
+ * HERRIN host adaptation for FongMi browser parser's Sniffer boundary.
  * URL patterns alone never establish media: inspect an actual bounded HTTP
  * response, preserving TLS and per-origin credentials. No buffering of media.
  */
