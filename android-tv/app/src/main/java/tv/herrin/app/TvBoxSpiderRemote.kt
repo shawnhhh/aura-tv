@@ -621,7 +621,31 @@ internal class TvBoxSpiderBridge(context: Context) {
                 } ?: PlaybackResult.Unavailable(response.message)
             }
             is SpiderResult.Ready -> try {
-                SpiderIpc.readPlayback(response.value, allowHttp)
+                val ready = SpiderIpc.readPlayback(response.value, allowHttp)
+                if (ready is PlaybackResult.Ready && SpiderProxyPlayback.isCatVodProxy(ready.media.uri)) {
+                    val alive = SpiderProxyPlayback.ping(ready.media.uri)
+                    if (!alive) {
+                        // The remote process can die between returning playerContent
+                        // and the Media3 connection. Explicitly invalidate its
+                        // bound session and retry at most once from the last
+                        // previously approved source, never an arbitrary URL.
+                        withContext(Dispatchers.Main.immediate) {
+                            invalidate("Spider 播放代理连接失效")
+                        }
+                        when (val retried = request(SpiderIpc.PLAY, payload)) {
+                            is SpiderResult.Failure -> PlaybackResult.Unavailable(
+                                "本机 Spider 代理已退出，重建站点失败：" + retried.message)
+                            is SpiderResult.Ready -> {
+                                val fixed = SpiderIpc.readPlayback(retried.value, allowHttp)
+                                if (fixed is PlaybackResult.Ready &&
+                                    SpiderProxyPlayback.isCatVodProxy(fixed.media.uri) &&
+                                    !SpiderProxyPlayback.ping(fixed.media.uri))
+                                    PlaybackResult.Unavailable("本机 Spider 播放代理无法启动，请重新应用影视站点")
+                                else fixed
+                            }
+                        }
+                    } else ready
+                } else ready
             } catch (error: Exception) {
                 PlaybackResult.Unavailable("Spider 播放信息无效：" + SpiderFailureDetails.message(error))
             }

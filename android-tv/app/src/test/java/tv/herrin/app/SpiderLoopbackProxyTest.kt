@@ -188,4 +188,49 @@ class SpiderLoopbackProxyTest {
         assertEquals(-1, Proxy.getPort())
         assertFalse(Proxy.getUrl(true).contains("session="))
     }
+    @Test fun healthEndpointAccessibleOnlyToSameSiteAndValidToken() {
+        val callbackCount = AtomicInteger()
+        SpiderLoopbackProxy("health-site") {
+            callbackCount.incrementAndGet()
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(3)))
+        }.use { proxy ->
+            assertEquals(204, request("http://127.0.0.1:${proxy.port}/health?session=${proxy.token}&siteKey=health-site").responseCode)
+            assertEquals(403, request("http://127.0.0.1:${proxy.port}/health?session=wrong&siteKey=health-site").responseCode)
+            assertEquals(403, request("http://127.0.0.1:${proxy.port}/health?session=${proxy.token}&siteKey=other-site").responseCode)
+            assertEquals(0, callbackCount.get())
+        }
+    }
+
+    @Test fun staleTvBoxPortIsReboundToActiveSpiderProxyInsteadOfRefusedConnection() {
+        SpiderLoopbackProxy("actual-site") { params ->
+            assertEquals("episode42", params["part"])
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(4, 2)))
+        }.use { proxy ->
+            val oldPort = if (proxy.port != 9978) 9978 else 9979
+            val stale = "http://127.0.0.1:$oldPort/proxy?do=jar&siteKey=actual-site&part=episode42"
+            val fixed = SpiderProxyPlayback.rebind(
+                PlaybackMedia(stale), "actual-site", proxy)
+            assertTrue(fixed is PlaybackResult.Ready)
+            val uri = (fixed as PlaybackResult.Ready).media.uri
+            assertEquals(proxy.port, URL(uri).port)
+            assertTrue(uri.contains("session="))
+            assertTrue(SpiderProxyPlayback.ping(uri))
+            assertArrayEquals(byteArrayOf(4, 2), request(uri).inputStream.use { it.readBytes() })
+        }
+    }
+
+    @Test fun neverRebindOtherSitesOrNonCatvodLoopbackMedia() {
+        SpiderLoopbackProxy("current-site") {
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            val alien = "http://127.0.0.1:9978/proxy?do=jar&siteKey=other-site"
+            assertTrue(SpiderProxyPlayback.rebind(PlaybackMedia(alien), "current-site", proxy)
+                is PlaybackResult.Unavailable)
+            val independent = "http://127.0.0.1:9978/stream.mp4"
+            val result = SpiderProxyPlayback.rebind(PlaybackMedia(independent), "current-site", proxy)
+            assertEquals(independent, (result as PlaybackResult.Ready).media.uri)
+            assertFalse(SpiderProxyPlayback.isCatVodProxy(independent))
+        }
+    }
+
 }

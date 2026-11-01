@@ -368,6 +368,7 @@ internal object SpiderInitPolicy {
 internal class TvBoxSpiderWorker(private val context: Context) {
     private var active: Spider? = null
     private var activeKey: String? = null
+    private var activeSiteKey: String? = null
     private var activeVipFlags: List<String> = emptyList()
     private var activeJsonParsers: List<TvBoxJsonParse> = emptyList()
     private var activePlaybackParsers: List<TvBoxPlaybackParser> = emptyList()
@@ -415,7 +416,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     try {
                         created.init(context, site.extension)
                         created.also {
-                            active = it; activeKey = key; activeHttpHost = host
+                            active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = host
                             activeLoopbackProxy = localProxy; activeScriptRuntime = runtime
                         }
                     } catch (error: Throwable) {
@@ -476,7 +477,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 created.local = Local(site.key)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
                 created.init(context, site.extension)
-                created.also { active = it; activeKey = key; activeHttpHost = httpHost
+                created.also { active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = httpHost
                     activeLoopbackProxy = localProxy; activeDexLoader = loader }
             } catch (error: Throwable) {
                 localProxy.close()
@@ -557,7 +558,16 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 is FongMiPlayRoute.Unavailable ->
                     PlaybackResult.Unavailable(decision.message)
             }
-            resolved.also {
+            val healthy = when (resolved) {
+                is PlaybackResult.Ready -> {
+                    val localProxy = activeLoopbackProxy
+                    if (localProxy != null)
+                        SpiderProxyPlayback.rebind(resolved.media, activeSiteKey.orEmpty(), localProxy)
+                    else resolved
+                }
+                is PlaybackResult.Unavailable -> resolved
+            }
+            healthy.also {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             }
         }
@@ -574,6 +584,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         SpiderRuntimeCompat.dispose(active)
         active = null
         activeKey = null
+        activeSiteKey = null
         activeVipFlags = emptyList()
         activeJsonParsers = emptyList()
         activePlaybackParsers = emptyList()
