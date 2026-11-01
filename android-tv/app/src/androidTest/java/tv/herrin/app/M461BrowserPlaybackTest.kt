@@ -69,4 +69,34 @@ class M461BrowserPlaybackTest {
             }
         }
     }
+    @Test fun configuredClickScriptActuallyTriggersMediaRequest() {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when {
+                    request.path?.startsWith("/click?url=") == true ->
+                        MockResponse().setHeader("Content-Type", "text/html")
+                            .setBody("""<!doctype html><html><body>
+                            <button id="start" onclick="fetch('/clicked.mp4')">Play</button>
+                            </body></html>""")
+                    request.path?.startsWith("/clicked.mp4") == true ->
+                        MockResponse().setHeader("Content-Type", "video/mp4")
+                            .setBody("this request is sniffed before response bytes are decoded")
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val parser = TvBoxPlaybackParser("Needs click", 0,
+                server.url("/click?url=").toString(),
+                click = "document.getElementById('start').click();")
+            val result = runBlocking {
+                FongMiBrowserPlayback.resolve(inst.targetContext, parser,
+                    "https://watch.example.test/episode.html", allowHttp = true)
+            }
+            assertTrue("Parser must run source-configured click script: $result",
+                result is PlaybackResult.Ready)
+            assertEquals(server.url("/clicked.mp4").toString(),
+                (result as PlaybackResult.Ready).media.uri)
+        }
+    }
 }

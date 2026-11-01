@@ -18,7 +18,8 @@ internal object SpiderRuntimeCompat {
     // source edits must never keep the old Spider's cookies or runtime alive.
     fun sessionKey(jar: String, site: TvBoxSite): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        val fields = listOf(jar, site.key, site.spiderApi.orEmpty(), site.extension) +
+        val fields = listOf(jar, site.key, site.spiderApi.orEmpty(),
+            site.scriptApi.orEmpty(), site.extension) +
             site.headers.entries.sortedBy { it.key }.flatMap { listOf(it.key, it.value) }
         fields.forEach { value ->
             val bytes = value.toByteArray(Charsets.UTF_8)

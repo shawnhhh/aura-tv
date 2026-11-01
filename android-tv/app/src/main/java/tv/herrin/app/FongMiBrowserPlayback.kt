@@ -164,6 +164,19 @@ internal object FongMiBrowserPlayback {
                             if (request.isForMainFrame)
                                 finish(PlaybackResult.Unavailable("网页解析入口返回 HTTP 错误"))
                         }
+                        // FongMi's ParseWebView executes the parser's click
+                        // script after HTML has loaded. Without this, many
+                        // pages never request the video even though a
+                        // WebView-based TVBox player can resolve it.
+                        override fun onPageFinished(view: WebView, url: String) {
+                            if (stopped || !cont.isActive || parser.click.isBlank()) return
+                            // Executed only in the disposable, isolated player
+                            // resolver; no JS bridge or access to app UI/DB.
+                            if (TvBoxUrl.normalize(url, allowHttp) == null) return
+                            runCatching {
+                                view.evaluateJavascript(parser.click.take(4_096), null)
+                            }
+                        }
                         override fun onRenderProcessGone(
                             view: WebView, detail: RenderProcessGoneDetail
                         ): Boolean {

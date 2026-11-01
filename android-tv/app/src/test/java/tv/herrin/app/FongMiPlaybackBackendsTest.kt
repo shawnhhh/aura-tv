@@ -73,4 +73,11 @@ class FongMiPlaybackBackendsTest {
         val candidates = (route as FongMiPlayRoute.Aggregate).parsers
         assertEquals(listOf(1,0), candidates.map { it.type })
     }
+    @Test fun changingScriptUrlInvalidatesTheSpiderRuntimeSession() {
+        val previous = TvBoxSite("Script", true, key = "one",
+            scriptApi = "https://source.test/v1.js")
+        val next = previous.copy(scriptApi = "https://source.test/v2.js")
+        assertNotEquals(SpiderRuntimeCompat.sessionKey("", previous),
+            SpiderRuntimeCompat.sessionKey("", next))
+    }
 }
