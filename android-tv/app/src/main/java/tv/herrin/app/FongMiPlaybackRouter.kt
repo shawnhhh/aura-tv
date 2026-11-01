@@ -69,6 +69,7 @@ internal object FongMiPlaybackRouter {
 
         val filePath = URI(sourceUrl).path.orEmpty().lowercase(Locale.ROOT)
         val isMedia = mediaExtensions.any { filePath.endsWith(it) } ||
+            SpiderProxyPlayback.isCatVodProxy(sourceUrl) ||
             PlaybackFormatRetry.declaredMime(response.optString("format")) != null
         val isWebPage = filePath.endsWith(".html") || filePath.endsWith(".htm")
         val needsParser = response.optInt("parse", 0) != 0 || response.optInt("jx", 0) != 0
