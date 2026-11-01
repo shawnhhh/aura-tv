@@ -30,7 +30,6 @@ import kotlin.coroutines.resume
  */
 internal object FongMiBrowserPlayback {
     private const val TIMEOUT_MS = 18_000L
-    private val main = Handler(Looper.getMainLooper())
 
     internal fun candidate(raw: String, allowHttp: Boolean): String? {
         val url = TvBoxUrl.normalize(raw, allowHttp) ?: return null
@@ -56,6 +55,7 @@ internal object FongMiBrowserPlayback {
             ?: return PlaybackResult.Unavailable("网页解析目标无效")
         val output = withTimeoutOrNull(TIMEOUT_MS) {
             withContext(Dispatchers.Main.immediate) {
+                val main = Handler(Looper.getMainLooper())
                 suspendCancellableCoroutine<PlaybackResult> { cont ->
                     val view = try { WebView(context.applicationContext) }
                         catch (_: Exception) {
@@ -90,6 +90,7 @@ internal object FongMiBrowserPlayback {
                             else WebSettings.MIXED_CONTENT_NEVER_ALLOW
                         if (ua != null) userAgentString = ua
                     }
+                    val defaultAgent = view.settings.userAgentString
                     view.webViewClient = object : WebViewClient() {
                         override fun shouldInterceptRequest(
                             view: WebView, request: WebResourceRequest
@@ -98,7 +99,7 @@ internal object FongMiBrowserPlayback {
                                 val found = candidate(request.url.toString(), allowHttp)
                                 if (found != null && found != target) {
                                     val mediaHeaders = buildMap<String, String> {
-                                        val agent = ua ?: view.settings.userAgentString
+                                        val agent = ua ?: defaultAgent
                                         if (!agent.isNullOrBlank()) put("User-Agent", agent)
                                         val ref = request.requestHeaders.entries.firstOrNull {
                                             it.key.equals("Referer", true)
