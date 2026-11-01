@@ -3333,7 +3333,8 @@ internal fun SeasonBrowser(
     history: (SeasonEpisode) -> WatchPosition?,
     onSeasonSelect: (Int) -> Unit,
     onEpisodeFocus: (SeasonEpisode) -> Unit,
-    onPlay: (SeasonEpisode) -> Unit
+    onPlay: (SeasonEpisode) -> Unit,
+    onMoveToCast: () -> Boolean = { false }
 ) {
     val uiScope = rememberCoroutineScope()
     val focusers = remember { mutableMapOf<String, FocusRequester>() }
@@ -3381,7 +3382,13 @@ internal fun SeasonBrowser(
                     reduced = reduced,
                     modifier = Modifier.testTag("season-card-${entry.season}-$index")
                         .focusRequester(focusAt("season-card-${entry.season}-$index"))
-                        .focusProperties { up = focusAt("season-tab-${entry.season}") },
+                        .focusProperties { up = focusAt("season-tab-${entry.season}") }
+                        .onPreviewKeyEvent { event ->
+                            event.type == KeyEventType.KeyDown &&
+                                event.nativeKeyEvent.keyCode ==
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
+                                onMoveToCast()
+                        },
                     onFocus = { onEpisodeFocus(entry) },
                     onClick = { onPlay(entry) })
             }
