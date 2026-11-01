@@ -1,6 +1,6 @@
 package tv.herrin.app
 
-import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
 import org.junit.Assert.*
@@ -10,7 +10,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class M464TvBoxCatalogSnapshotTest {
     @Test fun restoresPublicFilmDisplayButNeverPersistsSignedPlaybackUrls() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = "http://unit-test.invalid/warehouse-" + System.nanoTime()
         val site = "test-site"
         val secret = "PRIVATE_MEDIA_TOKEN"
