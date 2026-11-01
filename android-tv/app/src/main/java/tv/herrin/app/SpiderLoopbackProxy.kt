@@ -145,7 +145,7 @@ internal class SpiderLoopbackProxy(
                     null else key to text
             }
             val location = safeHeaders.firstOrNull { it.first.equals("location", true) }?.second
-            if (status in 300..399 && (location == null || !safeRedirect(location))) {
+            if (status in setOf(301, 302, 303, 307, 308) && (location == null || !safeRedirect(location))) {
                 failure(output, 502)
                 return
             }
