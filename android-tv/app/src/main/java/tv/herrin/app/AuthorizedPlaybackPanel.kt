@@ -233,13 +233,15 @@ private fun AuthorizedPlaybackSession(
                         val failedUrl = PlaybackFailureHints.causes(error)
                             .filterIsInstance<HttpDataSource.HttpDataSourceException>()
                             .firstOrNull()?.dataSpec?.uri?.toString() ?: retries.current.uri
-                        val actionable = PlaybackFailureHints.networkHint(
-                            error.errorCodeName, httpStatus, error, failedUrl)
-                            ?: PlaybackFailureHints.hint(error.errorCodeName, httpStatus)
-                        errorMessage = actionable +
-                            "（${PlaybackFailureHints.safeCode(error.errorCodeName)}" +
-                            "${httpStatus?.let { ", HTTP $it" }.orEmpty()}" +
-                            "; 地址 ${activeVariant + 1}/${candidates.size}）"
+                        errorMessage = PlaybackErrorReport.media(
+                            errorCodeName = error.errorCodeName,
+                            numericCode = error.errorCode,
+                            httpStatus = httpStatus,
+                            error = error,
+                            failedUrl = failedUrl,
+                            attempt = activeVariant + 1,
+                            total = candidates.size
+                        )
                     }
                 }
             })
