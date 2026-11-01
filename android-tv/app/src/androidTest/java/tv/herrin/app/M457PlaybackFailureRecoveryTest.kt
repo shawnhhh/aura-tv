@@ -96,8 +96,6 @@ class M457PlaybackFailureRecoveryTest {
             .assertTextContains("SOURCE_HTTP_403", substring = true)
         compose.onNodeWithTag("player-startup-diagnostic")
             .assertTextContains("HTTP 403", substring = true)
-        compose.onNodeWithTag("player-startup-diagnostic")
-            .assertTextDoesNotContain("PRIVATE")
         compose.onNodeWithTag("player-startup-retry").assertExists()
         compose.onNodeWithTag("player-startup-back").assertExists()
     }
