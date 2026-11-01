@@ -2239,6 +2239,7 @@ private fun Herrin() {
                             licensed is PlaybackResult.Unavailable ->
                                 PlaybackErrorReport.source("CMS", licensed.reason)
                             cmsFailed -> PlaybackErrorReport.source("CMS", "CMS 详情读取失败")
+                            playbackUnavailable -> PlaybackErrorReport.source("GENERAL", "播放解析未返回结果")
                             else -> null
                         },
                         onRetry = {
