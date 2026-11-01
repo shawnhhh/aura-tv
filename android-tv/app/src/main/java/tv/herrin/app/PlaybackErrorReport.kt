@@ -78,8 +78,13 @@ internal object PlaybackErrorReport {
             Regex("HTTP[ （:：]+([1-5]\\d{2})").find(raw)
                 ?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 100..599 }
         else null
+        val webViewCode = if (stage == "BROWSER")
+            Regex("WebView 错误 (-?[0-9]{1,4})").find(raw)
+                ?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in -9999..9999 }
+        else null
         val kind = when {
             http != null -> "SOURCE_HTTP_$http"
+            webViewCode != null -> "SOURCE_WEBVIEW_$webViewCode"
             raw.contains("DNS", ignoreCase = true) || raw.contains("域名解析失败") ->
                 "SOURCE_DNS_FAILED"
             raw.contains("TLS", ignoreCase = true) || raw.contains("证书") ->
