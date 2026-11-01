@@ -449,9 +449,11 @@ http://example.org/live/channel.m3u8
     @Test fun choosingLineDoesNotAutoplayUntilSpecificEpisodeIsConfirmed() {
         focus("card-tide")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
+        val detail = compose.onNodeWithTag("film-detail-list")
+        detail.performScrollToNode(hasTestTag("line-演示线路 B"))
         compose.onNodeWithTag("line-演示线路 B").performClick()
-        compose.onNodeWithTag("film-detail-list").assertExists()
-        compose.onNodeWithTag("line-演示线路 B").assertExists()
+        detail.assertExists()
+        detail.performScrollToNode(hasTestTag("episode-4"))
         compose.onNodeWithTag("episode-4").performClick()
         compose.onNodeWithText("播放演示").assertExists()
     }
