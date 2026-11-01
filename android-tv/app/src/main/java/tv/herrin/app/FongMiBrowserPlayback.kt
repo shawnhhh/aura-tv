@@ -28,6 +28,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.net.URI
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -96,6 +98,10 @@ internal object FongMiBrowserPlayback {
                     val stopped = java.util.concurrent.atomic.AtomicBoolean()
                     val calls = java.util.concurrent.ConcurrentHashMap.newKeySet<okhttp3.Call>()
                     val probes = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+                    // WebView's shouldInterceptRequest is a Chromium I/O callback,
+                    // not a place for a synchronous 4-second HTTP sniff. Bound
+                    // concurrent probe requests; cancellation closes their calls.
+                    val probeSlots = Semaphore(4)
                     fun cleanup() {
                         if (!stopped.compareAndSet(false, true)) return
                         calls.forEach { it.cancel() }
@@ -146,9 +152,7 @@ internal object FongMiBrowserPlayback {
                                     }
                                 }
                                 if (found != null && (detect || found != target) &&
-                                    probes.size < 128 && probes.add(found) &&
-                                    (videoCheck == null || runCatching { videoCheck(found) }.getOrDefault(false)) &&
-                                    FongMiMediaProbe.probe(found, requestHeaders, allowHttp, calls)) {
+                                    probes.size < 128 && probes.add(found)) {
                                     val mediaHeaders = buildMap<String, String> {
                                         val agent = ua ?: defaultAgent
                                         if (!agent.isNullOrBlank()) put("User-Agent", agent)
@@ -158,23 +162,37 @@ internal object FongMiBrowserPlayback {
                                         if (!ref.isNullOrBlank() && ref.length < 2_048)
                                             put("Referer", ref)
                                     }
-                                    main.post {
-                                        // Chromium provides only cookies scoped to
-                                        // this exact media URL, never site-wide
-                                        // API credentials from a different host.
-                                        val scopedCookie = runCatching {
-                                            CookieManager.getInstance().getCookie(found)
-                                        }.getOrNull().orEmpty()
-                                        val finalHeaders = if (scopedCookie.isNotBlank() &&
-                                            scopedCookie.length <= 2_048 &&
-                                            '\r' !in scopedCookie && '\n' !in scopedCookie)
-                                            mediaHeaders + ("Cookie" to scopedCookie)
-                                        else mediaHeaders
-                                        finish(PlaybackResult.Ready(PlaybackMedia(
-                                            uri = found, headers = finalHeaders,
-                                            allowHttpRedirects = allowHttp,
-                                            declaredMime = PlaybackFormatRetry.initialMime(found)
-                                        )))
+                                    // Keep Chromium's request interception fast.
+                                    // A hanging parser endpoint must not block the
+                                    // WebView from discovering a later media request.
+                                    children.launch(Dispatchers.IO) {
+                                        probeSlots.withPermit {
+                                            if (!stopped.get() && cont.isActive &&
+                                                (videoCheck == null ||
+                                                    runCatching { videoCheck(found) }.getOrDefault(false)) &&
+                                                FongMiMediaProbe.probe(found, requestHeaders, allowHttp, calls)) {
+                                                main.post {
+                                                    if (stopped.get() || !cont.isActive)
+                                                        return@post
+                                                    // Only cookies scoped to the exact media
+                                                    // URL; never expose parser credentials
+                                                    // to unrelated hosts.
+                                                    val scopedCookie = runCatching {
+                                                        CookieManager.getInstance().getCookie(found)
+                                                    }.getOrNull().orEmpty()
+                                                    val finalHeaders = if (scopedCookie.isNotBlank() &&
+                                                        scopedCookie.length <= 2_048 &&
+                                                        '\r' !in scopedCookie && '\n' !in scopedCookie)
+                                                        mediaHeaders + ("Cookie" to scopedCookie)
+                                                    else mediaHeaders
+                                                    finish(PlaybackResult.Ready(PlaybackMedia(
+                                                        uri = found, headers = finalHeaders,
+                                                        allowHttpRedirects = allowHttp,
+                                                        declaredMime = PlaybackFormatRetry.initialMime(found)
+                                                    )))
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
