@@ -1,0 +1,141 @@
+{
+  "schema": 1,
+  "status": "BLOCKED",
+  "tv_sha": "5e191aaced194e5cac5668cc91908ecb65336222",
+  "media_sha": "3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d",
+  "mpv_android_sha": "049ade89abc85fc05ef73dc9ba6f1810466c9f8a",
+  "required_java_api_present": {
+    "DecoderManager": false,
+    "LibassPlaybackSession": false,
+    "LibassSubtitleController": false,
+    "ContentTypeResolvingMediaSource": false,
+    "SubtitleTranscriptSession": false,
+    "ProgressiveIsoCache": false,
+    "DiskPreloadManager": true,
+    "SecondaryTextTrackSelector": false
+  },
+  "required_aars_present": {
+    "lib-mpvplayer-release.aar": false,
+    "lib-decoder-ffmpeg-release.aar": false
+  },
+  "current_tv_requires_unified_ffmpeg": true,
+  "public_media_native_libraries": [
+    {
+      "path": "libraries/mpvplayer/src/main/jniLibs/arm64-v8a/libc++_shared.so",
+      "sha256": "0c52cfab2df0d957d8b346a2bdc5ae8d71feca2591924d77e1cd724d5bf74352",
+      "elf_class": "ELF64",
+      "machine": "AArch64",
+      "needed": [
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ],
+      "split_ffmpeg_dependency": false
+    },
+    {
+      "path": "libraries/mpvplayer/src/main/jniLibs/arm64-v8a/libmpv.so",
+      "sha256": "b1f2061e4868731236d407fdb7ac494a472d937fa9ce909f982cec82f9b96802",
+      "elf_class": "ELF64",
+      "machine": "AArch64",
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libdl.so",
+        "libavcodec.so",
+        "libavfilter.so",
+        "libavformat.so",
+        "libavutil.so",
+        "libc++_shared.so",
+        "libvulkan.so",
+        "libswresample.so",
+        "libswscale.so",
+        "libandroid.so",
+        "libEGL.so",
+        "libGLESv2.so",
+        "libavdevice.so",
+        "libOpenSLES.so",
+        "libc.so"
+      ],
+      "split_ffmpeg_dependency": true
+    },
+    {
+      "path": "libraries/mpvplayer/src/main/jniLibs/arm64-v8a/libplayer.so",
+      "sha256": "3113925b69fbe077f73433c04a601ec21be40aa20db764efb552bc9bb1f18d3a",
+      "elf_class": "ELF64",
+      "machine": "AArch64",
+      "needed": [
+        "libswscale.so",
+        "libavcodec.so",
+        "libmpv.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so",
+        "libc++_shared.so",
+        "libdl.so"
+      ],
+      "split_ffmpeg_dependency": true
+    },
+    {
+      "path": "libraries/mpvplayer/src/main/jniLibs/armeabi-v7a/libc++_shared.so",
+      "sha256": "7ce65fd0fdd49236bc2ee618f6968dbb3fca46434845f563f2bb4c994878853e",
+      "elf_class": "ELF32",
+      "machine": "ARM",
+      "needed": [
+        "libc.so",
+        "libm.so",
+        "libdl.so"
+      ],
+      "split_ffmpeg_dependency": false
+    },
+    {
+      "path": "libraries/mpvplayer/src/main/jniLibs/armeabi-v7a/libmpv.so",
+      "sha256": "a1251ce2b22160cbc218889231ab990a68047a5264ebc650b5cc9abec0d4b237",
+      "elf_class": "ELF32",
+      "machine": "ARM",
+      "needed": [
+        "libm.so",
+        "libz.so",
+        "libdl.so",
+        "libavcodec.so",
+        "libavfilter.so",
+        "libavformat.so",
+        "libavutil.so",
+        "libc++_shared.so",
+        "libvulkan.so",
+        "libswresample.so",
+        "libswscale.so",
+        "libandroid.so",
+        "libEGL.so",
+        "libGLESv2.so",
+        "libavdevice.so",
+        "libOpenSLES.so",
+        "libc.so"
+      ],
+      "split_ffmpeg_dependency": true
+    },
+    {
+      "path": "libraries/mpvplayer/src/main/jniLibs/armeabi-v7a/libplayer.so",
+      "sha256": "76b7ed911d362ada779e194bbe6dbb8af146dc52d18c790725ea1786b9f48a46",
+      "elf_class": "ELF32",
+      "machine": "ARM",
+      "needed": [
+        "libswscale.so",
+        "libavcodec.so",
+        "libmpv.so",
+        "liblog.so",
+        "libc.so",
+        "libm.so",
+        "libc++_shared.so",
+        "libdl.so"
+      ],
+      "split_ffmpeg_dependency": true
+    }
+  ],
+  "blockers": [
+    "Public media branch lacks current TV Java APIs",
+    "TV's required native AAR inputs are absent",
+    "Public media prebuilts use split FFmpeg; current TV requires unified libffmpeg.so",
+    "Current mpv-android NDK r30 toolchain is not installed"
+  ],
+  "redistributed_native_libraries": []
+}
