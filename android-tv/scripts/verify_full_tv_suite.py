@@ -31,6 +31,7 @@ REQUIRED_CLASSES = (
     "M467ParseJobInstrumentedTest",
     "M467PlaybackRecoveryTest",
     "M467EngineContainerTest",
+    "M467HlsRecoveryEndToEndTest",
     "AuthorizedCatalogIntegrationTest",
     "TvBoxVodIntegrationTest",
     "TvBoxWarehouseIntegrationTest",
