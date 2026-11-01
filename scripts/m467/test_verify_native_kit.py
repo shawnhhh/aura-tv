@@ -18,6 +18,11 @@ def write_aar(path, files):
             archive.writestr(name, data)
 
 
+def fake_elf(blob, needed=()):
+    arm64 = b"arm64-v8a" in blob
+    return list(needed), "ELF64" if arm64 else "ELF32", "AArch64" if arm64 else "ARM"
+
+
 def build_kit(root, *, missing_ffmpeg_abi=False):
     mpv = {"classes.jar": b"placeholder"}
     ffmpeg_classes = io.BytesIO()
@@ -26,7 +31,7 @@ def build_kit(root, *, missing_ffmpeg_abi=False):
     ffmpeg = {"classes.jar": ffmpeg_classes.getvalue()}
     for abi in verifier.ABIS:
         for lib in verifier.MPV_LIBS:
-            mpv["jni/" + abi + "/" + lib] = b"fake-elf"
+            mpv["jni/" + abi + "/" + lib] = ("fake-elf-" + abi).encode()
         if not (missing_ffmpeg_abi and abi == verifier.ABIS[-1]):
             ffmpeg["jni/" + abi + "/libffmpegJNI.so"] = b"fake-elf"
     write_aar(root / verifier.AAR_NAMES[0], mpv)
@@ -53,31 +58,37 @@ class NativeKitTests(unittest.TestCase):
 
     def test_missing_aar_and_abis_are_blocked(self):
         with tempfile.TemporaryDirectory() as d:
-            errors = verifier.aar_errors(Path(d), dependency_reader=lambda _: [])
+            errors = verifier.aar_errors(Path(d), dependency_reader=fake_elf)
             self.assertTrue(any("Missing native AAR" in e for e in errors))
             self.assertTrue(any("missing mpv ELF" in e for e in errors))
 
     def test_complete_synthetic_layout_is_structurally_accepted(self):
         with tempfile.TemporaryDirectory() as d:
             build_kit(Path(d))
-            self.assertEqual([], verifier.aar_errors(Path(d), dependency_reader=lambda _: []))
+            self.assertEqual([], verifier.aar_errors(Path(d), dependency_reader=fake_elf))
 
     def test_split_ffmpeg_is_rejected_even_with_all_files(self):
         with tempfile.TemporaryDirectory() as d:
             build_kit(Path(d))
-            errors = verifier.aar_errors(Path(d), dependency_reader=lambda _: ["libavcodec.so", "libswscale.so"])
+            errors = verifier.aar_errors(Path(d), dependency_reader=lambda blob: fake_elf(blob, ["libavcodec.so", "libswscale.so"]))
             self.assertTrue(any("incompatible split FFmpeg" in e for e in errors))
+
+    def test_wrong_elf_machine_fails_even_if_abi_path_looks_correct(self):
+        with tempfile.TemporaryDirectory() as d:
+            build_kit(Path(d))
+            errors = verifier.aar_errors(Path(d), dependency_reader=lambda blob: ([], "ELF32", "ARM"))
+            self.assertTrue(any("wrong ELF architecture" in e for e in errors))
 
     def test_incomplete_second_abi_cannot_pass(self):
         with tempfile.TemporaryDirectory() as d:
             build_kit(Path(d), missing_ffmpeg_abi=True)
-            errors = verifier.aar_errors(Path(d), dependency_reader=lambda _: [])
+            errors = verifier.aar_errors(Path(d), dependency_reader=fake_elf)
             self.assertTrue(any("armeabi-v7a: missing FFmpeg audio JNI" in e for e in errors))
 
     def test_corrupt_aar_is_not_accepted(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / verifier.AAR_NAMES[0]).write_bytes(b"not-a-zip")
-            errors = verifier.aar_errors(Path(d), dependency_reader=lambda _: [])
+            errors = verifier.aar_errors(Path(d), dependency_reader=fake_elf)
             self.assertTrue(any("invalid archive" in e for e in errors))
 
     def test_no_fake_success_on_missing_fongmi_sources(self):
