@@ -29,8 +29,8 @@ import fi.iki.elonen.NanoHTTPD
  */
 internal class SpiderLoopbackProxy(
     private val siteKey: String,
-    private val handler: (Map<String, String>) -> Array<out Any?>?,
-    private val staticHandler: ((Map<String, String>) -> Array<out Any?>?)? = null
+    private val staticHandler: ((Map<String, String>) -> Array<out Any?>?)? = null,
+    private val handler: (Map<String, String>) -> Array<out Any?>?
 ) : Closeable {
     private val closed = AtomicBoolean(false)
     private val server = ServerSocket(0, 24, InetAddress.getByName("127.0.0.1"))
