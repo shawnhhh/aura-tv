@@ -484,7 +484,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
-        return when (val result = attempt {
+        val attemptResult = attempt {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
@@ -532,9 +532,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             resolved.also {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             }
-        }) {
-            is SpiderResult.Ready -> result.value
-            is SpiderResult.Failure -> PlaybackResult.Unavailable(result.message)
+        }
+        return when (attemptResult) {
+            is SpiderResult.Ready -> attemptResult.value
+            is SpiderResult.Failure -> PlaybackResult.Unavailable(attemptResult.message)
         }
     }
 
