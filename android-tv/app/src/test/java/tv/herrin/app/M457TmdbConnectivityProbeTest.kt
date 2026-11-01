@@ -5,6 +5,8 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 import java.net.UnknownHostException
+import java.net.SocketTimeoutException
+import javax.net.ssl.SSLHandshakeException
 
 class M457TmdbConnectivityProbeTest {
     private val goodToken = "A".repeat(120)
@@ -89,4 +91,53 @@ class M457TmdbConnectivityProbeTest {
         val status = TmdbConnectivityProbe.check(goodToken, ArtworkJsonFetcher { _, _ -> null })
         assertFalse(status.text.contains(goodToken))
     }
+    @Test fun failureReportIdentifiesEndpointAndNetworkClassWithoutCredentialLeak() {
+        val report = TmdbConnectivityProbe.checkDetailed(goodToken, ArtworkJsonFetcher { url, _ ->
+            if (url.endsWith("/3/configuration")) """{"images":{}}"""
+            else throw SocketTimeoutException("request included private credential $goodToken")
+        })
+        assertEquals(TmdbProbeState.CONNECTION_FAILED, report.state)
+        assertEquals("搜索接口", report.stage)
+        assertTrue(report.text.contains("超时"))
+        assertFalse(report.text.contains(goodToken))
+        val dns = TmdbConnectivityProbe.checkDetailed(goodToken,
+            ArtworkJsonFetcher { _, _ -> throw UnknownHostException("private $goodToken") })
+        assertEquals("配置接口", dns.stage)
+        assertTrue(dns.text.contains("DNS"))
+        assertFalse(dns.text.contains(goodToken))
+        val tls = TmdbConnectivityProbe.checkDetailed(goodToken,
+            ArtworkJsonFetcher { _, _ -> throw SSLHandshakeException("private $goodToken") })
+        assertTrue(tls.text.contains("TLS"))
+        assertFalse(tls.text.contains(goodToken))
+    }
+
+    @Test fun http403IsNotMisreportedAsMovieTitleMismatch() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(403))
+            val result = TmdbConnectivityProbe.checkDetailed(goodToken, ArtworkJsonFetcher { url, token ->
+                val uri = java.net.URI(url)
+                NetworkArtworkFetcher.load(server.url(uri.rawPath).toString(), token)
+            })
+            assertEquals(TmdbProbeState.UNAUTHORIZED, result.state)
+            assertEquals("配置接口", result.stage)
+            assertTrue(result.text.contains("HTTP 403"))
+            assertFalse(result.text.contains(goodToken))
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun http503RetriesOnceAndReportsStatusNotBadToken() {
+        MockWebServer().use { server ->
+            repeat(2) { server.enqueue(MockResponse().setResponseCode(503)) }
+            val result = TmdbConnectivityProbe.checkDetailed(goodToken, ArtworkJsonFetcher { url, token ->
+                val uri = java.net.URI(url)
+                NetworkArtworkFetcher.load(server.url(uri.rawPath).toString(), token)
+            })
+            assertEquals(TmdbProbeState.SERVER_UNAVAILABLE, result.state)
+            assertEquals("配置接口", result.stage)
+            assertTrue(result.text.contains("HTTP 503"))
+            assertEquals(2, server.requestCount)
+        }
+    }
+
 }

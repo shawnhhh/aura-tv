@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.net.UnknownHostException
 import org.junit.rules.TemporaryFolder
 
 class ArtworkMetadataResolverTest {
@@ -196,4 +197,58 @@ class ArtworkMetadataResolverTest {
         })
         assertNull(resolver.lookup(film("安全影片", "2026", "电影"), exampleToken))
     }
+    @Test fun transientLookupFailureIsReportedAndDoesNotCacheFalseNoMatch() {
+        var offline = true
+        val issues = mutableListOf<TmdbLookupFailure>()
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            if (offline) throw UnknownHostException("TV network offline")
+            when {
+                "/search/movie?" in url -> """{"results":[{"id":42,"title":"重连成功",
+                    "release_date":"2024-01-01","poster_path":"/poster.jpg"}]}"""
+                "/movie/42?" in url -> """{"id":42,"credits":{"cast":[]}}"""
+                else -> error("Unexpected endpoint")
+            }
+        })
+        val item = film("重连成功", "2024", "电影")
+        assertNull(resolver.lookup(item, exampleToken, onFailure = { issues += it }))
+        assertEquals(listOf(TmdbLookupFailure.NETWORK_ERROR), issues)
+        offline = false
+        assertEquals("https://image.tmdb.org/t/p/w780/poster.jpg",
+            resolver.lookup(item, exampleToken, onFailure = { issues += it })?.posterUrl)
+        assertEquals(1, issues.size)
+    }
+
+    @Test fun absentTitleIsCountedAsNoMatchButNotAsNetworkFailure() {
+        val resolver = ArtworkMetadataResolver(temp.newFolder(),
+            ArtworkJsonFetcher { _, _ -> """{"results":[]}""" })
+        var issue: TmdbLookupFailure? = null
+        val item = film("确实没有这部作品", "2024", "电影")
+        assertNull(resolver.lookup(item, exampleToken, onFailure = { issue = it }))
+        assertEquals(TmdbLookupFailure.NO_MATCH, issue)
+        issue = null
+        assertNull(resolver.lookup(item, exampleToken, onFailure = { issue = it }))
+        assertEquals(TmdbLookupFailure.NO_MATCH, issue)
+    }
+
+    @Test fun rateLimitedLookupIsReportedAndCanRetryWithoutNegativeCache() {
+        var rateLimited = true
+        val token = "R".repeat(60)
+        val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, _ ->
+            if (rateLimited) throw ArtworkRateLimitFailure()
+            when {
+                "/search/movie?" in url -> """{"results":[{"id":77,"title":"重试影片",
+                    "release_date":"2025-01-01","poster_path":"/retry.jpg"}]}"""
+                "/movie/77?" in url -> """{"id":77,"credits":{"cast":[]}}"""
+                else -> error("Unexpected endpoint")
+            }
+        })
+        var issue: TmdbLookupFailure? = null
+        val item = film("重试影片", "2025", "电影")
+        assertNull(resolver.lookup(item, token, onFailure = { issue = it }))
+        assertEquals(TmdbLookupFailure.RATE_LIMITED, issue)
+        rateLimited = false
+        assertEquals("https://image.tmdb.org/t/p/w780/retry.jpg",
+            resolver.lookup(item, token)?.posterUrl)
+    }
+
 }

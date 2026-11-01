@@ -236,6 +236,10 @@ internal object ArtworkMatch {
     }
 }
 
+internal enum class TmdbLookupFailure {
+    INVALID_INPUT, NO_MATCH, UNAUTHORIZED, RATE_LIMITED, NETWORK_ERROR, SERVER_ERROR, INVALID_RESPONSE
+}
+
 internal fun interface ArtworkJsonFetcher {
     fun load(url: String, readAccessToken: String): String?
 }
@@ -256,12 +260,22 @@ internal class ArtworkMetadataResolver(
         if (token.isNotBlank()) rejectedTokens.remove(hash(token.trim()))
     }
 
-    fun lookup(film: Film, readAccessToken: String, forceRefresh: Boolean = false): EnrichedArtwork? {
+    fun lookup(
+        film: Film,
+        readAccessToken: String,
+        forceRefresh: Boolean = false,
+        onFailure: ((TmdbLookupFailure) -> Unit)? = null
+    ): EnrichedArtwork? {
+        fun failed(issue: TmdbLookupFailure): EnrichedArtwork? {
+            onFailure?.invoke(issue)
+            return null
+        }
         val token = readAccessToken.trim()
-        if (!Regex("^[A-Za-z0-9._~-]{20,1000}$").matches(token) || film.title.isBlank()) return null
+        if (!Regex("^[A-Za-z0-9._~-]{20,1000}$").matches(token) || film.title.isBlank())
+            return failed(TmdbLookupFailure.INVALID_INPUT)
         val identity = ArtworkTitle.identify(film)
         val queryTitle = identity.title
-        if (queryTitle.isBlank()) return null
+        if (queryTitle.isBlank()) return failed(TmdbLookupFailure.INVALID_INPUT)
         val manual = manualMatch(film)
         // CMS type_name is often a genre such as 科幻、悬疑 or simply 未知.
         // Do not silently skip these films: try the official movie catalog first,
@@ -274,12 +288,13 @@ internal class ArtworkMetadataResolver(
             val maxAge = if (parsed?.optBoolean("negative") == true) 3L * 3600 * 1000
                 else 14L * 24 * 3600 * 1000
             if (System.currentTimeMillis() - file.lastModified() in 0L..maxAge) {
-                if (parsed?.optBoolean("negative") == true) return null
+                if (parsed?.optBoolean("negative") == true) return failed(TmdbLookupFailure.NO_MATCH)
                 parsed?.let { decodeCached(it) }?.let { return it }
             }
         }
         val tokenKey = hash(token)
-        if ((rejectedTokens[tokenKey] ?: 0L) > System.currentTimeMillis()) return null
+        if ((rejectedTokens[tokenKey] ?: 0L) > System.currentTimeMillis())
+            return failed(TmdbLookupFailure.UNAUTHORIZED)
         // Multiple 80-title shelves must not flood TMDB with simultaneous requests.
         networkLimit.acquire()
         try {
@@ -289,19 +304,30 @@ internal class ArtworkMetadataResolver(
             } else "https://api.themoviedb.org/3/search/$category?query=" +
                 URLEncoder.encode(queryTitle, "UTF-8") + "&language=zh-CN&include_adult=false&page=1"
             val response = try { fetcher.load(searchUrl, token) }
-                catch (auth: ArtworkAuthenticationFailure) {
+                catch (_: ArtworkAuthenticationFailure) {
                     rejectedTokens[tokenKey] = System.currentTimeMillis() + 30L * 60 * 1000
-                    return null
-                } catch (_: Exception) { null }
-            // Transport errors are retryable; a failed network is not a negative title match.
-            if (response == null) return null
-            val root = runCatching { JSONObject(response) }.getOrNull() ?: return null
+                    return failed(TmdbLookupFailure.UNAUTHORIZED)
+                } catch (_: ArtworkRateLimitFailure) {
+                    return failed(TmdbLookupFailure.RATE_LIMITED)
+                } catch (e: ArtworkHttpStatusFailure) {
+                    return failed(if (e.status in 500..599) TmdbLookupFailure.SERVER_ERROR
+                        else TmdbLookupFailure.NETWORK_ERROR)
+                } catch (_: java.io.IOException) {
+                    return failed(TmdbLookupFailure.NETWORK_ERROR)
+                } catch (_: Exception) {
+                    return failed(TmdbLookupFailure.SERVER_ERROR)
+                }
+            if (response == null) return failed(TmdbLookupFailure.SERVER_ERROR)
+            val root = runCatching { JSONObject(response) }.getOrNull()
+                ?: return failed(TmdbLookupFailure.INVALID_RESPONSE)
             var matchedCategory = category
             val candidate = if (manual != null) {
-                if (root.optInt("id") != manual.id || root.optBoolean("adult")) return null
+                if (root.optInt("id") != manual.id || root.optBoolean("adult"))
+                    return failed(TmdbLookupFailure.NO_MATCH)
                 candidates(JSONArray().put(root), category).singleOrNull()
             } else {
-                val results = root.optJSONArray("results") ?: return null
+                val results = root.optJSONArray("results")
+                    ?: return failed(TmdbLookupFailure.INVALID_RESPONSE)
                 val primary = ArtworkMatch.best(queryTitle, identity.year.orEmpty(),
                     candidates(results, category))
                 if (primary != null) primary else {
@@ -314,21 +340,29 @@ internal class ArtworkMetadataResolver(
                         URLEncoder.encode(queryTitle, "UTF-8") +
                         "&language=zh-CN&include_adult=false&page=1"
                     val otherResponse = try { fetcher.load(url, token) }
-                        catch (auth: ArtworkAuthenticationFailure) {
+                        catch (_: ArtworkAuthenticationFailure) {
                             rejectedTokens[tokenKey] = System.currentTimeMillis() + 30L * 60 * 1000
-                            return null
-                        } catch (_: Exception) { null }
-                    // If the alternate request failed, don't poison the cache:
-                    // this is a connection problem, not an absent movie.
-                    if (otherResponse == null) return null
+                            return failed(TmdbLookupFailure.UNAUTHORIZED)
+                        } catch (_: ArtworkRateLimitFailure) {
+                            return failed(TmdbLookupFailure.RATE_LIMITED)
+                        } catch (e: ArtworkHttpStatusFailure) {
+                            return failed(if (e.status in 500..599) TmdbLookupFailure.SERVER_ERROR
+                                else TmdbLookupFailure.NETWORK_ERROR)
+                        } catch (_: java.io.IOException) {
+                            return failed(TmdbLookupFailure.NETWORK_ERROR)
+                        } catch (_: Exception) {
+                            return failed(TmdbLookupFailure.SERVER_ERROR)
+                        }
+                    // Failed networks never poison the negative-title cache.
+                    if (otherResponse == null) return failed(TmdbLookupFailure.SERVER_ERROR)
                     val otherList = runCatching { JSONObject(otherResponse).optJSONArray("results") }
-                        .getOrNull() ?: return null
+                        .getOrNull() ?: return failed(TmdbLookupFailure.INVALID_RESPONSE)
                     ArtworkMatch.best(queryTitle, identity.year.orEmpty(),
                         candidates(otherList, other)).also {
                         if (it != null) matchedCategory = other
                     }
                 }
-            } ?: run { cacheNegative(file); return null }
+            } ?: run { cacheNegative(file); return failed(TmdbLookupFailure.NO_MATCH) }
             // Manual corrections already fetched detail; otherwise read the
             // matched category's credits, never the original misclassified tab.
             val detail = if (manual != null) TmdbCreditsParser.parse(response, matchedCategory)
@@ -352,7 +386,8 @@ internal class ArtworkMetadataResolver(
                 if (matchedCategory == "tv") candidate.tmdbId else null,
                 candidate.names.firstOrNull { it.isNotBlank() }?.take(160), candidate.tmdbId, matchedCategory
             )
-            if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null) return null
+            if (picture.posterUrl == null && picture.backdropUrl == null && synopsis == null)
+                return failed(TmdbLookupFailure.NO_MATCH)
             persist(file, JSONObject().put("poster", picture.posterUrl ?: "")
                 .put("backdrop", picture.backdropUrl ?: "")
                 .put("overview", picture.synopsis ?: "")
@@ -488,13 +523,12 @@ internal class ArtworkMetadataResolver(
     }
 }
 
-internal class ArtworkAuthenticationFailure : Exception()
+internal class ArtworkAuthenticationFailure(val status: Int = 401) : Exception()
 internal class ArtworkRateLimitFailure : Exception()
+internal class ArtworkHttpStatusFailure(val status: Int) : java.io.IOException()
 
 internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
-    // Requests are performed on IO threads. Three concurrent lookup workers
-    // alone can still burst >40 requests per 10 seconds when results are fast.
-    // Bound *all* API calls (configuration, search, details) without UI blocking.
+    // All TMDB GET requests share a paced queue, including probe and details.
     private val paceLock = Any()
     private var nextRequestAtMs = 0L
     private fun paceRequest() = synchronized(paceLock) {
@@ -503,21 +537,37 @@ internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
         if (delay > 0) Thread.sleep(delay)
         nextRequestAtMs = System.nanoTime() / 1_000_000 + 320L
     }
+
     override fun load(url: String, readAccessToken: String): String? {
-        paceRequest()
+        // Retry a transient GET transport/5xx failure just once. Never retry
+        // unauthorized, rate-limited or other 4xx responses automatically.
+        for (attempt in 0..1) {
+            paceRequest()
+            try {
+                return requestOnce(url, readAccessToken)
+            } catch (e: java.io.IOException) {
+                if (e is ArtworkHttpStatusFailure && e.status !in 500..599) throw e
+                if (attempt == 1) throw e
+                Thread.sleep(350L)
+            }
+        }
+        return null
+    }
+
+    private fun requestOnce(url: String, readAccessToken: String): String? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 3500
-            readTimeout = 4500
+            connectTimeout = 6000
+            readTimeout = 8000
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Authorization", "Bearer $readAccessToken")
         }
         return try {
             val status = connection.responseCode
-            if (status in setOf(401, 403)) throw ArtworkAuthenticationFailure()
+            if (status == 401 || status == 403) throw ArtworkAuthenticationFailure(status)
             if (status == 429) throw ArtworkRateLimitFailure()
-            if (status != 200 ||
-                !connection.contentType.orEmpty().startsWith("application/json")) return null
+            if (status != 200) throw ArtworkHttpStatusFailure(status)
+            if (!connection.contentType.orEmpty().startsWith("application/json")) return null
             if (connection.contentLengthLong > 1_000_000) return null
             connection.inputStream.use { stream ->
                 val data = java.io.ByteArrayOutputStream()
