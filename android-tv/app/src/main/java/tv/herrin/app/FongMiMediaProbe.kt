@@ -5,6 +5,7 @@
  */
 package tv.herrin.app
 
+import tv.herrin.app.fongmi.parse.MediaSniffer
 import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,7 +17,7 @@ internal object FongMiMediaProbe {
         .callTimeout(4, TimeUnit.SECONDS).build()
 
     internal fun isMedia(contentType: String, prefix: ByteArray): Boolean =
-        tv.herrin.app.fongmi.parse.MediaSniffer.isMedia(contentType, prefix)
+        MediaSniffer.isMedia(contentType, prefix)
 
     fun probe(raw: String, headers: Map<String, String>, allowHttp: Boolean,
         calls: MutableSet<Call>): Boolean {

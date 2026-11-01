@@ -217,7 +217,11 @@ internal object FongMiBrowserPlayback {
                     try {
                         val cookie = parser.headers.entries.firstOrNull { it.key.equals("Cookie", true) }?.value
                         if (!cookie.isNullOrBlank()) CookieManager.getInstance().setCookie(target, cookie)
-                        view.loadUrl(target, FongMiParsePlayback.safeHeaders(parser.headers, target, target))
+                        // CookieManager applies origin/path scoping through redirects.
+                        // WebView.loadUrl extra headers have no redirect-origin hook;
+                        // never place raw credentials in that extra-header map.
+                        view.loadUrl(target, FongMiParsePlayback.safeHeaders(parser.headers, target, target)
+                            .filterKeys { !it.equals("Cookie", true) && !it.equals("Authorization", true) })
                     } catch (_: Exception) {
                         finish(PlaybackResult.Unavailable("网页解析入口启动失败"))
                     }

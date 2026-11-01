@@ -67,7 +67,8 @@ internal object FongMiParsePlayback {
         playbackParsers: List<TvBoxPlaybackParser> = emptyList(),
         loader: ClassLoader? = null, siteClick: String = "",
         vipFlags: List<String> = emptyList(),
-        videoCheck: ((String) -> Boolean)? = null
+        videoCheck: ((String) -> Boolean)? = null,
+        normalizeMedia: ((String) -> String?)? = null
     ): PlaybackResult {
         val root = runCatching { JSONObject(playerContent) }.getOrNull()
             ?: return PlaybackResult.Unavailable("PARSE_INVALID_JSON：Spider 播放数据不是有效 JSON")
@@ -131,6 +132,7 @@ internal object FongMiParsePlayback {
                         override fun jsonExtMix(flag: String, key: String, name: String,
                             jxs: LinkedHashMap<String, HashMap<String, String>>, url: String): Any =
                             FongMiJarPlayback.invoke(loader, 3, key, name, flag, null, jxs, url)
+                        override fun convertUrl(url: String): String = normalizeMedia?.invoke(url) ?: url
                         override fun webSupported() = true
                         override fun post(task: Runnable) { main.post(task) }
                         override fun startWeb(key: String, from: String, headers: Map<String, String>,
@@ -148,7 +150,8 @@ internal object FongMiParsePlayback {
                     val job = ParseJob.create(host, object : ParseCallback {
                         override fun onParseSuccess(headers: Map<String, String>, url: String, from: String) {
                             if (!cont.isActive) return
-                            val normalized = TvBoxUrl.normalize(url, allowHttp)
+                            val boundUrl = if (normalizeMedia == null) url else normalizeMedia(url)
+                            val normalized = boundUrl?.let { TvBoxUrl.normalize(it, allowHttp) }
                             val parserUrl = parsers.firstOrNull { it.name == from }?.url
                                 ?: selected?.url?.takeIf { it.startsWith("http") }
                                 ?: result.playUrl.removePrefix("json:").takeIf { it.startsWith("http") }
