@@ -214,7 +214,7 @@ class SpiderLoopbackProxyTest {
             val uri = (fixed as PlaybackResult.Ready).media.uri
             assertEquals(proxy.port, URL(uri).port)
             assertTrue(uri.contains("session="))
-            assertTrue(SpiderProxyPlayback.ping(uri))
+            assertTrue(kotlinx.coroutines.runBlocking { SpiderProxyPlayback.ping(uri) })
             assertArrayEquals(byteArrayOf(4, 2), request(uri).inputStream.use { it.readBytes() })
         }
     }
