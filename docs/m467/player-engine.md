@@ -20,7 +20,7 @@
 | `ExoUtil#buildLoadControl/buildTrackSelector/buildPlayer/buildRenderersFactory` | `FongMiExoPlayerFactory.create` | 对照源码移植公开 ABI 支持的 streaming/local buffer、最高支持码率、语言、AAC、tunneling、预热、audio focus/noisy、headers；DecoderManager / 特制 renderer 部分阻断 |
 | `MediaItemFactory#from/buildSubConfig/buildRequestMetadata/toBundle`、`TrackUtil#getSubtitleMimeType` | `FongMiExoPlayerFactory.mediaItem` | 宿主播放模型接口适配：外部字幕稳定 ID、SRT/ASS/SSA/VTT/TTML MIME、headers。宿主不具备上游显式字幕 flags、DRM/ISO 模型，未虚称移植这些能力 |
 
-`player-method-map.tsv` 是上述 **11 个上游类的全部 205 个方法/构造器声明** 的逐方法清单，含上游行号、宿主文件、状态及对应测试。`InventoryPlayerMethods.java` 使用 JDK 的 Java AST，不靠文本命中猜测覆盖率。`BLOCKED` 或 `PARTIAL` 行不算完成。无法运行的方法明确写 `NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET`。
+`player-method-map.tsv` 是上述 **11 个上游类的全部 205 个方法/构造器声明** 的逐方法清单，含上游行号、宿主文件、状态及对应测试。`InventoryPlayerMethods.java` 使用 JDK 的 Java AST，不靠文本命中猜测覆盖率。`scripts/m467/build-player-map.py` 可重生成机器可读 TSV；已用 CSV 解析校验全部 206 行（含表头）每行都是 7 列真实 TAB。205 行中 167 为 BLOCKED、11 为 PARTIAL，不能计作完成。`BLOCKED` 或 `PARTIAL` 行不算完成。无法运行的方法明确写 `NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET`。
 
 UI 连接由恢复 Agent 修改播放控制构造，不变更布局或影片资料。新增工厂不会设置 ClearKey、不会伪造 license/DRM provider；委托合法平台 DRM 验证。每会话 headers 不进入全局 URL-only 缓存，保留 Herrin 的凭据隔离。当前真实平台 codec fallback 被保留；它不是 FFmpeg 软件解码，不能拿来掩盖代理错误。
 
@@ -29,7 +29,7 @@ UI 连接由恢复 Agent 修改播放控制构造，不变更布局或影片资�
 `native-audit.json` 由 `scripts/m467/audit-native-dependencies.py` 只读核查并记录 SHA、ELF 架构、DT_NEEDED、SHA256；退出码 `2` 明确表示 **BLOCKED**：
 
 1. TV `app/libs` 未提供 `lib-mpvplayer-release.aar`、`lib-decoder-ffmpeg-release.aar`。仓库通过 `lib-*.aar` 忽略全部这些输入，不能直接复现当前构建。
-2. 公开 `media` 定制分支（2026-08-12）的源码不存在 TV 当前使用的 `DecoderManager`、`LibassPlaybackSession`、`LibassSubtitleController`、`ContentTypeResolvingMediaSource`、`SubtitleTranscriptSession`、`ProgressiveIsoCache`、`DiskPreloadManager`、`SecondaryTextTrackSelector`。因此直接复制当前 `ExoPlayerSession`、`ExoSubtitleController`、`MpvPlayerEngine` 等会产生真实编译错误。没有新增假类去填平缺失 ABI。
+2. 公开 `media` 定制分支（2026-08-12）的源码不存在 TV 当前使用的 `DecoderManager`、`LibassPlaybackSession`、`LibassSubtitleController`、`ContentTypeResolvingMediaSource`、`SubtitleTranscriptSession`、`ProgressiveIsoCache`、`SecondaryTextTrackSelector`。其中 `DiskPreloadManager` 在公开分支中存在；其余上述 7 个必要 API 缺失。因此直接复制当前 `ExoPlayerSession`、`ExoSubtitleController`、`MpvPlayerEngine` 等会产生真实编译错误。没有新增假类去填平缺失 ABI。
 3. 公开分支附带的 arm32/arm64 `.so` 的 DT_NEEDED 包含分离 `libavcodec.so` 等；当前 TV 的 `MpvNativeLibraries.groovy` 明确拒绝这些 split FFmpeg，要求统一 `libffmpeg.so`。把旧二进制凑进新 Java 层不能通过上游自己的 ABI 核查。旧 `.so` 没有进入本 PR。
 4. 真正执行 `/workspace/fongmi-mpv-android/buildscripts/buildall.sh --arch arm64 mpv`，退出码 `1`、完整日志 `/workspace/logs/m467-native-build-arm64.log`：`Can't find toolchain inside NDK`。当前构建脚本固定 NDK `r30/30.0.16248370`、Android API24，环境没有该 NDK。安装 NDK 仍不能解决第 1–3 项 Java/ABI 版本不匹配。
 
@@ -50,6 +50,7 @@ UI 连接由恢复 Agent 修改播放控制构造，不变更布局或影片资�
 
 - 已实际运行 `scripts/m467/generate-engine-fixtures.sh`，FFmpeg 重封装 MKV/HLS/DASH 并 ffprobe 检查 MP4、MKV、HLS master/child、DASH；H.264/AAC 正常，原 MKV 保留双 AAC 音轨，日志 `/workspace/logs/m467-engine-fixtures.log`。
 - 新增 JVM 3 例：精确分段/时长/UTF8、非法分段、全部字幕 MIME。
+- 新增 Android 仪器 3 例 `M467FongMiTrackRestoreTest`：真实 Media3 轨道模型在 manifest ID/ordinal 变化后的语言/标签恢复、缺失语言待恢复及关闭状态、secondary role/格式往返。
 - 新增 Android 仪器 8 例 `M467EngineContainerTest`：真实 HTTP MP4/MKV 双音轨/HLS 主子列表分段/DASH init+fragment → 实际 Media3 输出帧；SRT/ASS/SSA/VTT 实际 cue。ASS/SSA 只声称文字 cue，未声称 libass 特效。
 - 首轮 Gradle 命令：`:app:testDebugUnitTest --tests tv.herrin.app.M467FongMiMediaContractTest :app:compileDebugAndroidTestKotlin`。依赖解析被基线 `com.github.thegrizzlylabs:sardine-android:0.9` 的 `jitpack.io` HTTP403 阻断；没有执行 JVM 或模拟器测试。完整日志 `/workspace/logs/m467-engine-gradle.log`。后续运行结果必须追加，不允许把编译通过计为仪器通过。
 - 尚无 mpv/FFmpeg fallback、libass、预加载/decoder manager、4K/HDR 真机和 TCL 第三方源通过证据。不得将模拟器上的合成源输出帧扩大为这些结论。

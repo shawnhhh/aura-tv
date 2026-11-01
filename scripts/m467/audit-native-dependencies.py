@@ -18,7 +18,7 @@ def audit(tv, media, mpv):
         "ContentTypeResolvingMediaSource", "SubtitleTranscriptSession",
         "ProgressiveIsoCache", "DiskPreloadManager", "SecondaryTextTrackSelector",
     ]
-    source_files = list((media / "libraries").rglob("*.java"))
+    source_files = [p for p in (media / "libraries").rglob("*") if p.suffix in {".java", ".kt"}]
     source_names = {p.stem for p in source_files}
     api = {name: name in source_names for name in required_api}
     aars = {name: (tv / "app/libs" / name).is_file() for name in [
@@ -51,6 +51,7 @@ def audit(tv, media, mpv):
         "tv_sha": command("git", "rev-parse", "HEAD", cwd=tv),
         "media_sha": command("git", "rev-parse", "HEAD", cwd=media),
         "mpv_android_sha": command("git", "rev-parse", "HEAD", cwd=mpv),
+        "source_files_checked": len(source_files),
         "required_java_api_present": api, "required_aars_present": aars,
         "current_tv_requires_unified_ffmpeg": unified_required,
         "public_media_native_libraries": libraries, "blockers": blockers,
