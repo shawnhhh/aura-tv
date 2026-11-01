@@ -370,6 +370,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeKey: String? = null
     private var activeVipFlags: List<String> = emptyList()
     private var activeJsonParsers: List<TvBoxJsonParse> = emptyList()
+    private var activePlaybackParsers: List<TvBoxPlaybackParser> = emptyList()
+    private var activeDexLoader: DexClassLoader? = null
     private var activeSiteHeaders: Map<String, String> = emptyMap()
     private var activeHttpHost: SpiderHttpSessionHost? = null
     private var activeLoopbackProxy: SpiderLoopbackProxy? = null
@@ -448,7 +450,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
                 created.init(context, site.extension)
                 created.also { active = it; activeKey = key; activeHttpHost = httpHost
-                    activeLoopbackProxy = localProxy }
+                    activeLoopbackProxy = localProxy; activeDexLoader = loader }
             } catch (error: Throwable) {
                 localProxy.close()
                 CatVodProxy.set(-1, "")
@@ -462,6 +464,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         // playable result as TVBox for an otherwise identical episode ID.
         activeVipFlags = config.vipFlags.take(32)
         activeJsonParsers = config.jsonParsers.take(16)
+        activePlaybackParsers = config.playbackParsers.take(24)
         activeSiteHeaders = site.headers
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
         val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
@@ -491,12 +494,37 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // HERRIN's existing isolated Spider playback process. The result
             // is still just PlaybackMedia; no film metadata or UI is mutated.
             val decision = FongMiPlaybackRouter.route(
-                raw, selected.title, activeJsonParsers, allowHttp, activeSiteHeaders)
+                raw, selected.title, activeJsonParsers, allowHttp, activeSiteHeaders,
+                activePlaybackParsers)
             val resolved = when (decision) {
                 is FongMiPlayRoute.Direct -> decision.playback
                 is FongMiPlayRoute.JsonParser -> kotlinx.coroutines.runBlocking {
                     TvBoxJsonPlayback.resolve(
                         decision.parser, decision.originalUrl, allowHttp)
+                }
+                is FongMiPlayRoute.BrowserParser -> kotlinx.coroutines.runBlocking {
+                    FongMiBrowserPlayback.resolve(context, decision.parser,
+                        decision.originalUrl, allowHttp)
+                }
+                is FongMiPlayRoute.JarParser -> FongMiJarPlayback.resolve(
+                    activeDexLoader, decision.parser, decision.originalUrl,
+                    decision.flag, activePlaybackParsers, allowHttp)
+                is FongMiPlayRoute.Aggregate -> {
+                    var candidate: PlaybackResult = PlaybackResult.Unavailable(
+                        "当前聚合解析器没有可用的播放结果")
+                    for (parser in decision.parsers.take(6)) {
+                        candidate = kotlinx.coroutines.runBlocking {
+                            when (parser.type) {
+                                0 -> FongMiBrowserPlayback.resolve(context, parser,
+                                    decision.originalUrl, allowHttp)
+                                1 -> TvBoxJsonPlayback.resolve(parser.asJson(),
+                                    decision.originalUrl, allowHttp)
+                                else -> PlaybackResult.Unavailable("聚合子解析器类型无效")
+                            }
+                        }
+                        if (candidate is PlaybackResult.Ready) break
+                    }
+                    candidate
                 }
                 is FongMiPlayRoute.Unavailable ->
                     PlaybackResult.Unavailable(decision.message)
@@ -519,6 +547,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         activeKey = null
         activeVipFlags = emptyList()
         activeJsonParsers = emptyList()
+        activePlaybackParsers = emptyList()
+        activeDexLoader = null
         activeSiteHeaders = emptyMap()
         activeHttpHost?.clear()
         activeHttpHost = null
