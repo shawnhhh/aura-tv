@@ -79,7 +79,7 @@ internal object PlaybackErrorReport {
                 ?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 100..599 }
         else null
         val webViewCode = if (stage == "BROWSER")
-            Regex("WebView 错误 (-?[0-9]{1,4})").find(raw)
+            Regex("错误 (-?[0-9]{1,4})").find(raw)
                 ?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in -9999..9999 }
         else null
         val kind = when {
