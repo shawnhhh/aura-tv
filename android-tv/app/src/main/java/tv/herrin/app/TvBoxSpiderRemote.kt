@@ -47,7 +47,8 @@ internal object SpiderIpc {
 
     fun site(site: TvBoxSite): JSONObject = JSONObject()
         .put("name", site.name).put("key", site.key)
-        .put("spiderApi", site.spiderApi ?: "").put("ext", site.extension)
+        .put("spiderApi", site.spiderApi ?: "").put("scriptApi", site.scriptApi ?: "")
+        .put("ext", site.extension)
         .put("jar", site.jar ?: "")
         .put("header", JSONObject(site.headers))
 
@@ -56,6 +57,12 @@ internal object SpiderIpc {
         needsAdapter = true,
         key = obj.optString("key").take(90),
         spiderApi = obj.optString("spiderApi").takeIf { it.startsWith("csp_") },
+        scriptApi = obj.optString("scriptApi").takeIf { api ->
+            (api.startsWith("node:") && api.length <= 256) ||
+                (TvBoxUrl.normalize(api, true) != null && (
+                    api.substringBefore('?').endsWith(".js", true) ||
+                    api.substringBefore('?').endsWith(".py", true)))
+        },
         extension = obj.optString("ext").take(64_000),
         jar = obj.optString("jar").takeIf { it.isNotBlank() },
         headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))

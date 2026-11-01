@@ -511,8 +511,9 @@ private fun Herrin() {
             var cmsElapsed = 0L
             val hasRunnableSpider = candidates.any { site ->
                 val jar = site.jar ?: config.spiderJar
-                site.spiderApi != null && jar != null && TvBoxSpiderPolicy.mayRun(
-                    runSpiderAfterApply, prefs.tvBoxWarehouseUrl, jar,
+                (site.spiderApi != null || site.scriptApi != null) &&
+                    (jar != null || site.scriptApi != null) && TvBoxSpiderPolicy.mayRun(
+                    runSpiderAfterApply, prefs.tvBoxWarehouseUrl, jar ?: site.scriptApi.orEmpty(),
                     prefs.tvBoxTrustedSpiderRootUrl, prefs.tvBoxTrustedSpiderJarSpec)
             }
             for ((candidateIndex, site) in candidates.withIndex()) {
@@ -522,7 +523,7 @@ private fun Herrin() {
                     break
                 }
                 val timeout = TvBoxAutoScanPolicy.timeoutMs(
-                    elapsed, cmsElapsed, hasRunnableSpider, spider = site.spiderApi != null)
+                    elapsed, cmsElapsed, hasRunnableSpider, spider = site.spiderApi != null || site.scriptApi != null)
                     ?: continue
                 if (site.apiUrl != null) {
                     vodImportFeedback = "探测 ${candidateIndex + 1}/${candidates.size}"
@@ -539,8 +540,8 @@ private fun Herrin() {
                         }
                         else -> Unit
                     }
-                } else if (site.spiderApi != null) {
-                    val jarSpec = site.jar ?: config.spiderJar ?: continue
+                } else if (site.spiderApi != null || site.scriptApi != null) {
+                    val jarSpec = site.jar ?: config.spiderJar ?: site.scriptApi ?: continue
                     // No silent execution of a changed or newly introduced JAR on startup.
                     if (!TvBoxSpiderPolicy.mayRun(runSpiderAfterApply, prefs.tvBoxWarehouseUrl,
                             jarSpec, prefs.tvBoxTrustedSpiderRootUrl,
@@ -1522,7 +1523,7 @@ private fun Herrin() {
                                         }
                                     }
                                 }
-                                site.spiderApi != null && selected != null -> uiScope.launch {
+                                (site.spiderApi != null || site.scriptApi != null) && selected != null -> uiScope.launch {
                                     tvBoxStatus = "正在通过 ${site.name} 加载影片…"
                                     when (val result = spiderBridge.browse(site, selected)) {
                                         is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${result.message}"
@@ -2601,7 +2602,7 @@ private fun Herrin() {
                                     }
                                 } }
                             }
-                            val spiderSites = preview.sites.filter { it.spiderApi != null }
+                            val spiderSites = preview.sites.filter { it.spiderApi != null || it.scriptApi != null }
                             if (spiderSites.isNotEmpty()) {
                                 item { Text("Java Spider 影视站点 · ${spiderSites.size} 个", fontSize = 18.sp) }
                                 item { LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -53,6 +53,7 @@ internal object TvBoxSpiderPolicy {
 internal object TvBoxAutoSites {
     fun identity(site: TvBoxSite, defaultJar: String?): String {
         val value = listOf(site.key, site.apiUrl.orEmpty(), site.spiderApi.orEmpty(),
+            site.scriptApi.orEmpty(),
             if (site.spiderApi != null) site.jar ?: defaultJar.orEmpty() else "")
             .joinToString("\u0000")
         return MessageDigest.getInstance("SHA-256")
@@ -64,14 +65,14 @@ internal object TvBoxAutoSites {
     fun resumeOnly(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
         if (preferredId.isBlank()) return emptyList()
         return listOfNotNull(config.sites.firstOrNull {
-            (it.apiUrl != null || it.spiderApi != null) &&
+            (it.apiUrl != null || it.spiderApi != null || it.scriptApi != null) &&
                 identity(it, config.spiderJar) == preferredId
         })
     }
 
     fun candidates(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
         val direct = config.sites.filter { it.apiUrl != null }.take(8)
-        val spider = config.sites.filter { it.spiderApi != null }
+        val spider = config.sites.filter { it.spiderApi != null || it.scriptApi != null }
             .sortedBy { site ->
                 if (listOf("云盘", "片单", "预告", "音乐").any { site.name.contains(it) }) 1 else 0
             }.take(12)
@@ -187,7 +188,9 @@ internal object TvBoxConfigParser {
                         val direct = TvBoxUrl.normalize(api, allowHttp = true)
                         // TVBox drpy/JS rules are script definitions, not JSON CMS endpoints.
                         // Fetching them with ac=detail mislabels a script as a playable catalog.
-                        val script = direct?.takeIf { address ->
+                        val script = if (api.startsWith("node:") &&
+                            api.length <= 256 && api.none { it.isWhitespace() }) api
+                        else direct?.takeIf { address ->
                             runCatching { URI(address).path.lowercase().let {
                                 it.endsWith(".js") || it.endsWith(".py")
                             } }.getOrDefault(false)

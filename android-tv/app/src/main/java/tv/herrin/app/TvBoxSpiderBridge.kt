@@ -372,6 +372,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeJsonParsers: List<TvBoxJsonParse> = emptyList()
     private var activePlaybackParsers: List<TvBoxPlaybackParser> = emptyList()
     private var activeDexLoader: DexClassLoader? = null
+    private var activeScriptRuntime: FongMiScriptRuntimes? = null
     private var activeSiteHeaders: Map<String, String> = emptyMap()
     private var activeHttpHost: SpiderHttpSessionHost? = null
     private var activeLoopbackProxy: SpiderLoopbackProxy? = null
@@ -392,19 +393,45 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = attempt {
-        val spiderApi = site.spiderApi ?: run {
+        val spiderApi = site.spiderApi
+        val scriptApi = site.scriptApi
+        if (spiderApi == null && scriptApi == null) error("站点没有可执行的 CatVod API")
+        val jar = site.jar ?: config.spiderJar
+        if (spiderApi != null && jar == null) error("配置没有 Spider JAR")
+        val key = SpiderRuntimeCompat.sessionKey(jar.orEmpty(), site)
+        val spider = if (key == activeKey && active != null) active!! else {
             close()
-            error("站点不是 Java csp_* 类型")
-        }
-        val jar = site.jar ?: config.spiderJar ?: run {
-            close()
-            error("配置没有 Spider JAR")
-        }
-        val key = SpiderRuntimeCompat.sessionKey(jar, site)
-        val spider = if (key == activeKey) active!! else {
-            close()
+            if (scriptApi != null) {
+                Runtime.set(context.applicationContext)
+                Runtime.setActivity { null }
+                val host = SpiderHttpSessionHost()
+                val runtime = FongMiScriptRuntimes(context)
+                try {
+                    val created = runtime.create(site, host)
+                    val localProxy = SpiderLoopbackProxy(site.key) { params ->
+                        synchronized(created) { created.proxy(params) }
+                    }
+                    CatVodProxy.set(localProxy.port, localProxy.token)
+                    try {
+                        created.init(context, site.extension)
+                        created.also {
+                            active = it; activeKey = key; activeHttpHost = host
+                            activeLoopbackProxy = localProxy; activeScriptRuntime = runtime
+                        }
+                    } catch (error: Throwable) {
+                        localProxy.close()
+                        CatVodProxy.set(-1, "")
+                        SpiderRuntimeCompat.dispose(created)
+                        throw error
+                    }
+                } catch (error: Throwable) {
+                    runtime.close()
+                    host.clear()
+                    throw error
+                }
+            } else {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DOWNLOAD)
-            val file = SpiderJarCache.obtain(context, jar)
+            val file = SpiderJarCache.obtain(context, jar!!)
             // One ephemeral cookie jar per active site; never shared across source changes.
             val httpHost = SpiderHttpSessionHost()
             Runtime.set(context.applicationContext)
@@ -457,6 +484,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 SpiderRuntimeCompat.dispose(created)
                 httpHost.clear()
                 throw error
+            }
             }
         }
         // FongMi sends the root config's global VIP flags to playerContent.
@@ -550,6 +578,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         activeJsonParsers = emptyList()
         activePlaybackParsers = emptyList()
         activeDexLoader = null
+        activeScriptRuntime?.close()
+        activeScriptRuntime = null
         activeSiteHeaders = emptyMap()
         activeHttpHost?.clear()
         activeHttpHost = null
