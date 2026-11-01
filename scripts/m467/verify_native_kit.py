@@ -34,8 +34,8 @@ def media_api_errors(media_source):
     return ["Missing custom Media3 API: " + name for name in MEDIA_APIS if name not in names]
 
 
-def needed_from_readelf(blob):
-    """Read DT_NEEDED from extracted ELF; do not guess ABI from library filenames."""
+def elf_info_from_readelf(blob):
+    """Read ELF class, architecture and DT_NEEDED; filenames alone prove nothing."""
     executable = shutil.which("readelf")
     if not executable:
         raise RuntimeError("readelf is required to verify native dynamic dependencies")
@@ -43,12 +43,18 @@ def needed_from_readelf(blob):
         p = Path(d) / "lib.so"
         p.write_bytes(blob)
         result = subprocess.run([executable, "-d", str(p)], capture_output=True, text=True)
-    if result.returncode:
-        raise ValueError("Invalid ELF or unreadable dynamic section")
-    return re.findall(r"Shared library: \[([^\]]+)\]", result.stdout)
+        header = subprocess.run([executable, "-h", str(p)], capture_output=True, text=True)
+    if result.returncode or header.returncode:
+        raise ValueError("Invalid ELF or unreadable header/dynamic section")
+    cls = re.search(r"Class:\s+(ELF(?:32|64))", header.stdout)
+    machine = re.search(r"Machine:\s+([^\n]+)", header.stdout)
+    if not cls or not machine:
+        raise ValueError("Unreadable ELF class or machine")
+    needed = re.findall(r"Shared library: \[([^\]]+)\]", result.stdout)
+    return needed, cls.group(1), machine.group(1).strip()
 
 
-def aar_errors(kit, abis=ABIS, dependency_reader=needed_from_readelf):
+def aar_errors(kit, abis=ABIS, dependency_reader=elf_info_from_readelf):
     errors = []
     archives = {}
     for aar_name in AAR_NAMES:
@@ -82,7 +88,12 @@ def aar_errors(kit, abis=ABIS, dependency_reader=needed_from_readelf):
             if not path.startswith("jni/" + abi + "/"):
                 continue
             try:
-                needed = dependency_reader(blob)
+                needed, elf_class, machine = dependency_reader(blob)
+                expected_class, expected_machine = (
+                    ("ELF64", "AArch64") if abi == "arm64-v8a" else ("ELF32", "ARM")
+                )
+                if elf_class != expected_class or machine != expected_machine:
+                    errors.append(path + ": wrong ELF architecture: " + elf_class + " / " + machine)
                 for lib in needed:
                     if SPLIT_FFMPEG.match(lib):
                         errors.append(path + ": incompatible split FFmpeg dependency: " + lib)
