@@ -17,6 +17,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.CookieManager
 import android.webkit.WebViewClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -130,8 +131,19 @@ internal object FongMiBrowserPlayback {
                                             put("Referer", ref)
                                     }
                                     main.post {
+                                        // Chromium provides only cookies scoped to
+                                        // this exact media URL, never site-wide
+                                        // API credentials from a different host.
+                                        val scopedCookie = runCatching {
+                                            CookieManager.getInstance().getCookie(found)
+                                        }.getOrNull().orEmpty()
+                                        val finalHeaders = if (scopedCookie.isNotBlank() &&
+                                            scopedCookie.length <= 2_048 &&
+                                            '\r' !in scopedCookie && '\n' !in scopedCookie)
+                                            mediaHeaders + ("Cookie" to scopedCookie)
+                                        else mediaHeaders
                                         finish(PlaybackResult.Ready(PlaybackMedia(
-                                            uri = found, headers = mediaHeaders,
+                                            uri = found, headers = finalHeaders,
                                             allowHttpRedirects = allowHttp,
                                             declaredMime = PlaybackFormatRetry.initialMime(found)
                                         )))
