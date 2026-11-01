@@ -2908,70 +2908,13 @@ private fun Herrin() {
                                 }
                                 if (displayFilm.genres.isNotEmpty()) append("\n类型：").append(displayFilm.genres.joinToString(" · "))
                                 if (displayFilm.regions.isNotEmpty()) append("\n国家 / 地区：").append(displayFilm.regions.joinToString(" · "))
+                                verifiedStreams[streamEvidenceKey]?.labels()
+                                    ?.filter { it == "4K" || it.startsWith("HDR") ||
+                                        it.startsWith("Dolby") }
+                                    ?.distinct()?.take(3)?.forEach { append("  ·  ").append(it) }
                                 if (displayFilm.directors.isNotEmpty()) append("\n导演 / 主创：").append(displayFilm.directors.joinToString(" · "))
                             }, lineHeight = 25.sp, modifier = Modifier.testTag("detail-metadata"))
                         } }
-                        if (providerFilms != null) item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TvButton("纠正影片资料", Modifier.testTag("metadata-correct")) { metadataCorrection = film }
-                                TvButton("重新刮削本片", Modifier.testTag("metadata-rescrape-film")) {
-                                    metadataForceIds = setOf(film.id)
-                                    providerFilms = providerFilms?.map { if (it.id == film.id) FilmMetadataEnrichment.restore(it) else it }
-                                    metadataRescanEpoch++
-                                }
-                            }
-                        }
-                        item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("画质与音效", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                            val spec = verifiedStreams[streamEvidenceKey]
-                            val claims = SourceMediaClaims.labels(film.title,
-                                currentLines.firstOrNull { it.id == line }?.title.orEmpty())
-                            if (spec?.isKnown == true) Text(
-                                "播放器已识别轨道 · ${spec.labels().joinToString("  ·  ")}",
-                                modifier = Modifier.testTag("detail-media-spec"),
-                                color = Color(0xFFBCE2EF), fontSize = 17.sp)
-                            if (claims.isNotEmpty()) Text(
-                                "影视源标称：${claims.joinToString(" · ")}（未经播放验证）",
-                                modifier = Modifier.testTag("detail-source-claims"),
-                                color = Color(0xFFE5C58E), fontSize = 16.sp)
-                            if (spec?.isKnown != true && claims.isEmpty()) Text(
-                                "清晰度 / HDR / 杜比音效：播放后识别",
-                                modifier = Modifier.testTag("detail-media-spec"),
-                                color = Color(0xFFBCE2EF), fontSize = 17.sp)
-                            Text("规格以实际选中媒体轨道为依据，不代表电视已成功硬解或面板最终输出；未知时不猜测。",
-                                color = Color(0xFF8FA3B9), fontSize = 13.sp)
-                        } }
-                        if (displayFilm.people.isNotEmpty()) item {
-                            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                                Text("相关演职人员", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                                LazyRow(Modifier.testTag("detail-people"),
-                                    horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                                    itemsIndexed(displayFilm.people.take(10), key = { index, person ->
-                                        "$index-${person.name}" }) { index, person ->
-                                        var personFocused by remember(person.name) { mutableStateOf(false) }
-                                        Column(Modifier.width(122.dp)
-                                            .testTag("detail-person-$index")
-                                            .border(2.dp, if (personFocused) Color.White else Color.Transparent,
-                                                RoundedCornerShape(14.dp))
-                                            .onFocusChanged { personFocused = it.isFocused }
-                                            .focusable()
-                                            .padding(vertical = 7.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                            PersonPortrait(person, Modifier.size(82.dp))
-                                            Text(person.name, fontSize = 14.sp, maxLines = 2,
-                                                textAlign = TextAlign.Center, lineHeight = 17.sp)
-                                            Text(person.role.ifBlank { "演员" }, fontSize = 12.sp,
-                                                maxLines = 2, textAlign = TextAlign.Center,
-                                                color = Color(0xFFB7C5D5), lineHeight = 15.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        } else if (displayFilm.actors.isNotEmpty()) item {
-                            Text("主演：${displayFilm.actors.take(8).joinToString(" · ")}",
-                                modifier = Modifier.testTag("detail-people"), color = Color(0xFFD7E0EA))
-                        }
                         if (showGroup != null && screen == "detail") item {
                             Text("多季整合 · 当前目录 ${showGroup.members.size} 个原始条目 · 播放仍使用原影视点",
                                 modifier = Modifier.testTag("group-detail-members"),
@@ -3044,9 +2987,7 @@ private fun Herrin() {
                                     else if (seasonLayout != null && detailSeasonEntries.isNotEmpty())
                                         playSeasonEpisode(detailSeasonSource ?: detailSeasonEntries.first())
                                     else screen = "player"
-                                } else Text("请选择下方具体集数或播放线路",
-                                    modifier = Modifier.testTag("detail-choose-episode"),
-                                    color = Color(0xFFBDD8F0))
+                                }
                                 val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
                                     ?: (film.id in favorites)
                                 TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
@@ -3108,7 +3049,7 @@ private fun Herrin() {
                             } else {
                                 item { Text(if (providerFilms != null && film.playbackEpisodes.isEmpty())
                                     "原始条目 · 尚无可播放的真实选集"
-                                    else if (film.playbackEpisodes.isEmpty()) "演示选集" else "授权选集",
+                                    else if (film.playbackEpisodes.isEmpty()) "集数" else "集数",
                                     fontSize = 20.sp) }
                                 if (providerFilms != null && film.playbackEpisodes.isEmpty()) item {
                                     Text("当前影视点未返回有效的集数或线路；不会将演示集当作真实播放地址。",
@@ -3136,16 +3077,15 @@ private fun Herrin() {
                                                     },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 episode = entry.number
-                                                line = entry.lines.firstOrNull {
-                                                    AuthorizedUrls.https(it.uri) != null
-                                                }?.id ?: entry.lines.firstOrNull()?.id ?: line
+                                                line = entry.lines.firstOrNull { it.id == line }?.id
+                                                    ?: entry.lines.firstOrNull()?.id ?: line
                                                 screen = "player"
                                             }
                                         }
                                     }
                                 } }
                             }
-                            item { Text("播放线路 · 按方向键下键选择",
+                            item { Text("线路",
                                 modifier = Modifier.testTag("detail-line-heading"),
                                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
                             if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
@@ -3155,7 +3095,7 @@ private fun Herrin() {
                                     listOf("演示线路 A", "演示线路 B").forEachIndexed { index, name ->
                                         TvButton(name, modifier = Modifier.testTag("line-$name")
                                             .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier),
-                                            reduced = reduceMotion, selected = line == name) { line = name; screen = "player" }
+                                            reduced = reduceMotion, selected = line == name) { line = name }
                                     }
                                 } else {
                                     displayedLines.forEachIndexed { index, option ->
@@ -3164,7 +3104,6 @@ private fun Herrin() {
                                             selected = line == option.id) {
                                             line = option.id
                                             detailSeason?.let { detailSeasonLines[it.number] = option.id }
-                                            screen = "player"
                                         }
                                     }
                                 }
@@ -3175,9 +3114,38 @@ private fun Herrin() {
                                 Text(displayFilm.synopsis.ifBlank { "暂未取得可靠剧情简介" },
                                     modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
                                     color = Color(0xFFE1E8F2))
-                                if (displayFilm.metadataSource == "TMDB") Text("资料由 TMDB 提供；播放线路由你添加的影视源提供。",
-                                    fontSize = 13.sp, color = Color(0xFF9BAEC2))
                             } }
+                        if (displayFilm.people.isNotEmpty()) item {
+                            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                Text("相关演职人员", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                                LazyRow(Modifier.testTag("detail-people"),
+                                    horizontalArrangement = Arrangement.spacedBy(15.dp)) {
+                                    itemsIndexed(displayFilm.people.take(10), key = { index, person ->
+                                        "$index-${person.name}" }) { index, person ->
+                                        var personFocused by remember(person.name) { mutableStateOf(false) }
+                                        Column(Modifier.width(122.dp)
+                                            .testTag("detail-person-$index")
+                                            .border(2.dp, if (personFocused) Color.White else Color.Transparent,
+                                                RoundedCornerShape(14.dp))
+                                            .onFocusChanged { personFocused = it.isFocused }
+                                            .focusable()
+                                            .padding(vertical = 7.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            PersonPortrait(person, Modifier.size(82.dp))
+                                            Text(person.name, fontSize = 14.sp, maxLines = 2,
+                                                textAlign = TextAlign.Center, lineHeight = 17.sp)
+                                            Text(person.role.ifBlank { "演员" }, fontSize = 12.sp,
+                                                maxLines = 2, textAlign = TextAlign.Center,
+                                                color = Color(0xFFB7C5D5), lineHeight = 15.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (displayFilm.actors.isNotEmpty()) item {
+                            Text("主演：${displayFilm.actors.take(8).joinToString(" · ")}",
+                                modifier = Modifier.testTag("detail-people"), color = Color(0xFFD7E0EA))
+                        }
                             if (showGroup != null && unmappedGroupMembers.isNotEmpty()) item {
                                 GroupRawSourceChooser(unmappedGroupMembers, reduceMotion) { original ->
                                     bypassGroupFilmId = original.id
