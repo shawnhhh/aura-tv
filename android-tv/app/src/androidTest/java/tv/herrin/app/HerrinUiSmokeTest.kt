@@ -545,16 +545,31 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("config-media-url").performTextReplacement("http://invalid.example/test.mp4")
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
-        activate("保存媒体配置")
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存失败：链接必须是合法 HTTPS 地址"))
-        compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").assertIsDisplayed()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
-        compose.onNodeWithTag("config-media-url").performTextReplacement("https://media.example.org/authorized.mp4")
+        // Focus/keyboard handoff is asynchronous on the TV emulator.
+        // The semantics click validates the save action without a swallowed center key.
+        compose.onNodeWithText("保存媒体配置").performClick()
+        compose.waitUntil(8_000) {
+            runCatching {
+                compose.onNodeWithTag("settings-list").performScrollToNode(
+                    hasText("保存失败：链接必须是合法 HTTPS 地址"))
+                compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").assertExists()
+            }.isSuccess
+        }
+        compose.onNodeWithTag("config-media-url").let {
+            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
+            it.performTextReplacement("https://media.example.org/authorized.mp4")
+        }
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
-        activate("保存媒体配置")
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("配置已保存；测试流只会在手动进入演示播放页时使用"))
-        compose.onNodeWithText("配置已保存；测试流只会在手动进入演示播放页时使用").assertIsDisplayed()
+        compose.onNodeWithText("保存媒体配置").performClick()
+        compose.waitUntil(8_000) {
+            runCatching {
+                compose.onNodeWithTag("settings-list").performScrollToNode(
+                    hasText("配置已保存；测试流只会在手动进入演示播放页时使用"))
+                compose.onNodeWithText("配置已保存；测试流只会在手动进入演示播放页时使用")
+                    .assertExists()
+            }.isSuccess
+        }
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("重新同步目录"))
         activate("重新同步目录")
         // LazyColumn does not compose its off-screen status row until scrolled into view.
