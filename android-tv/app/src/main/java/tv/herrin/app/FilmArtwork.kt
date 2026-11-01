@@ -127,8 +127,11 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
                 Image(image, null, Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop, alpha = 0.23f)
                 Box(Modifier.fillMaxSize().background(Color(0xA20C111A)))
+                // Landscape TMDB stills should fill landscape cards; fallback
+                // portrait posters from other sources remain completely visible.
                 Image(image, film.title, Modifier.fillMaxSize().padding(3.dp),
-                    contentScale = ContentScale.Fit)
+                    contentScale = if (film.metadataSource == "TMDB" &&
+                        !film.backdropUrl.isNullOrBlank()) ContentScale.Crop else ContentScale.Fit)
             }
         }
     }
@@ -160,7 +163,8 @@ fun PersonPortrait(person: FilmPerson, modifier: Modifier = Modifier) {
 @Composable
 private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap? {
     val context = LocalContext.current
-    val url = if (hero) film.backdropUrl ?: film.artworkUrl else film.artworkUrl
+    val url = if (hero || film.metadataSource == "TMDB")
+        film.backdropUrl ?: film.artworkUrl else film.artworkUrl
     // TMDB matching is managed centrally by MainActivity's bounded catalogue
     // enrichment worker. Do NOT start another TMDB request per visible card:
     // that duplicated network, JSON parsing and image downloads during D-pad.
@@ -173,7 +177,8 @@ private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap?
         val requestJob = currentCoroutineContext()[Job]
         poster = withContext(Dispatchers.IO) {
             runCatching {
-                val urls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
+                val urls = if (hero || film.metadataSource == "TMDB")
+                    listOfNotNull(film.backdropUrl, film.artworkUrl)
                     else listOfNotNull(film.artworkUrl)
                 val cache = AuthorizedPosterCache(context)
                 urls.distinct().firstNotNullOfOrNull {
