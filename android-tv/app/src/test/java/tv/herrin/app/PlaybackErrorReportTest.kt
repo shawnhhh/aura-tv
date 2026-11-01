@@ -76,4 +76,12 @@ class PlaybackErrorReportTest {
         assertFalse(report.contains("SUPERSENSITIVE"))
         assertFalse(report.contains("ERROR_CODE_IO"))
     }
+
+    @Test fun missingResolvedMediaAndCmsDetailFailureAreNotFakedAsDecoderErrors() {
+        val missing = PlaybackErrorReport.source("GENERAL", "播放解析未返回结果")
+        val cms = PlaybackErrorReport.source("CMS", "CMS 详情读取失败")
+        assertTrue(missing.contains("SOURCE_NO_RESOLVED_MEDIA"))
+        assertTrue(cms.contains("SOURCE_CMS_DETAIL_FAILED"))
+        assertFalse(missing.contains("ERROR_CODE_DECODING"))
+    }
 }
