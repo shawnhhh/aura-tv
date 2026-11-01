@@ -1165,22 +1165,12 @@ private fun Herrin() {
     val settingsListState = rememberLazyListState()
     // Cast is the final offscreen LazyColumn item. Scroll it into composition
     // before requesting focus; native spatial search cannot reach detached rows.
-    fun moveToDetailCast(): Boolean {
-        if (screen != "detail" ||
-            (displayFilm.people.isEmpty() && displayFilm.actors.isEmpty())) return false
-        uiScope.launch {
-            val last = settingsListState.layoutInfo.totalItemsCount - 1
-            if (last < 0) return@launch
-            settingsListState.scrollToItem(last)
-            repeat(8) {
-                withFrameNanos { }
-                if (runCatching {
-                        requester("detail-person-0").requestFocus()
-                    }.isSuccess && focusId == "detail-person-0") return@launch
-            }
+    fun moveToDetailCast(): Boolean = screen == "detail" &&
+        DetailCastFocus.move(uiScope, settingsListState,
+            displayFilm.people.isNotEmpty() || displayFilm.actors.isNotEmpty(),
+            requester("detail-person-0")) {
+            focusId == "detail-person-0"
         }
-        return true
-    }
     LaunchedEffect(settingsTvBoxOnly) {
         if (screen == "settings" && !settingsTvBoxOnly) {
             // Expanding the deep diagnostics form replaces the compact list.
