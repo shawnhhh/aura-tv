@@ -4,18 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class M449CompactSettingsIntentTest {
-    @Test fun fourDownKeysReachFifthRowEvenBeforeAnyFocusCallback() {
+    @Test fun fourDownKeysReachTokenWithoutWaitingForFocusCallback() {
         val navigation = CompactSettingsIntent()
         val commands = List(4) {
             navigation.next("screen-first", down = true, movieAction = "tvbox-warehouse-load")
         }
-        assertEquals(listOf(
-            "tvbox-warehouse-url", "tvbox-warehouse-load",
-            "tvbox-live-direct-url", "tvbox-live-direct-load"
-        ), commands)
-        navigation.settled("tvbox-live-direct-load")
-        assertEquals("settings-home",
-            navigation.next("tvbox-live-direct-load", true, "tvbox-warehouse-load"))
+        assertEquals(listOf("tvbox-warehouse-url", "tvbox-warehouse-load",
+            "compact-tmdb-split-toggle", "compact-tmdb-token"), commands)
+        navigation.settled("compact-tmdb-token")
+        assertEquals("compact-tmdb-save",
+            navigation.next("compact-tmdb-token", true, "tvbox-warehouse-load"))
     }
 
     @Test fun reversalsPreserveLatestRequestedDirectionRatherThanLastActualFocus() {
@@ -24,8 +22,6 @@ class M449CompactSettingsIntentTest {
             navigation.next("screen-first", true, "tvbox-warehouse-load"))
         assertEquals("tvbox-warehouse-load",
             navigation.next("screen-first", true, "tvbox-warehouse-load"))
-        // Previous row focus callback can arrive late; it must not erase the
-        // already queued newer destination.
         navigation.settled("tvbox-warehouse-url")
         assertEquals("tvbox-warehouse-url",
             navigation.next("screen-first", false, "tvbox-warehouse-load"))
@@ -48,11 +44,24 @@ class M449CompactSettingsIntentTest {
             navigation.next("screen-first", true, "tvbox-warehouse-load"))
     }
 
-    @Test fun movieSiteSelectionRemainsTheReturnTarget() {
+    @Test fun movieSiteSelectionNavigatesIntoTmdbThenReturnsToSiteAction() {
         val navigation = CompactSettingsIntent()
-        assertEquals("tvbox-live-direct-url",
+        assertEquals("compact-tmdb-split-toggle",
             navigation.next("settings-source-sites", true, "settings-source-sites"))
         assertEquals("settings-source-sites",
             navigation.next("settings-source-sites", false, "settings-source-sites"))
+    }
+
+    @Test fun splitTokenSequenceSupportsFastRepeatAndReversal() {
+        val navigation = CompactSettingsIntent()
+        navigation.request("compact-tmdb-split-toggle")
+        assertEquals("compact-tmdb-part-1",
+            navigation.next("screen-first", true, "tvbox-warehouse-load", true))
+        assertEquals("compact-tmdb-part-2",
+            navigation.next("screen-first", true, "tvbox-warehouse-load", true))
+        assertEquals("compact-tmdb-part-1",
+            navigation.next("screen-first", false, "tvbox-warehouse-load", true))
+        assertEquals("compact-tmdb-part-2",
+            navigation.next("screen-first", true, "tvbox-warehouse-load", true))
     }
 }
