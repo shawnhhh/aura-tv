@@ -171,4 +171,91 @@ class SpiderLocalProxyPlaybackTest {
         }
     }
 
+    @Test fun fongMiProxySchemeNormalizesToRealAuthenticatedPlaybackBeforeRouting() {
+        val samples = byteArrayOf(2, 4, 6, 8, 10)
+        SpiderLoopbackProxy("legacy-fongmi-site") { params ->
+            assertEquals("jar", params["do"])
+            assertEquals("legacy-fongmi-site", params["siteKey"])
+            assertEquals("episode-one", params["part"])
+            arrayOf(200, "video/mp4", ByteArrayInputStream(samples))
+        }.use { proxy ->
+            val raw = JSONObject()
+                .put("parse", 0)
+                .put("format", "mp4")
+                .put("url", "proxy://do=jar&siteKey=legacy-fongmi-site&part=episode-one")
+                .toString()
+            val fixed = SpiderProxyPlayback.normalizePlayerResponse(
+                raw, "legacy-fongmi-site", proxy)
+            assertNotNull(fixed)
+            val routed = FongMiPlaybackRouter.route(
+                fixed!!, "夸父原", emptyList(), allowHttp = true)
+            assertTrue("Internal proxy:// must become a direct playback decision",
+                routed is FongMiPlayRoute.Direct)
+            val media = (routed as FongMiPlayRoute.Direct).playback.media
+            assertTrue(SpiderProxyPlayback.isCatVodProxy(media.uri))
+            assertEquals(SpiderProxyPlayback.Health.READY,
+                kotlinx.coroutines.runBlocking { SpiderProxyPlayback.diagnose(media.uri) })
+            val result = SpiderProxyPlayback.rebind(media, "legacy-fongmi-site", proxy)
+            assertTrue(result is PlaybackResult.Ready)
+            val url = (result as PlaybackResult.Ready).media.uri
+            assertArrayEquals(samples, java.net.URL(url).openStream().use { it.readBytes() })
+        }
+    }
+
+    @Test fun fongMiProxySchemeRejectsOtherSitesAndInvalidRoutes() {
+        SpiderLoopbackProxy("current-site") {
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            val unsafe = listOf(
+                "proxy://do=jar&siteKey=other-site&part=x",
+                "proxy://do=external&siteKey=current-site",
+                "proxy://part=x&part=y",
+                "proxy://url=http://attacker.example"
+            )
+            for (url in unsafe) {
+                assertNull("Must not rewrite unsafe proxy alias: $url",
+                    SpiderProxyPlayback.normalizePlayerResponse(
+                        JSONObject().put("url", url).toString(), "current-site", proxy))
+            }
+            val supported = JSONObject().put("url", JSONObject()
+                .put("position", 1).put("values", org.json.JSONArray()
+                    .put(JSONObject().put("name", "A").put("v", "https://example.org/a.mp4"))
+                    .put(JSONObject().put("name", "B")
+                        .put("v", "proxy://do=jar&siteKey=current-site&part=selected"))))
+            val adjusted = SpiderProxyPlayback.normalizePlayerResponse(
+                supported.toString(), "current-site", proxy)
+            assertNotNull(adjusted)
+            val values = JSONObject(adjusted!!).getJSONObject("url").getJSONArray("values")
+            assertEquals("https://example.org/a.mp4",
+                values.getJSONObject(0).getString("v"))
+            assertTrue(values.getJSONObject(1).getString("v").contains("session="))
+        }
+    }
+
+    @Test fun actualIsolatedSpiderProcessStreamsAuthenticatedProxyAcrossBinder() {
+        val bridge = TvBoxSpiderBridge(inst.targetContext)
+        try {
+            val response = kotlinx.coroutines.runBlocking {
+                bridge.probeRemoteProxyForInstrumentation()
+            }
+            assertTrue("Binder must start :spider and return its private proxy URL",
+                response is SpiderResult.Ready)
+            val url = (response as SpiderResult.Ready).value
+            assertEquals(SpiderProxyPlayback.Health.READY,
+                kotlinx.coroutines.runBlocking { SpiderProxyPlayback.diagnose(url) })
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 5_000
+            try {
+                assertEquals(200, connection.responseCode)
+                assertArrayEquals(byteArrayOf(8, 9, 10),
+                    connection.inputStream.use { it.readBytes() })
+            } finally {
+                connection.disconnect()
+            }
+        } finally {
+            bridge.close()
+        }
+    }
+
 }
