@@ -233,4 +233,28 @@ class SpiderLoopbackProxyTest {
         }
     }
 
+    @Test fun acceptsLargeMovieByteRangesBeyondOld512MibCeiling() {
+        val start = 2_684_354_560L // >2 GiB in a multi-GB MKV
+        val requested = "bytes=" + start + "-" + (start + 3)
+        var observed: String? = null
+        SpiderLoopbackProxy("large-mkv-site") { params ->
+            observed = params["range"]
+            arrayOf(206, "video/x-matroska",
+                ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)),
+                mapOf("Content-Range" to "bytes " + start + "-" +
+                    (start + 3) + "/10565619507",
+                    "Accept-Ranges" to "bytes"))
+        }.use { proxy ->
+            val conn = request(proxy.url)
+            conn.setRequestProperty("Range", requested)
+            assertEquals(206, conn.responseCode)
+            assertEquals(requested, observed)
+            assertEquals("bytes " + start + "-" + (start + 3) + "/10565619507",
+                conn.getHeaderField("Content-Range"))
+            assertArrayEquals(byteArrayOf(1, 2, 3, 4),
+                conn.inputStream.use { it.readBytes() })
+            conn.disconnect()
+        }
+    }
+
 }
