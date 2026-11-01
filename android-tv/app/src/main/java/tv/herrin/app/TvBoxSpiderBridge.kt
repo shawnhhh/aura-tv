@@ -105,7 +105,9 @@ internal object SpiderVodCodec {
         val playable = if (!needsWebParser) options else options.filterIndexed { index, url ->
             val path = url.substringBefore('?').lowercase(java.util.Locale.ROOT)
             path.endsWith(".m3u8") || path.endsWith(".mp4") ||
-                path.endsWith(".mpd") || (index == 0 && declaredMime != null)
+                path.endsWith(".mpd") ||
+                SpiderProxyPlayback.isCatVodProxy(url) ||
+                (index == 0 && declaredMime != null)
         }
         if (needsWebParser && playable.isEmpty())
             return PlaybackResult.Unavailable("此线路需要网页解析器，请切换返回直链的授权线路")
