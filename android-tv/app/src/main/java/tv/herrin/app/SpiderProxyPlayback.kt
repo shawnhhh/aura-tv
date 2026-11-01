@@ -63,26 +63,43 @@ internal object SpiderProxyPlayback {
         return PlaybackResult.Ready(media.copy(uri = primary, alternateUris = alternates))
     }
 
-    /** Internal /health is a no-media, per-session loopback endpoint. */
-    suspend fun ping(raw: String): Boolean = withContext(Dispatchers.IO) {
-        if (!isCatVodProxy(raw)) return@withContext false
-        val uri = runCatching { URI(raw) }.getOrNull() ?: return@withContext false
+    /** Bounded health probe, never reveals URL or private session. */
+    enum class Health {
+        READY, NOT_CATVOD, INVALID_SESSION, INVALID_PORT, HTTP_403, HTTP_404,
+        HTTP_5XX, HTTP_OTHER, CONNECT_REFUSED, TIMEOUT, IO_FAILURE
+    }
+
+    suspend fun diagnose(raw: String): Health = withContext(Dispatchers.IO) {
+        if (!isCatVodProxy(raw)) return@withContext Health.NOT_CATVOD
+        val uri = runCatching { URI(raw) }.getOrNull()
+            ?: return@withContext Health.NOT_CATVOD
+        if (uri.port !in 1..65535) return@withContext Health.INVALID_PORT
         val params = query(uri.rawQuery)
         val session = params["session"]?.takeIf { it.length in 24..64 }
-            ?: return@withContext false
+            ?: return@withContext Health.INVALID_SESSION
         val site = params["siteKey"]?.takeIf { it.length in 1..128 }
-            ?: return@withContext false
+            ?: return@withContext Health.INVALID_SESSION
         val url = "http://127.0.0.1:${uri.port}/health?session=" +
             URLEncoder.encode(session, "UTF-8") + "&siteKey=" +
             URLEncoder.encode(site, "UTF-8")
-        val conn = runCatching { URL(url).openConnection() as HttpURLConnection }
-            .getOrNull() ?: return@withContext false
+        val conn = try { URL(url).openConnection() as HttpURLConnection }
+            catch (_: Exception) { return@withContext Health.IO_FAILURE }
         try {
-            conn.connectTimeout = 1_500
-            conn.readTimeout = 1_500
+            conn.connectTimeout = 3_000
+            conn.readTimeout = 3_000
             conn.instanceFollowRedirects = false
-            conn.responseCode == 204
-        } catch (_: Exception) { false }
+            when (conn.responseCode) {
+                204 -> Health.READY
+                403 -> Health.HTTP_403
+                404 -> Health.HTTP_404
+                in 500..599 -> Health.HTTP_5XX
+                else -> Health.HTTP_OTHER
+            }
+        } catch (_: java.net.ConnectException) { Health.CONNECT_REFUSED }
+        catch (_: java.net.SocketTimeoutException) { Health.TIMEOUT }
+        catch (_: Exception) { Health.IO_FAILURE }
         finally { conn.disconnect() }
     }
+
+    suspend fun ping(raw: String): Boolean = diagnose(raw) == Health.READY
 }
