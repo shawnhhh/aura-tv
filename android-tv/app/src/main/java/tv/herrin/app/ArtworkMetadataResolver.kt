@@ -488,13 +488,12 @@ internal class ArtworkMetadataResolver(
     }
 }
 
-internal class ArtworkAuthenticationFailure : Exception()
+internal class ArtworkAuthenticationFailure(val status: Int = 401) : Exception()
 internal class ArtworkRateLimitFailure : Exception()
+internal class ArtworkHttpStatusFailure(val status: Int) : java.io.IOException()
 
 internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
-    // Requests are performed on IO threads. Three concurrent lookup workers
-    // alone can still burst >40 requests per 10 seconds when results are fast.
-    // Bound *all* API calls (configuration, search, details) without UI blocking.
+    // All TMDB GET requests share a paced queue, including probe and details.
     private val paceLock = Any()
     private var nextRequestAtMs = 0L
     private fun paceRequest() = synchronized(paceLock) {
@@ -503,21 +502,37 @@ internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
         if (delay > 0) Thread.sleep(delay)
         nextRequestAtMs = System.nanoTime() / 1_000_000 + 320L
     }
+
     override fun load(url: String, readAccessToken: String): String? {
-        paceRequest()
+        // Retry a transient GET transport/5xx failure just once. Never retry
+        // unauthorized, rate-limited or other 4xx responses automatically.
+        for (attempt in 0..1) {
+            paceRequest()
+            try {
+                return requestOnce(url, readAccessToken)
+            } catch (e: java.io.IOException) {
+                if (e is ArtworkHttpStatusFailure && e.status !in 500..599) throw e
+                if (attempt == 1) throw e
+                Thread.sleep(350L)
+            }
+        }
+        return null
+    }
+
+    private fun requestOnce(url: String, readAccessToken: String): String? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 3500
-            readTimeout = 4500
+            connectTimeout = 6000
+            readTimeout = 8000
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Authorization", "Bearer $readAccessToken")
         }
         return try {
             val status = connection.responseCode
-            if (status in setOf(401, 403)) throw ArtworkAuthenticationFailure()
+            if (status == 401 || status == 403) throw ArtworkAuthenticationFailure(status)
             if (status == 429) throw ArtworkRateLimitFailure()
-            if (status != 200 ||
-                !connection.contentType.orEmpty().startsWith("application/json")) return null
+            if (status != 200) throw ArtworkHttpStatusFailure(status)
+            if (!connection.contentType.orEmpty().startsWith("application/json")) return null
             if (connection.contentLengthLong > 1_000_000) return null
             connection.inputStream.use { stream ->
                 val data = java.io.ByteArrayOutputStream()
