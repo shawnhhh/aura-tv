@@ -1281,6 +1281,15 @@ private fun Herrin() {
         if (detailSelectedSeason != seasonNumber) groupFocusedCoordinates = null
         detailSelectedSeason = seasonNumber
     }
+    fun selectGroupSource(option: GroupPlaybackRef) {
+        val request = option.request()
+        filmId = request.filmId
+        episode = request.episode
+        line = request.line
+        detailSelectedSeason = option.season
+        groupFocusedCoordinates = option.season to option.number
+        // Line selection does not initiate playback.
+    }
     fun playGroupSource(option: GroupPlaybackRef) {
         val request = option.request()
         // The player and every licensed CMS / Spider resolver read the selected
@@ -1298,7 +1307,7 @@ private fun Herrin() {
             watchHistory.load(catalogScope, source.film.id, source.source.number, source.line.id)
                 ?.let { source to it }
         }.maxByOrNull { it.second.updatedAtMs }?.first
-        playGroupSource(entry.preferred(mostRecent ?: selectedGroupOption))
+        playGroupSource(entry.preferred(selectedGroupOption ?: mostRecent))
     }
     LaunchedEffect(screen, film.id, detailSeason?.number, restoreSeasonFocus) {
         if (screen == "detail" && showGroup == null && restoreSeasonFocus && detailSeasonEntries.isNotEmpty()) {
@@ -3024,7 +3033,7 @@ private fun Herrin() {
                                         onEpisodeFocus = { entry ->
                                             groupFocusedCoordinates = entry.season to entry.number
                                         }, onEpisodePlay = ::playGroupEpisode,
-                                        onLinePlay = ::playGroupSource)
+                                        onLinePlay = ::selectGroupSource)
                                 }
                             } else if (showGroup != null) {
                                 item { Text("当前原始条目没有可信的季集标记；可打开单个影视条目继续选集。",
