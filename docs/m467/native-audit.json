@@ -4,6 +4,7 @@
   "tv_sha": "5e191aaced194e5cac5668cc91908ecb65336222",
   "media_sha": "3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d",
   "mpv_android_sha": "049ade89abc85fc05ef73dc9ba6f1810466c9f8a",
+  "source_files_checked": 2881,
   "required_java_api_present": {
     "DecoderManager": false,
     "LibassPlaybackSession": false,

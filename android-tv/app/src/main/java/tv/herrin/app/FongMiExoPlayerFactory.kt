@@ -25,7 +25,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
-@androidx.annotation.OptIn(UnstableApi::class)
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal object FongMiExoPlayerFactory {
     /** Host settings replace upstream App/PlayerSetting/DecodeSetting globals. */
     data class Settings(

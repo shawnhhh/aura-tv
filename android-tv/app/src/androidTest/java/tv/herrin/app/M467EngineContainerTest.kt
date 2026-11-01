@@ -40,7 +40,7 @@ class M467EngineContainerTest {
                 }
                 val range = request.getHeader("Range")
                 val start = range?.substringAfter("bytes=")?.substringBefore('-')?.toIntOrNull() ?: 0
-                if (start !in 0..data.size) return MockResponse().setResponseCode(416)
+                if (start !in data.indices) return MockResponse().setResponseCode(416)
                 return MockResponse().setHeader("Content-Type", mime)
                     .setHeader("Accept-Ranges", "bytes")
                     .apply {
