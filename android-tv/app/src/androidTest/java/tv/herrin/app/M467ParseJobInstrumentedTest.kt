@@ -54,4 +54,38 @@ class M467ParseJobInstrumentedTest {
             assertEquals(server.url("/media").toString(),(resolved as PlaybackResult.Ready).media.uri)
         }
     }
+    @Test fun slowNonMediaProbeDoesNotStarveFollowingValidMediaRequest() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when {
+                    request.path?.startsWith("/jx?") == true ->
+                        MockResponse().setHeader("Content-Type", "text/html")
+                            .setBody("""<html><body><script>
+                                fetch('/slow-chunk').catch(()=>{});
+                                setTimeout(()=>fetch('/actual-media').catch(()=>{}),30);
+                            </script></body></html>""")
+                    request.path == "/slow-chunk" ->
+                        MockResponse().setHeader("Content-Type", "application/octet-stream")
+                            .setBody("not real media, deliberately slow")
+                            .throttleBody(1, 2, java.util.concurrent.TimeUnit.SECONDS)
+                    request.path == "/actual-media" ->
+                        MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl")
+                            .setBody("#EXTM3U\n#EXT-X-ENDLIST\n")
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            val parser = TvBoxPlaybackParser("web", 0, server.url("/jx?url=").toString())
+            val resolved = runBlocking {
+                FongMiParsePlayback.resolve(context,
+                    """{"parse":1,"playUrl":"parse:web","url":"https://watch.test/item"}""",
+                    "vip", emptyList(), true, playbackParsers = listOf(parser))
+            }
+            assertTrue("Slow non-media request must not block actual media: $resolved",
+                resolved is PlaybackResult.Ready)
+            assertEquals(server.url("/actual-media").toString(),
+                (resolved as PlaybackResult.Ready).media.uri)
+        }
+    }
+
 }
