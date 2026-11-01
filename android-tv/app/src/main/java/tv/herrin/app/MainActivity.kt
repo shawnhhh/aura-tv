@@ -769,6 +769,8 @@ private fun Herrin() {
     var metadataCorrection by remember { mutableStateOf<Film?>(null) }
     var metadataScanDone by remember { mutableIntStateOf(0) }
     var metadataScanTotal by remember { mutableIntStateOf(0) }
+    var metadataScanNoMatch by remember { mutableIntStateOf(0) }
+    var metadataScanFailures by remember { mutableIntStateOf(0) }
     LaunchedEffect(catalogScope) {
         facetActor = null; facetDirector = null; facetRegion = null
         facetYear = null; facetCategory = null; facetRating = null
@@ -777,6 +779,8 @@ private fun Herrin() {
         val eligible = providerFilms.orEmpty().take(ArtworkScrapePolicy.STARTUP_LIMIT)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
+        metadataScanNoMatch = 0
+        metadataScanFailures = 0
         // A configuration-only success never authorizes bulk search. Wait for
         // a real TMDB search endpoint response; otherwise 0/20 looks like
         // twenty bad movie names when the API is rate-limited or blocked.
@@ -787,15 +791,19 @@ private fun Herrin() {
         // is coalesced to one update per 12 items instead of one per item.
         // This prevents dozens of whole-home regroupings during TV remote use.
         for (batch in unprocessed.chunked(12)) {
-            val updates = mutableListOf<Pair<String, EnrichedArtwork?>>()
+            val updates = mutableListOf<Triple<String, EnrichedArtwork?, TmdbLookupFailure?>>()
             for (group in batch.chunked(3)) {
                 updates += coroutineScope {
                     group.map { original ->
                         async(Dispatchers.IO) {
-                            original.id to runCatching {
+                            var failure: TmdbLookupFailure? = null
+                            val artwork = runCatching {
                                 metadataResolver.lookup(original, metadataToken,
-                                    forceRefresh = original.id in metadataForceIds)
+                                    forceRefresh = original.id in metadataForceIds,
+                                    onFailure = { failure = it })
                             }.getOrNull()
+                            Triple(original.id, artwork,
+                                failure ?: if (artwork == null) TmdbLookupFailure.SERVER_ERROR else null)
                         }
                     }.awaitAll()
                 }
@@ -813,6 +821,10 @@ private fun Herrin() {
                     }
                 }
                 metadataForceIds = metadataForceIds - batch.map { it.id }.toSet()
+                metadataScanNoMatch += updates.count { it.third == TmdbLookupFailure.NO_MATCH }
+                metadataScanFailures += updates.count {
+                    it.third != null && it.third != TmdbLookupFailure.NO_MATCH
+                }
                 metadataScanDone += batch.size
             }
         }
@@ -2403,7 +2415,8 @@ private fun Herrin() {
                                 "未启用自动刮削：没有配置 TMDB API Read Access Token，当前显示影视源海报。" +
                                     "配置后自动匹配海报、背景、简介、评分和演员资料。"
                                 else "TMDB 匹配检查：已尝试 $metadataScanDone/$metadataScanTotal，" +
-                                    "成功匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部。" +
+                                    "成功匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部，" +
+                                    "未匹配 $metadataScanNoMatch 部，请求失败 $metadataScanFailures 部。" +
                                     "只有搜索接口验证通过才会开始刮削；播放地址与选集仍由影视源提供。",
                                 modifier = Modifier.testTag("compact-metadata-status"),
                                 color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
@@ -2451,8 +2464,14 @@ private fun Herrin() {
                                     color = if (tmdbConnectivity == TmdbProbeState.CONNECTED)
                                         Color(0xFFB3E8D2) else Color(0xFFFFD49D))
                             }
+                            if (metadataScanFailures > 0 && metadataScanDone >= metadataScanTotal &&
+                                tmdbConnectivity == TmdbProbeState.CONNECTED) item {
+                                Text("本轮 $metadataScanFailures 部 TMDB 请求失败，不是片名无匹配。请检查电视网络并点重新刮削。",
+                                    color = Color(0xFFFFD49D))
+                            }
                             if (tmdbConnectivity == TmdbProbeState.CONNECTED &&
                                 metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
+                                metadataScanFailures == 0 &&
                                 providerFilms.orEmpty().none { it.metadataSource == "TMDB" }) item {
                                 Text("已连通 TMDB，但本轮没有可靠的同名匹配。请检查影视源片名、电影/剧集分类，" +
                                     "或在影片详情中手动纠正匹配；不会误用其他影片的海报。",
