@@ -39,7 +39,7 @@ internal object PlaybackErrorReport {
             append("失败阶段：").append(phase)
             append("\n实际错误：").append(PlaybackFailureHints.safeCode(errorCodeName))
             if (numericCode in 0..99_999) append("（").append(numericCode).append("）")
-            if (status != null) append("\nHTTP 状态：").append(status)
+            if (status != null) append("\nHTTP ").append(status).append("（实际状态码）")
             if (cause != null) append("\n底层异常：").append(cause)
             append("\n已尝试播放地址：").append(attempt.coerceIn(1, total.coerceAtLeast(1)))
                 .append('/').append(total.coerceIn(1, 99))
@@ -106,7 +106,7 @@ internal object PlaybackErrorReport {
         return buildString {
             append("失败阶段：").append(safeStage)
             append("\n实际错误：").append(kind)
-            if (http != null) append("\nHTTP 状态：").append(http)
+            if (http != null) append("\nHTTP ").append(http).append("（实际状态码）")
             if (kind == "SOURCE_UNCLASSIFIED")
                 append("\n来源未提供可安全识别的错误码；未进入 Media3")
         }
