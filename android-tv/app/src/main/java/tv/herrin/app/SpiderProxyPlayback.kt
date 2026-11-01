@@ -52,12 +52,17 @@ internal object SpiderProxyPlayback {
         val legacy = raw.startsWith("proxy://", ignoreCase = true)
         val parameters = if (legacy) {
             val tail = raw.substring(8).removePrefix("?")
-            if (tail.contains('/') || tail.contains('#')) return null
-            if (tail.isEmpty()) emptyMap() else query(tail)
+            // FongMi sources may pass a plain unescaped HTTP URL inside an
+            // existing URL query parameter. Slashes in its VALUE are valid.
+            // The alias itself still cannot specify a host/path/fragment.
+            if (tail.startsWith('/') || tail.contains('#') ||
+                (!tail.contains('=') && tail.isNotEmpty())) return null
+            if (tail.isEmpty()) emptyMap() else runCatching { query(tail) }.getOrNull()
+                ?: return null
         } else {
             val uri = runCatching { URI(raw) }.getOrNull() ?: return null
             if (!local(uri) || uri.path != "/proxy") return raw
-            query(uri.rawQuery)
+            runCatching { query(uri.rawQuery) }.getOrNull() ?: return null
         }
         if (parameters.isEmpty() && !(legacy && raw.substring(8).trim('?').isEmpty()))
             return null
