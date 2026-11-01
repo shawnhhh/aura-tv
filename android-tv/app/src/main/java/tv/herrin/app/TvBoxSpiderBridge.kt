@@ -462,7 +462,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 android.util.Log.w("HerrinCatVod", "Optional plugin initializer failed: ${initFailure.javaClass.simpleName}")
             }
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
-            val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi.removePrefix("csp_")}")
+            val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi!!.removePrefix("csp_")}")
             val created = spiderClass.getDeclaredConstructor().newInstance() as Spider
             // CatVod Spider.getProxyUrl() needs a real, local listening port.
             // Start it inside :spider, scoped to the active site and process.
