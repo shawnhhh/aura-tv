@@ -61,7 +61,7 @@ object FongMiPlaybackRecovery {
      * Called from Media3's error callback before scheduling delayed retries.
      */
     fun preferAuthorizedAlternate(httpStatus: Int?, hasNext: Boolean): Boolean =
-        hasNext && httpStatus in 500..599
+        hasNext && httpStatus != null && httpStatus in 500..599
 
     /** Exactly the health failures that prove a transport failure, not a denied session. */
     fun canRebuildProxy(healthName: String): Boolean = healthName in
