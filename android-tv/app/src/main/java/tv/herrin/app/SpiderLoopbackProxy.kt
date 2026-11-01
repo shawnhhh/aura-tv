@@ -29,7 +29,8 @@ import fi.iki.elonen.NanoHTTPD
  */
 internal class SpiderLoopbackProxy(
     private val siteKey: String,
-    private val handler: (Map<String, String>) -> Array<out Any?>?
+    private val handler: (Map<String, String>) -> Array<out Any?>?,
+    private val staticHandler: ((Map<String, String>) -> Array<out Any?>?)? = null
 ) : Closeable {
     private val closed = AtomicBoolean(false)
     private val server = ServerSocket(0, 24, InetAddress.getByName("127.0.0.1"))
@@ -100,7 +101,12 @@ internal class SpiderLoopbackProxy(
             // FongMi Java Spider supports either a 3-4 element array or one
             // NanoHTTPD.Response object. Adapt only its public response API;
             // do not run its own HTTP server or reuse its socket/session.
-            adaptResponse(handler(params.filterKeys { it != "session" }))
+            val forwarded = params.filterKeys {
+                it != "session" && it != "__herrin_static"
+            }
+            val callback = if (params["__herrin_static"] == "1")
+                staticHandler ?: handler else handler
+            adaptResponse(callback(forwarded))
         } catch (_: Throwable) {
             failure(output, 502)
             return
