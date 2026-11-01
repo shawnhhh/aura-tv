@@ -467,7 +467,23 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val created = spiderClass.getDeclaredConstructor().newInstance() as Spider
             // CatVod Spider.getProxyUrl() needs a real, local listening port.
             // Start it inside :spider, scoped to the active site and process.
-            val localProxy = SpiderLoopbackProxy(site.key) { params ->
+            val staticProxyClass = runCatching {
+                loader.loadClass("com.github.catvod.spider.Proxy")
+            }.getOrNull()
+            val staticProxyMethod = staticProxyClass?.methods?.firstOrNull { method ->
+                method.name == "proxy" &&
+                    java.lang.reflect.Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.contentEquals(arrayOf(Map::class.java))
+            }
+            val localProxy = SpiderLoopbackProxy(
+                site.key,
+                staticHandler = { params ->
+                    synchronized(created) {
+                        if (staticProxyMethod == null) created.proxy(params)
+                        else staticProxyMethod.invoke(null, params) as? Array<out Any?>
+                    }
+                }
+            ) { params ->
                 synchronized(created) { created.proxy(params) }
             }
             CatVodProxy.set(localProxy.port, localProxy.token)
