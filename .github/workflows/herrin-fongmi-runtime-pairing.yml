@@ -1,0 +1,113 @@
+name: HERRIN FongMi Playback Runtime Pairing
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/herrin-fongmi-runtime-pairing.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: herrin-fongmi-runtime-pairing-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  paired-runtime-apks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 70
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          test -x "$sdk_manager"
+          "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build the paired HERRIN host with its own debug signing identity
+        working-directory: android-tv
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Verify and re-sign upstream GPL runtime APKs with the exact host certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$HOME/.android/debug.keystore"
+          SDK_BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          APKSIGNER="$SDK_BUILD_TOOLS/apksigner"
+          ZIPALIGN="$SDK_BUILD_TOOLS/zipalign"
+          HOST="android-tv/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$HOST"
+          mkdir -p paired downloaded
+          cp "$HOST" paired/Herrin-paired-debug.apk
+          "$APKSIGNER" verify --print-certs "$HOST" > paired/host-signer.txt
+          HOST_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' paired/host-signer.txt | head -n1)
+          test -n "$HOST_CERT"
+          cat > modules.lock <<'EOF'
+          quickjs runtime-quickjs-1.0.8-arm64-v8a.apk c2e4c0cf227b409d97c8e92f5bc55e81f11f65154ecb37a85e090908d361c2f1
+          python runtime-python-1.1.1-arm64-v8a.apk ee4c18814e847f853cee7cd2ca2f48cbddb82587a70ef36d334059c73487e279
+          nodejs runtime-nodejs-1.0.5-arm64-v8a.apk 5f2542be4fc17e8429c63d29ec4bb54e1d792b2a326826b91adc808dc743713a
+          mpv runtime-mpv-1.1.0-arm64-v8a.apk 95e781939092a29169cc7bd0165540f1ec66a9d005420717667c4be6471f2333
+          EOF
+          while read -r module filename digest; do
+            curl -fLsS --retry 3 --retry-delay 3 \
+              "https://github.com/FongMi/Release/releases/download/module/$filename" \
+              -o "downloaded/$filename"
+            echo "$digest  downloaded/$filename" | sha256sum -c -
+            MODULE="$module" FILE="downloaded/$filename" python3 - <<'PY'
+          import json, os, zipfile
+          expected = {
+            'python': 'catvod-python-plugin-v3',
+            'quickjs': 'fongmi-quickjs-ng-0.17-v12',
+            'nodejs': 'catvod-nodejs-plugin-v2',
+            'mpv': 'mpv-jni-ffmpeg-shared-v1',
+          }
+          with zipfile.ZipFile(os.environ['FILE']) as z:
+            meta = json.loads(z.read('assets/runtime.json'))
+          module = os.environ['MODULE']
+          assert meta['module'] == module
+          assert meta['packageName'] == 'com.fongmi.runtime.' + module
+          assert meta['compatibilityId'] == expected[module], meta
+          print(f"{module}: correct runtime ABI metadata and compatibility ID")
+          PY
+            "$ZIPALIGN" -f -p 4 "downloaded/$filename" "downloaded/$module-aligned.apk"
+            "$APKSIGNER" sign \
+              --ks "$HOME/.android/debug.keystore" \
+              --ks-key-alias androiddebugkey \
+              --ks-pass pass:android \
+              --key-pass pass:android \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --out "paired/Herrin-runtime-$module-arm64.apk" \
+              "downloaded/$module-aligned.apk"
+            "$APKSIGNER" verify --print-certs "paired/Herrin-runtime-$module-arm64.apk" > "paired/$module-signer.txt"
+            CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "paired/$module-signer.txt" | head -n1)
+            test "$CERT" = "$HOST_CERT"
+            echo "$module: APK re-signed and host signer matched"
+          done < modules.lock
+          sha256sum paired/*.apk > paired/SHA256SUMS
+          cat > paired/README.txt <<'EOF'
+          HERRIN FongMi Native Runtime Paired Build - debug-only proof of packaging.
+          Install Herrin-paired-debug.apk and only the matching-runtime APKs from THIS SAME CI run.
+          This bundle uses an ephemeral CI debug certificate. It is incompatible with any
+          previously installed Herrin APK signed using a different certificate.
+          Back up local settings before replacing test installations.
+          Runtime APKs originate from FongMi/Release tag 'module' (GPL upstream).
+          Release asset original SHA-256 hashes are verified from GitHub release metadata,
+          and the re-signed copies are checked against the host certificate.
+          This does NOT prove actual QuickJS/Python/Node script execution, or MPV playback.
+          Runtime installation/execution and MPV engine integration require further tests.
+          Source: https://github.com/FongMi/TV/tree/fongmi
+          Provenance: https://github.com/FongMi/Release/releases/tag/module
+          This is for compatible, authorized playback sources only.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-fongmi-paired-arm64-runtime-apks
+          path: paired/
+          if-no-files-found: error
+          retention-days: 14
