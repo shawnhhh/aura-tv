@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Fail-closed verifier for optional, independently built FongMi native inputs.
+"""Fail-closed preflight for FongMi/TV native AAR inputs (not a playback test).
 
-Never treat a file named *.aar as proof of compatible mpv/FFmpeg support.
-This tool validates *inputs only*, not actual Android decoder compatibility.
+Expected archive layout is derived from FongMi/TV
+buildSrc/src/main/groovy/com/fongmi/gradle/MpvNativeLibraries.groovy
+at TV commit 5e191aaced194e5cac5668cc91908ecb65336222.
+The TV upstream keeps libffmpeg.so in the *decoder* AAR, not the mpv AAR.
 """
 import argparse
 import io
@@ -21,9 +23,13 @@ MEDIA_APIS = (
     "ProgressiveIsoCache", "SecondaryTextTrackSelector",
 )
 ABIS = ("arm64-v8a", "armeabi-v7a")
-MPV_LIBS = frozenset(("libmpv.so", "libplayer.so", "libffmpeg.so"))
-AAR_NAMES = ("lib-mpvplayer-release.aar", "lib-decoder-ffmpeg-release.aar")
+MPV_AAR = "lib-mpvplayer-release.aar"
+DECODER_AAR = "lib-decoder-ffmpeg-release.aar"
+AAR_NAMES = (MPV_AAR, DECODER_AAR)
+MPV_LIBS = ("libmpv.so", "libplayer.so", "libc++_shared.so")
+DECODER_LIBS = ("libffmpeg.so", "libffmpegJNI.so")
 SPLIT_FFMPEG = re.compile(r"^lib(?:av|sw)[^.]*\.so(?:\.\d+)*$")
+MAX_ELF_BYTES = 128 * 1024 * 1024
 
 
 def media_api_errors(media_source):
@@ -35,7 +41,7 @@ def media_api_errors(media_source):
 
 
 def elf_info_from_readelf(blob):
-    """Read ELF class, architecture and DT_NEEDED; filenames alone prove nothing."""
+    """Check dynamic dependencies and actual ELF class/machine."""
     executable = shutil.which("readelf")
     if not executable:
         raise RuntimeError("readelf is required to verify native dynamic dependencies")
@@ -54,65 +60,91 @@ def elf_info_from_readelf(blob):
     return needed, cls.group(1), machine.group(1).strip()
 
 
+def read_aar(kit, name, errors):
+    path = kit / name
+    if not path.is_file():
+        errors.append("Missing native AAR: " + name)
+        return {}
+    contents = {}
+    try:
+        with ZipFile(path) as archive:
+            members = archive.infolist()
+            names = [m.filename for m in members]
+            if len(names) != len(set(names)):
+                errors.append(name + ": duplicate ZIP entries")
+                return {}
+            if "classes.jar" not in names:
+                errors.append(name + ": missing classes.jar")
+            else:
+                with ZipFile(io.BytesIO(archive.read("classes.jar"))) as classes:
+                    if name == DECODER_AAR and not any(
+                        x.endswith("/FfmpegAudioRenderer.class") for x in classes.namelist()
+                    ):
+                        errors.append(name + ": missing Media3 FFmpeg audio renderer")
+            for member in members:
+                if not (member.filename.startswith("jni/") and member.filename.endswith(".so")):
+                    continue
+                if member.file_size <= 0 or member.file_size > MAX_ELF_BYTES:
+                    errors.append(name + ": invalid native size: " + member.filename)
+                    continue
+                contents[member.filename] = archive.read(member)
+            bad = [p for p in contents if SPLIT_FFMPEG.match(p.rsplit("/", 1)[-1])]
+            if bad:
+                errors.extend(name + ": split FFmpeg library packaged: " + p for p in sorted(bad))
+    except (BadZipFile, OSError, ValueError, RuntimeError, EOFError) as exc:
+        errors.append(name + ": invalid archive (" + type(exc).__name__ + ")")
+    return contents
+
+
 def aar_errors(kit, abis=ABIS, dependency_reader=elf_info_from_readelf):
     errors = []
-    archives = {}
-    for aar_name in AAR_NAMES:
-        path = kit / aar_name
-        if not path.is_file():
-            errors.append("Missing native AAR: " + aar_name)
-            continue
-        try:
-            with ZipFile(path) as archive:
-                if archive.testzip() is not None:
-                    raise BadZipFile("Damaged AAR entry")
-                entries = set(archive.namelist())
-                if "classes.jar" not in entries:
-                    errors.append(aar_name + ": missing classes.jar")
-                elif aar_name.startswith("lib-decoder"):
-                    with ZipFile(io.BytesIO(archive.read("classes.jar"))) as classes:
-                        if not any(x.endswith("/FfmpegAudioRenderer.class") for x in classes.namelist()):
-                            errors.append(aar_name + ": not a Media3 FFmpeg audio renderer")
-                archives[aar_name] = {name: archive.read(name) for name in entries if name.startswith("jni/") and name.endswith(".so")}
-        except (BadZipFile, OSError, ValueError) as exc:
-            errors.append(aar_name + ": invalid archive (" + type(exc).__name__ + ")")
-
-    mpv = archives.get(AAR_NAMES[0], {})
-    ffmpeg = archives.get(AAR_NAMES[1], {})
+    mpv = read_aar(kit, MPV_AAR, errors)
+    decoder = read_aar(kit, DECODER_AAR, errors)
     for abi in abis:
-        expected = {"jni/" + abi + "/" + name for name in MPV_LIBS}
-        errors.extend(abi + ": missing mpv ELF " + p.split("/")[-1] for p in sorted(expected - set(mpv)))
-        if "jni/" + abi + "/libffmpegJNI.so" not in ffmpeg:
-            errors.append(abi + ": missing FFmpeg audio JNI")
-        for path, blob in mpv.items():
-            if not path.startswith("jni/" + abi + "/"):
-                continue
-            try:
-                needed, elf_class, machine = dependency_reader(blob)
+        required = (
+            (MPV_AAR, mpv, MPV_LIBS),
+            (DECODER_AAR, decoder, DECODER_LIBS),
+        )
+        for archive_name, binaries, names in required:
+            for lib in names:
+                if "jni/" + abi + "/" + lib not in binaries:
+                    errors.append(abi + ": missing " + lib + " in " + archive_name)
+        for archive_name, binaries, _ in required:
+            for path, blob in binaries.items():
+                if not path.startswith("jni/" + abi + "/"):
+                    continue
+                lib = path.rsplit("/", 1)[-1]
+                try:
+                    needed, elf_class, machine = dependency_reader(blob)
+                except (RuntimeError, ValueError, OSError) as exc:
+                    errors.append(path + ": cannot inspect ELF (" + str(exc) + ")")
+                    continue
                 expected_class, expected_machine = (
                     ("ELF64", "AArch64") if abi == "arm64-v8a" else ("ELF32", "ARM")
                 )
                 if elf_class != expected_class or machine != expected_machine:
                     errors.append(path + ": wrong ELF architecture: " + elf_class + " / " + machine)
-                for lib in needed:
-                    if SPLIT_FFMPEG.match(lib):
-                        errors.append(path + ": incompatible split FFmpeg dependency: " + lib)
-            except (RuntimeError, ValueError) as exc:
-                errors.append(path + ": " + str(exc))
+                split = [libname for libname in needed if SPLIT_FFMPEG.match(libname)]
+                errors.extend(path + ": incompatible split FFmpeg dependency: " + x for x in split)
+                must_depend_on_ffmpeg = lib in ("libmpv.so", "libplayer.so", "libffmpegJNI.so", "libffmpegDoviJNI.so")
+                if must_depend_on_ffmpeg and "libffmpeg.so" not in needed:
+                    errors.append(path + ": missing required libffmpeg.so dependency")
+                if lib == "libplayer.so" and "libmpv.so" not in needed:
+                    errors.append(path + ": missing required libmpv.so dependency")
     return errors
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--kit-dir", type=Path, required=True, help="Untrusted candidate AAR directory")
-    parser.add_argument("--media-source", type=Path, required=True, help="Source checkout of pinned FongMi/media fork")
-    parser.add_argument("--output", type=Path, help="Optional JSON evidence file")
+    parser.add_argument("--kit-dir", type=Path, required=True, help="Candidate AAR directory (never auto-distributed)")
+    parser.add_argument("--media-source", type=Path, required=True, help="Pinned FongMi/media source checkout")
+    parser.add_argument("--output", type=Path, help="Optional JSON evidence path")
     args = parser.parse_args(argv)
     errors = media_api_errors(args.media_source) + aar_errors(args.kit_dir)
     result = {
         "status": "BLOCKED" if errors else "INPUTS_STRUCTURALLY_VALID_NOT_RUNTIME_VERIFIED",
         "errors": errors,
-        "scope": "Only validates local inputs; never proves TCL/mpv/FFmpeg playback",
+        "scope": "Local inputs only; no runtime/decoder verification",
         "required_abis": list(ABIS),
     }
     if args.output:
