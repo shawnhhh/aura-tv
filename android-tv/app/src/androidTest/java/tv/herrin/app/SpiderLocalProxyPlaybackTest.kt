@@ -179,9 +179,10 @@ class SpiderLocalProxyPlaybackTest {
             assertEquals("episode-one", params["part"])
             arrayOf(200, "video/mp4", ByteArrayInputStream(samples))
         }.use { proxy ->
+            // A real CatVod proxy is media even when an older Spider
+            // mislabels it parse=1 and omits a format extension.
             val raw = JSONObject()
-                .put("parse", 0)
-                .put("format", "mp4")
+                .put("parse", 1)
                 .put("url", "proxy://do=jar&siteKey=legacy-fongmi-site&part=episode-one")
                 .toString()
             val fixed = SpiderProxyPlayback.normalizePlayerResponse(
