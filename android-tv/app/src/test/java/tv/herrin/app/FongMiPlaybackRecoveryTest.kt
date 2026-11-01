@@ -125,4 +125,22 @@ class FongMiPlaybackRecoveryTest {
         // A different episode/line receives a different Session, independent budget.
         assertNotNull(FongMiPlaybackRecovery.Session().next(read, false, false))
     }
+    @Test fun serviceErrorPrefersProviderAuthorizedBackupWithoutWaitingForPerUrlRetry() {
+        for (status in listOf(500, 502, 503, 504, 599)) {
+            assertTrue("HTTP $status should switch when an explicit backup exists",
+                FongMiPlaybackRecovery.preferAuthorizedAlternate(status, true))
+            assertFalse("No implicit unknown backup is permitted",
+                FongMiPlaybackRecovery.preferAuthorizedAlternate(status, false))
+        }
+        for (status in listOf(null, 200, 301, 400, 401, 403, 404, 410, 429)) {
+            assertFalse("HTTP $status must not automatically switch the source",
+                FongMiPlaybackRecovery.preferAuthorizedAlternate(status, true))
+        }
+        val retries = PlaybackFormatRetry.Session("https://video.test/original.m3u8",
+            listOf("https://backup.test/progressive"), PlaybackFormatRetry.HLS)
+        val next = retries.next(2004, 503)!!
+        assertEquals(1, next.candidateIndex)
+        assertNull("Backup MIME must not inherit the primary HLS format", next.mime)
+    }
+
 }
