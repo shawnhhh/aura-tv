@@ -93,7 +93,8 @@ internal class SpiderLoopbackProxy(
             return
         }
         if (params["session"] != token ||
-            params["siteKey"] != siteKey || closed.get() ||
+            (params["siteKey"] != null && params["siteKey"] != siteKey) || closed.get() ||
+            (path == "/health" && params["siteKey"] != siteKey) ||
             (path == "/proxy" && params["do"] != "jar")) {
             failure(output, 403)
             return
@@ -108,7 +109,7 @@ internal class SpiderLoopbackProxy(
             // FongMi Java Spider supports either a 3-4 element array or one
             // NanoHTTPD.Response object. Adapt only its public response API;
             // do not run its own HTTP server or reuse its socket/session.
-            val isStatic = params["__herrin_static"] == "1"
+            val isStatic = !params.containsKey("siteKey") || params["__herrin_static"] == "1"
             val forwarded = params.filterKeys {
                 it != "session" && it != "__herrin_static" && !(isStatic && it == "siteKey")
             }
@@ -222,6 +223,17 @@ internal class SpiderLoopbackProxy(
         }
     }
 
+    /**
+     * Original JARs append "?do=jar" to Proxy.getUrl(), which had no query in
+     * FongMi. HERRIN adds a session query. Repair that one delimiter only after
+     * matching this exact capability; arbitrary malformed queries still fail.
+     */
+    internal fun compatibleQuery(raw: String?): String? {
+        val prefix = "session=$token?"
+        return if (raw?.startsWith(prefix) == true)
+            "session=$token&" + raw.substring(prefix.length) else raw
+    }
+
     private fun parse(input: InputStream): Triple<String, Map<String, String>, String>? {
         val first = readLine(input) ?: return null
         val parts = first.split(' ')
@@ -259,7 +271,7 @@ internal class SpiderLoopbackProxy(
         val target = URI(parts[1])
         if (target.path !in setOf("/proxy", "/health") || target.fragment != null)
             throw IllegalArgumentException("Unsupported path")
-        val rawQuery = target.rawQuery ?: throw IllegalArgumentException("Missing session")
+        val rawQuery = compatibleQuery(target.rawQuery) ?: throw IllegalArgumentException("Missing session")
         if (rawQuery.length > MAX_QUERY) throw IllegalArgumentException("Oversized query")
         val entries = rawQuery.split('&')
         if (entries.size !in 1..24) throw IllegalArgumentException("Too many params")

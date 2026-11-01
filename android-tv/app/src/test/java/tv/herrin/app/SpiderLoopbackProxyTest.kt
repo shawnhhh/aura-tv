@@ -267,7 +267,8 @@ class SpiderLoopbackProxyTest {
             arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(2, 4, 8)))
         }) { error("Instance called for a static JAR route") }.use { proxy ->
             for (alias in listOf("proxy://do=jar&part=one",
-                    "http://127.0.0.1:9978/proxy?do=jar&part=one")) {
+                    "http://127.0.0.1:9978/proxy?do=jar&part=one",
+                    "http://127.0.0.1:${proxy.port}/proxy?session=${proxy.token}?do=jar&part=one")) {
                 val normalized = SpiderProxyPlayback.rebaseUrl(alias, "static-site", proxy)!!
                 assertTrue(normalized.contains("__herrin_static=1"))
                 val rebound = SpiderProxyPlayback.rebind(PlaybackMedia(normalized), "static-site", proxy)
@@ -276,7 +277,7 @@ class SpiderLoopbackProxyTest {
                 assertEquals(normalized, url)
                 assertArrayEquals(byteArrayOf(2, 4, 8), request(url).inputStream.use { it.readBytes() })
             }
-            assertEquals(2, staticCalls.get())
+            assertEquals(3, staticCalls.get())
             assertNull(SpiderProxyPlayback.rebaseUrl(
                 "proxy://do=jar&__herrin_static=1", "static-site", proxy))
             assertNull(SpiderProxyPlayback.rebaseUrl(

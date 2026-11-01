@@ -172,4 +172,26 @@ class M467SpiderProxyTransportTest {
             assertArrayEquals(byteArrayOf(4), conn.inputStream.use { it.readBytes() }); conn.disconnect()
         }
     }
+
+    @Test fun originalJarProxyUrlQuestionMarkConcatenationUsesAuthenticatedStaticCallback() {
+        val calls = AtomicInteger()
+        SpiderLoopbackProxy("legacy-jar", staticHandler = { params ->
+            calls.incrementAndGet()
+            assertEquals("jar", params["do"])
+            assertEquals("segment1", params["part"])
+            assertFalse(params.containsKey("siteKey")); assertFalse(params.containsKey("session"))
+            arrayOf(200, "video/mp2t", ByteArrayInputStream(byteArrayOf(0x47, 1, 2, 3)))
+        }) { error("Static route must not call instance") }.use { proxy ->
+            val base = "http://127.0.0.1:${proxy.port}/proxy?session=${proxy.token}"
+            for (separator in listOf("?", "&")) {
+                val conn = connection(base + separator + "do=jar&part=segment1")
+                assertEquals(200, conn.responseCode)
+                assertArrayEquals(byteArrayOf(0x47, 1, 2, 3), conn.inputStream.use { it.readBytes() })
+                conn.disconnect()
+            }
+            val denied = connection(base.replace(proxy.token, "wrong") + "?do=jar&part=segment1")
+            assertEquals(403, denied.responseCode); denied.disconnect()
+            assertEquals(2, calls.get())
+        }
+    }
 }
