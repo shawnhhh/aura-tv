@@ -33,7 +33,8 @@ internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val a
                               val key: String = "", val spiderApi: String? = null,
                               val extension: String = "", val jar: String? = null,
                               val scriptApi: String? = null,
-                              val headers: Map<String, String> = emptyMap())
+                              val headers: Map<String, String> = emptyMap(),
+                              val click: String = "")
 internal data class TvBoxLive(val name: String, val playlistUrl: String?,
                               val sourceUrl: String? = null, val channels: List<LiveChannel> = emptyList())
 
@@ -203,7 +204,8 @@ internal object TvBoxConfigParser {
                             extension = extension.take(64_000),
                             jar = site.optString("jar").takeIf { it.isNotBlank() },
                             scriptApi = script,
-                            headers = TvBoxHeaderCodec.decode(site.optJSONObject("header")))
+                            headers = TvBoxHeaderCodec.decode(site.optJSONObject("header")),
+                            click = site.optString("click").take(4_096))
                     }
                 }
             }

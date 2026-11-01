@@ -25,8 +25,6 @@ internal sealed interface FongMiPlayRoute {
 }
 
 internal object FongMiPlaybackRouter {
-    private val mediaExtensions = setOf(".m3u8", ".mpd", ".mp4", ".m4v",
-        ".mkv", ".mov", ".webm", ".ts", ".flv", ".mp3", ".aac")
 
     fun route(
         playerContent: String,
@@ -68,8 +66,7 @@ internal object FongMiPlaybackRouter {
         }
 
         val filePath = URI(sourceUrl).path.orEmpty().lowercase(Locale.ROOT)
-        val isMedia = mediaExtensions.any { filePath.endsWith(it) } ||
-            SpiderProxyPlayback.isCatVodProxy(sourceUrl) ||
+        val isMedia = SpiderProxyPlayback.isCatVodProxy(sourceUrl) ||
             PlaybackFormatRetry.declaredMime(response.optString("format")) != null
         val isWebPage = filePath.endsWith(".html") || filePath.endsWith(".htm")
         val needsParser = response.optInt("parse", 0) != 0 || response.optInt("jx", 0) != 0

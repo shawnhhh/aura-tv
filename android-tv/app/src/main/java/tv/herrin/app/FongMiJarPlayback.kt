@@ -14,8 +14,15 @@ import java.util.LinkedHashMap
  * downloaded here. No UI, catalog or scraping mutations.
  */
 internal object FongMiJarPlayback {
+    /** Exact JarLoader.jsonExt/jsonExtMix reflection ABI; also usable with a JVM fixture JAR. */
+    fun invoke(loader: ClassLoader?, type: Int, key: String, name: String, flag: String,
+        jxs: LinkedHashMap<String, String>?,
+        mixed: LinkedHashMap<String, HashMap<String, String>>?, source: String): Any {
+        return tv.herrin.app.fongmi.parse.JarParser.invoke(loader, type, key, name, flag, jxs, mixed, source)
+    }
+
     fun resolve(
-        loader: DexClassLoader?, parser: TvBoxPlaybackParser,
+        loader: ClassLoader?, parser: TvBoxPlaybackParser,
         source: String, flag: String, parsers: List<TvBoxPlaybackParser>,
         allowHttp: Boolean
     ): PlaybackResult {
@@ -26,27 +33,15 @@ internal object FongMiJarPlayback {
         if (!className.matches(Regex("[A-Za-z0-9_]{1,80}")))
             return PlaybackResult.Unavailable("插件解析器名称无效")
         return try {
-            val prefix = if (parser.type == 2) "Json" else "Mix"
-            val type = loader.loadClass("com.github.catvod.parser.$prefix$className")
-            val result = if (parser.type == 2) {
-                val options = LinkedHashMap<String, String>()
-                parsers.filter { it.type == 1 }.take(16).forEach {
-                    options[it.name] = it.url
-                }
-                type.getMethod("parse", LinkedHashMap::class.java, String::class.java)
-                    .invoke(null, options, source)
-            } else {
-                val options = LinkedHashMap<String, HashMap<String, String>>()
-                parsers.take(24).forEach {
-                    options[it.name] = hashMapOf("type" to it.type.toString(),
-                        "url" to it.url,
-                        "ext" to JSONObject().put("flag", org.json.JSONArray(it.flags))
-                            .put("header", JSONObject(it.headers)).toString())
-                }
-                type.getMethod("parse", LinkedHashMap::class.java, String::class.java,
-                    String::class.java, String::class.java)
-                    .invoke(null, options, parser.name, flag, source)
+            val options = LinkedHashMap<String, String>()
+            val mixed = LinkedHashMap<String, HashMap<String, String>>()
+            parsers.forEach {
+                val config = FongMiParsePlayback.configuration(it)
+                if (it.type == 1) options[it.name] = config.extUrl()
+                mixed[it.name] = config.mixMap()
             }
+            val result = invoke(loader, parser.type, className, parser.name, flag,
+                options, mixed, source)
             val json = when (result) {
                 is JSONObject -> result.toString()
                 is String -> result
