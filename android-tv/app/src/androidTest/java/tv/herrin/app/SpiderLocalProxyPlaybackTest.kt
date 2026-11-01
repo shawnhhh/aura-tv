@@ -217,6 +217,13 @@ class SpiderLocalProxyPlaybackTest {
                     SpiderProxyPlayback.normalizePlayerResponse(
                         JSONObject().put("url", url).toString(), "current-site", proxy))
             }
+            val rawNested = JSONObject().put("url",
+                "proxy://do=jar&siteKey=current-site&url=https://example.org/media.mkv")
+            val converted = SpiderProxyPlayback.normalizePlayerResponse(
+                rawNested.toString(), "current-site", proxy)
+            assertNotNull(converted)
+            assertTrue(JSONObject(converted!!).getString("url")
+                .contains("url=https%3A%2F%2Fexample.org%2Fmedia.mkv"))
             val supported = JSONObject().put("url", JSONObject()
                 .put("position", 1).put("values", org.json.JSONArray()
                     .put(JSONObject().put("name", "A").put("v", "https://example.org/a.mp4"))
