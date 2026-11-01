@@ -32,8 +32,15 @@
 
 ## 验证证据及剩余缺口
 
-纯JVM生产逻辑隔离编译与JUnit运行完成：`/workspace/logs/recovery-jvm/compile.log`、`/workspace/logs/recovery-jvm/tests.log`；5个类共36项通过（含新增11项），Kotlin 1.9.23编译器及JUnit4来自Gradle8.9发行包。不是Android/JVM全量。新增JVM测试11项（故障分类/预算/退避/取消/授权隔离/根因脱敏）、真实HTTP驱动Media3仪器测试2项（410换播放器后仍有限、403不访问备用URL）。仪器用例存在不代表已执行；TCL第三方片源成功从未验证。
+纯JVM生产逻辑隔离编译与JUnit运行完成：`/workspace/logs/recovery-jvm/compile.log`、`/workspace/logs/recovery-jvm/tests.log`；5个类共36项通过（含新增11项），Kotlin 1.9.23编译器及JUnit4来自Gradle8.9发行包。不是Android/JVM全量。新增JVM测试11项（故障分类/预算/退避/取消/授权隔离/根因脱敏）、真实HTTP驱动Media3仪器测试3项（410换播放器后仍有限、403不访问备用URL）。仪器用例存在不代表已执行；TCL第三方片源成功从未验证。
 
 已实现的故障恢复不等于完整FongMi播放链路移植。尚无故障注入JAR覆盖每个Spider进程死亡时点和加载超时；JAR/网页/JSON聚合解析取消和native解码后备依赖其他Agent与集成测试。不得用本文件声称所有恢复路径已通过。
 
 Android整体编译与仪器编译交由总集成执行：本提交Panel依赖Agent3的`FongMiExoPlayerFactory`/`FongMiSubtitleFormats`提交，不复制拥有权。请先集成Agent3再集成本提交。新增仪器用例尚未执行，不能计入通过数量。
+
+
+### 退出资源释放与立即重进
+
+`MainActivity`只在`screen == player`离开时调用Remote `releasePlayback`，不会因media、线路、集数或refreshEpoch的composition重建关闭来源。Remote独立清理Job在`requests`互斥锁中发`RELEASE_PLAYBACK`，service先关闭self-test proxy/worker（Agent1 `releasePlayback=close`），收到确认后invalidate/unbind但保留精确lastBrowse。下次playerContent必须先重新browse授权源、取得新会话；不同于单纯unbind等待Android异步onDestroy，避免快速重进复用旧token/socket。应用close取消待清理Job。`M467PlaybackRecoveryTest.exitingPlaybackClosesOldProxyBeforeImmediateReopenReturnsMediaBytes`验证释放屏障后立即重进、旧URL失效、新URL不同且真实HTTP媒体字节正确（待集成仪器运行）。
+
+`SpiderIpc.site/readSite`同时补充Agent2新`TvBoxSite.click`的透传（最长4096），保障上游站点click优先级跨进程不丢失。本追加提交同时依赖Agent1的Worker方法和Agent2数据模型，请四Agent齐备后统一编译。
