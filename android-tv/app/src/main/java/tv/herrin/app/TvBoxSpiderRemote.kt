@@ -83,6 +83,33 @@ internal object SpiderIpc {
         }
     }
 
+    fun playbackParsers(parsers: List<TvBoxPlaybackParser>): JSONArray = JSONArray().apply {
+        parsers.take(24).forEach { parser ->
+            put(JSONObject().put("name", parser.name).put("type", parser.type)
+                .put("url", parser.url).put("flags", JSONArray(parser.flags.take(32)))
+                .put("headers", JSONObject(parser.headers))
+                .put("click", parser.click))
+        }
+    }
+
+    fun readPlaybackParsers(array: JSONArray?): List<TvBoxPlaybackParser> {
+        if (array == null) return emptyList()
+        return (0 until minOf(array.length(), 24)).mapNotNull { i ->
+            val obj = array.optJSONObject(i) ?: return@mapNotNull null
+            val type = obj.optInt("type", -1)
+            if (type !in 0..4) return@mapNotNull null
+            val raw = obj.optString("url").take(2048)
+            val url = if (type in 0..1) TvBoxUrl.normalize(raw, true)
+                ?: return@mapNotNull null else raw
+            val flags = obj.optJSONArray("flags") ?: JSONArray()
+            TvBoxPlaybackParser(obj.optString("name").take(64), type, url,
+                (0 until minOf(flags.length(), 32)).mapNotNull {
+                    flags.optString(it).trim().take(80).takeIf(String::isNotBlank)
+                }, TvBoxHeaderCodec.decode(obj.optJSONObject("headers")),
+                obj.optString("click").take(4_096))
+        }
+    }
+
     fun film(film: Film): JSONObject {
         val episodes = JSONArray()
         var episodeChars = 0
@@ -241,7 +268,9 @@ class TvBoxSpiderService : Service() {
                                         }
                                     }.orEmpty(),
                                     jsonParsers = SpiderIpc.readJsonParsers(
-                                        request.optJSONArray("jsonParsers")))
+                                        request.optJSONArray("jsonParsers")),
+                                    playbackParsers = SpiderIpc.readPlaybackParsers(
+                                        request.optJSONArray("playbackParsers")))
                                 when (val result = worker.browse(site, warehouse)) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("films", JSONArray().apply {
@@ -538,6 +567,7 @@ internal class TvBoxSpiderBridge(context: Context) {
             .put("defaultJar", config.spiderJar ?: "")
             .put("vipFlags", JSONArray(config.vipFlags.take(32)))
             .put("jsonParsers", SpiderIpc.jsonParsers(config.jsonParsers))
+            .put("playbackParsers", SpiderIpc.playbackParsers(config.playbackParsers))
         return when (val response = request(SpiderIpc.BROWSE, payload)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> {
