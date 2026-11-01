@@ -2939,12 +2939,12 @@ private fun Herrin() {
                                     append(if (displayFilm.category == "剧集" || displayFilm.category == "动漫") "单集约 " else "资料片长 ")
                                     append(it).append(" 分钟")
                                 }
-                                if (displayFilm.genres.isNotEmpty()) append("\n类型：").append(displayFilm.genres.joinToString(" · "))
-                                if (displayFilm.regions.isNotEmpty()) append("\n国家 / 地区：").append(displayFilm.regions.joinToString(" · "))
                                 verifiedStreams[streamEvidenceKey]?.labels()
                                     ?.filter { it == "4K" || it.startsWith("HDR") ||
                                         it.startsWith("Dolby") }
                                     ?.distinct()?.take(3)?.forEach { append("  ·  ").append(it) }
+                                if (displayFilm.genres.isNotEmpty()) append("\n类型：").append(displayFilm.genres.joinToString(" · "))
+                                if (displayFilm.regions.isNotEmpty()) append("\n国家 / 地区：").append(displayFilm.regions.joinToString(" · "))
                                 if (displayFilm.directors.isNotEmpty()) append("\n导演 / 主创：").append(displayFilm.directors.joinToString(" · "))
                             }, lineHeight = 25.sp, modifier = Modifier.testTag("detail-metadata"))
                         } }
@@ -3148,6 +3148,15 @@ private fun Herrin() {
                                 }
                                 }
                             }
+                        if (showGroup != null && unmappedGroupMembers.isNotEmpty()) item {
+                            GroupRawSourceChooser(unmappedGroupMembers, reduceMotion) { original ->
+                                bypassGroupFilmId = original.id
+                                filmId = original.id
+                                episode = original.playbackEpisodes.firstOrNull()?.number ?: 1
+                                line = original.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
+                                restoreGroupFocus = false
+                            }
+                        }
                         if (displayFilm.people.isNotEmpty()) item {
                             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                 Text("相关演职人员", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -3179,15 +3188,7 @@ private fun Herrin() {
                             Text("主演：${displayFilm.actors.take(8).joinToString(" · ")}",
                                 modifier = Modifier.testTag("detail-people"), color = Color(0xFFD7E0EA))
                         }
-                            if (showGroup != null && unmappedGroupMembers.isNotEmpty()) item {
-                                GroupRawSourceChooser(unmappedGroupMembers, reduceMotion) { original ->
-                                    bypassGroupFilmId = original.id
-                                    filmId = original.id
-                                    episode = original.playbackEpisodes.firstOrNull()?.number ?: 1
-                                    line = original.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
-                                    restoreGroupFocus = false
-                                }
-                            }
+
 
                         }
                     
