@@ -39,6 +39,7 @@ internal object SpiderIpc {
     const val BROWSE = 1
     const val DETAILS = 2
     const val PLAY = 3
+    const val PROXY_SELF_TEST = 20
     const val AUTH_SHOW = 10
     const val AUTH_ACTION = 11
     const val AUTH_CLOSE = 12
@@ -47,7 +48,8 @@ internal object SpiderIpc {
 
     fun site(site: TvBoxSite): JSONObject = JSONObject()
         .put("name", site.name).put("key", site.key)
-        .put("spiderApi", site.spiderApi ?: "").put("ext", site.extension)
+        .put("spiderApi", site.spiderApi ?: "").put("scriptApi", site.scriptApi ?: "")
+        .put("ext", site.extension)
         .put("jar", site.jar ?: "")
         .put("header", JSONObject(site.headers))
 
@@ -56,6 +58,12 @@ internal object SpiderIpc {
         needsAdapter = true,
         key = obj.optString("key").take(90),
         spiderApi = obj.optString("spiderApi").takeIf { it.startsWith("csp_") },
+        scriptApi = obj.optString("scriptApi").takeIf { api ->
+            (api.startsWith("node:") && api.length <= 256) ||
+                (TvBoxUrl.normalize(api, true) != null && (
+                    api.substringBefore('?').endsWith(".js", true) ||
+                    api.substringBefore('?').endsWith(".py", true)))
+        },
         extension = obj.optString("ext").take(64_000),
         jar = obj.optString("jar").takeIf { it.isNotBlank() },
         headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))
@@ -80,6 +88,33 @@ internal object SpiderIpc {
             }
             TvBoxJsonParse(obj.optString("name").take(64), prefix,
                 flags, TvBoxHeaderCodec.decode(obj.optJSONObject("headers")))
+        }
+    }
+
+    fun playbackParsers(parsers: List<TvBoxPlaybackParser>): JSONArray = JSONArray().apply {
+        parsers.take(24).forEach { parser ->
+            put(JSONObject().put("name", parser.name).put("type", parser.type)
+                .put("url", parser.url).put("flags", JSONArray(parser.flags.take(32)))
+                .put("headers", JSONObject(parser.headers))
+                .put("click", parser.click))
+        }
+    }
+
+    fun readPlaybackParsers(array: JSONArray?): List<TvBoxPlaybackParser> {
+        if (array == null) return emptyList()
+        return (0 until minOf(array.length(), 24)).mapNotNull { i ->
+            val obj = array.optJSONObject(i) ?: return@mapNotNull null
+            val type = obj.optInt("type", -1)
+            if (type !in 0..4) return@mapNotNull null
+            val raw = obj.optString("url").take(2048)
+            val url = if (type in 0..1) TvBoxUrl.normalize(raw, true)
+                ?: return@mapNotNull null else raw
+            val flags = obj.optJSONArray("flags") ?: JSONArray()
+            TvBoxPlaybackParser(obj.optString("name").take(64), type, url,
+                (0 until minOf(flags.length(), 32)).mapNotNull {
+                    flags.optString(it).trim().take(80).takeIf(String::isNotBlank)
+                }, TvBoxHeaderCodec.decode(obj.optJSONObject("headers")),
+                obj.optString("click").take(4_096))
         }
     }
 
@@ -194,6 +229,8 @@ class TvBoxSpiderService : Service() {
     private val lock = Mutex()
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
     private val worker by lazy { TvBoxSpiderWorker(applicationContext) }
+    // Debug-only smoke fixture, never registered as a user-configurable source.
+    private var proxySelfTest: SpiderLoopbackProxy? = null
     @Volatile private var authCaller: Pair<Messenger, Int>? = null
     private val authorization = SpiderAuthorizationSession { dialogId, payload ->
         authCaller?.let { (caller, operationId) ->
@@ -241,7 +278,9 @@ class TvBoxSpiderService : Service() {
                                         }
                                     }.orEmpty(),
                                     jsonParsers = SpiderIpc.readJsonParsers(
-                                        request.optJSONArray("jsonParsers")))
+                                        request.optJSONArray("jsonParsers")),
+                                    playbackParsers = SpiderIpc.readPlaybackParsers(
+                                        request.optJSONArray("playbackParsers")))
                                 when (val result = worker.browse(site, warehouse)) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("films", JSONArray().apply {
@@ -256,6 +295,18 @@ class TvBoxSpiderService : Service() {
                                         .put("film", SpiderIpc.film(result.value))
                                     is SpiderResult.Failure -> SpiderIpc.error(result.message)
                                 }
+                            }
+                            SpiderIpc.PROXY_SELF_TEST -> {
+                                check((applicationInfo.flags and
+                                    android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                                    "Proxy smoke endpoint disabled in production"
+                                }
+                                val active = proxySelfTest ?: SpiderLoopbackProxy("ci-proxy") {
+                                    arrayOf(200, "video/mp4",
+                                        java.io.ByteArrayInputStream(byteArrayOf(8, 9, 10)))
+                                }.also { proxySelfTest = it }
+                                JSONObject().put("ok", true)
+                                    .put("uri", active.url + "&part=probe")
                             }
                             SpiderIpc.PLAY -> {
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
@@ -299,6 +350,10 @@ class TvBoxSpiderService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // Chromium browser parser lives only in the :spider process.
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            runCatching { android.webkit.WebView.setDataDirectorySuffix("herrin-spider") }
+        }
         val process = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
             .runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
         check(process == "$packageName:spider") { "Spider must run in its dedicated process" }
@@ -324,6 +379,8 @@ class TvBoxSpiderService : Service() {
     override fun onDestroy() {
         authorization.cancel()
         CatVodRuntime.setDialog(null)
+        proxySelfTest?.close()
+        proxySelfTest = null
         scope.cancel()
         // A plugin's destroy can also hang; the deadline runs off the main looper.
         val terminate = watchdog.schedule({
@@ -538,6 +595,7 @@ internal class TvBoxSpiderBridge(context: Context) {
             .put("defaultJar", config.spiderJar ?: "")
             .put("vipFlags", JSONArray(config.vipFlags.take(32)))
             .put("jsonParsers", SpiderIpc.jsonParsers(config.jsonParsers))
+            .put("playbackParsers", SpiderIpc.playbackParsers(config.playbackParsers))
         return when (val response = request(SpiderIpc.BROWSE, payload)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> {
@@ -580,12 +638,42 @@ internal class TvBoxSpiderBridge(context: Context) {
                 } ?: PlaybackResult.Unavailable(response.message)
             }
             is SpiderResult.Ready -> try {
-                SpiderIpc.readPlayback(response.value, allowHttp)
+                val ready = SpiderIpc.readPlayback(response.value, allowHttp)
+                if (ready is PlaybackResult.Ready && SpiderProxyPlayback.isCatVodProxy(ready.media.uri)) {
+                    val alive = SpiderProxyPlayback.ping(ready.media.uri)
+                    if (!alive) {
+                        // The remote process can die between returning playerContent
+                        // and the Media3 connection. Explicitly invalidate its
+                        // bound session and retry at most once from the last
+                        // previously approved source, never an arbitrary URL.
+                        withContext(Dispatchers.Main.immediate) {
+                            invalidate("Spider 播放代理连接失效")
+                        }
+                        when (val retried = request(SpiderIpc.PLAY, payload)) {
+                            is SpiderResult.Failure -> PlaybackResult.Unavailable(
+                                "本机 Spider 代理已退出，重建站点失败：" + retried.message)
+                            is SpiderResult.Ready -> {
+                                val fixed = SpiderIpc.readPlayback(retried.value, allowHttp)
+                                if (fixed is PlaybackResult.Ready &&
+                                    SpiderProxyPlayback.isCatVodProxy(fixed.media.uri) &&
+                                    !SpiderProxyPlayback.ping(fixed.media.uri))
+                                    PlaybackResult.Unavailable("本机 Spider 播放代理无法启动，请重新应用影视站点")
+                                else fixed
+                            }
+                        }
+                    } else ready
+                } else ready
             } catch (error: Exception) {
                 PlaybackResult.Unavailable("Spider 播放信息无效：" + SpiderFailureDetails.message(error))
             }
         }
     }
+
+    internal suspend fun probeRemoteProxyForInstrumentation(): SpiderResult<String> =
+        when (val result = sendRequest(SpiderIpc.PROXY_SELF_TEST, JSONObject())) {
+            is SpiderResult.Failure -> result
+            is SpiderResult.Ready -> SpiderResult.Ready(result.value.optString("uri"))
+        }
 
     fun close() {
         Handler(Looper.getMainLooper()).post {

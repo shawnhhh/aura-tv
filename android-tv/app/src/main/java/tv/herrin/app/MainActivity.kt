@@ -511,8 +511,9 @@ private fun Herrin() {
             var cmsElapsed = 0L
             val hasRunnableSpider = candidates.any { site ->
                 val jar = site.jar ?: config.spiderJar
-                site.spiderApi != null && jar != null && TvBoxSpiderPolicy.mayRun(
-                    runSpiderAfterApply, prefs.tvBoxWarehouseUrl, jar,
+                (site.spiderApi != null || site.scriptApi != null) &&
+                    (jar != null || site.scriptApi != null) && TvBoxSpiderPolicy.mayRun(
+                    runSpiderAfterApply, prefs.tvBoxWarehouseUrl, jar ?: site.scriptApi.orEmpty(),
                     prefs.tvBoxTrustedSpiderRootUrl, prefs.tvBoxTrustedSpiderJarSpec)
             }
             for ((candidateIndex, site) in candidates.withIndex()) {
@@ -522,7 +523,7 @@ private fun Herrin() {
                     break
                 }
                 val timeout = TvBoxAutoScanPolicy.timeoutMs(
-                    elapsed, cmsElapsed, hasRunnableSpider, spider = site.spiderApi != null)
+                    elapsed, cmsElapsed, hasRunnableSpider, spider = site.spiderApi != null || site.scriptApi != null)
                     ?: continue
                 if (site.apiUrl != null) {
                     vodImportFeedback = "探测 ${candidateIndex + 1}/${candidates.size}"
@@ -539,8 +540,8 @@ private fun Herrin() {
                         }
                         else -> Unit
                     }
-                } else if (site.spiderApi != null) {
-                    val jarSpec = site.jar ?: config.spiderJar ?: continue
+                } else if (site.spiderApi != null || site.scriptApi != null) {
+                    val jarSpec = site.jar ?: config.spiderJar ?: site.scriptApi ?: continue
                     // No silent execution of a changed or newly introduced JAR on startup.
                     if (!TvBoxSpiderPolicy.mayRun(runSpiderAfterApply, prefs.tvBoxWarehouseUrl,
                             jarSpec, prefs.tvBoxTrustedSpiderRootUrl,
@@ -1522,7 +1523,7 @@ private fun Herrin() {
                                         }
                                     }
                                 }
-                                site.spiderApi != null && selected != null -> uiScope.launch {
+                                (site.spiderApi != null || site.scriptApi != null) && selected != null -> uiScope.launch {
                                     tvBoxStatus = "正在通过 ${site.name} 加载影片…"
                                     when (val result = spiderBridge.browse(site, selected)) {
                                         is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${result.message}"
@@ -2124,15 +2125,22 @@ private fun Herrin() {
                     TvBoxJsonPlayback.choose(selected.uri, selected.title,
                         tvBoxSingle?.jsonParsers.orEmpty())
                 }
-                // Do not hand a JSON-parse watch page directly to Media3.
+                val cmsBrowserParser = if (cmsJsonParser == null) cmsLine?.let { selected ->
+                    FongMiBrowserPlayback.choose(selected.uri, selected.title,
+                        tvBoxSingle?.playbackParsers.orEmpty(), tvBoxAllowHttp)
+                } else null
+                // Only playback URL resolution changes. Existing UI, TMDB,
+                // film metadata and details remain completely untouched.
                 val parsedCms = if (cmsLine != null && cmsJsonParser != null)
                     CmsJsonPlayback(cmsLine.uri, cmsJsonParser, tvBoxAllowHttp, playerRetryEpoch)
-                    else null
-                val cmsParseWaiting = cmsJsonParser != null && parsedCms == null
+                else if (cmsLine != null && cmsBrowserParser != null)
+                    CmsBrowserPlayback(cmsLine.uri, cmsBrowserParser, tvBoxAllowHttp, playerRetryEpoch)
+                else null
+                val cmsParseWaiting = (cmsJsonParser != null || cmsBrowserParser != null) && parsedCms == null
                 val licensed = if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
-                            if (cmsJsonParser != null) parsedCms
+                            if (cmsJsonParser != null || cmsBrowserParser != null) parsedCms
                             else TvBoxCmsPlaybackResolver.resolve(film, episode, line, tvBoxAllowHttp,
                                 activeCmsSite?.headers.orEmpty())
                         } else LicensedPlaybackResolver.resolve(film, episode, line)
@@ -2157,7 +2165,7 @@ private fun Herrin() {
                         startPositionMs = previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
-                        onRefreshSource = if (spiderActive || cmsJsonParser != null) ({ playerRetryEpoch++ }) else null,
+                        onRefreshSource = if (spiderActive || cmsJsonParser != null || cmsBrowserParser != null) ({ playerRetryEpoch++ }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
@@ -2192,7 +2200,7 @@ private fun Herrin() {
                         loading = !playbackUnavailable,
                         offlineDemonstration = offlineDemonstration,
                         cmsFailed = cmsFailed,
-                        retryAvailable = spiderActive || cmsFailed || cmsJsonParser != null,
+                        retryAvailable = spiderActive || cmsFailed || cmsJsonParser != null || cmsBrowserParser != null,
                         reducedMotion = reduceMotion,
                         failureHint = (parsedCms as? PlaybackResult.Unavailable)?.reason
                             ?: (spiderResolved as? PlaybackResult.Unavailable)
@@ -2594,7 +2602,7 @@ private fun Herrin() {
                                     }
                                 } }
                             }
-                            val spiderSites = preview.sites.filter { it.spiderApi != null }
+                            val spiderSites = preview.sites.filter { it.spiderApi != null || it.scriptApi != null }
                             if (spiderSites.isNotEmpty()) {
                                 item { Text("Java Spider 影视站点 · ${spiderSites.size} 个", fontSize = 18.sp) }
                                 item { LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

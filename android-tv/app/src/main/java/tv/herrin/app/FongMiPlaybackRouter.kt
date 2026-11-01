@@ -18,6 +18,9 @@ import java.util.Locale
 internal sealed interface FongMiPlayRoute {
     data class Direct(val playback: PlaybackResult.Ready) : FongMiPlayRoute
     data class JsonParser(val parser: TvBoxJsonParse, val originalUrl: String) : FongMiPlayRoute
+    data class BrowserParser(val parser: TvBoxPlaybackParser, val originalUrl: String) : FongMiPlayRoute
+    data class JarParser(val parser: TvBoxPlaybackParser, val originalUrl: String, val flag: String) : FongMiPlayRoute
+    data class Aggregate(val parsers: List<TvBoxPlaybackParser>, val originalUrl: String, val flag: String) : FongMiPlayRoute
     data class Unavailable(val message: String) : FongMiPlayRoute
 }
 
@@ -30,7 +33,8 @@ internal object FongMiPlaybackRouter {
         flag: String,
         jsonParsers: List<TvBoxJsonParse>,
         allowHttp: Boolean,
-        siteHeaders: Map<String, String> = emptyMap()
+        siteHeaders: Map<String, String> = emptyMap(),
+        playbackParsers: List<TvBoxPlaybackParser> = emptyList()
     ): FongMiPlayRoute {
         val response = runCatching { JSONObject(playerContent) }.getOrNull()
             ?: return FongMiPlayRoute.Unavailable("Spider 播放数据不是有效 JSON")
@@ -49,11 +53,13 @@ internal object FongMiPlaybackRouter {
         }
         if (instruction.startsWith("parse:", ignoreCase = true)) {
             val name = instruction.substringAfter(':')
-            val parser = jsonParsers.firstOrNull { it.name == name }
-                ?: return FongMiPlayRoute.Unavailable("影视源没有提供指定的 JSON 解析器")
             if (sourceUrl == null)
                 return FongMiPlayRoute.Unavailable("Spider 没有提供要解析的影片地址")
-            return FongMiPlayRoute.JsonParser(parser, sourceUrl)
+            val parser = playbackParsers.firstOrNull { it.name == name }
+            if (parser != null) return select(parser, sourceUrl, flag, playbackParsers)
+            val oldParser = jsonParsers.firstOrNull { it.name == name }
+                ?: return FongMiPlayRoute.Unavailable("影视源没有提供指定的解析器")
+            return FongMiPlayRoute.JsonParser(oldParser, sourceUrl)
         }
 
         if (sourceUrl == null) return when (direct) {
@@ -70,15 +76,34 @@ internal object FongMiPlaybackRouter {
         // hijacked by a flag parser. Only explicit parser intent or an
         // identifiable HTML watch page gets parsed.
         if (!isMedia && (needsParser || isWebPage)) {
-            val parser = TvBoxJsonPlayback.choose(sourceUrl, flag, jsonParsers)
-            if (parser != null) return FongMiPlayRoute.JsonParser(parser, sourceUrl)
+            val matching = playbackParsers.firstOrNull { parser ->
+                parser.type != 4 && parser.flags.any { it.equals(flag, true) }
+            } ?: playbackParsers.firstOrNull { parser ->
+                parser.type == 4 || (parser.type in 0..1 && parser.flags.isEmpty())
+            }
+            if (matching != null) return select(matching, sourceUrl, flag, playbackParsers)
+            val legacy = TvBoxJsonPlayback.choose(sourceUrl, flag, jsonParsers)
+            if (legacy != null) return FongMiPlayRoute.JsonParser(legacy, sourceUrl)
             return FongMiPlayRoute.Unavailable(
-                "当前线路需要解析，但此影视源没有可用的 JSON 解析器")
+                "当前线路需要解析，但影视源没有提供可用的解析器")
         }
         return when (direct) {
             is PlaybackResult.Ready -> FongMiPlayRoute.Direct(direct)
             is PlaybackResult.Unavailable -> FongMiPlayRoute.Unavailable(direct.reason)
         }
+    }
+
+    private fun select(
+        parser: TvBoxPlaybackParser, url: String, flag: String,
+        candidates: List<TvBoxPlaybackParser> = emptyList()
+    ): FongMiPlayRoute = when (parser.type) {
+        0 -> FongMiPlayRoute.BrowserParser(parser, url)
+        1 -> FongMiPlayRoute.JsonParser(parser.asJson(), url)
+        2, 3 -> FongMiPlayRoute.JarParser(parser, url, flag)
+        4 -> FongMiPlayRoute.Aggregate(candidates.filter { it.type in 0..1 &&
+            (it.flags.isEmpty() || it.flags.any { f -> f.equals(flag, true) }) },
+            url, flag)
+        else -> FongMiPlayRoute.Unavailable("该线路的解析器类型不受支持")
     }
 
     private fun firstHttpUrl(value: Any?, allowHttp: Boolean): String? {

@@ -39,6 +39,7 @@ internal class SpiderLoopbackProxy(
     }
     private val sockets = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
     val port: Int get() = server.localPort
+    val isOpen: Boolean get() = !closed.get() && !server.isClosed
     val token: String = ByteArray(24).also { SecureRandom().nextBytes(it) }.let {
         Base64.getUrlEncoder().withoutPadding().encodeToString(it)
     }
@@ -76,13 +77,20 @@ internal class SpiderLoopbackProxy(
         if (request == null) return
         val method = request.first
         val params = request.second
+        val path = request.third
         if (method != "GET" && method != "HEAD") {
             failure(output, 405)
             return
         }
-        if (params["session"] != token || params["do"] != "jar" ||
-            params["siteKey"] != siteKey || closed.get()) {
+        if (params["session"] != token ||
+            params["siteKey"] != siteKey || closed.get() ||
+            (path == "/proxy" && params["do"] != "jar")) {
             failure(output, 403)
+            return
+        }
+        if (path == "/health") {
+            output.write("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n".toByteArray(StandardCharsets.US_ASCII))
+            output.flush()
             return
         }
         val response = try {
@@ -183,7 +191,7 @@ internal class SpiderLoopbackProxy(
         }
     }
 
-    private fun parse(input: InputStream): Pair<String, Map<String, String>>? {
+    private fun parse(input: InputStream): Triple<String, Map<String, String>, String>? {
         val first = readLine(input) ?: return null
         val parts = first.split(' ')
         if (parts.size != 3 || parts[2] != "HTTP/1.1" ||
@@ -212,7 +220,7 @@ internal class SpiderLoopbackProxy(
         }
         if (origin || host != "127.0.0.1:" + port) throw IllegalArgumentException("Wrong host")
         val target = URI(parts[1])
-        if (target.path != "/proxy" || target.fragment != null)
+        if (target.path !in setOf("/proxy", "/health") || target.fragment != null)
             throw IllegalArgumentException("Unsupported path")
         val rawQuery = target.rawQuery ?: throw IllegalArgumentException("Missing session")
         if (rawQuery.length > MAX_QUERY) throw IllegalArgumentException("Oversized query")
@@ -230,7 +238,7 @@ internal class SpiderLoopbackProxy(
         // HTTP request headers override same-named query keys, as in CatVod
         // NanoHTTPD. A plugin sees range via params["range"] (lowercase).
         range?.let { params["range"] = it }
-        return parts[0] to params
+        return Triple(parts[0], params, target.path)
     }
 
     private fun readLine(input: InputStream): String? {

@@ -368,8 +368,12 @@ internal object SpiderInitPolicy {
 internal class TvBoxSpiderWorker(private val context: Context) {
     private var active: Spider? = null
     private var activeKey: String? = null
+    private var activeSiteKey: String? = null
     private var activeVipFlags: List<String> = emptyList()
     private var activeJsonParsers: List<TvBoxJsonParse> = emptyList()
+    private var activePlaybackParsers: List<TvBoxPlaybackParser> = emptyList()
+    private var activeDexLoader: DexClassLoader? = null
+    private var activeScriptRuntime: FongMiScriptRuntimes? = null
     private var activeSiteHeaders: Map<String, String> = emptyMap()
     private var activeHttpHost: SpiderHttpSessionHost? = null
     private var activeLoopbackProxy: SpiderLoopbackProxy? = null
@@ -390,19 +394,45 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = attempt {
-        val spiderApi = site.spiderApi ?: run {
+        val spiderApi = site.spiderApi
+        val scriptApi = site.scriptApi
+        if (spiderApi == null && scriptApi == null) error("站点没有可执行的 CatVod API")
+        val jar = site.jar ?: config.spiderJar
+        if (spiderApi != null && jar == null) error("配置没有 Spider JAR")
+        val key = SpiderRuntimeCompat.sessionKey(jar.orEmpty(), site)
+        val spider = if (key == activeKey && active != null) active!! else {
             close()
-            error("站点不是 Java csp_* 类型")
-        }
-        val jar = site.jar ?: config.spiderJar ?: run {
-            close()
-            error("配置没有 Spider JAR")
-        }
-        val key = SpiderRuntimeCompat.sessionKey(jar, site)
-        val spider = if (key == activeKey) active!! else {
-            close()
+            if (scriptApi != null) {
+                Runtime.set(context.applicationContext)
+                Runtime.setActivity { null }
+                val host = SpiderHttpSessionHost()
+                val runtime = FongMiScriptRuntimes(context)
+                try {
+                    val created = runtime.create(site, host)
+                    val localProxy = SpiderLoopbackProxy(site.key) { params ->
+                        synchronized(created) { created.proxy(params) }
+                    }
+                    CatVodProxy.set(localProxy.port, localProxy.token)
+                    try {
+                        created.init(context, site.extension)
+                        created.also {
+                            active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = host
+                            activeLoopbackProxy = localProxy; activeScriptRuntime = runtime
+                        }
+                    } catch (error: Throwable) {
+                        localProxy.close()
+                        CatVodProxy.set(-1, "")
+                        SpiderRuntimeCompat.dispose(created)
+                        throw error
+                    }
+                } catch (error: Throwable) {
+                    runtime.close()
+                    host.clear()
+                    throw error
+                }
+            } else {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DOWNLOAD)
-            val file = SpiderJarCache.obtain(context, jar)
+            val file = SpiderJarCache.obtain(context, jar!!)
             // One ephemeral cookie jar per active site; never shared across source changes.
             val httpHost = SpiderHttpSessionHost()
             Runtime.set(context.applicationContext)
@@ -433,7 +463,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 android.util.Log.w("HerrinCatVod", "Optional plugin initializer failed: ${initFailure.javaClass.simpleName}")
             }
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
-            val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi.removePrefix("csp_")}")
+            val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi!!.removePrefix("csp_")}")
             val created = spiderClass.getDeclaredConstructor().newInstance() as Spider
             // CatVod Spider.getProxyUrl() needs a real, local listening port.
             // Start it inside :spider, scoped to the active site and process.
@@ -447,8 +477,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 created.local = Local(site.key)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
                 created.init(context, site.extension)
-                created.also { active = it; activeKey = key; activeHttpHost = httpHost
-                    activeLoopbackProxy = localProxy }
+                created.also { active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = httpHost
+                    activeLoopbackProxy = localProxy; activeDexLoader = loader }
             } catch (error: Throwable) {
                 localProxy.close()
                 CatVodProxy.set(-1, "")
@@ -456,12 +486,14 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 httpHost.clear()
                 throw error
             }
+            }
         }
         // FongMi sends the root config's global VIP flags to playerContent.
         // Passing emptyList() prevented some plugins from generating the same
         // playable result as TVBox for an otherwise identical episode ID.
         activeVipFlags = config.vipFlags.take(32)
         activeJsonParsers = config.jsonParsers.take(16)
+        activePlaybackParsers = config.playbackParsers.take(24)
         activeSiteHeaders = site.headers
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
         val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
@@ -481,7 +513,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
-        return when (val result = attempt {
+        val attemptResult = attempt {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
@@ -491,22 +523,57 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // HERRIN's existing isolated Spider playback process. The result
             // is still just PlaybackMedia; no film metadata or UI is mutated.
             val decision = FongMiPlaybackRouter.route(
-                raw, selected.title, activeJsonParsers, allowHttp, activeSiteHeaders)
+                raw, selected.title, activeJsonParsers, allowHttp, activeSiteHeaders,
+                activePlaybackParsers)
             val resolved = when (decision) {
                 is FongMiPlayRoute.Direct -> decision.playback
                 is FongMiPlayRoute.JsonParser -> kotlinx.coroutines.runBlocking {
                     TvBoxJsonPlayback.resolve(
                         decision.parser, decision.originalUrl, allowHttp)
                 }
+                is FongMiPlayRoute.BrowserParser -> kotlinx.coroutines.runBlocking {
+                    FongMiBrowserPlayback.resolve(context, decision.parser,
+                        decision.originalUrl, allowHttp)
+                }
+                is FongMiPlayRoute.JarParser -> FongMiJarPlayback.resolve(
+                    activeDexLoader, decision.parser, decision.originalUrl,
+                    decision.flag, activePlaybackParsers, allowHttp)
+                is FongMiPlayRoute.Aggregate -> {
+                    var candidate: PlaybackResult = PlaybackResult.Unavailable(
+                        "当前聚合解析器没有可用的播放结果")
+                    for (parser in decision.parsers.take(6)) {
+                        candidate = kotlinx.coroutines.runBlocking {
+                            when (parser.type) {
+                                0 -> FongMiBrowserPlayback.resolve(context, parser,
+                                    decision.originalUrl, allowHttp)
+                                1 -> TvBoxJsonPlayback.resolve(parser.asJson(),
+                                    decision.originalUrl, allowHttp)
+                                else -> PlaybackResult.Unavailable("聚合子解析器类型无效")
+                            }
+                        }
+                        if (candidate is PlaybackResult.Ready) break
+                    }
+                    candidate
+                }
                 is FongMiPlayRoute.Unavailable ->
                     PlaybackResult.Unavailable(decision.message)
             }
-            resolved.also {
+            val healthy = when (resolved) {
+                is PlaybackResult.Ready -> {
+                    val localProxy = activeLoopbackProxy
+                    if (localProxy != null)
+                        SpiderProxyPlayback.rebind(resolved.media, activeSiteKey.orEmpty(), localProxy)
+                    else resolved
+                }
+                is PlaybackResult.Unavailable -> resolved
+            }
+            healthy.also {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             }
-        }) {
-            is SpiderResult.Ready -> result.value
-            is SpiderResult.Failure -> PlaybackResult.Unavailable(result.message)
+        }
+        return when (attemptResult) {
+            is SpiderResult.Ready -> attemptResult.value
+            is SpiderResult.Failure -> PlaybackResult.Unavailable(attemptResult.message)
         }
     }
 
@@ -517,8 +584,13 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         SpiderRuntimeCompat.dispose(active)
         active = null
         activeKey = null
+        activeSiteKey = null
         activeVipFlags = emptyList()
         activeJsonParsers = emptyList()
+        activePlaybackParsers = emptyList()
+        activeDexLoader = null
+        activeScriptRuntime?.close()
+        activeScriptRuntime = null
         activeSiteHeaders = emptyMap()
         activeHttpHost?.clear()
         activeHttpHost = null

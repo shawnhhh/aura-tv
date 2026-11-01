@@ -20,6 +20,15 @@ internal data class TvBoxWarehouse(val name: String, val url: String)
 internal data class TvBoxJsonParse(val name: String, val prefix: String,
                                    val flags: List<String> = emptyList(),
                                    val headers: Map<String, String> = emptyMap())
+/** FongMi playback-only parser configuration. No catalog or UI state. */
+internal data class TvBoxPlaybackParser(
+    val name: String, val type: Int, val url: String,
+    val flags: List<String> = emptyList(),
+    val headers: Map<String, String> = emptyMap(),
+    val click: String = ""
+) {
+    fun asJson(): TvBoxJsonParse = TvBoxJsonParse(name, url, flags, headers)
+}
 internal data class TvBoxSite(val name: String, val needsAdapter: Boolean, val apiUrl: String? = null,
                               val key: String = "", val spiderApi: String? = null,
                               val extension: String = "", val jar: String? = null,
@@ -44,6 +53,7 @@ internal object TvBoxSpiderPolicy {
 internal object TvBoxAutoSites {
     fun identity(site: TvBoxSite, defaultJar: String?): String {
         val value = listOf(site.key, site.apiUrl.orEmpty(), site.spiderApi.orEmpty(),
+            site.scriptApi.orEmpty(),
             if (site.spiderApi != null) site.jar ?: defaultJar.orEmpty() else "")
             .joinToString("\u0000")
         return MessageDigest.getInstance("SHA-256")
@@ -55,14 +65,14 @@ internal object TvBoxAutoSites {
     fun resumeOnly(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
         if (preferredId.isBlank()) return emptyList()
         return listOfNotNull(config.sites.firstOrNull {
-            (it.apiUrl != null || it.spiderApi != null) &&
+            (it.apiUrl != null || it.spiderApi != null || it.scriptApi != null) &&
                 identity(it, config.spiderJar) == preferredId
         })
     }
 
     fun candidates(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
         val direct = config.sites.filter { it.apiUrl != null }.take(8)
-        val spider = config.sites.filter { it.spiderApi != null }
+        val spider = config.sites.filter { it.spiderApi != null || it.scriptApi != null }
             .sortedBy { site ->
                 if (listOf("云盘", "片单", "预告", "音乐").any { site.name.contains(it) }) 1 else 0
             }.take(12)
@@ -103,7 +113,8 @@ internal sealed interface TvBoxConfig {
                       val fromCache: Boolean = false, val wrappedInImage: Boolean = false,
                       val spiderJar: String? = null,
                       val vipFlags: List<String> = emptyList(),
-                      val jsonParsers: List<TvBoxJsonParse> = emptyList()) : TvBoxConfig
+                      val jsonParsers: List<TvBoxJsonParse> = emptyList(),
+                      val playbackParsers: List<TvBoxPlaybackParser> = emptyList()) : TvBoxConfig
     data class HerrinCatalog(val address: String, val count: Int) : TvBoxConfig
     data class Error(val reason: String) : TvBoxConfig
 }
@@ -177,7 +188,9 @@ internal object TvBoxConfigParser {
                         val direct = TvBoxUrl.normalize(api, allowHttp = true)
                         // TVBox drpy/JS rules are script definitions, not JSON CMS endpoints.
                         // Fetching them with ac=detail mislabels a script as a playable catalog.
-                        val script = direct?.takeIf { address ->
+                        val script = if (api.startsWith("node:") &&
+                            api.length <= 256 && api.none { it.isWhitespace() }) api
+                        else direct?.takeIf { address ->
                             runCatching { URI(address).path.lowercase().let {
                                 it.endsWith(".js") || it.endsWith(".py")
                             } }.getOrDefault(false)
@@ -214,23 +227,30 @@ internal object TvBoxConfigParser {
                 flagsJson.optString(index).trim().take(80).takeIf { it.isNotBlank() }
             }.distinct().take(32)
             val parseItems = root.optJSONArray("parses") ?: JSONArray()
-            val jsonParsers = (0 until minOf(16, parseItems.length())).mapNotNull { index ->
+            val playbackParsers = (0 until minOf(24, parseItems.length())).mapNotNull { index ->
                 val item = parseItems.optJSONObject(index) ?: return@mapNotNull null
-                if (item.optInt("type", 0) != 1) return@mapNotNull null
+                val type = item.optInt("type", 0)
+                if (type !in 0..4) return@mapNotNull null
+                // type 4 is an upstream supervisor with no individual URL.
                 val address = TvBoxUrl.normalize(item.optString("url"), allowHttp = true)
-                    ?: return@mapNotNull null
-                // Only the configured type-1 JSON parser is evaluated here,
-                // never browser-based scripts or executable JAR parser plugins.
+                if (type in 0..1 && address == null) return@mapNotNull null
+                if (type in 2..3 && item.optString("url").isBlank()) return@mapNotNull null
                 val ext = item.optJSONObject("ext")
                 val flagsArray = ext?.optJSONArray("flag") ?: JSONArray()
-                val parseFlags = (0 until minOf(flagsArray.length(), 32)).mapNotNull {
-                    flagsArray.optString(it).trim().take(80).takeIf(String::isNotEmpty)
+                val flags = (0 until minOf(flagsArray.length(), 32)).mapNotNull {
+                    flagsArray.optString(it).trim().take(80).takeIf(String::isNotBlank)
                 }
-                TvBoxJsonParse(item.optString("name").take(64).ifBlank { "JSON 解析" },
-                    address, parseFlags, TvBoxHeaderCodec.decode(ext?.optJSONObject("header")))
+                TvBoxPlaybackParser(
+                    item.optString("name").take(64).ifBlank { "解析器 $index" },
+                    type, address ?: item.optString("url").take(256), flags,
+                    TvBoxHeaderCodec.decode(ext?.optJSONObject("header")),
+                    item.optString("click").take(4_096))
             }
+            val jsonParsers = playbackParsers.filter { it.type == 1 }
+                .map { it.asJson() }.take(16)
             return TvBoxConfig.Single(sites, lives, spider != null || sites.any { it.needsAdapter },
-                spiderJar = spider, vipFlags = flags, jsonParsers = jsonParsers)
+                spiderJar = spider, vipFlags = flags, jsonParsers = jsonParsers,
+                playbackParsers = playbackParsers)
         }
         if (root.optInt("version", -1) == 1 && root.optJSONArray("items") != null) {
             return TvBoxConfig.HerrinCatalog(origin, root.getJSONArray("items").length())
