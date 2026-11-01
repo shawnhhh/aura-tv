@@ -3046,6 +3046,30 @@ private fun Herrin() {
                                     screen = "player"
                                 } }
                             }
+                            if (showGroup == null) item { Text("线路",
+                                modifier = Modifier.testTag("detail-line-heading"),
+                                fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (displayedLines.isEmpty()) {
+                                    listOf("演示线路 A", "演示线路 B").forEachIndexed { index, name ->
+                                        TvButton(name, modifier = Modifier.testTag("line-$name")
+                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier),
+                                            reduced = reduceMotion, selected = line == name) { line = name }
+                                    }
+                                } else {
+                                    displayedLines.forEachIndexed { index, option ->
+                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}")
+                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier), reduced = reduceMotion,
+                                            selected = line == option.id) {
+                                            line = option.id
+                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
+                                        }
+                                    }
+                                }
+                                }
+                            }
                             if (showGroup != null && groupLayout != null && groupSection != null) {
                                 item {
                                     GroupSeasonBrowser(groupLayout, groupSection,
@@ -3110,7 +3134,7 @@ private fun Herrin() {
                                                 modifier = Modifier.testTag("episode-${entry.number}")
                                                     .onPreviewKeyEvent { event ->
                                                         if (event.type == KeyEventType.KeyDown &&
-                                                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+                                                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP)
                                                             runCatching { requester("detail-first-line").requestFocus() }.isSuccess
                                                         else false
                                                     },
@@ -3123,30 +3147,6 @@ private fun Herrin() {
                                         }
                                     }
                                 } }
-                            }
-                            item { Text("线路",
-                                modifier = Modifier.testTag("detail-line-heading"),
-                                fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
-                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
-                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (displayedLines.isEmpty()) {
-                                    listOf("演示线路 A", "演示线路 B").forEachIndexed { index, name ->
-                                        TvButton(name, modifier = Modifier.testTag("line-$name")
-                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier),
-                                            reduced = reduceMotion, selected = line == name) { line = name }
-                                    }
-                                } else {
-                                    displayedLines.forEachIndexed { index, option ->
-                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}")
-                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier), reduced = reduceMotion,
-                                            selected = line == option.id) {
-                                            line = option.id
-                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
-                                        }
-                                    }
-                                }
-                                }
                             }
                         if (showGroup != null && unmappedGroupMembers.isNotEmpty()) item {
                             GroupRawSourceChooser(unmappedGroupMembers, reduceMotion) { original ->
