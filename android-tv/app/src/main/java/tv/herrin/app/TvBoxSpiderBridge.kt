@@ -565,7 +565,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     loader = activeDexLoader,
                     siteClick = activeSiteClick,
                     vipFlags = activeVipFlags,
-                    videoCheck = if (spider.manualVideoCheck()) spider::isVideoFormat else null)
+                    videoCheck = if (spider.manualVideoCheck()) spider::isVideoFormat else null,
+                    normalizeMedia = { url ->
+                        SpiderProxyPlayback.rebaseUrl(url, activeSiteKey.orEmpty(), localProxy)
+                    })
             }
             val healthy = when (resolved) {
                 is PlaybackResult.Ready -> {
