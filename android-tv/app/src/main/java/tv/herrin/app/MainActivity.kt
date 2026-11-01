@@ -1163,6 +1163,24 @@ private fun Herrin() {
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
     val settingsListState = rememberLazyListState()
+    // Cast is the final offscreen LazyColumn item. Scroll it into composition
+    // before requesting focus; native spatial search cannot reach detached rows.
+    fun moveToDetailCast(): Boolean {
+        if (screen != "detail" ||
+            (displayFilm.people.isEmpty() && displayFilm.actors.isEmpty())) return false
+        uiScope.launch {
+            val last = settingsListState.layoutInfo.totalItemsCount - 1
+            if (last < 0) return@launch
+            settingsListState.scrollToItem(last)
+            repeat(8) {
+                withFrameNanos { }
+                if (runCatching {
+                        requester("detail-person-0").requestFocus()
+                    }.isSuccess && focusId == "detail-person-0") return@launch
+            }
+        }
+        return true
+    }
     LaunchedEffect(settingsTvBoxOnly) {
         if (screen == "settings" && !settingsTvBoxOnly) {
             // Expanding the deep diagnostics form replaces the compact list.
@@ -3119,7 +3137,8 @@ private fun Herrin() {
                                         onEpisodeFocus = { entry ->
                                             groupFocusedCoordinates = entry.season to entry.number
                                         }, onEpisodePlay = ::playGroupEpisode,
-                                        onLinePlay = ::selectGroupSource)
+                                        onLinePlay = ::selectGroupSource,
+                                        onMoveToCast = ::moveToDetailCast)
                                 }
                             } else if (showGroup != null) {
                                 item { Text("当前原始条目没有可信的季集标记；可打开单个影视条目继续选集。",
@@ -3139,7 +3158,8 @@ private fun Herrin() {
                                         onSeasonSelect = ::selectDetailSeason,
                                         onEpisodeFocus = { entry ->
                                             detailSeasonEpisodeNumbers[entry.season] = entry.source.number
-                                        }, onPlay = { entry -> playSeasonEpisode(entry) })
+                                        }, onPlay = { entry -> playSeasonEpisode(entry) },
+                                        onMoveToCast = ::moveToDetailCast)
                                 }
                             } else {
                                 item { Text(if (providerFilms != null && film.playbackEpisodes.isEmpty())
@@ -3154,7 +3174,13 @@ private fun Herrin() {
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     if (film.playbackEpisodes.isEmpty()) {
                                         (1..film.episodes).forEach { n ->
-                                            TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n"), reduced = reduceMotion,
+                                            TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n")
+                                                .onPreviewKeyEvent { event ->
+                                                    event.type == KeyEventType.KeyDown &&
+                                                        event.nativeKeyEvent.keyCode ==
+                                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
+                                                        moveToDetailCast()
+                                                }, reduced = reduceMotion,
                                                 selected = episode == n) {
                                                 episode = n
                                                 screen = "player"
@@ -3165,10 +3191,14 @@ private fun Herrin() {
                                             TvButton("第 ${entry.number} 集 · ${entry.title}",
                                                 modifier = Modifier.testTag("episode-${entry.number}")
                                                     .onPreviewKeyEvent { event ->
-                                                        if (event.type == KeyEventType.KeyDown &&
-                                                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP)
-                                                            runCatching { requester("detail-first-line").requestFocus() }.isSuccess
-                                                        else false
+                                                        if (event.type != KeyEventType.KeyDown) false
+                                                        else when (event.nativeKeyEvent.keyCode) {
+                                                            android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                                                runCatching { requester("detail-first-line").requestFocus() }.isSuccess
+                                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                                                                moveToDetailCast()
+                                                            else -> false
+                                                        }
                                                     },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 episode = entry.number
@@ -3201,7 +3231,13 @@ private fun Herrin() {
                                             .testTag("detail-person-$index")
                                             .border(2.dp, if (personFocused) Color.White else Color.Transparent,
                                                 RoundedCornerShape(14.dp))
-                                            .onFocusChanged { personFocused = it.isFocused }
+                                            .onFocusChanged {
+                                                personFocused = it.isFocused
+                                                if (it.isFocused) focusId = "detail-person-$index"
+                                            }
+                                            .then(if (index == 0)
+                                                Modifier.focusRequester(requester("detail-person-0"))
+                                                else Modifier)
                                             .focusable()
                                             .padding(vertical = 7.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -3218,7 +3254,10 @@ private fun Herrin() {
                             }
                         } else if (displayFilm.actors.isNotEmpty()) item {
                             Text("主演：${displayFilm.actors.take(8).joinToString(" · ")}",
-                                modifier = Modifier.testTag("detail-people"), color = Color(0xFFD7E0EA))
+                                modifier = Modifier.testTag("detail-people")
+                                    .focusRequester(requester("detail-person-0"))
+                                    .onFocusChanged { if (it.isFocused) focusId = "detail-person-0" }
+                                    .focusable(), color = Color(0xFFD7E0EA))
                         }
 
 
