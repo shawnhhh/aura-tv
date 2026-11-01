@@ -2948,6 +2948,12 @@ private fun Herrin() {
                                 if (displayFilm.directors.isNotEmpty()) append("\n导演 / 主创：").append(displayFilm.directors.joinToString(" · "))
                             }, lineHeight = 25.sp, modifier = Modifier.testTag("detail-metadata"))
                         } }
+                        item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                                Text(displayFilm.synopsis.ifBlank { "暂未取得可靠剧情简介" },
+                                    modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
+                                    color = Color(0xFFE1E8F2))
+                            } }
                         if (showGroup != null && screen == "detail") item {
                             Text("多季整合 · 当前目录 ${showGroup.members.size} 个原始条目 · 播放仍使用原影视点",
                                 modifier = Modifier.testTag("group-detail-members"),
@@ -3142,12 +3148,6 @@ private fun Herrin() {
                                 }
                                 }
                             }
-                            item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text("剧情简介", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                                Text(displayFilm.synopsis.ifBlank { "暂未取得可靠剧情简介" },
-                                    modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
-                                    color = Color(0xFFE1E8F2))
-                            } }
                         if (displayFilm.people.isNotEmpty()) item {
                             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                 Text("相关演职人员", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
