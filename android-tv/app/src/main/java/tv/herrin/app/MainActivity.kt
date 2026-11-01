@@ -1037,6 +1037,10 @@ private fun Herrin() {
             else -> ""
         }
     }
+    // One finite budget for the explicit selection; URL refreshes do not reset it.
+    val playbackRecovery = remember(catalogScope, film.id, episode, line, screen) {
+        FongMiPlaybackRecovery.Session()
+    }
     LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch) {
         spiderResolved = null
         if (spiderActive && screen == "player") {
@@ -2231,6 +2235,7 @@ private fun Herrin() {
                     key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
+                        recoverySession = playbackRecovery,
                         startPositionMs = previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,

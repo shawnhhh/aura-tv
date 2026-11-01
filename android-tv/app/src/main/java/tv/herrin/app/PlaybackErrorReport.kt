@@ -37,6 +37,8 @@ internal object PlaybackErrorReport {
         }
         return buildString {
             append("失败阶段：").append(phase)
+            append("\n诊断分类：").append(FongMiPlaybackRecovery.classify(
+                errorCodeName, status, error, failedUrl).kind.name)
             append("\n实际错误：").append(PlaybackFailureHints.safeCode(errorCodeName))
             if (numericCode in 0..99_999) append("（").append(numericCode).append("）")
             if (status != null) append("\nHTTP ").append(status).append("（实际状态码）")
@@ -82,12 +84,13 @@ internal object PlaybackErrorReport {
             Regex("错误 (-?[0-9]{1,4})").find(raw)
                 ?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in -9999..9999 }
         else null
-        val proxyHealth = Regex("PROXY_(?:NOT_CATVOD|INVALID_SESSION|INVALID_PORT|HTTP_403|HTTP_404|HTTP_5XX|HTTP_OTHER|CONNECT_REFUSED|TIMEOUT|IO_FAILURE)")
+        val proxyHealth = Regex("PROXY_(?:NOT_RUNNING|INVALID_ROUTE|NOT_CATVOD|INVALID_SESSION|INVALID_PORT|HTTP_403|HTTP_404|HTTP_5XX|HTTP_OTHER|CONNECT_REFUSED|TIMEOUT|IO_FAILURE)")
             .find(raw)?.value
         val kind = when {
             proxyHealth != null -> "SOURCE_$proxyHealth"
             http != null -> "SOURCE_HTTP_$http"
             webViewCode != null -> "SOURCE_WEBVIEW_$webViewCode"
+            raw.contains("初始化失败") || raw.contains("插件初始化") -> "SOURCE_SPIDER_INITIALIZATION"
             raw.contains("DNS", ignoreCase = true) || raw.contains("域名解析失败") ->
                 "SOURCE_DNS_FAILED"
             raw.contains("TLS", ignoreCase = true) || raw.contains("证书") ->
