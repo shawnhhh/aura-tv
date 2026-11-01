@@ -1186,7 +1186,17 @@ private fun Herrin() {
         }
     }
     fun moveCompactSettingsFocus(target: String) {
-        val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
+        val itemIndex = TvFocusRoutes.compactSettingsItemIndex(
+            target,
+            sourceStatus = vodImportFeedback.isNotBlank(),
+            connectedStatus = metadataToken.isNotBlank(),
+            failedStatus = metadataScanFailures > 0 && metadataScanDone >= metadataScanTotal &&
+                tmdbConnectivity == TmdbProbeState.CONNECTED,
+            noMatchesStatus = tmdbConnectivity == TmdbProbeState.CONNECTED &&
+                metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
+                metadataScanFailures == 0 &&
+                providerFilms.orEmpty().none { it.metadataSource == "TMDB" }
+        ) ?: return
         settingsIntent.request(target)
         settingsFocusJob[0]?.cancel()
         fun confirmFocus(): Boolean {
@@ -2477,11 +2487,30 @@ private fun Herrin() {
                                 single = tmdbTokenDraft, onSingle = { tmdbTokenDraft = it },
                                 first = tmdbTokenPart1, onFirst = { tmdbTokenPart1 = it },
                                 second = tmdbTokenPart2, onSecond = { tmdbTokenPart2 = it },
-                                third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it }
+                                third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it },
+                                remoteNavigation = CompactTmdbRemoteNavigation(
+                                    requester = { requester(it) },
+                                    onNavFocus = { focusId = it; configInputFocused = false },
+                                    onEditingFocus = { configInputFocused = it },
+                                    onMoveUp = { id ->
+                                        TvFocusRoutes.compactSettingsNeighbor(
+                                            id, false, lastMovieSettingsAction, tmdbTokenSplitMode)
+                                            ?.let(::moveCompactSettingsFocus)
+                                    },
+                                    onMoveDown = { id ->
+                                        TvFocusRoutes.compactSettingsNeighbor(
+                                            id, true, lastMovieSettingsAction, tmdbTokenSplitMode)
+                                            ?.let(::moveCompactSettingsFocus)
+                                    },
+                                    onToggleFocus = { focusId = "compact-tmdb-split-toggle" }
+                                )
                             ) }
                             item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 TvButton("保存并开始刮削",
-                                    modifier = Modifier.testTag("compact-tmdb-save"), reduced = reduceMotion) {
+                                    modifier = Modifier.testTag("compact-tmdb-save")
+                                        .focusRequester(requester("compact-tmdb-save")),
+                                    reduced = reduceMotion,
+                                    onFocus = { focusId = "compact-tmdb-save"; keyboard?.hide() }) {
                                     val value = candidateTmdbToken()
                                     if (value != null) {
                                         prefs.tmdbReadToken = value
@@ -2496,7 +2525,10 @@ private fun Herrin() {
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
                                 TvButton("重新刮削",
-                                    modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
+                                    modifier = Modifier.testTag("compact-tmdb-rescan")
+                                        .focusRequester(requester("compact-tmdb-rescan")),
+                                    reduced = reduceMotion,
+                                    onFocus = { focusId = "compact-tmdb-rescan"; keyboard?.hide() }) {
                                     if (metadataToken.isNotBlank()) {
                                         metadataResolver.clearAuthCooldown(metadataToken)
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
@@ -2540,7 +2572,7 @@ private fun Herrin() {
                                 editRequester = requester("tvbox-live-direct-editor"),
                                 onNavFocus = { focusId = "tvbox-live-direct-url"; configInputFocused = false },
                                 onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-live-direct-editor" },
-                                onMoveUp = { moveCompactSettingsFocus(lastMovieSettingsAction) },
+                                onMoveUp = { moveCompactSettingsFocus("compact-tmdb-save") },
                                 onMoveDown = { moveCompactSettingsFocus("tvbox-live-direct-load") }
                             ) else OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                                 Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
@@ -3208,9 +3240,9 @@ private fun Herrin() {
                             val code = event.nativeKeyEvent.keyCode
                             val target = when (code) {
                                 android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                                    settingsIntent.next(focusId, false, lastMovieSettingsAction)
+                                    settingsIntent.next(focusId, false, lastMovieSettingsAction, tmdbTokenSplitMode)
                                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                                    settingsIntent.next(focusId, true, lastMovieSettingsAction)
+                                    settingsIntent.next(focusId, true, lastMovieSettingsAction, tmdbTokenSplitMode)
                                 else -> null
                             }
                             if (target == null) false else {
