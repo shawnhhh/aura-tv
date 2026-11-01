@@ -217,14 +217,6 @@ internal object SpiderIpc {
  * permission sandbox: the service still runs under the application's UID.
  */
 class TvBoxSpiderService : Service() {
-    override fun onCreate() {
-        super.onCreate()
-        // Android 9+ requires distinct Chromium data directories when an
-        // isolated playback helper and the main TV process both use Chromium.
-        if (android.os.Build.VERSION.SDK_INT >= 28) {
-            runCatching { android.webkit.WebView.setDataDirectorySuffix("herrin-spider") }
-        }
-    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Mutex()
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
@@ -336,6 +328,10 @@ class TvBoxSpiderService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // Chromium browser parser lives only in the :spider process.
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            runCatching { android.webkit.WebView.setDataDirectorySuffix("herrin-spider") }
+        }
         val process = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
             .runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
         check(process == "$packageName:spider") { "Spider must run in its dedicated process" }
