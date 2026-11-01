@@ -1,6 +1,6 @@
 package tv.herrin.app
 
-import dalvik.system.DexClassLoader
+import tv.herrin.app.fongmi.parse.JarParser
 import org.json.JSONObject
 import java.lang.reflect.InvocationTargetException
 import java.util.LinkedHashMap
@@ -18,7 +18,7 @@ internal object FongMiJarPlayback {
     fun invoke(loader: ClassLoader?, type: Int, key: String, name: String, flag: String,
         jxs: LinkedHashMap<String, String>?,
         mixed: LinkedHashMap<String, HashMap<String, String>>?, source: String): Any {
-        return tv.herrin.app.fongmi.parse.JarParser.invoke(loader, type, key, name, flag, jxs, mixed, source)
+        return JarParser.invoke(loader, type, key, name, flag, jxs, mixed, source)
     }
 
     fun resolve(

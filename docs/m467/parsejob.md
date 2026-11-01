@@ -64,3 +64,5 @@
 编译及测试日志：`/workspace/m467-parsejob-build.log`。以下结果在实际执行后补充，不以代码存在代替通过。
 
 首次完整 Gradle 实测在源码编译前失败：环境对 jitpack.io 返回 HTTP 403，既有依赖 `com.github.thegrizzlylabs:sardine-android:0.9` 无法解析，完整日志为 `/workspace/m467-parsejob-build.log`。总 Agent 已从官方源码构建本地验证依赖；使用 `/workspace/tools/local-sardine.init.gradle` 的重跑进行中，日志 `/workspace/m467-parsejob-build-local-sardine.log`。不修改生产依赖。独立 javac 已成功编译实际 Java port 与 fixture JAR 类；Kotlin/JUnit 执行结果待补，不宣称 Android 编译或浏览器用例通过。
+
+追加验证：同一生产 Java port + 真实 fixture JAR 的独立 JUnit 已实际通过 10 项（`/workspace/m467-parsejob-standalone/test.log`；网络监听必须使用执行工具的已授权网络权限）。又增加 HTTP403 终止、聚合全部失败的两个回归，正在重跑。最终JSON/JAR/聚合返回的 `proxy://` 统一通过可选 `normalizeMedia`（worker 提供当前会话 rebaseUrl）转换，JAR needParse 同样转换后进入浏览器，避免解析成功后再被HTTP-only边界误拒绝。

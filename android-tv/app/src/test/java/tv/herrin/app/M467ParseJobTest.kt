@@ -35,8 +35,9 @@ class M467ParseJobTest {
     private open class Host(val selected: Parse, val parsers: List<Parse> = listOf(selected)) : ParseJob.Host, AutoCloseable {
         val timer = Executors.newSingleThreadScheduledExecutor()
         val canceled = AtomicInteger()
+        val cancellation = CountDownLatch(1)
         val client = OkHttpClient.Builder().eventListener(object : EventListener() {
-            override fun canceled(call: Call) { canceled.incrementAndGet() }
+            override fun canceled(call: Call) { canceled.incrementAndGet(); cancellation.countDown() }
         }).build()
         var webHeaders: Map<String,String>? = null
         var webClick: String? = null
@@ -169,6 +170,30 @@ class M467ParseJobTest {
             }
         } }
     }
+    @Test fun type1Http403IsTerminalWithoutRetryOrMediaFromErrorBody() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(403).setBody("""{"url":"https://cdn.test/forbidden"}"""))
+            Host(parse(1,server.url("/?url=").toString())).use { host ->
+                val completed = Completion()
+                ParseJob.create(host,completed).start(result(),true); completed.await()
+                assertEquals(1,completed.failures.get()); assertEquals(0,completed.successes.get())
+                assertEquals(1,server.requestCount)
+            }
+        }
+    }
+    @Test fun superParseAllFailuresDeliverExactlyOneError() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("{\"url\":\"\"}"))
+            server.enqueue(MockResponse().setBody("not json"))
+            Host(parse(4,"","all"),listOf(parse(1,server.url("/a?url=").toString(),"a"),
+                parse(1,server.url("/b?url=").toString(),"b"))).use { host ->
+                val completed = Completion()
+                ParseJob.create(host,completed).start(result(),true); completed.await()
+                assertEquals(1,completed.failures.get()); assertEquals(0,completed.successes.get())
+                assertEquals(2,server.requestCount)
+            }
+        }
+    }
     @Test fun timeoutCancelsHttpAndDeliversOneFailure() {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"url":"https://cdn.test/late"}""").setBodyDelay(2,TimeUnit.SECONDS))
@@ -176,7 +201,7 @@ class M467ParseJobTest {
                 host.timeout = 100; val completed = Completion()
                 ParseJob.create(host,completed).start(result(),true); completed.await()
                 assertEquals(1,completed.failures.get()); assertEquals(0,completed.successes.get())
-                assertTrue("in-flight request must be canceled",host.canceled.get() > 0)
+                assertTrue("in-flight request must be canceled",host.cancellation.await(1,TimeUnit.SECONDS))
             }
         }
     }
