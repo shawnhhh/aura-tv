@@ -465,7 +465,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 RuntimeModule.getSpiderClassLoader())
             // FongMi's server exists before JAR Init.init(Context). Bootstrap
             // hooks may obtain a static proxy URL during initialization.
-            var created: Spider? = null
+            val created = java.util.concurrent.atomic.AtomicReference<Spider>()
             val staticProxyMethod = runCatching {
                 loader.loadClass("com.github.catvod.spider.Proxy").getMethod("proxy", Map::class.java)
             }.getOrNull()?.takeIf { java.lang.reflect.Modifier.isStatic(it.modifiers) }
@@ -474,7 +474,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 staticHandler = { params ->
                     staticProxyMethod?.invoke(null, params) as? Array<out Any?>
                 }
-            ) { params -> created?.proxy(params) }
+            ) { params -> created.get()?.proxy(params) }
             CatVodProxy.set(localProxy.port, localProxy.token)
             try {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.INITIALIZER)
@@ -487,8 +487,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 } }
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
                 val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi!!.removePrefix("csp_")}")
-                val spiderInstance = spiderClass.getDeclaredConstructor().newInstance() as Spider
-                created = spiderInstance
+                val spiderInstance = initialize {
+                    spiderClass.getDeclaredConstructor().newInstance() as Spider
+                }
+                created.set(spiderInstance)
                 spiderInstance.siteKey = site.key
                 spiderInstance.net = Net(httpHost, site.key)
                 spiderInstance.local = Local(site.key)
@@ -499,7 +501,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             } catch (error: Throwable) {
                 localProxy.close()
                 CatVodProxy.set(-1, "")
-                SpiderRuntimeCompat.dispose(created)
+                SpiderRuntimeCompat.dispose(created.get())
                 httpHost.clear()
                 throw error
             }
@@ -581,6 +583,13 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             is SpiderResult.Failure -> PlaybackResult.Unavailable(attemptResult.message)
         }
     }
+
+    /**
+     * The IPC host retains only its approved source descriptor. Leaving playback
+     * releases media and credential sessions; the next operation re-browses that
+     * descriptor to create a new Spider/proxy instead of reusing expired URLs.
+     */
+    fun releasePlayback() = close()
 
     fun close() {
         activeLoopbackProxy?.close()

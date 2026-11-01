@@ -40,6 +40,8 @@ class M467SpiderProxyTransportTest {
                     mapOf("Location" to "https://media.example.org/authorized/segment.ts"))
                 "range" -> arrayOf(416, "text/plain", ByteArrayInputStream(byteArrayOf()),
                     mapOf("Content-Range" to "bytes */10737418240"))
+                "unchanged" -> arrayOf(304, "video/mp4", ByteArrayInputStream(byteArrayOf()),
+                    mapOf("ETag" to "same-content"))
                 else -> arrayOf(403, "text/plain", ByteArrayInputStream("denied".toByteArray()))
             }
         }.use { proxy ->
@@ -57,7 +59,11 @@ class M467SpiderProxyTransportTest {
                 assertEquals(403, it.responseCode)
                 assertEquals("denied", it.errorStream.bufferedReader().readText()); it.disconnect()
             }
-            assertEquals(3, calls.get())
+            connection(proxy.url + "&part=unchanged").let {
+                assertEquals(304, it.responseCode)
+                assertEquals("same-content", it.getHeaderField("ETag")); it.disconnect()
+            }
+            assertEquals(4, calls.get())
         }
     }
 
