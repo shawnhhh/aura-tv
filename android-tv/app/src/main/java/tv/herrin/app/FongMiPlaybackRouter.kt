@@ -56,7 +56,7 @@ internal object FongMiPlaybackRouter {
             if (sourceUrl == null)
                 return FongMiPlayRoute.Unavailable("Spider 没有提供要解析的影片地址")
             val parser = playbackParsers.firstOrNull { it.name == name }
-            if (parser != null) return select(parser, sourceUrl, flag)
+            if (parser != null) return select(parser, sourceUrl, flag, playbackParsers)
             val oldParser = jsonParsers.firstOrNull { it.name == name }
                 ?: return FongMiPlayRoute.Unavailable("影视源没有提供指定的解析器")
             return FongMiPlayRoute.JsonParser(oldParser, sourceUrl)
