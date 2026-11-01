@@ -4,6 +4,13 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -39,6 +46,21 @@ internal object FongMiBrowserPlayback {
             listOf(".m3u8", ".mpd", ".mp4", ".m4v", ".webm", ".mkv")
                 .any(path::endsWith)
         }
+    }
+
+    /** Browser parsing is a playback decision only; no metadata is read. */
+    fun choose(
+        sourceUrl: String, flag: String, parsers: List<TvBoxPlaybackParser>,
+        allowHttp: Boolean
+    ): TvBoxPlaybackParser? {
+        if (TvBoxUrl.normalize(sourceUrl, allowHttp) == null) return null
+        val path = URI(sourceUrl).path.orEmpty().lowercase(Locale.ROOT)
+        if (listOf(".m3u8", ".mp4", ".mpd", ".mkv", ".webm").any { path.endsWith(it) })
+            return null
+        return parsers.firstOrNull { it.type == 0 &&
+            it.flags.any { f -> f.equals(flag, true) } }
+            ?: if (path.endsWith(".html") || path.endsWith(".htm"))
+                parsers.firstOrNull { it.type == 0 && it.flags.isEmpty() } else null
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -149,4 +171,19 @@ internal object FongMiBrowserPlayback {
         }
         return output ?: PlaybackResult.Unavailable("网页解析超时，请切换线路")
     }
+}
+
+/** Called only from the existing CMS player resolution branch; renders no UI. */
+@Composable
+internal fun CmsBrowserPlayback(
+    sourceUrl: String, parser: TvBoxPlaybackParser, allowHttp: Boolean, retryEpoch: Int
+): PlaybackResult? {
+    val context = LocalContext.current
+    var result by remember(sourceUrl, parser, allowHttp, retryEpoch) {
+        mutableStateOf<PlaybackResult?>(null)
+    }
+    LaunchedEffect(sourceUrl, parser, allowHttp, retryEpoch) {
+        result = FongMiBrowserPlayback.resolve(context, parser, sourceUrl, allowHttp)
+    }
+    return result
 }
