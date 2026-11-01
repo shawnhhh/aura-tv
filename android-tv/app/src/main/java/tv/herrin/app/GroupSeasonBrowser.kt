@@ -45,7 +45,8 @@ internal fun GroupSeasonBrowser(
     onSeasonSelect: (Int) -> Unit,
     onEpisodeFocus: (GroupEpisode) -> Unit,
     onEpisodePlay: (GroupEpisode) -> Unit,
-    onLinePlay: (GroupPlaybackRef) -> Unit
+    onLinePlay: (GroupPlaybackRef) -> Unit,
+    onMoveToCast: () -> Boolean = { false }
 ) {
     val scope = rememberCoroutineScope()
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -123,7 +124,13 @@ internal fun GroupSeasonBrowser(
                         selected = isSelected, reduced = reduced,
                         modifier = Modifier.testTag("group-season-card-${entry.season}-$index")
                             .focusRequester(requester("group-season-card-${entry.season}-$index"))
-                            .focusProperties { up = requester("group-season-tab-${entry.season}") },
+                            .focusProperties { up = requester("group-season-tab-${entry.season}") }
+                            .onPreviewKeyEvent { event ->
+                                event.type == KeyEventType.KeyDown &&
+                                    event.nativeKeyEvent.keyCode ==
+                                        android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
+                                    onMoveToCast()
+                            },
                         onFocus = { onEpisodeFocus(entry) },
                         onClick = { onEpisodePlay(entry) })
                 }
@@ -137,7 +144,13 @@ internal fun GroupSeasonBrowser(
                     horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     alternatives.sources.forEachIndexed { index, ref ->
                         TvButton("${ref.film.title.take(22)} · ${ref.line.title.take(16)}",
-                            modifier = Modifier.testTag("group-source-line-${alternatives.season}-${alternatives.number}-$index"),
+                            modifier = Modifier.testTag("group-source-line-${alternatives.season}-${alternatives.number}-$index")
+                                .onPreviewKeyEvent { event ->
+                                    event.type == KeyEventType.KeyDown &&
+                                        event.nativeKeyEvent.keyCode ==
+                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
+                                        onMoveToCast()
+                                },
                             reduced = reduced, quiet = true,
                             selected = selected?.let { it.film.id == ref.film.id &&
                                 it.source.number == ref.source.number && it.line.id == ref.line.id } == true) {
