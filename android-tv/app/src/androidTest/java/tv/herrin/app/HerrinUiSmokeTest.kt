@@ -163,26 +163,32 @@ class HerrinUiSmokeTest {
             !text.contains("Spider") && !text.contains("JAR") && !text.contains("子进程"))
     }
 
-    @Test fun compactSettingsDpadMovesThroughBothInputsAndActionsWithoutSkippingRows() {
+    @Test fun compactSettingsDpadReachesTmdbInputThenLiveSourceAndReturns() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("screen-first").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-nav").assertIsFocused()
-        if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
-            !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
-        }
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-load").assertIsFocused()
         focus("settings-source-sites")
         key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
-        if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
-            !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
-        }
-        key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("settings-source-sites").assertIsFocused()
+        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsFocused()
+        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsDisplayed()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_UP)
+        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("compact-tmdb-save").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_UP)
+        compose.onNodeWithTag("compact-tmdb-save").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-live-direct-load").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
@@ -191,8 +197,30 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-advanced").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_UP)
         compose.onNodeWithTag("settings-home").assertIsFocused()
-        capture("settings-two-source-vertical-focus")
+        capture("settings-tmdb-source-vertical-focus")
     }
+
+    @Test fun compactTmdbSplitTokenFieldsReceiveEachDpadStep() {
+        focus("settings")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("settings-list")
+            .performScrollToNode(hasTestTag("compact-tmdb-split-toggle"))
+        focus("compact-tmdb-split-toggle")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("compact-tmdb-part-1-nav").assertExists()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("compact-tmdb-part-1-nav").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("compact-tmdb-part-2-nav").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("compact-tmdb-part-3-nav").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("compact-tmdb-save").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_UP)
+        compose.onNodeWithTag("compact-tmdb-part-3-nav").assertIsFocused()
+        capture("settings-split-tmdb-dpad")
+    }
+
     @Test fun compactSettingsOnlyOpenTextEditorAfterRemoteOk() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
