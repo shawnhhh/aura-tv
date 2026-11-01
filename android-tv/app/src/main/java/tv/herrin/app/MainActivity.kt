@@ -427,6 +427,15 @@ private fun Herrin() {
     var tvBoxSelectedName by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         if (configuredTvBoxUrl.isNotBlank()) {
+            val saved = withContext(Dispatchers.IO) {
+                TvBoxCatalogSnapshot(context).load(
+                    configuredTvBoxUrl, prefs.tvBoxLastWorkingSiteId)
+            }
+            if (saved.isNotEmpty()) {
+                providerFilms = saved
+                filmId = saved.first().id
+                providerStatus = "已恢复上次片库 · 正在连接来源以获取实时选集"
+            }
             tvBoxColdStartRequest = true
             tvBoxRequest = configuredTvBoxUrl to true
             tvBoxLoadEpoch++
@@ -676,6 +685,21 @@ private fun Herrin() {
                     providerFilms = null
                     providerStatus = result.reason
                 }
+            }
+        }
+    }
+    // Debounced, private visual-only home snapshot. Never persist playable URIs.
+    LaunchedEffect(providerFilms, tvBoxVodScope) {
+        val entries = providerFilms.orEmpty()
+        if (entries.isNotEmpty() && configuredTvBoxUrl.isNotBlank() &&
+            tvBoxVodScope?.startsWith("spider:") == true ||
+            entries.isNotEmpty() && configuredTvBoxUrl.isNotBlank() &&
+            tvBoxVodScope?.startsWith("tvbox:") == true &&
+            tvBoxVodScope?.startsWith("tvbox:pending:") != true) {
+            delay(850)
+            withContext(Dispatchers.IO) {
+                TvBoxCatalogSnapshot(context).save(configuredTvBoxUrl,
+                    prefs.tvBoxLastWorkingSiteId, entries)
             }
         }
     }
