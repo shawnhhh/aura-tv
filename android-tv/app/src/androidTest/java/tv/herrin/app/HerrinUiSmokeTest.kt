@@ -414,14 +414,14 @@ http://example.org/live/channel.m3u8
     @Test fun posterDetailBackRestoresFocus() {
         focus("card-tide")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithText("演示选集").assertExists()
+        compose.onNodeWithText("集数").assertExists()
         compose.onNodeWithText("第 6 集").assertExists()
-        compose.onNodeWithText("演示选集").assertIsDisplayed()
+        compose.onNodeWithText("集数").assertIsDisplayed()
         capture("detail")
         activate("▶ 播放演示")
         compose.onNodeWithText("播放演示").assertExists()
         key(KeyEvent.KEYCODE_BACK)
-        compose.onNodeWithText("演示选集").assertExists()
+        compose.onNodeWithText("集数").assertExists()
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("card-tide").assertIsFocused()
         capture("detail-back-focus")
@@ -446,6 +446,17 @@ http://example.org/live/channel.m3u8
         assertTrue("New focus must be white", focusedLine.red > 0.85f)
         capture("detail-unique-focus")
     }
+    @Test fun choosingLineDoesNotAutoplayUntilSpecificEpisodeIsConfirmed() {
+        focus("card-tide")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        val detail = compose.onNodeWithTag("film-detail-list")
+        detail.performScrollToNode(hasTestTag("line-演示线路 B"))
+        compose.onNodeWithTag("line-演示线路 B").performClick()
+        detail.assertExists()
+        detail.performScrollToNode(hasTestTag("episode-4"))
+        compose.onNodeWithTag("episode-4").performClick()
+        compose.onNodeWithText("播放演示").assertExists()
+    }
     @Test fun offlineSearchTextEmptyAndRemoteResult() {
         focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("search-input").performTextInput("not-a-film")
@@ -458,10 +469,10 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         // Wait for the Activity to finish the IME/window transition before asserting lazy detail content.
         compose.waitUntil(5000) {
-            runCatching { compose.onNodeWithText("演示选集").assertExists() }.isSuccess
+            runCatching { compose.onNodeWithText("集数").assertExists() }.isSuccess
         }
-        compose.onNodeWithText("演示选集").assertExists()
-        compose.onNodeWithText("演示选集").assertIsDisplayed()
+        compose.onNodeWithText("集数").assertExists()
+        compose.onNodeWithText("集数").assertIsDisplayed()
         capture("search-detail")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("card-orbit").assertIsFocused()
@@ -513,16 +524,20 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("facet-screen").assertExists()
         capture("metadata-facet-dpad")
     }
-    @Test fun filmDetailShowsUnknownMediaSpecInsteadOfInventingDolbyOrHdr() {
+    @Test fun filmDetailOmitsUnknownQualityAndKeepsSynopsisWithoutSeparateSpecPanel() {
         focus("details")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-media-spec"))
-        compose.onNodeWithTag("detail-media-spec")
-            .assertTextContains("播放后识别", substring = true)
-            .assertIsDisplayed()
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-metadata"))
+        val details = compose.onNodeWithTag("detail-metadata")
+        details.assertTextContains("电影", substring = true)
+        val displayed = details.fetchSemanticsNode().config[
+            androidx.compose.ui.semantics.SemanticsProperties.Text].joinToString(" ") { it.text }
+        assertTrue("Unverified demo video must not claim 4K/HDR/Dolby quality",
+            listOf("4K", "HDR", "Dolby").none { displayed.contains(it) })
+        compose.onNodeWithTag("detail-media-spec").assertDoesNotExist()
+        compose.onNodeWithTag("detail-source-claims").assertDoesNotExist()
         compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-synopsis"))
         compose.onNodeWithTag("detail-synopsis").assertExists()
-        compose.onNodeWithTag("detail-source-claims").assertDoesNotExist()
     }
     @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
         advancedSettings()
@@ -530,16 +545,31 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("config-media-url").performTextReplacement("http://invalid.example/test.mp4")
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
-        activate("保存媒体配置")
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存失败：链接必须是合法 HTTPS 地址"))
-        compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").assertIsDisplayed()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
-        compose.onNodeWithTag("config-media-url").performTextReplacement("https://media.example.org/authorized.mp4")
+        // Focus/keyboard handoff is asynchronous on the TV emulator.
+        // The semantics click validates the save action without a swallowed center key.
+        compose.onNodeWithText("保存媒体配置").performClick()
+        compose.waitUntil(8_000) {
+            runCatching {
+                compose.onNodeWithTag("settings-list").performScrollToNode(
+                    hasText("保存失败：链接必须是合法 HTTPS 地址"))
+                compose.onNodeWithText("保存失败：链接必须是合法 HTTPS 地址").assertExists()
+            }.isSuccess
+        }
+        compose.onNodeWithTag("config-media-url").let {
+            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
+            it.performTextReplacement("https://media.example.org/authorized.mp4")
+        }
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
-        activate("保存媒体配置")
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("配置已保存；测试流只会在手动进入演示播放页时使用"))
-        compose.onNodeWithText("配置已保存；测试流只会在手动进入演示播放页时使用").assertIsDisplayed()
+        compose.onNodeWithText("保存媒体配置").performClick()
+        compose.waitUntil(8_000) {
+            runCatching {
+                compose.onNodeWithTag("settings-list").performScrollToNode(
+                    hasText("配置已保存；测试流只会在手动进入演示播放页时使用"))
+                compose.onNodeWithText("配置已保存；测试流只会在手动进入演示播放页时使用")
+                    .assertExists()
+            }.isSuccess
+        }
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("重新同步目录"))
         activate("重新同步目录")
         // LazyColumn does not compose its off-screen status row until scrolled into view.

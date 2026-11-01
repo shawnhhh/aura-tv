@@ -45,7 +45,7 @@ class PosterArtworkTest {
         }
     }
 
-    @Test fun realPortraitAndLandscapeArtKeepTheirFullEdgesWithinIdenticalFrames() {
+    @Test fun realPortraitAndLandscapeArtworkFillAllEdgesOfThumbnailFrames() {
         val portrait = stripedImage(64, 128)
         val landscape = stripedImage(128, 64)
         val server = MockWebServer()
@@ -91,10 +91,24 @@ class PosterArtworkTest {
                 val middle = image.width / 2
                 val top = image[middle, (image.height * 0.12f).toInt()]
                 val bottom = image[middle, (image.height * 0.88f).toInt()]
-                assertTrue("${if (index == 0) "Portrait" else "Landscape"} top edge must be visible",
+                assertTrue("${if (index == 0) "Portrait" else "Landscape"} image must cover top",
                     top.red > top.blue * 2f)
-                assertTrue("${if (index == 0) "Portrait" else "Landscape"} bottom edge must be visible",
+                assertTrue("${if (index == 0) "Portrait" else "Landscape"} image must cover bottom",
                     bottom.blue > bottom.red * 2f)
+                // A Fit portrait leaves empty/dimmed bands on the left/right;
+                // Crop must cover the FULL image viewport, not the title row.
+                val left = (image.width * 0.06f).toInt()
+                val right = (image.width * 0.94f).toInt()
+                val topY = (image.height * 0.12f).toInt()
+                val bottomY = (image.height * 0.88f).toInt()
+                for (x in listOf(left, right)) {
+                    val t = image[x, topY]
+                    val b = image[x, bottomY]
+                    assertTrue("Image must fill top left/right, no dark pillarbox at x=$x",
+                        t.red > t.blue * 2f && t.red > 0.65f)
+                    assertTrue("Image must fill bottom left/right, no dark pillarbox at x=$x",
+                        b.blue > b.red * 2f && b.blue > 0.65f)
+                }
             }
         } finally {
             server.shutdown()

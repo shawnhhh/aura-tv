@@ -82,7 +82,10 @@ internal object PlaybackErrorReport {
             Regex("错误 (-?[0-9]{1,4})").find(raw)
                 ?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in -9999..9999 }
         else null
+        val proxyHealth = Regex("PROXY_(?:NOT_CATVOD|INVALID_SESSION|INVALID_PORT|HTTP_403|HTTP_404|HTTP_5XX|HTTP_OTHER|CONNECT_REFUSED|TIMEOUT|IO_FAILURE)")
+            .find(raw)?.value
         val kind = when {
+            proxyHealth != null -> "SOURCE_$proxyHealth"
             http != null -> "SOURCE_HTTP_$http"
             webViewCode != null -> "SOURCE_WEBVIEW_$webViewCode"
             raw.contains("DNS", ignoreCase = true) || raw.contains("域名解析失败") ->

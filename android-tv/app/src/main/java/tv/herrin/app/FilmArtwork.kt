@@ -89,9 +89,9 @@ fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = Con
 }
 
 /**
- * All cards have the same viewport. Portrait vod_pic artwork stays fully visible
- * in front of a dim, cropped copy of itself; no stretched or truncated poster.
- * Unlike the full-screen hero, a remote tile never flashes unrelated demo art.
+ * All small movie-card artwork viewports are filled edge-to-edge using Crop.
+ * Only the image is cropped; the separate opaque title/year bar stays unchanged.
+ * Remote tiles never flash unrelated demo artwork while loading.
  */
 @Composable
 fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
@@ -112,24 +112,20 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
                     color = Color(0x708BA0B8))
             }
         } else {
-            Image(painterResource(film.artwork), null, Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop, alpha = 0.20f)
+            // Every small-card artwork viewport is edge-to-edge, including
+            // bundled offline demo images. No fit/margin/dimmed letterbox.
             Image(painterResource(film.artwork), film.title,
-                Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit)
+                Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         if (poster != null) {
-            Box(Modifier.fillMaxSize().alpha(posterAlpha).testTag("poster-remote-ready")
-                .background(Color(0xFF101821))) {
-                val image = poster.asImageBitmap()
-                // A per-card RenderEffect blur forces expensive GPU offscreen passes
-                // whenever the viewer navigates quickly through the rail.
-                // Retain a dim source-image backdrop plus sharp foreground.
-                Image(image, null, Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop, alpha = 0.23f)
-                Box(Modifier.fillMaxSize().background(Color(0xA20C111A)))
-                Image(image, film.title, Modifier.fillMaxSize().padding(3.dp),
-                    contentScale = ContentScale.Fit)
-            }
+            // Fill ONLY the artwork viewport of each 217 x 116 dp tile.
+            // Poster() owns the separate 29 dp opaque title/year row below;
+            // never stretch the image into that row or change its text/focus.
+            // Crop from the centre rather than distorting any aspect ratio.
+            Image(poster.asImageBitmap(), film.title,
+                Modifier.fillMaxSize().alpha(posterAlpha)
+                    .testTag("poster-remote-ready"),
+                contentScale = ContentScale.Crop)
         }
     }
 }
@@ -160,7 +156,8 @@ fun PersonPortrait(person: FilmPerson, modifier: Modifier = Modifier) {
 @Composable
 private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap? {
     val context = LocalContext.current
-    val url = if (hero) film.backdropUrl ?: film.artworkUrl else film.artworkUrl
+    val url = if (hero || film.metadataSource == "TMDB")
+        film.backdropUrl ?: film.artworkUrl else film.artworkUrl
     // TMDB matching is managed centrally by MainActivity's bounded catalogue
     // enrichment worker. Do NOT start another TMDB request per visible card:
     // that duplicated network, JSON parsing and image downloads during D-pad.
@@ -173,7 +170,8 @@ private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap?
         val requestJob = currentCoroutineContext()[Job]
         poster = withContext(Dispatchers.IO) {
             runCatching {
-                val urls = if (hero) listOfNotNull(film.backdropUrl, film.artworkUrl)
+                val urls = if (hero || film.metadataSource == "TMDB")
+                    listOfNotNull(film.backdropUrl, film.artworkUrl)
                     else listOfNotNull(film.artworkUrl)
                 val cache = AuthorizedPosterCache(context)
                 urls.distinct().firstNotNullOfOrNull {
