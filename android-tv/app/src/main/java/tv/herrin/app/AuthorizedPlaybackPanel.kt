@@ -82,7 +82,7 @@ fun AuthorizedPlaybackPanel(
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
     testDiagnostics: Boolean = false,
     /** Budget belongs to the selected episode/line, including refreshed media URLs. */
-    recoverySession: FongMiPlaybackRecovery.Session = remember { FongMiPlaybackRecovery.Session() }
+    recoverySession: FongMiPlaybackRecovery.Session = remember(media) { FongMiPlaybackRecovery.Session() }
 ) {
     // A media replacement owns a fresh composition, including callbacks,
     // effects, focus nodes and native surfaces. No outgoing resource can be

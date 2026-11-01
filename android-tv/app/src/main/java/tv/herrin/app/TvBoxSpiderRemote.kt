@@ -17,6 +17,7 @@ import android.os.Messenger
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +42,7 @@ internal object SpiderIpc {
     const val DETAILS = 2
     const val PLAY = 3
     const val PROXY_SELF_TEST = 20
+    const val RELEASE_PLAYBACK = 21
     const val AUTH_SHOW = 10
     const val AUTH_ACTION = 11
     const val AUTH_CLOSE = 12
@@ -51,7 +53,7 @@ internal object SpiderIpc {
         .put("name", site.name).put("key", site.key)
         .put("spiderApi", site.spiderApi ?: "").put("scriptApi", site.scriptApi ?: "")
         .put("ext", site.extension)
-        .put("jar", site.jar ?: "")
+        .put("jar", site.jar ?: "").put("click", site.click)
         .put("header", JSONObject(site.headers))
 
     fun readSite(obj: JSONObject): TvBoxSite = TvBoxSite(
@@ -66,6 +68,7 @@ internal object SpiderIpc {
                     api.substringBefore('?').endsWith(".py", true)))
         },
         extension = obj.optString("ext").take(64_000),
+        click = obj.optString("click").take(4096),
         jar = obj.optString("jar").takeIf { it.isNotBlank() },
         headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))
 
@@ -297,6 +300,12 @@ class TvBoxSpiderService : Service() {
                                     is SpiderResult.Failure -> SpiderIpc.error(result.message)
                                 }
                             }
+                            SpiderIpc.RELEASE_PLAYBACK -> {
+                                proxySelfTest?.close()
+                                proxySelfTest = null
+                                worker.releasePlayback()
+                                JSONObject().put("ok", true)
+                            }
                             SpiderIpc.PROXY_SELF_TEST -> {
                                 check((applicationInfo.flags and
                                     android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
@@ -408,6 +417,8 @@ internal class TvBoxSpiderBridge(context: Context) {
     private var bound = false
     private var closed = false
     private val requests = Mutex()
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var cleanupJob: Job? = null
     @Volatile private var generation = 0
     @Volatile private var hydratedGeneration = -1
     @Volatile private var lastBrowse: String? = null
@@ -692,16 +703,53 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
     }
 
+    /**
+     * Close before a subsequent play can reuse the bound service. Android may
+     * rebind a service before onDestroy, so unbind alone is not a close barrier.
+     * This job is owned by the bridge, not the outgoing media composition.
+     */
+    fun releasePlayback() {
+        val selectedSource = lastBrowse
+        val selectedGeneration = generation
+        cleanupJob?.cancel()
+        cleanupJob = cleanupScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            requests.withLock {
+                if (generation != selectedGeneration || lastBrowse != selectedSource) return@withLock
+                if (remote == null && !bound) {
+                    invalidate("Spider 播放会话已结束")
+                    return@withLock
+                }
+                try {
+                    withTimeout(6_000L) {
+                        sendRequest(SpiderIpc.RELEASE_PLAYBACK, JSONObject())
+                    }
+                } catch (_: CancellationException) {
+                    // Explicit close cancels this cleanup. The finally fence
+                    // still releases registrations of this exact generation.
+                } finally {
+                    if (generation == selectedGeneration && lastBrowse == selectedSource)
+                        invalidate("Spider 播放会话已结束")
+                }
+            }
+        }
+    }
+
+    internal suspend fun awaitPlaybackReleaseForInstrumentation() { cleanupJob?.join() }
+
     internal suspend fun probeRemoteProxyForInstrumentation(): SpiderResult<String> =
-        when (val result = sendRequest(SpiderIpc.PROXY_SELF_TEST, JSONObject())) {
-            is SpiderResult.Failure -> result
-            is SpiderResult.Ready -> SpiderResult.Ready(result.value.optString("uri"))
+        requests.withLock {
+            when (val result = sendRequest(SpiderIpc.PROXY_SELF_TEST, JSONObject())) {
+                is SpiderResult.Failure -> result
+                is SpiderResult.Ready -> SpiderResult.Ready(result.value.optString("uri"))
+            }
         }
 
     fun close() {
         Handler(Looper.getMainLooper()).post {
             if (closed) return@post
             closed = true
+            cleanupJob?.cancel()
+            cleanupJob = null
             lastBrowse = null
             invalidate("Spider 会话已结束")
             closed = false // A later "应用影视源" starts a new bound session.

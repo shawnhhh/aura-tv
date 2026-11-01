@@ -705,6 +705,13 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    // Media rekeys (refresh, episode and line) keep their active source. Only
+    // leaving the player releases its Spider resources and next play rehydrates.
+    DisposableEffect(screen == "player", spiderActive) {
+        val ownsPlayback = screen == "player" && spiderActive
+        onDispose { if (ownsPlayback) spiderBridge.releasePlayback() }
+    }
+
     LaunchedEffect(screen, filmId) {
         // A Back press during a slow CMS request must not leave a stale
         // pending lookup that can later attach to an unrelated navigation.
