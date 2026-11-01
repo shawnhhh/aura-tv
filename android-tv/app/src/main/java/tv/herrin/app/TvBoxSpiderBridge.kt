@@ -105,7 +105,9 @@ internal object SpiderVodCodec {
         val playable = if (!needsWebParser) options else options.filterIndexed { index, url ->
             val path = url.substringBefore('?').lowercase(java.util.Locale.ROOT)
             path.endsWith(".m3u8") || path.endsWith(".mp4") ||
-                path.endsWith(".mpd") || (index == 0 && declaredMime != null)
+                path.endsWith(".mpd") ||
+                SpiderProxyPlayback.isCatVodProxy(url) ||
+                (index == 0 && declaredMime != null)
         }
         if (needsWebParser && playable.isEmpty())
             return PlaybackResult.Unavailable("此线路需要网页解析器，请切换返回直链的授权线路")
@@ -467,7 +469,23 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val created = spiderClass.getDeclaredConstructor().newInstance() as Spider
             // CatVod Spider.getProxyUrl() needs a real, local listening port.
             // Start it inside :spider, scoped to the active site and process.
-            val localProxy = SpiderLoopbackProxy(site.key) { params ->
+            val staticProxyClass = runCatching {
+                loader.loadClass("com.github.catvod.spider.Proxy")
+            }.getOrNull()
+            val staticProxyMethod = staticProxyClass?.methods?.firstOrNull { method ->
+                method.name == "proxy" &&
+                    java.lang.reflect.Modifier.isStatic(method.modifiers) &&
+                    method.parameterTypes.contentEquals(arrayOf(Map::class.java))
+            }
+            val localProxy = SpiderLoopbackProxy(
+                site.key,
+                staticHandler = { params ->
+                    synchronized(created) {
+                        if (staticProxyMethod == null) created.proxy(params)
+                        else staticProxyMethod.invoke(null, params) as? Array<out Any?>
+                    }
+                }
+            ) { params ->
                 synchronized(created) { created.proxy(params) }
             }
             CatVodProxy.set(localProxy.port, localProxy.token)
@@ -519,11 +537,22 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
             val raw = spider.playerContent(selected.title, selected.uri, activeVipFlags)
+            // FongMi supports proxy:// and fixed-port CatVod proxy URIs.
+            // Normalize them to this :spider worker's current authenticated
+            // loopback BEFORE the HTTP-only ParseJob/direct player sees them.
+            // Never translate generic localhost services or other site keys.
+            val localProxy = activeLoopbackProxy
+                ?: return@attempt PlaybackResult.Unavailable(
+                    "本机 Spider 播放代理尚未启动（PROXY_NOT_RUNNING）")
+            val normalized = SpiderProxyPlayback.normalizePlayerResponse(
+                raw, activeSiteKey.orEmpty(), localProxy)
+                ?: return@attempt PlaybackResult.Unavailable(
+                    "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE）")
             // Reuse the upstream FongMi ParseJob routing precedence within
             // HERRIN's existing isolated Spider playback process. The result
             // is still just PlaybackMedia; no film metadata or UI is mutated.
             val decision = FongMiPlaybackRouter.route(
-                raw, selected.title, activeJsonParsers, allowHttp, activeSiteHeaders,
+                normalized, selected.title, activeJsonParsers, allowHttp, activeSiteHeaders,
                 activePlaybackParsers)
             val resolved = when (decision) {
                 is FongMiPlayRoute.Direct -> decision.playback
@@ -560,10 +589,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             }
             val healthy = when (resolved) {
                 is PlaybackResult.Ready -> {
-                    val localProxy = activeLoopbackProxy
-                    if (localProxy != null)
-                        SpiderProxyPlayback.rebind(resolved.media, activeSiteKey.orEmpty(), localProxy)
-                    else resolved
+                    SpiderProxyPlayback.rebind(
+                        resolved.media, activeSiteKey.orEmpty(), localProxy)
                 }
                 is PlaybackResult.Unavailable -> resolved
             }

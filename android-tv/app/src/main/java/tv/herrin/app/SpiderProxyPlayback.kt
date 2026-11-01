@@ -7,6 +7,8 @@ import java.net.URI
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * The source may return a CatVod proxy URL containing TVBox's fixed port, or
@@ -40,26 +42,97 @@ internal object SpiderProxyPlayback {
         return result
     }
 
-    fun rebind(media: PlaybackMedia, siteKey: String, proxy: SpiderLoopbackProxy): PlaybackResult {
-        if (siteKey.isBlank() || !proxy.isOpen)
-            return PlaybackResult.Unavailable("本机 Spider 播放代理未启动")
-        fun fix(raw: String): String? {
-            if (raw.length !in 1..MAX_URL) return null
+    /**
+     * FongMi accepts proxy://do=jar&... as a CatVod internal route.
+     * Convert it ONLY into the active selected Spider's authenticated
+     * loopback endpoint before invoking the HTTP-only playback router.
+     */
+    internal fun rebaseUrl(raw: String, siteKey: String, proxy: SpiderLoopbackProxy): String? {
+        if (siteKey.isBlank() || !proxy.isOpen || raw.length !in 1..MAX_URL) return null
+        val legacy = raw.startsWith("proxy://", ignoreCase = true)
+        val parameters = if (legacy) {
+            val tail = raw.substring(8).removePrefix("?")
+            // FongMi sources may pass a plain unescaped HTTP URL inside an
+            // existing URL query parameter. Slashes in its VALUE are valid.
+            // The alias itself still cannot specify a host/path/fragment.
+            if (tail.startsWith('/') || tail.contains('#') ||
+                (!tail.contains('=') && tail.isNotEmpty())) return null
+            if (tail.isEmpty()) emptyMap() else runCatching { query(tail) }.getOrNull()
+                ?: return null
+        } else {
             val uri = runCatching { URI(raw) }.getOrNull() ?: return null
             if (!local(uri) || uri.path != "/proxy") return raw
-            val map = query(uri.rawQuery)
-            if (map["do"] != "jar" || map["siteKey"].orEmpty().let { it.isNotEmpty() && it != siteKey })
-                return null
-            if (map.size !in 1..24) return null
-            val extra = map.entries.filterNot { it.key in setOf("session", "do", "siteKey") }
-                .joinToString("&") { (k, v) ->
-                    URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
-                }
-            return proxy.url + if (extra.isEmpty()) "" else "&$extra"
+            runCatching { query(uri.rawQuery) }.getOrNull() ?: return null
         }
-        val primary = fix(media.uri) ?: return PlaybackResult.Unavailable(
-            "此线路的本地代理不属于当前 Spider 站点，无法安全转接")
-        val alternates = media.alternateUris.mapNotNull(::fix).filter { it != primary }.distinct()
+        if (parameters.isEmpty() && !(legacy && raw.substring(8).trim('?').isEmpty()))
+            return null
+        if (parameters["do"].let { it != null && it != "jar" }) return null
+        if (parameters["siteKey"].let { it != null && it != siteKey }) return null
+        if (parameters.containsKey("__herrin_static")) return null
+        if (parameters.size !in 0..24) return null
+        // FongMi's Java JAR convention routes proxy:// without siteKey
+        // through the static com.github.catvod.spider.Proxy.proxy(Map).
+        // For regular Spider.getProxyUrl() URLs siteKey is always present.
+        val useStatic = legacy && !parameters.containsKey("siteKey")
+        val extra = parameters.entries.filterNot { it.key in setOf("session", "do", "siteKey") }
+            .joinToString("&") { (k, v) ->
+                URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
+            }
+        return proxy.url +
+            (if (useStatic) "&__herrin_static=1" else "") +
+            (if (extra.isEmpty()) "" else "&$extra")
+    }
+
+    /**
+     * Normalize Spider proxy aliases while retaining all other parser fields
+     * and selected quality options. No network request occurs here.
+     */
+    fun normalizePlayerResponse(
+        rawJson: String, siteKey: String, proxy: SpiderLoopbackProxy
+    ): String? {
+        val obj = runCatching { JSONObject(rawJson) }.getOrNull() ?: return null
+        fun translate(url: String): String? {
+            val legacy = url.startsWith("proxy://", ignoreCase = true)
+            val localProxy = runCatching {
+                val uri = URI(url)
+                local(uri) && uri.path == "/proxy"
+            }.getOrDefault(false)
+            return if (legacy || localProxy) rebaseUrl(url, siteKey, proxy) else url
+        }
+        val url = obj.opt("url")
+        when (url) {
+            is String -> obj.put("url", translate(url) ?: return null)
+            is JSONArray -> {
+                for (i in 0 until minOf(32, url.length())) {
+                    val value = url.optString(i)
+                    // Quality labels in alternating label/url arrays remain intact.
+                    url.put(i, translate(value) ?: return null)
+                }
+            }
+            is JSONObject -> {
+                val values = url.optJSONArray("values")
+                if (values != null) {
+                    for (i in 0 until minOf(values.length(), 20)) {
+                        val entry = values.optJSONObject(i) ?: continue
+                        if (entry.has("v")) {
+                            entry.put("v", translate(entry.optString("v")) ?: return null)
+                        }
+                    }
+                }
+            }
+        }
+        return obj.toString()
+    }
+
+    fun rebind(media: PlaybackMedia, siteKey: String, proxy: SpiderLoopbackProxy): PlaybackResult {
+        if (siteKey.isBlank() || !proxy.isOpen)
+            return PlaybackResult.Unavailable("本机 Spider 播放代理未启动（PROXY_NOT_RUNNING）")
+        val primary = rebaseUrl(media.uri, siteKey, proxy)
+            ?: return PlaybackResult.Unavailable(
+                "此线路的代理不属于当前 Spider 站点（PROXY_INVALID_ROUTE）")
+        val alternates = media.alternateUris.mapNotNull {
+            rebaseUrl(it, siteKey, proxy)
+        }.filter { it != primary }.distinct()
         return PlaybackResult.Ready(media.copy(uri = primary, alternateUris = alternates))
     }
 

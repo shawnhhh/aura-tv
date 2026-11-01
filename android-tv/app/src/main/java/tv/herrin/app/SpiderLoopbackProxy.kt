@@ -29,12 +29,15 @@ import fi.iki.elonen.NanoHTTPD
  */
 internal class SpiderLoopbackProxy(
     private val siteKey: String,
+    private val staticHandler: ((Map<String, String>) -> Array<out Any?>?)? = null,
     private val handler: (Map<String, String>) -> Array<out Any?>?
 ) : Closeable {
     private val closed = AtomicBoolean(false)
-    private val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
-    private val workers = ThreadPoolExecutor(2, 2, 0L, TimeUnit.SECONDS,
-        ArrayBlockingQueue(8)) { runnable ->
+    private val server = ServerSocket(0, 24, InetAddress.getByName("127.0.0.1"))
+    // HLS/DASH and range-seek requests overlap; two workers could remain
+    // occupied on large streams, blocking all following segment requests.
+    private val workers = ThreadPoolExecutor(4, 4, 0L, TimeUnit.SECONDS,
+        ArrayBlockingQueue(24)) { runnable ->
         Thread(runnable, "Herrin Spider proxy response").apply { isDaemon = true }
     }
     private val sockets = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
@@ -98,7 +101,12 @@ internal class SpiderLoopbackProxy(
             // FongMi Java Spider supports either a 3-4 element array or one
             // NanoHTTPD.Response object. Adapt only its public response API;
             // do not run its own HTTP server or reuse its socket/session.
-            adaptResponse(handler(params.filterKeys { it != "session" }))
+            val forwarded = params.filterKeys {
+                it != "session" && it != "__herrin_static"
+            }
+            val callback = if (params["__herrin_static"] == "1")
+                staticHandler ?: handler else handler
+            adaptResponse(callback(forwarded))
         } catch (_: Throwable) {
             failure(output, 502)
             return
@@ -142,19 +150,20 @@ internal class SpiderLoopbackProxy(
             output.write(head.toByteArray(StandardCharsets.US_ASCII))
             if (method == "HEAD") return
             val buffer = ByteArray(16 * 1024)
-            var streamed = 0L
-            while (!closed.get() && streamed < MAX_RESPONSE_BYTES) {
-                val size = stream.read(buffer, 0,
-                    minOf(buffer.size.toLong(), MAX_RESPONSE_BYTES - streamed).toInt())
+            // A single MKV can exceed 10 GiB. The old 512 MiB ceiling
+            // silently truncated large sources and broke range seeking.
+            // Stream with a fixed 16 KiB buffer until EOF or cancellation;
+            // bound memory, sockets and concurrent workers instead of bytes.
+            while (!closed.get()) {
+                val size = stream.read(buffer)
                 if (size < 0) break
                 if (size == 0) continue
                 output.write(Integer.toHexString(size).toByteArray(StandardCharsets.US_ASCII))
                 output.write(CRLF)
                 output.write(buffer, 0, size)
                 output.write(CRLF)
-                streamed += size
             }
-            if (!closed.get() && streamed < MAX_RESPONSE_BYTES) {
+            if (!closed.get()) {
                 output.write(END_CHUNKS)
                 output.flush()
             }
@@ -267,7 +276,6 @@ internal class SpiderLoopbackProxy(
         const val MAX_HEADERS = 32
         const val MAX_LINE = 4_096
         const val MAX_QUERY = 4_096
-        const val MAX_RESPONSE_BYTES = 512L * 1024 * 1024
         val CRLF = "\r\n".toByteArray(StandardCharsets.US_ASCII)
         val END_CHUNKS = "0\r\n\r\n".toByteArray(StandardCharsets.US_ASCII)
     }

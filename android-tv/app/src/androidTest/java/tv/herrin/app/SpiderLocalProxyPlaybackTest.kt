@@ -171,4 +171,146 @@ class SpiderLocalProxyPlaybackTest {
         }
     }
 
+    @Test fun fongMiProxySchemeNormalizesToRealAuthenticatedPlaybackBeforeRouting() {
+        val samples = byteArrayOf(2, 4, 6, 8, 10)
+        SpiderLoopbackProxy("legacy-fongmi-site") { params ->
+            assertEquals("jar", params["do"])
+            assertEquals("legacy-fongmi-site", params["siteKey"])
+            assertEquals("episode-one", params["part"])
+            arrayOf(200, "video/mp4", ByteArrayInputStream(samples))
+        }.use { proxy ->
+            // A real CatVod proxy is media even when an older Spider
+            // mislabels it parse=1 and omits a format extension.
+            val raw = JSONObject()
+                .put("parse", 1)
+                .put("url", "proxy://do=jar&siteKey=legacy-fongmi-site&part=episode-one")
+                .toString()
+            val fixed = SpiderProxyPlayback.normalizePlayerResponse(
+                raw, "legacy-fongmi-site", proxy)
+            assertNotNull(fixed)
+            val routed = FongMiPlaybackRouter.route(
+                fixed!!, "夸父原", emptyList(), allowHttp = true)
+            assertTrue("Internal proxy:// must become a direct playback decision",
+                routed is FongMiPlayRoute.Direct)
+            val media = (routed as FongMiPlayRoute.Direct).playback.media
+            assertTrue(SpiderProxyPlayback.isCatVodProxy(media.uri))
+            assertEquals(SpiderProxyPlayback.Health.READY,
+                kotlinx.coroutines.runBlocking { SpiderProxyPlayback.diagnose(media.uri) })
+            val result = SpiderProxyPlayback.rebind(media, "legacy-fongmi-site", proxy)
+            assertTrue(result is PlaybackResult.Ready)
+            val url = (result as PlaybackResult.Ready).media.uri
+            assertArrayEquals(samples, java.net.URL(url).openStream().use { it.readBytes() })
+        }
+    }
+
+    @Test fun fongMiProxySchemeRejectsOtherSitesAndInvalidRoutes() {
+        SpiderLoopbackProxy("current-site") {
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            val unsafe = listOf(
+                "proxy://do=jar&siteKey=other-site&part=x",
+                "proxy://do=external&siteKey=current-site",
+                "proxy://part=x&part=y"
+            )
+            for (url in unsafe) {
+                assertNull("Must not rewrite unsafe proxy alias: $url",
+                    SpiderProxyPlayback.normalizePlayerResponse(
+                        JSONObject().put("url", url).toString(), "current-site", proxy))
+            }
+            // An absolute URL may be a *parameter for the authorized Spider's*
+            // static handler. It must never become a direct open HTTP proxy.
+            val delegated = SpiderProxyPlayback.normalizePlayerResponse(
+                JSONObject().put("url",
+                    "proxy://url=http://example.invalid/movie.mkv").toString(),
+                "current-site", proxy)
+            assertNotNull(delegated)
+            val delegatedUrl = JSONObject(delegated!!).getString("url")
+            val parsed = java.net.URI(delegatedUrl)
+            assertEquals("127.0.0.1", parsed.host)
+            assertEquals(proxy.port, parsed.port)
+            assertTrue(delegatedUrl.contains("__herrin_static=1"))
+            assertTrue(delegatedUrl.contains("url=http%3A%2F%2Fexample.invalid%2Fmovie.mkv"))
+            val rawNested = JSONObject().put("url",
+                "proxy://do=jar&siteKey=current-site&url=https://example.org/media.mkv")
+            val converted = SpiderProxyPlayback.normalizePlayerResponse(
+                rawNested.toString(), "current-site", proxy)
+            assertNotNull(converted)
+            assertTrue(JSONObject(converted!!).getString("url")
+                .contains("url=https%3A%2F%2Fexample.org%2Fmedia.mkv"))
+            val supported = JSONObject().put("url", JSONObject()
+                .put("position", 1).put("values", org.json.JSONArray()
+                    .put(JSONObject().put("name", "A").put("v", "https://example.org/a.mp4"))
+                    .put(JSONObject().put("name", "B")
+                        .put("v", "proxy://do=jar&siteKey=current-site&part=selected"))))
+            val adjusted = SpiderProxyPlayback.normalizePlayerResponse(
+                supported.toString(), "current-site", proxy)
+            assertNotNull(adjusted)
+            val values = JSONObject(adjusted!!).getJSONObject("url").getJSONArray("values")
+            assertEquals("https://example.org/a.mp4",
+                values.getJSONObject(0).getString("v"))
+            assertTrue(values.getJSONObject(1).getString("v").contains("session="))
+        }
+    }
+
+    @Test fun actualIsolatedSpiderProcessStreamsAuthenticatedProxyAcrossBinder() {
+        val bridge = TvBoxSpiderBridge(inst.targetContext)
+        try {
+            val response = kotlinx.coroutines.runBlocking {
+                bridge.probeRemoteProxyForInstrumentation()
+            }
+            assertTrue("Binder must start :spider and return its private proxy URL",
+                response is SpiderResult.Ready)
+            val url = (response as SpiderResult.Ready).value
+            assertEquals(SpiderProxyPlayback.Health.READY,
+                kotlinx.coroutines.runBlocking { SpiderProxyPlayback.diagnose(url) })
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 5_000
+            try {
+                assertEquals(200, connection.responseCode)
+                assertArrayEquals(byteArrayOf(8, 9, 10),
+                    connection.inputStream.use { it.readBytes() })
+            } finally {
+                connection.disconnect()
+            }
+        } finally {
+            bridge.close()
+        }
+    }
+
+    @Test fun legacyFongMiNoSiteKeyCallsStaticProxyHandlerNotInstanceHandler() {
+        val instanceCalls = AtomicInteger()
+        val staticCalls = AtomicInteger()
+        SpiderLoopbackProxy("static-java-site",
+            staticHandler = { params ->
+                staticCalls.incrementAndGet()
+                assertEquals("static", params["part"])
+                assertFalse(params.containsKey("__herrin_static"))
+                arrayOf(200, "video/mp4",
+                    ByteArrayInputStream(byteArrayOf(1, 7, 4, 6)))
+            }) {
+                instanceCalls.incrementAndGet()
+                arrayOf(200, "video/mp4",
+                    ByteArrayInputStream(byteArrayOf(0)))
+            }.use { proxy ->
+                val player = JSONObject().put("parse", 0).put("format", "mp4")
+                    .put("url", "proxy://do=jar&part=static").toString()
+                val rewritten = SpiderProxyPlayback.normalizePlayerResponse(
+                    player, "static-java-site", proxy)
+                assertNotNull(rewritten)
+                val url = JSONObject(rewritten!!).getString("url")
+                assertTrue(url.contains("__herrin_static=1"))
+                assertEquals(SpiderProxyPlayback.Health.READY,
+                    kotlinx.coroutines.runBlocking { SpiderProxyPlayback.diagnose(url) })
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                try {
+                    assertEquals(200, conn.responseCode)
+                    assertArrayEquals(byteArrayOf(1, 7, 4, 6),
+                        conn.inputStream.use { it.readBytes() })
+                } finally { conn.disconnect() }
+                assertEquals(1, staticCalls.get())
+                assertEquals(0, instanceCalls.get())
+            }
+    }
+
 }
