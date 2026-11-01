@@ -30,6 +30,7 @@ import org.junit.runner.RunWith
 class M466DetailCastDpadTest {
     @get:Rule val compose = createComposeRule()
 
+    @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
     @Test fun dpadDownScrollsOffscreenCastIntoViewAndFocusesFirstActor() {
         val episodeRequester = FocusRequester()
         compose.setContent {
