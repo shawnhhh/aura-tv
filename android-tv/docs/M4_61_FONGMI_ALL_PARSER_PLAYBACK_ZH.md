@@ -42,3 +42,9 @@ FongMi/TV `fongmi` 分支提交 `5e191aaced194e5cac5668cc91908ecb65336222`：
 - 真实 TCL、饭太硬每种线路必须以授权真机可解码帧为验收标准，不能把测试用本地片源当作第三方源验证。
 
 本次只做播放域，不做任何影片资料/刮削/UI 顺带修改；保持 Draft。
+
+## M4.61 后续修复：运行时版本握手
+
+固定对照 FongMi/TV `fongmi@5e191aaced` 的 `buildSrc/.../AbiApkPackaging.groovy`：Python 兼容标识更新为 `catvod-python-plugin-v3`，QuickJS 更新为 `fongmi-quickjs-ng-0.17-v12`；NodeJS 保持 `catvod-nodejs-plugin-v2`，MPV 保持 `mpv-jni-ffmpeg-shared-v1`。添加 JVM 版本握手回归。
+
+**兼容 ID 不等于运行时已就绪**：仍必须同宿主签名构建 APK、核对 native ABI 和完整 payload 哈希，进行实际加载及播放出帧回归；不得关闭运行时签名校验。

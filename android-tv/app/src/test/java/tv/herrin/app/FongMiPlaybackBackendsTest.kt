@@ -2,6 +2,7 @@ package tv.herrin.app
 
 import org.junit.Assert.*
 import org.junit.Test
+import com.github.catvod.utils.RuntimeModule
 
 /** Playback-only FongMi parser coverage: no film/title/artwork/TMDB state. */
 class FongMiPlaybackBackendsTest {
@@ -79,5 +80,17 @@ class FongMiPlaybackBackendsTest {
         val next = previous.copy(scriptApi = "https://source.test/v2.js")
         assertNotEquals(SpiderRuntimeCompat.sessionKey("", previous),
             SpiderRuntimeCompat.sessionKey("", next))
+    }
+    @Test fun nativeRuntimeMetadataMustMatchPinnedFongMiModules() {
+        // Pinned upstream FongMi/TV fongmi@5e191aace:
+        // buildSrc/.../AbiApkPackaging.groovy RUNTIME_PROFILES.
+        assertEquals("catvod-python-plugin-v3",
+            RuntimeModule.PYTHON.compatibilityId)
+        assertEquals("fongmi-quickjs-ng-0.17-v12",
+            RuntimeModule.QUICKJS.compatibilityId)
+        assertEquals("catvod-nodejs-plugin-v2",
+            RuntimeModule.NODEJS.compatibilityId)
+        assertEquals("mpv-jni-ffmpeg-shared-v1",
+            RuntimeModule.MPV.compatibilityId)
     }
 }
