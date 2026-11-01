@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.StringJoiner;
 
+@androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 public class TrackUtil {
 
     public static String describeFormat(Format format) {
