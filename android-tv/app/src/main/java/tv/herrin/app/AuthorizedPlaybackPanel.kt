@@ -224,8 +224,13 @@ private fun AuthorizedPlaybackSession(
                                     prepare()
                                 }
                                 FongMiPlaybackRecovery.Action.RETRY_MEDIA -> {
-                                    // prepare() reopens the same DataSpec at the current position;
-                                    // retain Media3's Range behavior and the exact authorized headers.
+                                    // After a fatal Media3 source error, prepare() alone
+                                    // may leave the failed period/loadable attached.
+                                    // Reinstall the SAME authorized media candidate and
+                                    // MIME before preparing so the next HTTP GET is real;
+                                    // retain the original per-source headers and seek.
+                                    val current = retries.current
+                                    setMediaItem(itemFor(current.uri, current.candidateIndex, current.mime))
                                     if (!isLive && resumePosition > 0L) seekTo(resumePosition)
                                     prepare()
                                     play()
