@@ -167,7 +167,7 @@ class SpiderLocalProxyPlaybackTest {
             arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1, 2)))
         }.use { proxy ->
             val uri = "http://127.0.0.1:${proxy.port}/proxy?session=${proxy.token}&do=jar&siteKey=ipc-site"
-            assertTrue(SpiderProxyPlayback.ping(uri))
+            assertTrue(kotlinx.coroutines.runBlocking { SpiderProxyPlayback.ping(uri) })
         }
     }
 
