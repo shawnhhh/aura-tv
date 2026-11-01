@@ -68,13 +68,21 @@ internal object SpiderProxyPlayback {
             return null
         if (parameters["do"].let { it != null && it != "jar" }) return null
         if (parameters["siteKey"].let { it != null && it != siteKey }) return null
-        if (parameters.containsKey("__herrin_static")) return null
+        // The private marker may survive a second normalization only when it
+        // already belongs to this exact authenticated session. Untrusted legacy
+        // routes cannot choose or inject the internal dispatch field.
+        val current = !legacy && runCatching {
+            val uri = URI(raw)
+            uri.port == proxy.port && parameters["session"] == proxy.token
+        }.getOrDefault(false)
+        if (parameters.containsKey("__herrin_static") &&
+            (!current || parameters["__herrin_static"] != "1")) return null
         if (parameters.size !in 0..24) return null
         // FongMi's Java JAR convention routes proxy:// without siteKey
         // through the static com.github.catvod.spider.Proxy.proxy(Map).
         // For regular Spider.getProxyUrl() URLs siteKey is always present.
-        val useStatic = legacy && !parameters.containsKey("siteKey")
-        val extra = parameters.entries.filterNot { it.key in setOf("session", "do", "siteKey") }
+        val useStatic = !parameters.containsKey("siteKey") || parameters["__herrin_static"] == "1"
+        val extra = parameters.entries.filterNot { it.key in setOf("session", "do", "siteKey", "__herrin_static") }
             .joinToString("&") { (k, v) ->
                 URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
             }
