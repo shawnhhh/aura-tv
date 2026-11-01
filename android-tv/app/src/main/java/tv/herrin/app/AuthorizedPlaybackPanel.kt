@@ -206,6 +206,29 @@ private fun AuthorizedPlaybackSession(
                         httpStatus, error, failedUrl)
                     val diagnostic = PlaybackErrorReport.media(error.errorCodeName,
                         error.errorCode, httpStatus, error, failedUrl, activeVariant + 1, candidates.size)
+                    // FongMi source fallback: a server-side 5xx on one explicitly
+                    // authorized URL need not consume two delayed retries while a
+                    // separately provided healthy media URL is available. Switch
+                    // synchronously before scheduling the per-source retry budget.
+                    // This is NEVER allowed for HTTP 401/403/429 denials.
+                    val failover = if (FongMiPlaybackRecovery.preferAuthorizedAlternate(
+                            httpStatus, retries.current.candidateIndex < candidates.lastIndex))
+                        retries.next(error.errorCode, httpStatus) else null
+                    if (failover != null) {
+                        val resume = currentPosition.coerceAtLeast(0L)
+                        activeVariant = failover.candidateIndex
+                        journey.begin(failover.candidateIndex, candidates.size,
+                            android.os.SystemClock.elapsedRealtime(),
+                            videoDecoderCounters?.renderedOutputBufferCount ?: 0)
+                        errorMessage = null
+                        android.util.Log.i("HerrinRecovery",
+                            "action=authorized-alternate http=5xx index=${failover.candidateIndex}")
+                        setMediaItem(itemFor(failover.uri, failover.candidateIndex, failover.mime))
+                        if (!isLive && resume > 0L) seekTo(resume)
+                        prepare()
+                        play()
+                        return
+                    }
                     val plan = recoverySession.next(failure, latestRefreshSource != null, isLive)
                     if (plan != null) {
                         pendingRecovery?.cancel()
