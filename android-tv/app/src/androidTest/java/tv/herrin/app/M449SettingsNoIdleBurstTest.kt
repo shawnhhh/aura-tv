@@ -29,7 +29,7 @@ class M449SettingsNoIdleBurstTest {
     }
     @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
 
-    @Test fun fourRapidDownKeysMoveFourRowsAndBackWithoutOpeningIme() {
+    @Test fun fourRapidDownKeysReachTmdbTokenAndReturnWithoutOpeningIme() {
         compose.waitUntil(12_000) {
             runCatching {
                 compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
@@ -52,11 +52,11 @@ class M449SettingsNoIdleBurstTest {
         }
         compose.waitUntil(8_000) {
             runCatching {
-                compose.onNodeWithTag("tvbox-live-direct-load").assertIsFocused()
+                compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
             }.isSuccess
         }
         val downMs = SystemClock.elapsedRealtime() - started
-        compose.onNodeWithTag("tvbox-live-direct-load").assertIsFocused()
+        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
 
         // Move back up three rows without intermediate idle waits. The
         // navigation intent must reverse the requested target, not the

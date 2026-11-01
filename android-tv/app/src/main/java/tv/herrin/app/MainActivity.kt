@@ -1163,6 +1163,14 @@ private fun Herrin() {
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
     val settingsListState = rememberLazyListState()
+    // Cast is the final offscreen LazyColumn item. Scroll it into composition
+    // before requesting focus; native spatial search cannot reach detached rows.
+    fun moveToDetailCast(): Boolean = screen == "detail" &&
+        DetailCastFocus.move(uiScope, settingsListState,
+            displayFilm.people.isNotEmpty() || displayFilm.actors.isNotEmpty(),
+            requester("detail-person-0")) {
+            focusId == "detail-person-0"
+        }
     LaunchedEffect(settingsTvBoxOnly) {
         if (screen == "settings" && !settingsTvBoxOnly) {
             // Expanding the deep diagnostics form replaces the compact list.
@@ -1186,7 +1194,17 @@ private fun Herrin() {
         }
     }
     fun moveCompactSettingsFocus(target: String) {
-        val itemIndex = TvFocusRoutes.compactSettingsItemIndex(target) ?: return
+        val itemIndex = TvFocusRoutes.compactSettingsItemIndex(
+            target,
+            sourceStatus = vodImportFeedback.isNotBlank(),
+            connectedStatus = metadataToken.isNotBlank(),
+            failedStatus = metadataScanFailures > 0 && metadataScanDone >= metadataScanTotal &&
+                tmdbConnectivity == TmdbProbeState.CONNECTED,
+            noMatchesStatus = tmdbConnectivity == TmdbProbeState.CONNECTED &&
+                metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
+                metadataScanFailures == 0 &&
+                providerFilms.orEmpty().none { it.metadataSource == "TMDB" }
+        ) ?: return
         settingsIntent.request(target)
         settingsFocusJob[0]?.cancel()
         fun confirmFocus(): Boolean {
@@ -2477,11 +2495,30 @@ private fun Herrin() {
                                 single = tmdbTokenDraft, onSingle = { tmdbTokenDraft = it },
                                 first = tmdbTokenPart1, onFirst = { tmdbTokenPart1 = it },
                                 second = tmdbTokenPart2, onSecond = { tmdbTokenPart2 = it },
-                                third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it }
+                                third = tmdbTokenPart3, onThird = { tmdbTokenPart3 = it },
+                                remoteNavigation = CompactTmdbRemoteNavigation(
+                                    requester = { requester(it) },
+                                    onNavFocus = { focusId = it; configInputFocused = false },
+                                    onEditingFocus = { configInputFocused = it },
+                                    onMoveUp = { id ->
+                                        TvFocusRoutes.compactSettingsNeighbor(
+                                            id, false, lastMovieSettingsAction, tmdbTokenSplitMode)
+                                            ?.let(::moveCompactSettingsFocus)
+                                    },
+                                    onMoveDown = { id ->
+                                        TvFocusRoutes.compactSettingsNeighbor(
+                                            id, true, lastMovieSettingsAction, tmdbTokenSplitMode)
+                                            ?.let(::moveCompactSettingsFocus)
+                                    },
+                                    onToggleFocus = { focusId = "compact-tmdb-split-toggle" }
+                                )
                             ) }
                             item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 TvButton("保存并开始刮削",
-                                    modifier = Modifier.testTag("compact-tmdb-save"), reduced = reduceMotion) {
+                                    modifier = Modifier.testTag("compact-tmdb-save")
+                                        .focusRequester(requester("compact-tmdb-save")),
+                                    reduced = reduceMotion,
+                                    onFocus = { focusId = "compact-tmdb-save"; keyboard?.hide() }) {
                                     val value = candidateTmdbToken()
                                     if (value != null) {
                                         prefs.tmdbReadToken = value
@@ -2496,7 +2533,10 @@ private fun Herrin() {
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
                                 TvButton("重新刮削",
-                                    modifier = Modifier.testTag("compact-tmdb-rescan"), reduced = reduceMotion) {
+                                    modifier = Modifier.testTag("compact-tmdb-rescan")
+                                        .focusRequester(requester("compact-tmdb-rescan")),
+                                    reduced = reduceMotion,
+                                    onFocus = { focusId = "compact-tmdb-rescan"; keyboard?.hide() }) {
                                     if (metadataToken.isNotBlank()) {
                                         metadataResolver.clearAuthCooldown(metadataToken)
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
@@ -2540,7 +2580,7 @@ private fun Herrin() {
                                 editRequester = requester("tvbox-live-direct-editor"),
                                 onNavFocus = { focusId = "tvbox-live-direct-url"; configInputFocused = false },
                                 onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-live-direct-editor" },
-                                onMoveUp = { moveCompactSettingsFocus(lastMovieSettingsAction) },
+                                onMoveUp = { moveCompactSettingsFocus("compact-tmdb-save") },
                                 onMoveDown = { moveCompactSettingsFocus("tvbox-live-direct-load") }
                             ) else OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                                 Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
@@ -3087,7 +3127,8 @@ private fun Herrin() {
                                         onEpisodeFocus = { entry ->
                                             groupFocusedCoordinates = entry.season to entry.number
                                         }, onEpisodePlay = ::playGroupEpisode,
-                                        onLinePlay = ::selectGroupSource)
+                                        onLinePlay = ::selectGroupSource,
+                                        onMoveToCast = ::moveToDetailCast)
                                 }
                             } else if (showGroup != null) {
                                 item { Text("当前原始条目没有可信的季集标记；可打开单个影视条目继续选集。",
@@ -3107,7 +3148,8 @@ private fun Herrin() {
                                         onSeasonSelect = ::selectDetailSeason,
                                         onEpisodeFocus = { entry ->
                                             detailSeasonEpisodeNumbers[entry.season] = entry.source.number
-                                        }, onPlay = { entry -> playSeasonEpisode(entry) })
+                                        }, onPlay = { entry -> playSeasonEpisode(entry) },
+                                        onMoveToCast = ::moveToDetailCast)
                                 }
                             } else {
                                 item { Text(if (providerFilms != null && film.playbackEpisodes.isEmpty())
@@ -3122,7 +3164,13 @@ private fun Herrin() {
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     if (film.playbackEpisodes.isEmpty()) {
                                         (1..film.episodes).forEach { n ->
-                                            TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n"), reduced = reduceMotion,
+                                            TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n")
+                                                .onPreviewKeyEvent { event ->
+                                                    event.type == KeyEventType.KeyDown &&
+                                                        event.nativeKeyEvent.keyCode ==
+                                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
+                                                        moveToDetailCast()
+                                                }, reduced = reduceMotion,
                                                 selected = episode == n) {
                                                 episode = n
                                                 screen = "player"
@@ -3133,10 +3181,14 @@ private fun Herrin() {
                                             TvButton("第 ${entry.number} 集 · ${entry.title}",
                                                 modifier = Modifier.testTag("episode-${entry.number}")
                                                     .onPreviewKeyEvent { event ->
-                                                        if (event.type == KeyEventType.KeyDown &&
-                                                            event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP)
-                                                            runCatching { requester("detail-first-line").requestFocus() }.isSuccess
-                                                        else false
+                                                        if (event.type != KeyEventType.KeyDown) false
+                                                        else when (event.nativeKeyEvent.keyCode) {
+                                                            android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                                                runCatching { requester("detail-first-line").requestFocus() }.isSuccess
+                                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+                                                                moveToDetailCast()
+                                                            else -> false
+                                                        }
                                                     },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 episode = entry.number
@@ -3169,7 +3221,13 @@ private fun Herrin() {
                                             .testTag("detail-person-$index")
                                             .border(2.dp, if (personFocused) Color.White else Color.Transparent,
                                                 RoundedCornerShape(14.dp))
-                                            .onFocusChanged { personFocused = it.isFocused }
+                                            .onFocusChanged {
+                                                personFocused = it.isFocused
+                                                if (it.isFocused) focusId = "detail-person-$index"
+                                            }
+                                            .then(if (index == 0)
+                                                Modifier.focusRequester(requester("detail-person-0"))
+                                                else Modifier)
                                             .focusable()
                                             .padding(vertical = 7.dp),
                                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -3186,7 +3244,10 @@ private fun Herrin() {
                             }
                         } else if (displayFilm.actors.isNotEmpty()) item {
                             Text("主演：${displayFilm.actors.take(8).joinToString(" · ")}",
-                                modifier = Modifier.testTag("detail-people"), color = Color(0xFFD7E0EA))
+                                modifier = Modifier.testTag("detail-people")
+                                    .focusRequester(requester("detail-person-0"))
+                                    .onFocusChanged { if (it.isFocused) focusId = "detail-person-0" }
+                                    .focusable(), color = Color(0xFFD7E0EA))
                         }
 
 
@@ -3208,9 +3269,9 @@ private fun Herrin() {
                             val code = event.nativeKeyEvent.keyCode
                             val target = when (code) {
                                 android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                                    settingsIntent.next(focusId, false, lastMovieSettingsAction)
+                                    settingsIntent.next(focusId, false, lastMovieSettingsAction, tmdbTokenSplitMode)
                                 android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                                    settingsIntent.next(focusId, true, lastMovieSettingsAction)
+                                    settingsIntent.next(focusId, true, lastMovieSettingsAction, tmdbTokenSplitMode)
                                 else -> null
                             }
                             if (target == null) false else {
@@ -3262,7 +3323,8 @@ internal fun SeasonBrowser(
     history: (SeasonEpisode) -> WatchPosition?,
     onSeasonSelect: (Int) -> Unit,
     onEpisodeFocus: (SeasonEpisode) -> Unit,
-    onPlay: (SeasonEpisode) -> Unit
+    onPlay: (SeasonEpisode) -> Unit,
+    onMoveToCast: () -> Boolean = { false }
 ) {
     val uiScope = rememberCoroutineScope()
     val focusers = remember { mutableMapOf<String, FocusRequester>() }
@@ -3310,7 +3372,13 @@ internal fun SeasonBrowser(
                     reduced = reduced,
                     modifier = Modifier.testTag("season-card-${entry.season}-$index")
                         .focusRequester(focusAt("season-card-${entry.season}-$index"))
-                        .focusProperties { up = focusAt("season-tab-${entry.season}") },
+                        .focusProperties { up = focusAt("season-tab-${entry.season}") }
+                        .onPreviewKeyEvent { event ->
+                            event.type == KeyEventType.KeyDown &&
+                                event.nativeKeyEvent.keyCode ==
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
+                                onMoveToCast()
+                        },
                     onFocus = { onEpisodeFocus(entry) },
                     onClick = { onPlay(entry) })
             }

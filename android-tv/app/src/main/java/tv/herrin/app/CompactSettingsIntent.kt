@@ -12,9 +12,10 @@ package tv.herrin.app
 internal class CompactSettingsIntent {
     private var desiredFocus: String? = null
 
-    fun next(actualFocus: String, down: Boolean, movieAction: String): String? {
+    fun next(actualFocus: String, down: Boolean, movieAction: String,
+             splitToken: Boolean = false): String? {
         val base = desiredFocus ?: actualFocus
-        val target = TvFocusRoutes.compactSettingsNeighbor(base, down, movieAction)
+        val target = TvFocusRoutes.compactSettingsNeighbor(base, down, movieAction, splitToken)
         if (target != null) desiredFocus = target
         return target
     }
