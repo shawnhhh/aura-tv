@@ -2220,10 +2220,27 @@ private fun Herrin() {
                         cmsFailed = cmsFailed,
                         retryAvailable = spiderActive || cmsFailed || cmsJsonParser != null || cmsBrowserParser != null,
                         reducedMotion = reduceMotion,
-                        failureHint = (parsedCms as? PlaybackResult.Unavailable)?.reason
+                        failureHint = (parsedCms as? PlaybackResult.Unavailable)
+                                ?.reason?.let(PlayerStartupHints::forSpiderFailure)
                             ?: (spiderResolved as? PlaybackResult.Unavailable)
                                 ?.reason?.let(PlayerStartupHints::forSpiderFailure)
-                            ?: (licensed as? PlaybackResult.Unavailable)?.reason,
+                            ?: (licensed as? PlaybackResult.Unavailable)
+                                ?.reason?.let(PlayerStartupHints::forSpiderFailure),
+                        // Before Media3 starts, the parser/CMS/Spider error must
+                        // be visible rather than presenting a fake decoder failure.
+                        failureDiagnostic = when {
+                            parsedCms is PlaybackResult.Unavailable ->
+                                PlaybackErrorReport.source(
+                                    if (cmsJsonParser != null) "JSON" else "BROWSER",
+                                    parsedCms.reason)
+                            spiderResolved is PlaybackResult.Unavailable ->
+                                PlaybackErrorReport.source("SPIDER",
+                                    (spiderResolved as PlaybackResult.Unavailable).reason)
+                            licensed is PlaybackResult.Unavailable ->
+                                PlaybackErrorReport.source("CMS", licensed.reason)
+                            cmsFailed -> PlaybackErrorReport.source("CMS", "CMS 详情读取失败")
+                            else -> null
+                        },
                         onRetry = {
                             if (cmsFailed) {
                                 cmsPlaybackFailedId = null
