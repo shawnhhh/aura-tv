@@ -61,7 +61,8 @@ for entry in "arm64:arm64-v8a" "armv7l:armeabi-v7a"; do
     [[ -s "$output/$library" ]] || {
       echo "BLOCKED: missing $abi/$library from upstream native build" >&2; exit 2;
     }
-    if readelf -d "$output/$library" | grep -Eq 'Shared library: \[lib(av|sw)[^]]+\.so'; then
+    dynamic="$(readelf -d "$output/$library")"
+    if grep -Eq 'Shared library: \[lib(av|sw)[^]]+\.so' <<< "$dynamic"; then
       echo "BLOCKED: $abi/$library links split FFmpeg" >&2; exit 2;
     fi
   done
