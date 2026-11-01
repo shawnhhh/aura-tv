@@ -659,10 +659,13 @@ internal class TvBoxSpiderBridge(context: Context) {
                         // and the Media3 connection. Explicitly invalidate its
                         // bound session and retry at most once from the last
                         // previously approved source, never an arbitrary URL.
+                        val rememberedSource = lastBrowse
                         withContext(Dispatchers.Main.immediate) {
                             invalidate("Spider 播放代理连接失效")
                         }
                         delay(400L)
+                        if (rememberedSource == null || lastBrowse != rememberedSource)
+                            return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消恢复")
                         when (val retried = request(SpiderIpc.PLAY, payload)) {
                             is SpiderResult.Failure -> PlaybackResult.Unavailable(
                                 "本机 Spider 代理重连失败（PROXY_${health.name}）；" +
@@ -681,6 +684,8 @@ internal class TvBoxSpiderBridge(context: Context) {
                         }
                     } else ready
                 } else ready
+            } catch (cancel: CancellationException) {
+                throw cancel
             } catch (error: Exception) {
                 PlaybackResult.Unavailable("Spider 播放信息无效：" + SpiderFailureDetails.message(error))
             }

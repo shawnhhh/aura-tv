@@ -269,7 +269,7 @@ private fun AuthorizedPlaybackSession(
     // Use one deadline per buffering interval, independent of UI/tracks updates.
     LaunchedEffect(player, playbackState, playbackForeground) {
         if (playbackForeground && playbackState == Player.STATE_BUFFERING) {
-            delay(30_000L)
+            delay(15_000L)
             if (!player.isReleased && player.playbackState == Player.STATE_BUFFERING)
                 onLoadTimeout?.invoke()
         }
