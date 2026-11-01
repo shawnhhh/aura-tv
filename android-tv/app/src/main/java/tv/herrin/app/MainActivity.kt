@@ -742,16 +742,22 @@ private fun Herrin() {
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
     var metadataRescanEpoch by remember { mutableIntStateOf(0) }
     var tmdbConnectivity by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED) }
-    LaunchedEffect(metadataToken) {
+    var tmdbProbeMessage by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED.text) }
+    // Must not be tied to metadataRescanEpoch: a successful probe increments
+    // that epoch, which otherwise causes an endless configuration/search loop.
+    var tmdbProbeEpoch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(metadataToken, tmdbProbeEpoch) {
         tmdbConnectivity = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
             else TmdbProbeState.CHECKING
-        val result = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
-            else withContext(Dispatchers.IO) { TmdbConnectivityProbe.check(metadataToken) }
-        tmdbConnectivity = result
-        if (result == TmdbProbeState.CONNECTED) {
+        tmdbProbeMessage = tmdbConnectivity.text
+        val report = if (metadataToken.isBlank())
+            TmdbProbeReport(TmdbProbeState.NOT_CONFIGURED)
+        else withContext(Dispatchers.IO) { TmdbConnectivityProbe.checkDetailed(metadataToken) }
+        tmdbConnectivity = report.state
+        tmdbProbeMessage = report.text
+        if (report.state == TmdbProbeState.CONNECTED) {
             metadataResolver.clearAuthCooldown(metadataToken)
-            // First scan can have been skipped while a previous 401 cooldown
-            // was active. One verified rescan avoids a misleading 20/20 zero.
+            // Only a successful configuration AND search probe starts scanning.
             metadataRescanEpoch++
         }
     }
@@ -2421,6 +2427,7 @@ private fun Herrin() {
                                         metadataToken = value
                                         clearTmdbInput()
                                         metadataRescanEpoch++
+                                        tmdbProbeEpoch++
                                         tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
@@ -2431,6 +2438,7 @@ private fun Herrin() {
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataRescanEpoch++
+                                        tmdbProbeEpoch++
                                         tmdbSettingsStatus = "正在重新匹配当前影视点的元数据"
                                     } else tmdbSettingsStatus = "请先配置 TMDB Token"
                                 }
@@ -2438,7 +2446,7 @@ private fun Herrin() {
                             item { Text(tmdbSettingsStatus, color = Color(0xFFCFD7E4),
                                 modifier = Modifier.testTag("compact-tmdb-feedback")) }
                             if (metadataToken.isNotBlank()) item {
-                                Text(tmdbConnectivity.text,
+                                Text(tmdbProbeMessage,
                                     modifier = Modifier.testTag("compact-tmdb-connectivity"),
                                     color = if (tmdbConnectivity == TmdbProbeState.CONNECTED)
                                         Color(0xFFB3E8D2) else Color(0xFFFFD49D))
@@ -2789,6 +2797,7 @@ private fun Herrin() {
                                     metadataToken = value
                                     clearTmdbInput()
                                     metadataRescanEpoch++
+                                    tmdbProbeEpoch++
                                     tmdbSettingsStatus = "已保存；正在重新匹配海报与影视资料"
                                 } else tmdbSettingsStatus = "请输入完整的 TMDB API Read Access Token"
                             }
