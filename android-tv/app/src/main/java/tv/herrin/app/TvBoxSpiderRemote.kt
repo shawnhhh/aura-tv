@@ -640,8 +640,8 @@ internal class TvBoxSpiderBridge(context: Context) {
             is SpiderResult.Ready -> try {
                 val ready = SpiderIpc.readPlayback(response.value, allowHttp)
                 if (ready is PlaybackResult.Ready && SpiderProxyPlayback.isCatVodProxy(ready.media.uri)) {
-                    val alive = SpiderProxyPlayback.ping(ready.media.uri)
-                    if (!alive) {
+                    val health = SpiderProxyPlayback.diagnose(ready.media.uri)
+                    if (health != SpiderProxyPlayback.Health.READY) {
                         // The remote process can die between returning playerContent
                         // and the Media3 connection. Explicitly invalidate its
                         // bound session and retry at most once from the last
@@ -651,14 +651,18 @@ internal class TvBoxSpiderBridge(context: Context) {
                         }
                         when (val retried = request(SpiderIpc.PLAY, payload)) {
                             is SpiderResult.Failure -> PlaybackResult.Unavailable(
-                                "本机 Spider 代理已退出，重建站点失败：" + retried.message)
+                                "本机 Spider 代理重连失败（PROXY_${health.name}）；" +
+                                    retried.message)
                             is SpiderResult.Ready -> {
                                 val fixed = SpiderIpc.readPlayback(retried.value, allowHttp)
                                 if (fixed is PlaybackResult.Ready &&
-                                    SpiderProxyPlayback.isCatVodProxy(fixed.media.uri) &&
-                                    !SpiderProxyPlayback.ping(fixed.media.uri))
-                                    PlaybackResult.Unavailable("本机 Spider 播放代理无法启动，请重新应用影视站点")
-                                else fixed
+                                    SpiderProxyPlayback.isCatVodProxy(fixed.media.uri)) {
+                                    val retriedHealth = SpiderProxyPlayback.diagnose(fixed.media.uri)
+                                    if (retriedHealth != SpiderProxyPlayback.Health.READY)
+                                        PlaybackResult.Unavailable(
+                                            "本机 Spider 播放代理无法启动（PROXY_${retriedHealth.name}），请重新应用影视站点")
+                                    else fixed
+                                } else fixed
                             }
                         }
                     } else ready
