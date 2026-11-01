@@ -30,6 +30,8 @@ jobs:
         run: python3 scripts/check_static.py
       - name: Native integration boundary regression (offline)
         run: python3 -m unittest discover -s ../scripts/m467 -p 'test_verify_native_kit.py' -v
+      - name: Native candidate build script syntax (offline)
+        run: bash -n ../scripts/m467/build_native_candidates.sh
       - name: Install Android SDK
         run: |
           sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
