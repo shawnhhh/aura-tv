@@ -210,14 +210,26 @@ class SpiderLocalProxyPlaybackTest {
             val unsafe = listOf(
                 "proxy://do=jar&siteKey=other-site&part=x",
                 "proxy://do=external&siteKey=current-site",
-                "proxy://part=x&part=y",
-                "proxy://url=http://attacker.example"
+                "proxy://part=x&part=y"
             )
             for (url in unsafe) {
                 assertNull("Must not rewrite unsafe proxy alias: $url",
                     SpiderProxyPlayback.normalizePlayerResponse(
                         JSONObject().put("url", url).toString(), "current-site", proxy))
             }
+            // An absolute URL may be a *parameter for the authorized Spider's*
+            // static handler. It must never become a direct open HTTP proxy.
+            val delegated = SpiderProxyPlayback.normalizePlayerResponse(
+                JSONObject().put("url",
+                    "proxy://url=http://example.invalid/movie.mkv").toString(),
+                "current-site", proxy)
+            assertNotNull(delegated)
+            val delegatedUrl = JSONObject(delegated!!).getString("url")
+            val parsed = java.net.URI(delegatedUrl)
+            assertEquals("127.0.0.1", parsed.host)
+            assertEquals(proxy.port, parsed.port)
+            assertTrue(delegatedUrl.contains("__herrin_static=1"))
+            assertTrue(delegatedUrl.contains("url=http%3A%2F%2Fexample.invalid%2Fmovie.mkv"))
             val rawNested = JSONObject().put("url",
                 "proxy://do=jar&siteKey=current-site&url=https://example.org/media.mkv")
             val converted = SpiderProxyPlayback.normalizePlayerResponse(
