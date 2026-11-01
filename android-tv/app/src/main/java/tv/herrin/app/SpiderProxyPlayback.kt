@@ -63,12 +63,19 @@ internal object SpiderProxyPlayback {
             return null
         if (parameters["do"].let { it != null && it != "jar" }) return null
         if (parameters["siteKey"].let { it != null && it != siteKey }) return null
+        if (parameters.containsKey("__herrin_static")) return null
         if (parameters.size !in 0..24) return null
+        // FongMi's Java JAR convention routes proxy:// without siteKey
+        // through the static com.github.catvod.spider.Proxy.proxy(Map).
+        // For regular Spider.getProxyUrl() URLs siteKey is always present.
+        val useStatic = legacy && !parameters.containsKey("siteKey")
         val extra = parameters.entries.filterNot { it.key in setOf("session", "do", "siteKey") }
             .joinToString("&") { (k, v) ->
                 URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
             }
-        return proxy.url + if (extra.isEmpty()) "" else "&$extra"
+        return proxy.url +
+            (if (useStatic) "&__herrin_static=1" else "") +
+            (if (extra.isEmpty()) "" else "&$extra")
     }
 
     /**
