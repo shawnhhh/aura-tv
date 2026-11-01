@@ -39,6 +39,7 @@ internal object SpiderIpc {
     const val BROWSE = 1
     const val DETAILS = 2
     const val PLAY = 3
+    const val PROXY_SELF_TEST = 20
     const val AUTH_SHOW = 10
     const val AUTH_ACTION = 11
     const val AUTH_CLOSE = 12
@@ -228,6 +229,8 @@ class TvBoxSpiderService : Service() {
     private val lock = Mutex()
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
     private val worker by lazy { TvBoxSpiderWorker(applicationContext) }
+    // Debug-only smoke fixture, never registered as a user-configurable source.
+    private var proxySelfTest: SpiderLoopbackProxy? = null
     @Volatile private var authCaller: Pair<Messenger, Int>? = null
     private val authorization = SpiderAuthorizationSession { dialogId, payload ->
         authCaller?.let { (caller, operationId) ->
@@ -292,6 +295,18 @@ class TvBoxSpiderService : Service() {
                                         .put("film", SpiderIpc.film(result.value))
                                     is SpiderResult.Failure -> SpiderIpc.error(result.message)
                                 }
+                            }
+                            SpiderIpc.PROXY_SELF_TEST -> {
+                                check((applicationInfo.flags and
+                                    android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                                    "Proxy smoke endpoint disabled in production"
+                                }
+                                val active = proxySelfTest ?: SpiderLoopbackProxy("ci-proxy") {
+                                    arrayOf(200, "video/mp4",
+                                        java.io.ByteArrayInputStream(byteArrayOf(8, 9, 10)))
+                                }.also { proxySelfTest = it }
+                                JSONObject().put("ok", true)
+                                    .put("uri", active.url + "&part=probe")
                             }
                             SpiderIpc.PLAY -> {
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
@@ -364,6 +379,8 @@ class TvBoxSpiderService : Service() {
     override fun onDestroy() {
         authorization.cancel()
         CatVodRuntime.setDialog(null)
+        proxySelfTest?.close()
+        proxySelfTest = null
         scope.cancel()
         // A plugin's destroy can also hang; the deadline runs off the main looper.
         val terminate = watchdog.schedule({
@@ -651,6 +668,12 @@ internal class TvBoxSpiderBridge(context: Context) {
             }
         }
     }
+
+    internal suspend fun probeRemoteProxyForInstrumentation(): SpiderResult<String> =
+        when (val result = sendRequest(SpiderIpc.PROXY_SELF_TEST, JSONObject())) {
+            is SpiderResult.Failure -> result
+            is SpiderResult.Ready -> SpiderResult.Ready(result.value.optString("uri"))
+        }
 
     fun close() {
         Handler(Looper.getMainLooper()).post {
