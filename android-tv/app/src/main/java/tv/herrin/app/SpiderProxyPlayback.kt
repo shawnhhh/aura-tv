@@ -141,12 +141,13 @@ internal object SpiderProxyPlayback {
             val tail = raw.substring(8).removePrefix("?")
             if (tail.startsWith('/') || tail.contains('#')) return "INVALID_ALIAS"
             if (tail.length > MAX_URL) return "QUERY_TOO_LONG"
-            query(tail)
+            runCatching { query(tail) }.getOrElse { return "INVALID_QUERY" }
         } else {
             val u = runCatching { URI(raw) }.getOrNull() ?: return "MALFORMED_URI"
             if (!local(u)) return "NOT_LOCAL_PROXY"
             if (u.path != "/proxy") return "NOT_PROXY_PATH"
-            query(proxy.compatibleQuery(u.rawQuery))
+            runCatching { query(proxy.compatibleQuery(u.rawQuery)) }
+                .getOrElse { return "INVALID_QUERY" }
         }
         if (args.isEmpty() && !legacy) return "INVALID_QUERY"
         if (args["do"] != null && args["do"] != "jar") return "UNSUPPORTED_OPERATION"
