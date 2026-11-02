@@ -272,11 +272,11 @@ class HerrinUiSmokeTest {
         }
         capture("poster-cross-rail-vertical-focus")
     }
-    @Test fun centeredHeaderHasExactlyEightTabsPlusSearchAndRightOnlyGear() {
+    @Test fun centeredHeaderHasNineTabsIncludingMyBetweenLiveAndSearchWithRightOnlyGear() {
         val expected = listOf("首页", "电影", "剧集", "动漫", "综艺",
-            "纪录片", "Top 250", "直播")
+            "纪录片", "Top 250", "直播", "我的")
         expected.forEach { compose.onNodeWithTag("nav-$it").assertIsDisplayed() }
-        for (removed in listOf("科幻", "动作", "悬疑", "喜剧", "我的"))
+        for (removed in listOf("科幻", "动作", "悬疑", "喜剧"))
             compose.onNodeWithTag("nav-$removed").assertDoesNotExist()
         compose.onNodeWithTag("search").assertIsDisplayed()
         compose.onNodeWithTag("settings").assertIsDisplayed()
@@ -288,6 +288,38 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("search").assertIsFocused()
         capture("m469-real-header-centered-search-right-gear")
     }
+    @Test fun myTabAfterLiveOpensRealPersonalShelfWithEmptyState() {
+        focus("nav-直播")
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("nav-我的").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("my-library-heading").assertIsDisplayed()
+        compose.onNodeWithTag("my-library-empty").assertIsDisplayed()
+        compose.onNodeWithText("继续观看与收藏 · 0 部").assertIsDisplayed()
+        focus("nav-我的")
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("search").assertIsFocused()
+        // Focus traversal preserves user-requested visual ordering.
+        val live = compose.onNodeWithTag("nav-直播").fetchSemanticsNode().boundsInRoot
+        val mine = compose.onNodeWithTag("nav-我的").fetchSemanticsNode().boundsInRoot
+        val search = compose.onNodeWithTag("search").fetchSemanticsNode().boundsInRoot
+        assertTrue("我的 must be physically between 直播 and Search",
+            live.right <= mine.left && mine.right <= search.left)
+        capture("m473-my-between-live-and-search")
+    }
+
+    @Test fun top250WithoutTmdbTokenExplainsEmptyListAndProvidesRetry() {
+        focus("nav-Top 250")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("top250-heading").assertIsDisplayed()
+        compose.onNodeWithTag("top250-network-status").assertIsDisplayed()
+        compose.onNodeWithTag("top250-retry").assertIsDisplayed()
+        compose.onNodeWithTag("top250-token-settings").assertIsDisplayed()
+        // The top-ranked grid must never silently fall back to demo films.
+        compose.onNodeWithTag("card-orbit").assertDoesNotExist()
+        capture("m473-top250-no-token-diagnostic")
+    }
+
     @Test fun cinematicNavigationKeepsSearchInsideGlassRailAndGearSeparate() {
         val rail = compose.onNodeWithTag("nav-shell").fetchSemanticsNode().boundsInRoot
         val searchButton = compose.onNodeWithTag("search").fetchSemanticsNode().boundsInRoot
