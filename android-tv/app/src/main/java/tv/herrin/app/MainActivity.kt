@@ -901,7 +901,7 @@ private fun Herrin() {
         val cloudUrl = prefs.cloudWebDavUrl
         val allowNasHttp = prefs.nasAllowHttp
         val allowCloudHttp = prefs.cloudAllowHttp
-        val (lookup, sources) = withContext(Dispatchers.IO) {
+        val (verified, sources) = withContext(Dispatchers.IO) {
             val adapters = mutableListOf<HerrinFilmSource>()
             for ((slot, url, insecure, kind) in listOf(
                 listOf("nas", nasUrl, allowNasHttp.toString(), "NAS"),
@@ -936,8 +936,29 @@ private fun Herrin() {
             approvedSpiderSite?.let { site ->
                 adapters += HerrinTvBoxSpiderSource(site, spiderBridge)
             }
-            HerrinFilmRouter(adapters).find(searchIdentity) to adapters
+            val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
+            val remotes = adapters.associateBy { it.id }
+            val resolved = HerrinVerifiedSourceResolver(adapters).find(
+                searchIdentity,
+                personalPlayback = { offer ->
+                    personals[offer.sourceId]?.playback(offer)
+                        ?: PlaybackResult.Unavailable("该个人媒体来源未授权")
+                },
+                remoteDetails = { offer ->
+                    withTimeoutOrNull(4_000L) {
+                        when (val adapter = remotes[offer.sourceId]) {
+                            is HerrinTvBoxCmsSource ->
+                                (adapter.details(offer) as? TvBoxVodDetailResult.Ready)?.film
+                            is HerrinTvBoxSpiderSource ->
+                                (adapter.details(offer) as? SpiderResult.Ready)?.value
+                            else -> null
+                        }
+                    }
+                }
+            )
+            resolved to adapters
         }
+        val lookup = verified.lookup
         val found = lookup.options.firstOrNull()
         if (found == null) {
             tmdbSourceStatus = "NAS／云盘／已接入 CMS 中未找到可信匹配的片源；影片资料仍可浏览"
@@ -945,14 +966,9 @@ private fun Herrin() {
         }
         when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
             is HerrinWebDavSource -> {
-                val personalSources = sources.filterIsInstance<HerrinWebDavSource>()
-                    .associateBy { it.id }
-                val playlist = HerrinPersonalPlaylistBuilder.create(lookup.options) { offer ->
-                    personalSources[offer.sourceId]?.playback(offer)
-                        ?: PlaybackResult.Unavailable("该媒体来源已失效")
-                }
-                if (playlist.episodes.isEmpty()) {
-                    tmdbSourceStatus = "找到个人媒体，但对应 URL 无法生成授权播放地址"
+                val playlist = verified.personalPlaylist
+                if (playlist == null || playlist.episodes.isEmpty()) {
+                    tmdbSourceStatus = "个人媒体没有可用的授权播放线路，已尝试其他来源"
                     return@LaunchedEffect
                 }
                 tmdbPersonalPlayback[targetId] = playlist.mediaByLine
@@ -965,48 +981,36 @@ private fun Herrin() {
                 tmdbSourceStatus = "已找到 ${playlist.episodes.size} 组个人媒体选集、${playlist.mediaByLine.size} 条可选清晰度线路"
             }
             is HerrinTvBoxSpiderSource -> {
-                tmdbSourceStatus = "NAS／云盘无匹配，已在用户授权 Spider 中找到对应影片，正在读集数…"
-                when (val detailed = adapter.details(found)) {
-                    is SpiderResult.Ready -> {
-                        if (detailed.value.playbackEpisodes.isEmpty()) {
-                            tmdbSourceStatus = "Spider 找到影片，但没有返回可用选集"
-                            return@LaunchedEffect
-                        }
-                        tmdbPersonalPlayback.remove(targetId)
-                        activeCmsSite = null
-                        spiderActive = true
-                        tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
-                            spiderVodId = detailed.value.spiderVodId,
-                            playbackEpisodes = detailed.value.playbackEpisodes,
-                            episodes = maxOf(1, detailed.value.playbackEpisodes.size)
-                        )
-                        tmdbSourceStatus = "已匹配已授权的 Spider 影视点：${adapter.site.name}"
-                    }
-                    is SpiderResult.Failure -> tmdbSourceStatus =
-                        "Spider 找到影片但读取播放线路失败：${detailed.message.take(90)}"
+                val detailed = verified.sourceDetails
+                if (detailed == null || detailed.playbackEpisodes.isEmpty()) {
+                    tmdbSourceStatus = "Spider 搜索完成，但没有可用选集"
+                    return@LaunchedEffect
                 }
+                tmdbPersonalPlayback.remove(targetId)
+                activeCmsSite = null
+                spiderActive = true
+                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                    spiderVodId = detailed.spiderVodId,
+                    playbackEpisodes = detailed.playbackEpisodes,
+                    episodes = maxOf(1, detailed.playbackEpisodes.size)
+                )
+                tmdbSourceStatus = "已匹配已授权的 Spider 影视点：${adapter.site.name}"
             }
             is HerrinTvBoxCmsSource -> {
-                tmdbSourceStatus = "个人媒体未找到；正在读取 TVBox 对应作品的实际选集…"
-                when (val detailed = adapter.details(found)) {
-                    is TvBoxVodDetailResult.Ready -> {
-                        if (detailed.film.playbackEpisodes.isEmpty()) {
-                            tmdbSourceStatus = "TVBox 返回影片但没有可解析选集"
-                            return@LaunchedEffect
-                        }
-                        tmdbPersonalPlayback.remove(targetId)
-                        activeCmsSite = adapter.site
-                        spiderActive = false
-                        tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
-                            cmsVodId = detailed.film.cmsVodId,
-                            playbackEpisodes = detailed.film.playbackEpisodes,
-                            episodes = maxOf(1, detailed.film.playbackEpisodes.size)
-                        )
-                        tmdbSourceStatus = "已匹配 TVBox ${adapter.site.name} · ${detailed.film.playbackEpisodes.size} 集"
-                    }
-                    is TvBoxVodDetailResult.Error ->
-                        tmdbSourceStatus = "TVBox 找到同名作品，但读取实际线路失败：${detailed.reason}"
+                val detailed = verified.sourceDetails
+                if (detailed == null || detailed.playbackEpisodes.isEmpty()) {
+                    tmdbSourceStatus = "TVBox 搜索完成，但没有可用选集"
+                    return@LaunchedEffect
                 }
+                tmdbPersonalPlayback.remove(targetId)
+                activeCmsSite = adapter.site
+                spiderActive = false
+                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                    cmsVodId = detailed.cmsVodId,
+                    playbackEpisodes = detailed.playbackEpisodes,
+                    episodes = maxOf(1, detailed.playbackEpisodes.size)
+                )
+                tmdbSourceStatus = "已匹配 TVBox ${adapter.site.name} · ${detailed.playbackEpisodes.size} 集"
             }
             else -> tmdbSourceStatus = "影视源没有返回可用于当前播放器的授权线路"
         }
