@@ -26,12 +26,31 @@ internal object HerrinPersonalPlaylistBuilder {
         }.toSortedMap(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
         else mapOf((1 to 1) to valid)
         val urls = linkedMapOf<String, PlaybackMedia>()
+        // Alternate video files are safe for automatic retry only when they
+        // belong to the same authorized source and exact HTTP origin/headers.
+        // Never replay a NAS/Cloud Authorization header to another provider.
+        fun sameOrigin(first: String, second: String): Boolean = runCatching {
+            val a = java.net.URI(first)
+            val b = java.net.URI(second)
+            a.scheme.equals(b.scheme, true) &&
+                a.host != null && a.host.equals(b.host, true) && a.port == b.port &&
+                a.rawUserInfo == null && b.rawUserInfo == null
+        }.getOrDefault(false)
         var count = 0
         val episodes = groups.entries.take(150).map { (coordinate, entries) ->
             val ordinal = ++count
             val lines = entries.take(12).mapIndexed { index, (offer, media) ->
                 val id = "personal-$ordinal-$index"
-                urls[id] = media
+                val fallbacks = entries.filter { other ->
+                    other.first.sourceId == offer.sourceId &&
+                        other.second.headers == media.headers &&
+                        other.second.allowHttpRedirects == media.allowHttpRedirects &&
+                        sameOrigin(media.uri, other.second.uri) &&
+                        other.second.uri != media.uri
+                }.map { it.second.uri }.distinct().take(5)
+                urls[id] = media.copy(alternateUris = (media.alternateUris.filter {
+                    sameOrigin(media.uri, it)
+                } + fallbacks).distinct().take(5))
                 val quality = offer.resolutionClaim?.let { if (it >= 2160) "4K" else it.toString() + "p" }
                     ?: "原画"
                 val hdr = if (offer.hdrClaim) " HDR（源标称）" else ""
