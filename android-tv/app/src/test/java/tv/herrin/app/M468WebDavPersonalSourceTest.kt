@@ -108,6 +108,27 @@ class M468WebDavPersonalSourceTest {
         }
     }
 
+    @Test fun webdavRejectsDoctypeEntitiesWithoutReadingLocalFilesOrFollowingExternalUrls() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(207)
+                .setHeader("Content-Type", "application/xml")
+                .setBody("""<!DOCTYPE d:multistatus [
+                    <!ENTITY secret SYSTEM "file:///etc/passwd">
+                  ]><d:multistatus xmlns:d="DAV:"><d:response>
+                  <d:href>/dav/Interstellar.2014.1080p.mp4</d:href>
+                  <d:propstat><d:prop><d:resourcetype/></d:prop></d:propstat>
+                  <d:displayname>&secret;</d:displayname>
+                  </d:response></d:multistatus>""".trimIndent()))
+            server.start()
+            val source = HerrinWebDavSource(HerrinWebDavAccount(
+                "NAS", server.url("/dav/").toString(), allowInsecureHttp = true))
+            val results = source.search(HerrinFilmIdentity(
+                157336, "movie", listOf("Interstellar"), 2014))
+            assertTrue("DTD and external entities must be rejected, not expanded", results.isEmpty())
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test fun webdavRequiresExplicitInsecureHttpApproval() {
         MockWebServer().use { server ->
             server.start()

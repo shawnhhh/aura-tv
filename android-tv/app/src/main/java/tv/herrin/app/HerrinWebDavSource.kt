@@ -170,16 +170,31 @@ internal class HerrinWebDavSource(
                 if (output.size() + n > 262144) return emptyList()
                 output.write(buffer, 0, n)
             }
+            // Android's platform DOM parser does not implement every Xerces
+            // setFeature URI. Refusing ALL declarations before DOM parsing
+            // makes the conservative parser policy work on Android TV as well
+            // as desktop JVM without silently treating valid DAV as empty.
+            val xmlText = output.toString(Charsets.UTF_8.name())
+            if (Regex("""<!\\s*(?:DOCTYPE|ENTITY)\\b""", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(xmlText)) return emptyList()
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
-            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            factory.isXIncludeAware = false
+            // Some Android API levels throw ParserConfigurationException for
+            // Xerces security features. DTDs are already refused above.
+            runCatching { factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
+            runCatching {
+                factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            }
+            runCatching {
+                factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+            }
+            runCatching {
+                factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            }
+            runCatching { factory.isXIncludeAware = false }
             factory.setExpandEntityReferences(false)
             val document = factory.newDocumentBuilder()
-                .parse(InputSource(StringReader(output.toString(Charsets.UTF_8.name()))))
+                .parse(InputSource(StringReader(xmlText)))
             val results = document.getElementsByTagNameNS("DAV:", "response")
             return (0 until minOf(250, results.length)).mapNotNull { index ->
                 val element = results.item(index) as? Element ?: return@mapNotNull null
