@@ -843,6 +843,93 @@ private fun Herrin() {
             else "TMDB 高分榜只加载了 ${shelf.films.size} 部；可稍后重试"
         }
     }
+    // A TMDB detail starts a REAL per-title resource lookup. This never uses
+    // the scraped poster/title as an executable source or auto-plays a video.
+    LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle) {
+        if (screen != "detail" || !filmId.startsWith("tmdb-") ||
+            tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true) return@LaunchedEffect
+        val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
+            ?: return@LaunchedEffect
+        val tmdbKey = tmdbDiscovery.identity(tmdbFilm) ?: return@LaunchedEffect
+        val targetId = tmdbFilm.id
+        val searchIdentity = HerrinFilmIdentity(
+            tmdbKey.second, tmdbKey.first,
+            listOf(tmdbFilm.title, tmdbFilm.subtitle).filter(String::isNotBlank),
+            tmdbFilm.year.toIntOrNull()
+        )
+        tmdbSourceStatus = "正在优先检索 NAS／云盘的对应影片…"
+        val currentTvbox = tvBoxSingle
+        val nasUrl = prefs.nasWebDavUrl
+        val cloudUrl = prefs.cloudWebDavUrl
+        val allowNasHttp = prefs.nasAllowHttp
+        val allowCloudHttp = prefs.cloudAllowHttp
+        val (lookup, sources) = withContext(Dispatchers.IO) {
+            val adapters = mutableListOf<HerrinFilmSource>()
+            for ((slot, url, insecure, kind) in listOf(
+                listOf("nas", nasUrl, allowNasHttp.toString(), "NAS"),
+                listOf("cloud", cloudUrl, allowCloudHttp.toString(), "CLOUD")
+            )) {
+                if (url.isBlank()) continue
+                val login = HerrinPersonalCredentialStore(context, slot).load()
+                val account = HerrinWebDavAccount(
+                    if (slot == "nas") "NAS" else "云盘", url,
+                    login.first, login.second,
+                    if (kind == "NAS") HerrinSourceType.NAS else HerrinSourceType.CLOUD,
+                    insecure.toBoolean()
+                )
+                runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
+            }
+            currentTvbox?.sites?.asSequence()?.filter { it.apiUrl != null }
+                ?.take(8)?.forEach { site ->
+                    adapters += HerrinTvBoxCmsSource(site, tvBoxVodRepo, tvBoxAllowHttp)
+                }
+            HerrinFilmRouter(adapters).find(searchIdentity) to adapters
+        }
+        val found = lookup.options.firstOrNull()
+        if (found == null) {
+            tmdbSourceStatus = "NAS／云盘／已接入 CMS 中未找到可信匹配的片源；影片资料仍可浏览"
+            return@LaunchedEffect
+        }
+        when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
+            is HerrinWebDavSource -> {
+                val playback = adapter.playback(found) as? PlaybackResult.Ready
+                if (playback == null) {
+                    tmdbSourceStatus = "找到个人媒体，但该文件无法生成授权播放地址"
+                    return@LaunchedEffect
+                }
+                tmdbPersonalPlayback[targetId] = playback.media
+                tmdbResolved[targetId] = tmdbFilm.copy(
+                    playbackEpisodes = found.film.playbackEpisodes,
+                    episodes = maxOf(1, found.film.playbackEpisodes.size)
+                )
+                spiderActive = false
+                tmdbSourceStatus = "已优先匹配 ${if (found.sourceType == HerrinSourceType.NAS) "NAS" else "云盘"} 文件；请选择播放"
+            }
+            is HerrinTvBoxCmsSource -> {
+                tmdbSourceStatus = "个人媒体未找到；正在读取 TVBox 对应作品的实际选集…"
+                when (val detailed = adapter.details(found)) {
+                    is TvBoxVodDetailResult.Ready -> {
+                        if (detailed.film.playbackEpisodes.isEmpty()) {
+                            tmdbSourceStatus = "TVBox 返回影片但没有可解析选集"
+                            return@LaunchedEffect
+                        }
+                        tmdbPersonalPlayback.remove(targetId)
+                        activeCmsSite = adapter.site
+                        spiderActive = false
+                        tmdbResolved[targetId] = tmdbFilm.copy(
+                            cmsVodId = detailed.film.cmsVodId,
+                            playbackEpisodes = detailed.film.playbackEpisodes,
+                            episodes = maxOf(1, detailed.film.playbackEpisodes.size)
+                        )
+                        tmdbSourceStatus = "已匹配 TVBox ${adapter.site.name} · ${detailed.film.playbackEpisodes.size} 集"
+                    }
+                    is TvBoxVodDetailResult.Error ->
+                        tmdbSourceStatus = "TVBox 找到同名作品，但读取实际线路失败：${detailed.reason}"
+                }
+            }
+            else -> tmdbSourceStatus = "影视源没有返回可用于当前播放器的授权线路"
+        }
+    }
     // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
     val catalogIdentity = remember(providerFilms) {
         providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
@@ -2270,7 +2357,10 @@ private fun Herrin() {
                     CmsBrowserPlayback(cmsLine.uri, cmsBrowserParser, tvBoxAllowHttp, playerRetryEpoch)
                 else null
                 val cmsParseWaiting = (cmsJsonParser != null || cmsBrowserParser != null) && parsedCms == null
-                val licensed = if (spiderActive && screen == "player") spiderResolved
+                val personalMedia = if (screen == "player")
+                    tmdbPersonalPlayback[film.id] else null
+                val licensed = if (personalMedia != null) PlaybackResult.Ready(personalMedia)
+                    else if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
                             if (cmsJsonParser != null || cmsBrowserParser != null) parsedCms
@@ -3032,7 +3122,9 @@ private fun Herrin() {
                     }
                     fun androidx.compose.foundation.lazy.LazyListScope.renderDetailItems() {
                         item { Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                            Text(if (screen == "player" && !spiderActive) "播放演示"
+                            Text(if (screen == "player" && !spiderActive && film.id.startsWith("tmdb-") &&
+                                    film.playbackEpisodes.isEmpty()) "片源搜索"
+                                else if (screen == "player" && !spiderActive && !film.id.startsWith("tmdb-")) "播放演示"
                                 else if (screen == "detail") displayFilm.title else film.title,
                                 fontSize = 38.sp, fontWeight = FontWeight.Bold)
                             Text(buildString {
@@ -3059,6 +3151,11 @@ private fun Herrin() {
                                     modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
                                     color = Color(0xFFE1E8F2))
                             } }
+                        if (film.id.startsWith("tmdb-") && screen == "detail") item {
+                            Text(tmdbSourceStatus.ifBlank { "请选择影片后自动搜索已配置的 NAS、云盘、TVBox" },
+                                modifier = Modifier.testTag("tmdb-source-lookup-status"),
+                                color = Color(0xFFCFD7E4), fontSize = 14.sp)
+                        }
                         if (showGroup != null && screen == "detail") item {
                             Text("多季整合 · 当前目录 ${showGroup.members.size} 个原始条目 · 播放仍使用原影视点",
                                 modifier = Modifier.testTag("group-detail-members"),
