@@ -51,6 +51,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
@@ -185,7 +190,63 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
     }
 }
 
-/** Compact D-pad navigation: focused pill alone marks the active target. */
+/** Icon-only TV actions with accessible labels and the original instant white D-pad focus. */
+@Composable
+private fun TvHeaderIconButton(
+    gear: Boolean, modifier: Modifier = Modifier, reduced: Boolean = false,
+    selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(23.dp)
+    val focusScale by animateFloatAsState(if (focused && !reduced) 1.04f else 1f,
+        if (reduced) snap() else spring(dampingRatio = 0.89f, stiffness = 760f),
+        label = "header-icon-focus")
+    val foreground = if (focused) Color(0xFF111318) else Color.White
+    val label = if (gear) "设置" else "搜索"
+    Box(modifier.size(39.dp).graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+        .semantics { contentDescription = label }
+        .onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) onFocus()
+        }
+        .border(if (focused) 2.dp else if (selected) 1.dp else 0.dp,
+            if (focused) Color.White else if (selected) Color(0xFF7C9BBC) else Color.Transparent, shape)
+        .clip(shape)
+        .background(if (focused) Color.White else if (selected) Color(0xFF344B68) else Color.Transparent)
+        .clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(19.dp)) {
+            val dimension = size.minDimension
+            val centerAt = Offset(dimension / 2f, dimension / 2f)
+            if (!gear) {
+                drawCircle(foreground, radius = dimension * 0.29f,
+                    center = Offset(dimension * 0.41f, dimension * 0.41f),
+                    style = Stroke(width = dimension * 0.105f))
+                drawLine(foreground,
+                    Offset(dimension * 0.64f, dimension * 0.64f),
+                    Offset(dimension * 0.92f, dimension * 0.92f),
+                    strokeWidth = dimension * 0.13f, cap = StrokeCap.Round)
+            } else {
+                drawCircle(foreground, radius = dimension * 0.29f, center = centerAt,
+                    style = Stroke(width = dimension * 0.12f))
+                drawCircle(foreground, radius = dimension * 0.095f, center = centerAt,
+                    style = Stroke(width = dimension * 0.10f))
+                for (index in 0 until 8) {
+                    val angle = (index * kotlin.math.PI / 4).toFloat()
+                    val ux = kotlin.math.cos(angle)
+                    val uy = kotlin.math.sin(angle)
+                    drawLine(foreground,
+                        Offset(centerAt.x + ux * dimension * 0.35f,
+                            centerAt.y + uy * dimension * 0.35f),
+                        Offset(centerAt.x + ux * dimension * 0.47f,
+                            centerAt.y + uy * dimension * 0.47f),
+                        strokeWidth = dimension * 0.14f, cap = StrokeCap.Round)
+                }
+            }
+        }
+    }
+}
+
+/** Eight text tabs plus the search icon form one *centered* navigation group. */
 @Composable
 private fun TvNavTabs(
     category: String,
@@ -195,17 +256,21 @@ private fun TvNavTabs(
     downTarget: FocusRequester?,
     requester: (String) -> FocusRequester,
     onFocus: (String) -> Unit,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
+    onSearch: () -> Unit
 ) {
-    val categories = remember { listOf("首页", "电影", "剧集", "动漫", "科幻", "动作", "悬疑", "喜剧", "综艺", "纪录片", "Top 250", "直播", "我的") }
+    val categories = remember {
+        listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播")
+    }
     Row(
         Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
             .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
             .padding(horizontal = 5.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         categories.forEach { cat ->
-            TvButton(cat,
+            TvButton(if (cat == "Top 250") "Top250" else cat,
                 Modifier.testTag("nav-$cat")
                     .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
                         else Modifier)
@@ -214,6 +279,13 @@ private fun TvNavTabs(
                 quiet = true, onFocus = { onFocus("nav-$cat") }
             ) { onSelect(cat) }
         }
+        TvHeaderIconButton(gear = false,
+            modifier = Modifier.testTag("search")
+                .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
+                    else Modifier)
+                .focusRequester(requester("search")),
+            reduced = reducedMotion, selected = isSearch,
+            onFocus = { onFocus("search") }, onClick = onSearch)
     }
 }
 
@@ -1943,45 +2015,45 @@ private fun Herrin() {
                     alpha = sceneReveal.value
                     translationY = (1f - sceneReveal.value) * sceneLift
                 }.verticalScroll(browseScroll).padding(horizontal = 40.dp, vertical = 14.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.size(34.dp).border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
+                    Box(Modifier.fillMaxWidth().heightIn(min = 51.dp)) {
+                        Row(Modifier.align(Alignment.CenterStart),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(Modifier.size(34.dp)
+                                .border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
                                 contentAlignment = Alignment.Center) {
-                                Text("H", fontSize = 21.sp, fontWeight = FontWeight.Light, color = Color.White)
+                                Text("H", fontSize = 21.sp, fontWeight = FontWeight.Light,
+                                    color = Color.White)
                             }
-                            Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
+                            Text("HERRIN", letterSpacing = 4.sp,
+                                fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+                                color = Color.White)
                         }
-                        TvNavTabs(category, isSearch, focusId, reduceMotion, headerDownTarget,
+                        Box(Modifier.align(Alignment.Center)) {
+                            TvNavTabs(category, isSearch, focusId, reduceMotion, headerDownTarget,
                             { id -> requester(id) },
-                            onFocus = { focusId = it }) { selected ->
-                            category = selected
-                            if (selected == "直播" && liveChannels.isNotEmpty()) {
-                                if (activeLiveChannel?.url !in liveChannels.map { it.url }) {
-                                    activeLiveChannel = liveChannels.first()
-                                }
-                                screen = "live-player"
-                            } else screen = "browse"
+                            onFocus = { focusId = it },
+                            onSelect = { selected ->
+                                category = selected
+                                if (selected == "直播" && liveChannels.isNotEmpty()) {
+                                    if (activeLiveChannel?.url !in liveChannels.map { it.url }) {
+                                        activeLiveChannel = liveChannels.first()
+                                    }
+                                    screen = "live-player"
+                                } else screen = "browse"
+                            },
+                            onSearch = { focusId = "search"; screen = "search" })
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TvButton("搜索", Modifier.testTag("search")
-                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
-                                .focusRequester(requester("search")), reduceMotion, quiet = true,
-                                onFocus = { focusId = "search" }) { screen = "search" }
-                            TvButton("筛选", Modifier.testTag("facets")
-                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
-                                .focusRequester(requester("facets")), reduceMotion, quiet = true,
-                                onFocus = { focusId = "facets" }) {
-                                facetsReturnScreen = screen
-                                focusId = "screen-first"
-                                screen = "facets"
-                            }
-                            TvButton("设置", Modifier.testTag("settings")
-                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
-                                .focusRequester(requester("settings")), reduceMotion,
-                                quiet = true, onFocus = { focusId = "settings" }) {
-                                settingsTvBoxOnly = true
-                                screen = "settings"
-                            }
+                        TvHeaderIconButton(gear = true,
+                            modifier = Modifier.align(Alignment.CenterEnd)
+                                .testTag("settings")
+                                .then(if (headerDownTarget != null)
+                                    Modifier.focusProperties { down = headerDownTarget }
+                                    else Modifier)
+                                .focusRequester(requester("settings")),
+                            reduced = reduceMotion, onFocus = { focusId = "settings" }) {
+                            settingsTvBoxOnly = true
+                            screen = "settings"
                         }
                     }
                     Spacer(Modifier.height(20.dp))
@@ -4070,19 +4142,27 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
             false
         }
         .clickable { RemoteTrace.event { "POSTER ${film.id} CLICK clickable" }; onClick() }) {
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().weight(1f).testTag("poster-image-${film.id}"),
-                contentAlignment = Alignment.Center) {
-                PosterArtwork(film, Modifier.fillMaxSize(), reduced)
-            }
-            Row(Modifier.fillMaxWidth().height(29.dp)
-                .background(Color(0xF0121822))
-                .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text(film.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
-                Text(film.year, fontSize = 10.sp, color = Color(0xFFD3D8E1), maxLines = 1)
-            }
+        // A single full-bleed image covers the entire card, including the
+        // area previously occupied by an opaque 29 dp metadata footer.
+        Box(Modifier.fillMaxSize().testTag("poster-image-${film.id}"),
+            contentAlignment = Alignment.Center) {
+            PosterArtwork(film, Modifier.fillMaxSize(), reduced)
+        }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(75.dp)
+            .background(Brush.verticalGradient(
+                0.0f to Color.Transparent,
+                0.40f to Color(0x66070C14),
+                1.0f to Color(0xF0080D16))))
+        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .padding(start = 10.dp, end = 10.dp,
+                bottom = if (progress != null) 9.dp else 7.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(film.title, Modifier.weight(1f).testTag("poster-title-${film.id}"),
+                fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                color = Color.White, maxLines = 1)
+            Text(film.year, Modifier.testTag("poster-year-${film.id}"),
+                fontSize = 10.sp, color = Color(0xFFE0E5EB), maxLines = 1)
         }
         if (progress != null) {
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)
