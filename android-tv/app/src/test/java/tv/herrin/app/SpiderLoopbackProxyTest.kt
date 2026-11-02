@@ -219,6 +219,71 @@ class SpiderLoopbackProxyTest {
         }
     }
 
+    @Test fun newerCatVodCspAliasRebasesToAuthenticatedApprovedJavaSpiderAndStreamsRealBytes() {
+        val calls = AtomicInteger()
+        val expected = byteArrayOf(0x47, 0x11, 0x22, 0x33)
+        SpiderLoopbackProxy("approved-csp") { params ->
+            calls.incrementAndGet()
+            assertEquals("jar", params["do"])
+            assertEquals("approved-csp", params["siteKey"])
+            assertEquals("part1", params["part"])
+            assertFalse(params.containsKey("session"))
+            arrayOf(200, "video/mp2t", ByteArrayInputStream(expected))
+        }.use { proxy ->
+            val oldPort = if (proxy.port == 9978) 9979 else 9978
+            val aliases = listOf(
+                "proxy://do=csp&siteKey=approved-csp&part=part1",
+                "http://127.0.0.1:$oldPort/proxy?do=csp&siteKey=approved-csp&part=part1"
+            )
+            for (raw in aliases) {
+                val normalized = SpiderProxyPlayback.normalizePlayerResponse(
+                    org.json.JSONObject().put("url", raw).put("parse", 0).toString(),
+                    "approved-csp", proxy
+                ) ?: error("Newer Java CSP route was incorrectly rejected")
+                val rebased = org.json.JSONObject(normalized).getString("url")
+                assertEquals("jar", java.net.URI(rebased).rawQuery
+                    ?.split('&')?.firstOrNull { it == "do=jar" }?.substringAfter('='))
+                assertEquals(proxy.port, URL(rebased).port)
+                assertTrue("The local proxy session must be reissued", rebased.contains("session="))
+                val result = SpiderProxyPlayback.rebind(
+                    PlaybackMedia(rebased), "approved-csp", proxy)
+                assertTrue(result is PlaybackResult.Ready)
+                val conn = request((result as PlaybackResult.Ready).media.uri)
+                assertEquals(200, conn.responseCode)
+                assertArrayEquals(expected, conn.inputStream.use { it.readBytes() })
+                conn.disconnect()
+            }
+            assertEquals(2, calls.get())
+        }
+    }
+
+    @Test fun cspAliasCannotCrossApprovedSiteOrEnablePythonJavascriptOrFakeInternalSession() {
+        val calls = AtomicInteger()
+        SpiderLoopbackProxy("trusted-site") {
+            calls.incrementAndGet()
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            for (disallowed in listOf(
+                "proxy://do=py&siteKey=trusted-site&part=one",
+                "proxy://do=js&siteKey=trusted-site&part=one",
+                "proxy://do=unknown&siteKey=trusted-site&part=one",
+                "proxy://do=csp&siteKey=other-site&part=one",
+                "proxy://do=csp&__herrin_static=1&part=one",
+                "http://127.0.0.1:9978/proxy?do=csp&siteKey=other-site"
+            )) {
+                assertNull("Unapproved operation/route must not be rebound",
+                    SpiderProxyPlayback.rebaseUrl(disallowed, "trusted-site", proxy))
+            }
+            assertEquals("UNSUPPORTED_OPERATION",
+                SpiderProxyPlayback.routeReason(
+                    "proxy://do=py&siteKey=trusted-site", "trusted-site", proxy))
+            assertEquals("SITE_KEY_MISMATCH",
+                SpiderProxyPlayback.routeReason(
+                    "proxy://do=csp&siteKey=wrong", "trusted-site", proxy))
+            assertEquals(0, calls.get())
+        }
+    }
+
     @Test fun neverRebindOtherSitesOrNonCatvodLoopbackMedia() {
         SpiderLoopbackProxy("current-site") {
             arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))

@@ -28,6 +28,20 @@ class M472ProxyRouteDiagnosticTest {
         }
     }
 
+    @Test fun observedCspIsRecognizedAsValidJavaOperationNotAnUnsupportedRoute() {
+        SpiderLoopbackProxy("selected") {
+            arrayOf(200, "video/mp4",
+                java.io.ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            assertEquals("ALIAS_REJECTED",
+                SpiderProxyPlayback.routeReason(
+                    "proxy://do=csp&siteKey=selected", "selected", proxy))
+            assertNotNull(SpiderProxyPlayback.normalizePlayerResponse(
+                """{"parse":0,"url":"proxy://do=csp&siteKey=selected&part=one"}""",
+                "selected", proxy))
+        }
+    }
+
     @Test fun malformedPlayerJsonAndInvalidPercentQueriesCannotLeakOrCrash() {
         SpiderLoopbackProxy("approved") {
             arrayOf(200, "video/mp4", java.io.ByteArrayInputStream(byteArrayOf()))

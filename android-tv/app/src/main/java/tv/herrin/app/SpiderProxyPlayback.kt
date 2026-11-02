@@ -13,7 +13,8 @@ import org.json.JSONObject
 /**
  * The source may return a CatVod proxy URL containing TVBox's fixed port, or
  * an older HERRIN loopback port from a previous session. Neither listener
- * exists in this worker. Only rebase known CatVod /proxy?do=jar requests for
+ * exists in this worker. Only rebase known Java CatVod /proxy?do=jar
+ * and newer /proxy?do=csp requests for
  * the CURRENT selected site, never arbitrary localhost URLs.
  *
  * The health endpoint verifies a real listener across :spider and the UI
@@ -21,6 +22,10 @@ import org.json.JSONObject
  */
 internal object SpiderProxyPlayback {
     private const val MAX_URL = 4_096
+    // Newer CatVodSpider Java proxy uses do=csp, older FongMi uses jar.
+    // Both dispatch to the same approved JAR Spider. JS/Python have different
+    // runtimes and must NEVER be accepted by this Java-only bridge.
+    private val approvedJavaOperations = setOf("jar", "csp")
     private fun local(uri: URI): Boolean =
         uri.scheme == "http" && uri.host?.lowercase() in
             setOf("127.0.0.1", "localhost", "::1", "[::1]")
@@ -66,7 +71,7 @@ internal object SpiderProxyPlayback {
         }
         if (parameters.isEmpty() && !(legacy && raw.substring(8).trim('?').isEmpty()))
             return null
-        if (parameters["do"].let { it != null && it != "jar" }) return null
+        if (parameters["do"].let { it != null && it !in approvedJavaOperations }) return null
         if (parameters["siteKey"].let { it != null && it != siteKey }) return null
         // The private marker may survive a second normalization only when it
         // already belongs to this exact authenticated session. Untrusted legacy
@@ -150,7 +155,8 @@ internal object SpiderProxyPlayback {
                 .getOrElse { return "INVALID_QUERY" }
         }
         if (args.isEmpty() && !legacy) return "INVALID_QUERY"
-        if (args["do"] != null && args["do"] != "jar") return "UNSUPPORTED_OPERATION"
+        if (args["do"] != null && args["do"] !in approvedJavaOperations)
+            return "UNSUPPORTED_OPERATION"
         if (args["siteKey"] != null && args["siteKey"] != siteKey) return "SITE_KEY_MISMATCH"
         val current = !legacy && runCatching {
             val u = URI(raw)

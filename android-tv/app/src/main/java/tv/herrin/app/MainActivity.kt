@@ -1625,6 +1625,25 @@ private fun Herrin() {
                 }
             }
             spiderResolved = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp)
+            // Record in the UI process: the :spider worker has a separate
+            // in-memory journal. Without this, the on-TV journal says NO_EVENTS
+            // even though the user sees SOURCE_PROXY_INVALID_ROUTE.
+            when (val outcome = spiderResolved) {
+                is PlaybackResult.Unavailable -> {
+                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_REJECTED")
+                    if ("PROXY_INVALID_ROUTE" in outcome.reason) {
+                        val code = Regex(
+                            "route_reason=(UNSUPPORTED_OPERATION|SITE_KEY_MISMATCH|" +
+                                "STATIC_MARKER_FORGED|INVALID_ALIAS|INVALID_QUERY|" +
+                                "NOT_LOCAL_PROXY|NOT_PROXY_PATH|PROXY_STOPPED|" +
+                                "LOOPBACK_ROUTE_REJECTED|ALIAS_REJECTED)"
+                        ).find(outcome.reason)?.groupValues?.get(1) ?: "UNCLASSIFIED"
+                        HerrinPlaybackDiagnosticJournal.record("PROXY", "ROUTE_$code")
+                    }
+                }
+                is PlaybackResult.Ready ->
+                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "MEDIA_ROUTE_READY")
+            }
             spiderStatus = when (val result = spiderResolved) {
                 is PlaybackResult.Ready -> "播放地址已解析，正在准备播放器"
                 is PlaybackResult.Unavailable -> result.reason
