@@ -32,7 +32,7 @@ internal object HerrinPersonalPlaylistBuilder {
             val lines = entries.take(12).mapIndexed { index, (offer, media) ->
                 val id = "personal-$ordinal-$index"
                 urls[id] = media
-                val quality = offer.resolutionClaim?.let { if (it >= 2160) "4K" else "\${it}p" }
+                val quality = offer.resolutionClaim?.let { if (it >= 2160) "4K" else it.toString() + "p" }
                     ?: "原画"
                 val hdr = if (offer.hdrClaim) " HDR（源标称）" else ""
                 PlaybackLine(id,
