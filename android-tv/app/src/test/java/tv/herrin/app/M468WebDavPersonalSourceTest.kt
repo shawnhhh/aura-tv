@@ -61,6 +61,27 @@ class M468WebDavPersonalSourceTest {
         }
     }
 
+    @Test fun pastedWebdavFolderWithoutSlashResolvesRelativeMovieHrefSafely() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(207).setBody("""
+                <d:multistatus xmlns:d="DAV:">
+                  <d:response><d:href>Interstellar.2014.1080p.mp4</d:href>
+                    <d:propstat><d:prop><d:resourcetype/></d:prop></d:propstat>
+                  </d:response>
+                </d:multistatus>
+            """.trimIndent()))
+            server.start()
+            val source = HerrinWebDavSource(HerrinWebDavAccount(
+                "Local", server.url("/dav").toString(), allowInsecureHttp = true))
+            val found = source.search(HerrinFilmIdentity(157336, "movie",
+                listOf("Interstellar"), 2014))
+            assertEquals(1, found.size)
+            assertEquals("/dav/", server.takeRequest().path)
+            val playback = source.playback(found.single()) as PlaybackResult.Ready
+            assertTrue(playback.media.uri.endsWith("/dav/Interstellar.2014.1080p.mp4"))
+        }
+    }
+
     @Test fun webdavRequiresExplicitInsecureHttpApproval() {
         MockWebServer().use { server ->
             server.start()
