@@ -11,6 +11,7 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import okhttp3.Call
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -30,7 +31,7 @@ internal class MpvSecureHttpStream(
         .followRedirects(false).followSslRedirects(false)
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
-        .callTimeout(25, TimeUnit.SECONDS).build()
+        .callTimeout(0, TimeUnit.SECONDS).build()
 ) : MPVLib.Stream {
     private val requestHeaders = headers.toMap()
     private val contentRange = Regex("bytes (\\d+)-(\\d+)/(\\d+|\\*)", RegexOption.IGNORE_CASE)
@@ -42,7 +43,7 @@ internal class MpvSecureHttpStream(
     private var knownSize = -1L
 
     init {
-        val parsed = okhttp3.HttpUrl.parse(uri)
+        val parsed = uri.toHttpUrlOrNull()
             ?: throw IllegalArgumentException("Expected a valid HTTP(S) media URI")
         require(parsed.scheme == "https" || parsed.scheme == "http") { "Unsupported media URI" }
         require(parsed.username.isEmpty() && parsed.password.isEmpty()) { "Embedded URL credentials rejected" }
