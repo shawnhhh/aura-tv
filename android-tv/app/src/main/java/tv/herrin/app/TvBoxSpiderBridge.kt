@@ -562,10 +562,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 ?: run {
                     val reason = SpiderProxyPlayback.playerResponseReason(
                         raw, activeSiteKey.orEmpty(), localProxy)
+                    val operation = SpiderProxyPlayback.safeOperation(raw, localProxy)
                     android.util.Log.w("HerrinSpiderProxy",
-                        "phase=PLAYER_CONTENT_NORMALIZE code=PROXY_INVALID_ROUTE reason=$reason")
+                        "phase=PLAYER_CONTENT_NORMALIZE code=PROXY_INVALID_ROUTE reason=$reason operation=$operation")
                     return@attempt PlaybackResult.Unavailable(
-                        "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE route_reason=$reason）")
+                        "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE route_reason=$reason route_operation=$operation）")
                 }
             // Reuse the upstream FongMi ParseJob routing precedence within
             // HERRIN's existing isolated Spider playback process. The result

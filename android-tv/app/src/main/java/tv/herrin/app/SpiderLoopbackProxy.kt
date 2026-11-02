@@ -95,7 +95,9 @@ internal class SpiderLoopbackProxy(
         if (params["session"] != token ||
             (params["siteKey"] != null && params["siteKey"] != siteKey) || closed.get() ||
             (path == "/health" && params["siteKey"] != siteKey) ||
-            (path == "/proxy" && params["do"] != "jar")) {
+            (path == "/proxy" && params["do"] != "jar" &&
+                !(params["__herrin_static"] == "1" &&
+                    params["do"] in SpiderProxyPlayback.approvedStaticOperations))) {
             failure(output, 403)
             return
         }

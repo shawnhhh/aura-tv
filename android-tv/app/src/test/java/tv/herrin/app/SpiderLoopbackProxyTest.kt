@@ -257,6 +257,67 @@ class SpiderLoopbackProxyTest {
         }
     }
 
+    @Test fun authorizedJavaStaticOperationsPreserveDoAndActuallyStreamPluginBytes() {
+        val calls = mutableListOf<String>()
+        val body = byteArrayOf(0x47, 0x02, 0x03, 0x04)
+        SpiderLoopbackProxy("approved", staticHandler = { params ->
+            calls += params["do"].orEmpty()
+            assertEquals("part-1", params["id"])
+            assertFalse(params.containsKey("session"))
+            assertFalse(params.containsKey("siteKey"))
+            assertFalse(params.containsKey("__herrin_static"))
+            arrayOf(200, "video/mp2t", ByteArrayInputStream(body))
+        }) { error("Static operation must never invoke instance Spider proxy") }.use { proxy ->
+            for (operation in listOf("live", "push", "czspp", "ck")) {
+                val raw = "proxy://do=$operation&id=part-1"
+                val normalized = SpiderProxyPlayback.normalizePlayerResponse(
+                    org.json.JSONObject().put("url", raw).toString(),
+                    "approved", proxy) ?: error("Static route normalization failed")
+                val uri = org.json.JSONObject(normalized).getString("url")
+                assertEquals(proxy.port, URL(uri).port)
+                assertTrue("New private session must be applied", uri.contains("session="))
+                assertTrue("Static handler must be explicitly bound", uri.contains("__herrin_static=1"))
+                assertTrue(uri.contains("&do=$operation&"))
+                val playback = SpiderProxyPlayback.rebind(
+                    PlaybackMedia(uri), "approved", proxy)
+                assertTrue(playback is PlaybackResult.Ready)
+                val conn = request((playback as PlaybackResult.Ready).media.uri)
+                assertEquals(200, conn.responseCode)
+                assertArrayEquals(body, conn.inputStream.use { it.readBytes() })
+                conn.disconnect()
+            }
+        }
+        assertEquals(listOf("live", "push", "czspp", "ck"), calls)
+    }
+
+    @Test fun staticOnlyOperationsCannotRunOnAnotherSiteOrUnmarkedInstance() {
+        val calls = AtomicInteger()
+        SpiderLoopbackProxy("approved", staticHandler = {
+            calls.incrementAndGet()
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }) {
+            calls.incrementAndGet()
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            assertNull(SpiderProxyPlayback.rebaseUrl(
+                "proxy://do=live&siteKey=approved&id=one", "approved", proxy))
+            assertNull(SpiderProxyPlayback.rebaseUrl(
+                "proxy://do=live&siteKey=other&id=one", "approved", proxy))
+            assertNull(SpiderProxyPlayback.rebaseUrl(
+                "proxy://do=unknown&id=one", "approved", proxy))
+            assertNull(SpiderProxyPlayback.rebaseUrl(
+                "proxy://do=js&id=one", "approved", proxy))
+            assertNull(SpiderProxyPlayback.rebaseUrl(
+                "proxy://do=py&id=one", "approved", proxy))
+            assertNull(SpiderProxyPlayback.rebaseUrl(
+                "proxy://do=live&__herrin_static=1&id=one", "approved", proxy))
+            // A direct forged do=live request to the loopback server without
+            // an approved static marker is also denied at HTTP dispatch.
+            assertEquals(403, request(proxy.url.replace("do=jar", "do=live")).responseCode)
+            assertEquals(0, calls.get())
+        }
+    }
+
     @Test fun cspAliasCannotCrossApprovedSiteOrEnablePythonJavascriptOrFakeInternalSession() {
         val calls = AtomicInteger()
         SpiderLoopbackProxy("trusted-site") {

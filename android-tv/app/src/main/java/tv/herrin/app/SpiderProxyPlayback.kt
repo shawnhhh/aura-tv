@@ -26,13 +26,19 @@ internal object SpiderProxyPlayback {
     // Both dispatch to the same approved JAR Spider. JS/Python have different
     // runtimes and must NEVER be accepted by this Java-only bridge.
     private val approvedJavaOperations = setOf("jar", "csp")
+    // Public FongMi/CatVod Java static Proxy.proxy(Map) implementations
+    // use the original "do" selector (e.g. live / push / czspp / ck).
+    // Only routes explicitly marked for the selected JAR static handler may
+    // preserve these. Dynamic site proxies remain jar/csp only.
+    internal val approvedStaticOperations = setOf("live", "push", "czspp", "ck")
     private fun local(uri: URI): Boolean =
         uri.scheme == "http" && uri.host?.lowercase() in
             setOf("127.0.0.1", "localhost", "::1", "[::1]")
 
     fun isCatVodProxy(raw: String): Boolean = runCatching {
         val uri = URI(raw)
-        local(uri) && uri.path == "/proxy" && query(uri.rawQuery)["do"] == "jar"
+        local(uri) && uri.path == "/proxy" &&
+            query(uri.rawQuery)["do"] in (approvedJavaOperations + approvedStaticOperations)
     }.getOrDefault(false)
 
     private fun query(raw: String?): Map<String, String> {
@@ -71,7 +77,11 @@ internal object SpiderProxyPlayback {
         }
         if (parameters.isEmpty() && !(legacy && raw.substring(8).trim('?').isEmpty()))
             return null
-        if (parameters["do"].let { it != null && it !in approvedJavaOperations }) return null
+        val staticCandidate = !parameters.containsKey("siteKey") ||
+            parameters["__herrin_static"] == "1"
+        val operation = parameters["do"]
+        if (operation != null && operation !in approvedJavaOperations &&
+            !(staticCandidate && operation in approvedStaticOperations)) return null
         if (parameters["siteKey"].let { it != null && it != siteKey }) return null
         // The private marker may survive a second normalization only when it
         // already belongs to this exact authenticated session. Untrusted legacy
@@ -91,7 +101,11 @@ internal object SpiderProxyPlayback {
             .joinToString("&") { (k, v) ->
                 URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
             }
-        return proxy.url +
+        val dispatchedDo = if (useStatic && operation in approvedStaticOperations)
+            operation else "jar"
+        val route = if (dispatchedDo == "jar") proxy.url
+            else proxy.url.replace("&do=jar&", "&do=$dispatchedDo&")
+        return route +
             (if (useStatic) "&__herrin_static=1" else "") +
             (if (extra.isEmpty()) "" else "&$extra")
     }
@@ -155,7 +169,10 @@ internal object SpiderProxyPlayback {
                 .getOrElse { return "INVALID_QUERY" }
         }
         if (args.isEmpty() && !legacy) return "INVALID_QUERY"
-        if (args["do"] != null && args["do"] !in approvedJavaOperations)
+        val staticCandidate = !args.containsKey("siteKey") ||
+            args["__herrin_static"] == "1"
+        if (args["do"] != null && args["do"] !in approvedJavaOperations &&
+            !(staticCandidate && args["do"] in approvedStaticOperations))
             return "UNSUPPORTED_OPERATION"
         if (args["siteKey"] != null && args["siteKey"] != siteKey) return "SITE_KEY_MISMATCH"
         val current = !legacy && runCatching {
@@ -185,6 +202,37 @@ internal object SpiderProxyPlayback {
             else -> null
         } ?: return "MISSING_PLAYER_URL"
         return routeReason(raw, siteKey, proxy)
+    }
+
+    /**
+     * Log only the "do" operation identifier, not the URL or any other query
+     * fields. Unknown/untrusted values are displayed as OTHER, never copied.
+     */
+    internal fun safeOperation(rawJson: String, proxy: SpiderLoopbackProxy): String {
+        val obj = runCatching { JSONObject(rawJson) }.getOrNull() ?: return "UNAVAILABLE"
+        val url = when (val value = obj.opt("url")) {
+            is String -> value
+            is JSONArray -> (0 until minOf(32, value.length()))
+                .map { value.optString(it) }
+                .firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
+            is JSONObject -> value.optJSONArray("values")?.let { arr ->
+                (0 until minOf(arr.length(), 20))
+                    .mapNotNull { arr.optJSONObject(it)?.optString("v") }
+                    .firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
+            }
+            else -> null
+        } ?: return "UNAVAILABLE"
+        val rawQuery = if (url.startsWith("proxy://", ignoreCase = true))
+            url.substring(8).removePrefix("?")
+        else runCatching { proxy.compatibleQuery(URI(url).rawQuery) }.getOrNull()
+        val operation = runCatching { query(rawQuery)["do"] }.getOrNull()
+        return when (operation) {
+            null -> "MISSING"
+            in approvedJavaOperations -> operation.uppercase(java.util.Locale.ROOT)
+            in approvedStaticOperations -> operation.uppercase(java.util.Locale.ROOT)
+            "parse", "play", "proxy", "vod", "m3u8" -> operation.uppercase(java.util.Locale.ROOT)
+            else -> "OTHER"
+        }
     }
 
     fun rebind(media: PlaybackMedia, siteKey: String, proxy: SpiderLoopbackProxy): PlaybackResult {

@@ -42,6 +42,27 @@ class M472ProxyRouteDiagnosticTest {
         }
     }
 
+    @Test fun staticJavaOperationIsExplicitButUnrelatedDoAndSecretsStayHidden() {
+        SpiderLoopbackProxy("approved") {
+            arrayOf(200, "video/mp4", java.io.ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            assertEquals("ALIAS_REJECTED",
+                SpiderProxyPlayback.playerResponseReason(
+                    """{"url":"proxy://do=live&id=sample"}""", "approved", proxy))
+            assertEquals("LIVE",
+                SpiderProxyPlayback.safeOperation(
+                    """{"url":"proxy://do=live&token=SENSITIVE"}""", proxy))
+            assertEquals("OTHER",
+                SpiderProxyPlayback.safeOperation(
+                    """{"url":"proxy://do=USER_PRIVATE_PASSWORD&token=SENSITIVE"}""", proxy))
+            val safeReport = PlaybackErrorReport.source("SPIDER",
+                "PROXY_INVALID_ROUTE route_reason=UNSUPPORTED_OPERATION route_operation=OTHER " +
+                    "token=PRIVATE")
+            assertTrue(safeReport.contains("代理操作类型：OTHER"))
+            assertFalse(safeReport.contains("PRIVATE"))
+        }
+    }
+
     @Test fun malformedPlayerJsonAndInvalidPercentQueriesCannotLeakOrCrash() {
         SpiderLoopbackProxy("approved") {
             arrayOf(200, "video/mp4", java.io.ByteArrayInputStream(byteArrayOf()))
