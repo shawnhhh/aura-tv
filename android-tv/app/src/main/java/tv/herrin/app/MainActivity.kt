@@ -190,56 +190,87 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
     }
 }
 
-/** Icon-only TV actions with accessible labels and the original instant white D-pad focus. */
+/** Compact cinematic tabs: one visual language for Chinese labels and icon controls.
+ * D-pad focus remains immediate; only GPU scale is animated. */
+@Composable
+private fun TvNavTab(
+    label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
+    selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val focusScale by animateFloatAsState(
+        if (focused && !reduced) 1.018f else 1f,
+        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 850f),
+        label = "nav-tab-focus"
+    )
+    val fill = when {
+        focused -> Color(0xFFF0F1F3)
+        selected -> Color(0xFFD3D6DB)
+        else -> Color.Transparent
+    }
+    val textColor = if (focused || selected) Color(0xFF1D222B) else Color(0xE6EEF1F6)
+    Box(modifier.graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
+        .clip(RoundedCornerShape(22.dp))
+        .background(fill)
+        .clickable(onClick = onClick)
+        .padding(horizontal = 12.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center) {
+        Text(label, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** Search lives in the centered tab rail; settings remains independently on the far right.
+ * Both glyphs share subdued stroke weights with the new typographic tabs. */
 @Composable
 private fun TvHeaderIconButton(
     gear: Boolean, modifier: Modifier = Modifier, reduced: Boolean = false,
     selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(23.dp)
-    val focusScale by animateFloatAsState(if (focused && !reduced) 1.04f else 1f,
-        if (reduced) snap() else spring(dampingRatio = 0.89f, stiffness = 760f),
-        label = "header-icon-focus")
-    val foreground = if (focused) Color(0xFF111318) else Color.White
+    val shape = RoundedCornerShape(22.dp)
+    val focusScale by animateFloatAsState(
+        if (focused && !reduced) 1.025f else 1f,
+        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 850f),
+        label = "header-icon-focus"
+    )
+    val foreground = if (focused || selected) Color(0xFF1D222B) else Color(0xDCEBF0F7)
     val label = if (gear) "设置" else "搜索"
-    Box(modifier.size(39.dp).graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+    Box(modifier.size(if (gear) 35.dp else 33.dp)
+        .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
         .semantics { contentDescription = label }
-        .onFocusChanged {
-            focused = it.isFocused
-            if (it.isFocused) onFocus()
-        }
-        .border(if (focused) 2.dp else if (selected) 1.dp else 0.dp,
-            if (focused) Color.White else if (selected) Color(0xFF7C9BBC) else Color.Transparent, shape)
+        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .clip(shape)
-        .background(if (focused) Color.White else if (selected) Color(0xFF344B68) else Color.Transparent)
-        .clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(19.dp)) {
-            val dimension = size.minDimension
-            val centerAt = Offset(dimension / 2f, dimension / 2f)
+        .background(if (focused) Color(0xFFF0F1F3)
+            else if (selected) Color(0xFFD3D6DB) else Color.Transparent)
+        .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(if (gear) 18.dp else 17.dp)) {
+            val d = size.minDimension
+            val centerAt = Offset(d / 2f, d / 2f)
             if (!gear) {
-                drawCircle(foreground, radius = dimension * 0.29f,
-                    center = Offset(dimension * 0.41f, dimension * 0.41f),
-                    style = Stroke(width = dimension * 0.105f))
+                drawCircle(foreground, radius = d * 0.28f,
+                    center = Offset(d * 0.40f, d * 0.40f),
+                    style = Stroke(width = d * 0.09f))
                 drawLine(foreground,
-                    Offset(dimension * 0.64f, dimension * 0.64f),
-                    Offset(dimension * 0.92f, dimension * 0.92f),
-                    strokeWidth = dimension * 0.13f, cap = StrokeCap.Round)
+                    Offset(d * 0.61f, d * 0.61f),
+                    Offset(d * 0.88f, d * 0.88f),
+                    strokeWidth = d * 0.11f, cap = StrokeCap.Round)
             } else {
-                drawCircle(foreground, radius = dimension * 0.29f, center = centerAt,
-                    style = Stroke(width = dimension * 0.12f))
-                drawCircle(foreground, radius = dimension * 0.095f, center = centerAt,
-                    style = Stroke(width = dimension * 0.10f))
+                drawCircle(foreground, radius = d * 0.29f, center = centerAt,
+                    style = Stroke(width = d * 0.10f))
+                drawCircle(foreground, radius = d * 0.087f, center = centerAt,
+                    style = Stroke(width = d * 0.075f))
                 for (index in 0 until 8) {
                     val angle = (index * kotlin.math.PI / 4).toFloat()
                     val ux = kotlin.math.cos(angle)
                     val uy = kotlin.math.sin(angle)
                     drawLine(foreground,
-                        Offset(centerAt.x + ux * dimension * 0.35f,
-                            centerAt.y + uy * dimension * 0.35f),
-                        Offset(centerAt.x + ux * dimension * 0.47f,
-                            centerAt.y + uy * dimension * 0.47f),
-                        strokeWidth = dimension * 0.14f, cap = StrokeCap.Round)
+                        Offset(centerAt.x + ux * d * 0.35f,
+                            centerAt.y + uy * d * 0.35f),
+                        Offset(centerAt.x + ux * d * 0.46f,
+                            centerAt.y + uy * d * 0.46f),
+                        strokeWidth = d * 0.095f, cap = StrokeCap.Round)
                 }
             }
         }
@@ -263,20 +294,22 @@ private fun TvNavTabs(
         listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播")
     }
     Row(
-        Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
-            .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
-            .padding(horizontal = 5.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        Modifier.testTag("nav-shell")
+            .clip(RoundedCornerShape(50.dp))
+            .background(Color(0xAD121820))
+            .border(1.dp, Color(0x2EFFFFFF), RoundedCornerShape(50.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         categories.forEach { cat ->
-            TvButton(if (cat == "Top 250") "Top250" else cat,
+            TvNavTab(if (cat == "Top 250") "Top250" else cat,
                 Modifier.testTag("nav-$cat")
                     .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
                         else Modifier)
                     .focusRequester(requester("nav-$cat")),
-                reducedMotion, category == cat && !isSearch,
-                quiet = true, onFocus = { onFocus("nav-$cat") }
+                reduced = reducedMotion, selected = category == cat && !isSearch,
+                onFocus = { onFocus("nav-$cat") }
             ) { onSelect(cat) }
         }
         TvHeaderIconButton(gear = false,
@@ -1803,12 +1836,12 @@ private fun Herrin() {
             }
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-                0.0f to Color(0xF905080D), 0.32f to Color(0xD9060A11),
-                0.66f to Color(0x4B060911), 1.0f to Color(0x13060911)
+                0.0f to Color(0xEA05080D), 0.36f to Color(0xBD060A11),
+                0.68f to Color(0x32060911), 1.0f to Color(0x10060911)
             )))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                0.0f to Color(0x8A05070B), 0.18f to Color.Transparent,
-                0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
+                0.0f to Color(0x7C05070B), 0.17f to Color.Transparent,
+                0.54f to Color(0x2105070B), 1.0f to Color(0xF606080B)
             )))
         }
         // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
@@ -2029,18 +2062,18 @@ private fun Herrin() {
                     translationY = (1f - sceneReveal.value) * sceneLift
                 }.verticalScroll(browseScroll).padding(horizontal = 40.dp, vertical = 14.dp)) {
                     Box(Modifier.fillMaxWidth().heightIn(min = 51.dp)) {
-                        Row(Modifier.align(Alignment.CenterStart),
+                        Row(Modifier.align(Alignment.CenterStart).testTag("header-brand"),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.size(34.dp)
-                                .border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Box(Modifier.size(27.dp)
+                                .border(1.dp, Color(0x6FE2EAF3), RoundedCornerShape(7.dp)),
                                 contentAlignment = Alignment.Center) {
-                                Text("H", fontSize = 21.sp, fontWeight = FontWeight.Light,
-                                    color = Color.White)
+                                Text("H", fontSize = 16.sp, fontWeight = FontWeight.Light,
+                                    color = Color(0xE7F3F5F8))
                             }
-                            Text("HERRIN", letterSpacing = 4.sp,
-                                fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
-                                color = Color.White)
+                            Text("HERRIN", letterSpacing = 2.5.sp,
+                                fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                                color = Color(0xE4F0F2F6))
                         }
                         Box(Modifier.align(Alignment.Center)) {
                             TvNavTabs(category, isSearch, focusId, reduceMotion, headerDownTarget,
@@ -2060,6 +2093,7 @@ private fun Herrin() {
                         TvHeaderIconButton(gear = true,
                             modifier = Modifier.align(Alignment.CenterEnd)
                                 .testTag("settings")
+                                .background(Color(0x60151B24), RoundedCornerShape(22.dp))
                                 .then(if (headerDownTarget != null)
                                     Modifier.focusProperties { down = headerDownTarget }
                                     else Modifier)
@@ -2183,27 +2217,31 @@ private fun Herrin() {
                         Spacer(Modifier.height(24.dp))
                     } else {
                         Spacer(Modifier.height(132.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.width(18.dp).height(2.dp).background(Color.White))
-                            Text(if (tmdbHomeFilms.isNotEmpty()) "HERRIN  ·  TMDB DISCOVER" else if (providerFilms == null) "HERRIN  ·  ORIGINAL PREMIERE" else "HERRIN  ·  USER CATALOG", fontSize = 12.sp, letterSpacing = 2.sp,
-                                fontWeight = FontWeight.Medium, color = Color(0xFFE5EAF2))
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Box(Modifier.width(13.dp).height(1.dp)
+                                .background(Color(0xB8DCE5F0)))
+                            Text(if (tmdbHomeFilms.isNotEmpty()) "TMDB 精选"
+                                else if (providerFilms == null) "演示片库" else "我的媒体",
+                                fontSize = 11.sp, letterSpacing = 1.2.sp,
+                                fontWeight = FontWeight.Medium, color = Color(0xC2DDE6F0))
                         }
                         Spacer(Modifier.height(11.dp))
-                        Text(displayFilm.title, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.sp, color = Color.White, lineHeight = 49.sp)
-                        Text(displayFilm.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
-                            color = Color(0xFFE4E7EF))
+                        Text(displayFilm.title, fontSize = 42.sp, fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.4.sp, color = Color(0xFFF5F7FA), lineHeight = 48.sp)
+                        Text(displayFilm.subtitle, fontSize = 12.sp, letterSpacing = 2.3.sp,
+                            color = Color(0xCADFE5EE))
                         Spacer(Modifier.height(12.dp))
-                        Text("${displayFilm.year}   ·   ${displayFilm.category}   ·   ${if (tmdbHomeFilms.isNotEmpty()) "TMDB FILM DATABASE" else if (providerFilms == null) "ORIGINAL UI DEMO" else "USER-SUPPLIED CATALOG"}",
-                            fontSize = 13.sp, color = Color(0xFFF3F5F8))
+                        Text("${displayFilm.year}   ·   ${displayFilm.category}",
+                            fontSize = 12.sp, color = Color(0xD3E6EBF2))
                         if (displayFilm.ratingValue != null || displayFilm.genres.isNotEmpty())
                             Text(listOfNotNull(FilmMetadataEnrichment.ratingLabel(displayFilm),
                                 displayFilm.genres.take(3).joinToString(" · ").takeIf { it.isNotBlank() })
                                 .joinToString("   ·   "), fontSize = 13.sp,
                                 color = Color(0xFFE8CDA0), modifier = Modifier.testTag("hero-metadata"))
-                        Text(displayFilm.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 6.dp),
-                            fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
-                            color = Color(0xFFE0E4EA))
+                        Text(displayFilm.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 7.dp),
+                            fontSize = 12.sp, lineHeight = 19.sp, maxLines = 2,
+                            color = Color(0xCCDCE5EE))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton(if (film.id.startsWith("tmdb-")) "搜索片源与选集" else if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
                                 selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },

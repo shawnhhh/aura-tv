@@ -288,6 +288,23 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("search").assertIsFocused()
         capture("m469-real-header-centered-search-right-gear")
     }
+    @Test fun cinematicNavigationKeepsSearchInsideGlassRailAndGearSeparate() {
+        val rail = compose.onNodeWithTag("nav-shell").fetchSemanticsNode().boundsInRoot
+        val searchButton = compose.onNodeWithTag("search").fetchSemanticsNode().boundsInRoot
+        val gearButton = compose.onNodeWithTag("settings").fetchSemanticsNode().boundsInRoot
+        assertTrue("Search should be inside the centered navigation capsule",
+            searchButton.left >= rail.left && searchButton.right <= rail.right)
+        assertTrue("The settings gear should stand apart at the far-right edge",
+            gearButton.left > rail.right)
+        compose.onNodeWithTag("header-brand").assertIsDisplayed()
+        focus("nav-首页")
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("nav-电影").assertIsFocused()
+        focus("search")
+        compose.onNodeWithTag("search").assertIsFocused()
+        capture("m470-cinematic-glass-navigation")
+    }
+
     @Test fun posterArtworkFillsEntireCardWithTitleAndYearOverlay() {
         // Compare actual Compose layout bounds rather than a synthetic mockup.
         val card = compose.onNodeWithTag("card-orbit").fetchSemanticsNode().boundsInRoot
