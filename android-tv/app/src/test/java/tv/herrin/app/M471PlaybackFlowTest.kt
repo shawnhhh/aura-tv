@@ -203,6 +203,32 @@ class M471PlaybackFlowTest {
         assertEquals("ready-cloud", result.lookup.options.single().film.id)
     }
 
+    @Test fun tvboxSourceWithEpisodesButBrokenProxyIsExcludedForNextNode() = runBlocking {
+        val inspected = mutableListOf<String>()
+        val broken = offer("broken-route", "cms", HerrinSourceType.TVBOX_CMS, 2160)
+        val ready = offer("ready-route", "cms", HerrinSourceType.TVBOX_CMS, 1080)
+        val source = object : HerrinFilmSource {
+            override val id = "cms"
+            override val type = HerrinSourceType.TVBOX_CMS
+            override suspend fun search(identity: HerrinFilmIdentity) = listOf(broken, ready)
+        }
+        val result = HerrinVerifiedSourceResolver(listOf(source)).find(
+            identity,
+            personalPlayback = { PlaybackResult.Unavailable("not personal") },
+            verifyRemote = { offer, _ ->
+                inspected.add(offer.film.id)
+                offer.film.id != "broken-route"
+            },
+            remoteDetails = { candidate ->
+                candidate.film.copy(playbackEpisodes = listOf(
+                    PlaybackEpisode(1, "正片", listOf(
+                        PlaybackLine("direct", "线路", "https://authorized.example/movie.mp4")))))
+            })
+        assertEquals(listOf("broken-route", "ready-route"), inspected)
+        assertEquals("ready-route", result.lookup.options.single().film.id)
+        assertEquals("direct", HerrinPlaybackEntry.firstPlayable(result.sourceDetails)?.second)
+    }
+
     @Test fun tmdbNeverUsesFakeEpisodeOrEmptyUriAsPlayable() {
         val posterOnly = Film("tmdb-movie-157336", "Interstellar", "",
             "电影", "2014", "", R.drawable.photofilm_orbit)
