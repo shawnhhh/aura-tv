@@ -78,6 +78,7 @@ fun AuthorizedPlaybackPanel(
     onEpisodeSelection: (() -> Unit)? = null,
     /** Re-run the source's playerContent; differs from replaying a stale signed URL. */
     onRefreshSource: (() -> Unit)? = null,
+    onTryOtherSource: (() -> Unit)? = null,
     onBack: () -> Unit,
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
     testDiagnostics: Boolean = false,
@@ -90,7 +91,8 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onRefreshSource, onBack, testDiagnostics, recoverySession)
+            onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onBack,
+            testDiagnostics, recoverySession)
     }
 }
 
@@ -108,6 +110,7 @@ private fun AuthorizedPlaybackSession(
     onLineSelection: (() -> Unit)?,
     onEpisodeSelection: (() -> Unit)?,
     onRefreshSource: (() -> Unit)?,
+    onTryOtherSource: (() -> Unit)?,
     onBack: () -> Unit,
     testDiagnostics: Boolean,
     recoverySession: FongMiPlaybackRecovery.Session
@@ -624,6 +627,12 @@ private fun AuthorizedPlaybackSession(
                     Button(onClick = { recoverySession.userRetry(); refresh() },
                         modifier = Modifier.testTag("player-refresh-source")) {
                         Text("重新解析播放地址")
+                    }
+                }
+                onTryOtherSource?.let { tryAnother ->
+                    Button(onClick = tryAnother,
+                        modifier = Modifier.testTag("player-try-other-source")) {
+                        Text("查找其他片源")
                     }
                 }
                 // Network errors are often source-specific, not decoder bugs.

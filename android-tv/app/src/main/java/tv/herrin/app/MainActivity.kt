@@ -491,6 +491,7 @@ private fun Herrin() {
     // A film's playback origin must survive opening other TMDB films.
     // The global CMS/Spider route alone is not safe to reuse on Back/return.
     val tmdbPlaybackRoutes = remember { HerrinTmdbPlaybackRouteStore() }
+    val tmdbFallbackIndex = remember { HerrinTmdbFallbackIndex() }
     var tmdbDiscoveryStatus by remember { mutableStateOf("") }
     var tmdbSourceStatus by remember { mutableStateOf("") }
     // Explicit retry and source changes must invalidate old TMDB playback mappings.
@@ -831,6 +832,7 @@ private fun Herrin() {
         }
         tmdbPersonalPlayback.clear()
         tmdbPlaybackRoutes.clear()
+        tmdbFallbackIndex.clear()
         tmdbLookupEpoch++
     }
     fun readDeviceStatus(): String {
@@ -1080,7 +1082,9 @@ private fun Herrin() {
             val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
             val remotes = adapters.associateBy { it.id }
             val reachability = HerrinPersonalMediaProbe()
-            val resolved = HerrinVerifiedSourceResolver(adapters).find(
+            val resolved = HerrinVerifiedSourceResolver(
+                adapters.filterNot { it.id in tmdbFallbackIndex.rejected(targetId) }
+            ).find(
                 searchIdentity,
                 personalPlayback = { offer ->
                     personals[offer.sourceId]?.playback(offer)
@@ -1109,6 +1113,7 @@ private fun Herrin() {
             else "NAS／云盘／TVBox 均未找到可播放的授权选集；可重新检索"
             return@LaunchedEffect
         }
+        tmdbFallbackIndex.select(targetId, found.sourceId)
         when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
             is HerrinWebDavSource -> {
                 val playlist = verified.personalPlaylist
@@ -2757,6 +2762,26 @@ private fun Herrin() {
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
                         onRefreshSource = if (spiderActive || cmsJsonParser != null || cmsBrowserParser != null) ({ playerRetryEpoch++ }) else null,
+                        onTryOtherSource = if (film.id.startsWith("tmdb-") &&
+                            tmdbFallbackIndex.selected(film.id) != null) ({
+                            // The user explicitly requested a different provider.
+                            // Release the current player and preserve film metadata.
+                            val target = film.id
+                            if (tmdbFallbackIndex.failSelected(target)) {
+                                tmdbPersonalPlayback.remove(target)
+                                tmdbPlaybackRoutes.forget(target)
+                                tmdbResolved[target]?.let { current ->
+                                    tmdbResolved[target] = current.copy(
+                                        playbackEpisodes = emptyList(),
+                                        cmsVodId = null, spiderVodId = null)
+                                }
+                                activeCmsSite = null
+                                spiderActive = false
+                                tmdbSourceStatus = "当前来源播放失败，正在查找其他已授权片源…"
+                                tmdbLookupEpoch++
+                                screen = "detail"
+                            }
+                        }) else null,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
@@ -3666,6 +3691,7 @@ private fun Herrin() {
                                     TvButton("重新检索片源",
                                         modifier = Modifier.testTag("tmdb-source-retry"),
                                         reduced = reduceMotion) {
+                                        tmdbFallbackIndex.reset(film.id)
                                         tmdbResolved[film.id]?.let { current ->
                                             tmdbResolved[film.id] = current.copy(
                                                 playbackEpisodes = emptyList(),
