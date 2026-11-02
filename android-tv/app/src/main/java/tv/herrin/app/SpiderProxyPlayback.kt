@@ -132,12 +132,61 @@ internal object SpiderProxyPlayback {
         return obj.toString()
     }
 
+    /** Codes only: never include URL query values, proxy sessions or plugins' text. */
+    internal fun routeReason(raw: String, siteKey: String, proxy: SpiderLoopbackProxy): String {
+        if (!proxy.isOpen) return "PROXY_STOPPED"
+        if (raw.isBlank()) return "EMPTY_URL"
+        val legacy = raw.startsWith("proxy://", ignoreCase = true)
+        val args = if (legacy) {
+            val tail = raw.substring(8).removePrefix("?")
+            if (tail.startsWith('/') || tail.contains('#')) return "INVALID_ALIAS"
+            if (tail.length > MAX_URL) return "QUERY_TOO_LONG"
+            query(tail)
+        } else {
+            val u = runCatching { URI(raw) }.getOrNull() ?: return "MALFORMED_URI"
+            if (!local(u)) return "NOT_LOCAL_PROXY"
+            if (u.path != "/proxy") return "NOT_PROXY_PATH"
+            query(proxy.compatibleQuery(u.rawQuery))
+        }
+        if (args.isEmpty() && !legacy) return "INVALID_QUERY"
+        if (args["do"] != null && args["do"] != "jar") return "UNSUPPORTED_OPERATION"
+        if (args["siteKey"] != null && args["siteKey"] != siteKey) return "SITE_KEY_MISMATCH"
+        val current = !legacy && runCatching {
+            val u = URI(raw)
+            u.port == proxy.port && args["session"] == proxy.token
+        }.getOrDefault(false)
+        if (args.containsKey("__herrin_static") &&
+            (!current || args["__herrin_static"] != "1")) return "STATIC_MARKER_FORGED"
+        if (args.size > 24) return "TOO_MANY_PARAMETERS"
+        return if (legacy) "ALIAS_REJECTED" else "LOOPBACK_ROUTE_REJECTED"
+    }
+
+    internal fun playerResponseReason(rawJson: String, siteKey: String,
+                                      proxy: SpiderLoopbackProxy): String {
+        val obj = runCatching { JSONObject(rawJson) }.getOrNull()
+            ?: return "INVALID_PLAYER_JSON"
+        val raw = when (val value = obj.opt("url")) {
+            is String -> value
+            is JSONArray -> (0 until minOf(value.length(), 32)).mapNotNull {
+                value.optString(it).takeIf(String::isNotBlank)
+            }.firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
+            is JSONObject -> value.optJSONArray("values")?.let { values ->
+                (0 until minOf(values.length(), 20)).mapNotNull {
+                    values.optJSONObject(it)?.optString("v")
+                }.firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
+            }
+            else -> null
+        } ?: return "MISSING_PLAYER_URL"
+        return routeReason(raw, siteKey, proxy)
+    }
+
     fun rebind(media: PlaybackMedia, siteKey: String, proxy: SpiderLoopbackProxy): PlaybackResult {
         if (siteKey.isBlank() || !proxy.isOpen)
             return PlaybackResult.Unavailable("本机 Spider 播放代理未启动（PROXY_NOT_RUNNING）")
         val primary = rebaseUrl(media.uri, siteKey, proxy)
             ?: return PlaybackResult.Unavailable(
-                "此线路的代理不属于当前 Spider 站点（PROXY_INVALID_ROUTE）")
+                "此线路的代理不属于当前 Spider 站点（PROXY_INVALID_ROUTE route_reason=" +
+                    routeReason(media.uri, siteKey, proxy) + "）")
         val alternates = media.alternateUris.mapNotNull {
             rebaseUrl(it, siteKey, proxy)
         }.filter { it != primary }.distinct()
