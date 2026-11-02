@@ -613,7 +613,7 @@ http://example.org/live/channel.m3u8
         focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         focus("search-favorites"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("card-orbit").assertIsDisplayed()
-        compose.onNodeWithTag("nav-我的").assertDoesNotExist()
+        compose.onNodeWithTag("nav-我的").assertExists()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(15_000) {
             runCatching {
