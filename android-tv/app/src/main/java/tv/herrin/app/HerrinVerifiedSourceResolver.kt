@@ -52,7 +52,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                     val readyByOffer = accepted.toMap()
                     val built = HerrinPersonalPlaylistBuilder.create(
                         accepted.map { it.first }) { candidate ->
-                        readyByOffer[candidate]?.let(PlaybackResult::Ready)
+                        readyByOffer[candidate]?.let { PlaybackResult.Ready(it) }
                             ?: PlaybackResult.Unavailable("个人片源已失效")
                     }
                     if (built.episodes.isEmpty()) emptyList()
