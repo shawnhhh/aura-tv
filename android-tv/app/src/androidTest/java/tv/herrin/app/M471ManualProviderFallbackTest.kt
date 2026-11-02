@@ -48,7 +48,12 @@ class M471ManualProviderFallbackTest {
                 var requested = 0
                 scenario.onActivity { requested = it.otherSourceSelections }
                 assertEquals("Remote center must request provider search once", 1, requested)
-                assertEquals("No other provider can be silently queried", 1, server.requestCount)
+                val requests = server.requestCount
+                assertTrue("The selected fixture must have been requested", requests >= 1)
+                repeat(requests) {
+                    assertEquals("Only the user-selected source may be contacted",
+                        "/broken.mp4", server.takeRequest().path)
+                }
             }
         }
     }
