@@ -868,6 +868,9 @@ private fun Herrin() {
     var query by rememberSaveable { mutableStateOf("") }
     var searchCategory by rememberSaveable { mutableStateOf("全部") }
     var searchNewestFirst by rememberSaveable { mutableStateOf(false) }
+    // Saved under Search; Home intentionally has no independent Favorites/Filter tab.
+    var searchFavoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var showSearchAdvancedFilters by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
     var detailSelectedSeason by rememberSaveable { mutableIntStateOf(0) }
@@ -1967,9 +1970,16 @@ private fun Herrin() {
                 // Focus color animations can recompose every frame: searching,
                 // regrouping and reading playback history must NOT run per frame.
                 val filtered = remember(showCatalog, films, category, isSearch,
-                    query, searchCategory, searchNewestFirst, favorites) {
-                    if (isSearch) showCatalog.search(query, searchCategory, searchNewestFirst)
-                    else if (category == "我的") showCatalog.favorites(favorites)
+                    query, searchCategory, searchNewestFirst, favorites, searchFavoritesOnly,
+                    facetSelection, tmdbTop250Films) {
+                    if (isSearch) {
+                        val queried = showCatalog.search(query, searchCategory, searchNewestFirst)
+                        val favoritesOnly = if (searchFavoritesOnly) {
+                            val liked = showCatalog.favorites(favorites).map { it.id }.toSet()
+                            queried.filter { it.id in liked }
+                        } else queried
+                        showCatalog.collapse(FilmFacetFilters.results(favoritesOnly, facetSelection))
+                    }
                     else if (category == "Top 250" && tmdbHomeFilms.isNotEmpty())
                         showCatalog.collapse(tmdbTop250Films.map { tmdbResolved[it.id] ?: it })
                     else showCatalog.collapse(films.filter {
@@ -2058,7 +2068,7 @@ private fun Herrin() {
                     }
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
-                        Text(if (providerFilms == null) "搜索 · 离线演示片库" else "搜索 · 当前授权目录", fontSize = 24.sp)
+                        Text("搜索影片 · 类型与资料筛选", fontSize = 24.sp)
                         OutlinedTextField(query, { query = it }, Modifier.testTag("search-input")
                             .focusProperties { down = requester("search-filter-全部") }
                             .focusRequester(requester("search-input"))
@@ -2082,10 +2092,60 @@ private fun Herrin() {
                                 selected = searchNewestFirst, reduced = reduceMotion, quiet = true,
                                 onFocus = { focusId = "search-sort" }
                             ) { searchNewestFirst = !searchNewestFirst }
+                            TvButton(if (searchFavoritesOnly) "★ 已收藏" else "☆ 我的收藏",
+                                modifier = Modifier.testTag("search-favorites")
+                                    .focusRequester(requester("search-favorites")),
+                                reduced = reduceMotion, selected = searchFavoritesOnly,
+                                quiet = true, onFocus = { focusId = "search-favorites" }) {
+                                searchFavoritesOnly = !searchFavoritesOnly
+                            }
+                            TvButton(if (showSearchAdvancedFilters) "收起筛选" else
+                                if (facetSelection.isEmpty) "更多筛选" else "更多筛选 · 已启用",
+                                modifier = Modifier.testTag("search-advanced-toggle")
+                                    .focusRequester(requester("search-advanced-toggle")),
+                                reduced = reduceMotion, selected = showSearchAdvancedFilters,
+                                quiet = true, onFocus = { focusId = "search-advanced-toggle" }) {
+                                showSearchAdvancedFilters = !showSearchAdvancedFilters
+                            }
                         }
-                        Text("当前筛选：$searchCategory · ${filtered.size} 个结果",
+                        Text("搜索结果 · ${filtered.size} 部 · ${searchCategory}" +
+                            (if (searchFavoritesOnly) " · 我的收藏" else "") +
+                            (if (!facetSelection.isEmpty) " · 高级条件" else ""),
                             modifier = Modifier.testTag("search-filter-status"),
                             fontSize = 12.sp, color = Color(0xFFC4CDDC))
+                        if (showSearchAdvancedFilters) {
+                            Column(Modifier.fillMaxWidth().testTag("search-advanced-filters"),
+                                verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("资料筛选 · 多条件组合", fontSize = 17.sp,
+                                        fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    TvButton("重置筛选", Modifier.testTag("search-facet-reset"),
+                                        reduced = reduceMotion, quiet = true) {
+                                        facetActor = null; facetDirector = null; facetRegion = null
+                                        facetYear = null; facetCategory = null; facetRating = null
+                                    }
+                                }
+                                FacetRail("分类", "category", FilmFacetFilters.categories(films),
+                                    facetCategory, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetCategory = it })
+                                FacetRail("年份", "year", FilmFacetFilters.years(films),
+                                    facetYear, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetYear = it })
+                                FacetRail("演员", "actor", FilmFacetFilters.actors(films),
+                                    facetActor, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetActor = it })
+                                FacetRail("导演", "director", FilmFacetFilters.directors(films),
+                                    facetDirector, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetDirector = it })
+                                FacetRail("国家 / 地区", "region", FilmFacetFilters.regions(films),
+                                    facetRegion, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetRegion = it })
+                                FacetRail("TMDB 评分", "rating", FilmFacetFilters.ratingBands,
+                                    facetRating, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetRating = it })
+                            }
+                        }
                         // An on-screen keyboard also permits search without a hardware keyboard or IME.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             suggestions.forEachIndexed { index, word ->
