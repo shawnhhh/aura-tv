@@ -216,7 +216,11 @@ private fun TvNavTab(
         .clickable(onClick = onClick)
         .padding(horizontal = 12.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center) {
-        Text(label, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        // Top250's Latin letters and numerals appear optically larger than CJK glyphs
+        // at equal sp. Set it one step smaller for balanced visual height.
+        Text(label, color = textColor,
+            fontSize = if (label == "Top250") 12.sp else 13.sp,
+            fontWeight = FontWeight.Medium)
     }
 }
 
@@ -2093,7 +2097,8 @@ private fun Herrin() {
                         TvHeaderIconButton(gear = true,
                             modifier = Modifier.align(Alignment.CenterEnd)
                                 .testTag("settings")
-                                .background(Color(0x60151B24), RoundedCornerShape(22.dp))
+                                // Let the standalone gear sit directly on the hero:
+                                // only D-pad focus should introduce a visible fill.
                                 .then(if (headerDownTarget != null)
                                     Modifier.focusProperties { down = headerDownTarget }
                                     else Modifier)

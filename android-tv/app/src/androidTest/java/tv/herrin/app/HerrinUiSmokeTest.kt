@@ -305,6 +305,19 @@ class HerrinUiSmokeTest {
         capture("m470-cinematic-glass-navigation")
     }
 
+    @Test fun top250TabAndUnframedGearKeepRemoteFocus() {
+        // The Top250 optical font adjustment must not change its navigation identity.
+        compose.onNodeWithTag("nav-Top 250").assertIsDisplayed()
+        focus("nav-Top 250")
+        compose.onNodeWithTag("nav-Top 250").assertIsFocused()
+        val rail = compose.onNodeWithTag("nav-shell").fetchSemanticsNode().boundsInRoot
+        val gear = compose.onNodeWithTag("settings").fetchSemanticsNode().boundsInRoot
+        assertTrue("The gear remains separate from the navigation rail", gear.left > rail.right)
+        focus("settings")
+        compose.onNodeWithTag("settings").assertIsFocused()
+        capture("m470-balanced-top250-no-gear-halo")
+    }
+
     @Test fun posterArtworkFillsEntireCardWithTitleAndYearOverlay() {
         // Compare actual Compose layout bounds rather than a synthetic mockup.
         val card = compose.onNodeWithTag("card-orbit").fetchSemanticsNode().boundsInRoot
