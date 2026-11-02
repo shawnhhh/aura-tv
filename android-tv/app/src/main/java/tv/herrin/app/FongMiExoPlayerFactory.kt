@@ -84,7 +84,7 @@ internal object FongMiExoPlayerFactory {
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(12_000)
-            .setDefaultRequestProperties(media.headers)
+            .setDefaultRequestProperties(FongMiPlaybackItemSupport.extractHeaders(mediaItem(media)))
         return ExoMediaSourceFactory(DefaultDataSource.Factory(context, http))
     }
 
