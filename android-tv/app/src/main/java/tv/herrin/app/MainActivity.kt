@@ -960,6 +960,31 @@ private fun Herrin() {
             else -> tmdbSourceStatus = "影视源没有返回可用于当前播放器的授权线路"
         }
     }
+    LaunchedEffect(screen, filmId, metadataToken, imdbRatingsEpoch) {
+        if (screen != "detail" || !filmId.startsWith("tmdb-") ||
+            metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
+            return@LaunchedEffect
+        val filmToEnrich = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
+            ?: return@LaunchedEffect
+        val detailed = runCatching { tmdbDiscovery.detail(filmToEnrich, metadataToken) }.getOrNull()
+            ?: return@LaunchedEffect
+        val imdbScore = withContext(Dispatchers.IO) {
+            runCatching { personalImdbRatings.lookup(detailed.imdbId) }.getOrNull()
+        }
+        val current = tmdbResolved[detailed.id] ?: filmToEnrich
+        tmdbResolved[detailed.id] = current.copy(
+            synopsis = detailed.synopsis,
+            actors = detailed.actors,
+            directors = detailed.directors,
+            people = detailed.people,
+            regions = detailed.regions,
+            releaseDate = detailed.releaseDate,
+            runtimeMinutes = detailed.runtimeMinutes,
+            imdbId = detailed.imdbId,
+            imdbRating = imdbScore?.value,
+            imdbVotes = imdbScore?.votes
+        )
+    }
     // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
     val catalogIdentity = remember(providerFilms) {
         providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
