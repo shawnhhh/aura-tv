@@ -434,6 +434,12 @@ internal class TvBoxSpiderBridge(context: Context) {
     @Volatile private var generation = 0
     @Volatile private var hydratedGeneration = -1
     @Volatile private var lastBrowse: String? = null
+    /** A read-only hint, not execution authorization; worker verifies identity. */
+    fun approvedActiveSiteKey(): String? = lastBrowse?.let { payload ->
+        runCatching { JSONObject(payload).getJSONObject("site").optString("key")
+            .takeIf(String::isNotBlank) }.getOrNull()
+    }
+
     // Only host-observed Binder/transport events authorize a single replay.
     // Provider messages, authentication denials and initialization errors do not.
     private enum class TransportFault { PROCESS_EXITED, DISCONNECTED, TIMEOUT }
