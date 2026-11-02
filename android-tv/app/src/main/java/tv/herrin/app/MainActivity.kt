@@ -1075,12 +1075,14 @@ private fun Herrin() {
             }
             val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
             val remotes = adapters.associateBy { it.id }
+            val reachability = HerrinPersonalMediaProbe()
             val resolved = HerrinVerifiedSourceResolver(adapters).find(
                 searchIdentity,
                 personalPlayback = { offer ->
                     personals[offer.sourceId]?.playback(offer)
                         ?: PlaybackResult.Unavailable("该个人媒体来源未授权")
                 },
+                verifyPersonal = { media -> reachability.canRead(media) },
                 remoteDetails = { offer ->
                     withTimeoutOrNull(4_000L) {
                         when (val adapter = remotes[offer.sourceId]) {

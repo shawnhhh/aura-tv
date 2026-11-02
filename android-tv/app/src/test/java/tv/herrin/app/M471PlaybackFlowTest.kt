@@ -84,6 +84,43 @@ class M471PlaybackFlowTest {
         assertNull(result.personalPlaylist)
     }
 
+    @Test fun tvboxCandidateWithBlankEpisodeUrlMustFallThroughToNextCandidate() = runBlocking {
+        val calls = mutableListOf<String>()
+        val empty = offer("empty", "cms", HerrinSourceType.TVBOX_CMS, 2160)
+        val valid = offer("valid", "cms", HerrinSourceType.TVBOX_CMS, 1080)
+        val resolver = HerrinVerifiedSourceResolver(listOf(
+            object : HerrinFilmSource {
+                override val id = "cms"
+                override val type = HerrinSourceType.TVBOX_CMS
+                override suspend fun search(identity: HerrinFilmIdentity) = listOf(empty, valid)
+            }
+        ))
+        val result = resolver.find(identity, { PlaybackResult.Unavailable("none") }) { candidate ->
+            calls.add(candidate.film.id)
+            candidate.film.copy(playbackEpisodes = listOf(
+                PlaybackEpisode(1, "正片", listOf(PlaybackLine("line", "source",
+                    if (candidate.film.id == "valid") "https://authorized.example/movie.mp4" else "")))))
+        }
+        assertEquals(listOf("empty", "valid"), calls)
+        assertEquals("valid", result.lookup.options.single().film.id)
+        assertEquals("line", HerrinPlaybackEntry.firstPlayable(result.sourceDetails)?.second)
+    }
+
+    @Test fun allDeadNasOffersDoNotPreventCloudFallback() = runBlocking {
+        val calls = mutableListOf<String>()
+        val nas = offer("nas-dead", "nas", HerrinSourceType.NAS, 2160)
+        val cloud = offer("cloud-ok", "cloud", HerrinSourceType.CLOUD, 1080)
+        val result = HerrinVerifiedSourceResolver(listOf(
+            source("nas", HerrinSourceType.NAS, nas, calls),
+            source("cloud", HerrinSourceType.CLOUD, cloud, calls)
+        )).find(identity,
+            personalPlayback = { playable("https://source.example/" + it.film.id + ".mkv") },
+            verifyPersonal = { it.uri.contains("cloud-ok") },
+            remoteDetails = { null })
+        assertEquals(listOf("nas", "cloud"), calls)
+        assertEquals("cloud-ok", result.lookup.options.single().film.id)
+    }
+
     @Test fun tmdbNeverUsesFakeEpisodeOrEmptyUriAsPlayable() {
         val posterOnly = Film("tmdb-movie-157336", "Interstellar", "",
             "电影", "2014", "", R.drawable.photofilm_orbit)
