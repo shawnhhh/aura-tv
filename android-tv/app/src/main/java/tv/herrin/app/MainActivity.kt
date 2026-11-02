@@ -9,6 +9,8 @@ import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -264,6 +266,25 @@ private fun Herrin() {
     var pendingLiveSearchFocus by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
     val uiScope = rememberCoroutineScope()
+    val personalImdbRatings = remember(context) { HerrinImdbRatings(context) }
+    var imdbRatingsEpoch by remember { mutableIntStateOf(0) }
+    var imdbImportStatus by remember { mutableStateOf("IMDb 数据需用户自行导入；不随开源 APK 分发") }
+    val imdbImportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) uiScope.launch {
+            imdbImportStatus = "正在本机导入 IMDb ratings TSV.gz；不上传文件…"
+            val result = runCatching { personalImdbRatings.importUserFile(uri) }
+            imdbImportStatus = result.fold(
+                onSuccess = { count ->
+                    imdbRatingsEpoch++
+                    "已导入 " + count + " 条本地 IMDb 评分（仅保存在本设备）"
+                },
+                onFailure = { "IMDb 数据导入失败，请确认文件为 title.ratings.tsv.gz" }
+            )
+        }
+    }
+
     val profileStore = remember(context) { CatalogProfiles(context) }
     val watchHistory = remember(context) { PlaybackHistory(context) }
     val demoCatalog: CatalogSource = remember { DemoCatalog() }
@@ -343,6 +364,14 @@ private fun Herrin() {
             }
         }
     }
+    var personalSourceConfigEpoch by remember { mutableIntStateOf(0) }
+    var nasDavUrlDraft by remember { mutableStateOf(prefs.nasWebDavUrl) }
+    var cloudDavUrlDraft by remember { mutableStateOf(prefs.cloudWebDavUrl) }
+    var nasDavUserDraft by remember { mutableStateOf("") }
+    var nasDavPasswordDraft by remember { mutableStateOf("") }
+    var cloudDavUserDraft by remember { mutableStateOf("") }
+    var cloudDavPasswordDraft by remember { mutableStateOf("") }
+    var personalSourceFeedback by remember { mutableStateOf("") }
     var tmdbHomeFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
     var tmdbTop250Films by remember { mutableStateOf<List<Film>>(emptyList()) }
     val tmdbResolved = remember { mutableStateMapOf<String, Film>() }
@@ -845,7 +874,8 @@ private fun Herrin() {
     }
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
     // the scraped poster/title as an executable source or auto-plays a video.
-    LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle) {
+    LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle,
+        personalSourceConfigEpoch) {
         if (screen != "detail" || !filmId.startsWith("tmdb-") ||
             tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true) return@LaunchedEffect
         val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
@@ -898,7 +928,7 @@ private fun Herrin() {
                     return@LaunchedEffect
                 }
                 tmdbPersonalPlayback[targetId] = playback.media
-                tmdbResolved[targetId] = tmdbFilm.copy(
+                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
                     playbackEpisodes = found.film.playbackEpisodes,
                     episodes = maxOf(1, found.film.playbackEpisodes.size)
                 )
@@ -916,7 +946,7 @@ private fun Herrin() {
                         tmdbPersonalPlayback.remove(targetId)
                         activeCmsSite = adapter.site
                         spiderActive = false
-                        tmdbResolved[targetId] = tmdbFilm.copy(
+                        tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
                             cmsVodId = detailed.film.cmsVodId,
                             playbackEpisodes = detailed.film.playbackEpisodes,
                             episodes = maxOf(1, detailed.film.playbackEpisodes.size)
