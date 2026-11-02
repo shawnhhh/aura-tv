@@ -2473,9 +2473,9 @@ private fun Herrin() {
                             TvButton("管理 NAS / 云盘",
                                 modifier = Modifier.testTag("my-manage-personal-sources"),
                                 reduced = reduceMotion) {
-                                // These fields live in advanced settings; the
-                                // compact source form is TVBox/M3U-only.
-                                settingsTvBoxOnly = false
+                                // NAS / cloud editors are in the existing
+                                // compact Content Sources settings section.
+                                settingsTvBoxOnly = true
                                 screen = "settings"
                             }
                             Text("NAS ${if (prefs.nasWebDavUrl.isBlank()) "未配置" else "已配置"}" +
