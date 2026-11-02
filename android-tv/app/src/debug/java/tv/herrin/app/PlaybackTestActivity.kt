@@ -48,6 +48,10 @@ class PlaybackTestActivity : ComponentActivity() {
                     } ?: PlaybackMedia(
                         inPlaceFixture ?: intent.getStringExtra("fixture")
                             ?: error("Debug playback fixture not configured"),
+                        // Test-only source credentials: prove they reach Media3 on
+                        // original local fixtures, never production player settings.
+                        headers = intent.getStringExtra("fixtureAuthorization")
+                            ?.let { mapOf("Authorization" to it) }.orEmpty(),
                         subtitles = intent.getStringExtra("subtitle")?.let {
                             listOf(AuthorizedSubtitle("zh", "简体中文测试字幕", it))
                         }.orEmpty(),

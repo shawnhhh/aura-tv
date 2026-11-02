@@ -5,6 +5,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import okhttp3.Credentials
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -27,11 +28,14 @@ class M471WebDavRealPlaybackTest {
     @Test fun discoveredNasVideoSurvivesRangeProbeAndDecodesMedia3Frames() = runBlocking {
         val instrument = InstrumentationRegistry.getInstrumentation()
         val video = instrument.context.assets.open("synthetic.mp4").use { it.readBytes() }
+        val requiredAuth = Credentials.basic("fixture-user", "fixture-password")
         val events = CopyOnWriteArrayList<Pair<String, String?>>()
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     events += (request.method.orEmpty() to request.getHeader("Range"))
+                    if (request.getHeader("Authorization") != requiredAuth)
+                        return MockResponse().setResponseCode(401)
                     return when {
                         request.method == "PROPFIND" && request.path == "/dav/" ->
                             MockResponse().setResponseCode(207)
@@ -61,6 +65,7 @@ class M471WebDavRealPlaybackTest {
             server.start()
             val source = HerrinWebDavSource(HerrinWebDavAccount(
                 "Licensed NAS", server.url("/dav/").toString(),
+                username = "fixture-user", password = "fixture-password",
                 allowInsecureHttp = true))
             val probe = HerrinPersonalMediaProbe()
             val target = HerrinFilmIdentity(157336, "movie", listOf("Interstellar"), 2014)
@@ -88,10 +93,13 @@ class M471WebDavRealPlaybackTest {
                     chosen.lookup.options.single().film.copy(playbackEpisodes = playlist.episodes)))
             val media = playlist.mediaByLine.getValue(line.id)
             assertTrue(media.uri.endsWith("Interstellar.2014.1080p.mp4"))
+            assertEquals("The source's own Authorization header must be preserved",
+                requiredAuth, media.headers["Authorization"])
 
             ActivityScenario.launch<PlaybackTestActivity>(
                 Intent(instrument.targetContext, PlaybackTestActivity::class.java)
                     .putExtra("fixture", media.uri)
+                    .putExtra("fixtureAuthorization", media.headers["Authorization"])
             ).use { scenario ->
                 var frames = 0
                 var failure: String? = null
