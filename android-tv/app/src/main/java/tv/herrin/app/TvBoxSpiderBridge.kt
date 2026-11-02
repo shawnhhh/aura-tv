@@ -559,10 +559,14 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     "本机 Spider 播放代理尚未启动（PROXY_NOT_RUNNING）")
             val normalized = SpiderProxyPlayback.normalizePlayerResponse(
                 raw, activeSiteKey.orEmpty(), localProxy)
-                ?: return@attempt PlaybackResult.Unavailable(
-                    "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE route_reason=" +
-                        SpiderProxyPlayback.playerResponseReason(
-                            raw, activeSiteKey.orEmpty(), localProxy) + "）")
+                ?: run {
+                    val reason = SpiderProxyPlayback.playerResponseReason(
+                        raw, activeSiteKey.orEmpty(), localProxy)
+                    android.util.Log.w("HerrinSpiderProxy",
+                        "phase=PLAYER_CONTENT_NORMALIZE code=PROXY_INVALID_ROUTE reason=$reason")
+                    return@attempt PlaybackResult.Unavailable(
+                        "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE route_reason=$reason）")
+                }
             // Reuse the upstream FongMi ParseJob routing precedence within
             // HERRIN's existing isolated Spider playback process. The result
             // is still just PlaybackMedia; no film metadata or UI is mutated.
@@ -591,6 +595,13 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 is PlaybackResult.Unavailable -> resolved
             }
             healthy.also {
+                if (it is PlaybackResult.Unavailable &&
+                    it.reason.contains("PROXY_INVALID_ROUTE")) {
+                    val code = Regex("route_reason=([A-Z_]+)").find(it.reason)
+                        ?.groupValues?.get(1) ?: "UNCLASSIFIED"
+                    android.util.Log.w("HerrinSpiderProxy",
+                        "phase=MEDIA_ROUTE_REBIND code=PROXY_INVALID_ROUTE reason=$code")
+                }
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             }
         }
