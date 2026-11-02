@@ -98,6 +98,42 @@ class M457PlaybackFailureRecoveryTest {
             .assertTextContains("HTTP 403", substring = true)
         compose.onNodeWithTag("player-startup-retry").assertExists()
         compose.onNodeWithTag("player-startup-back").assertExists()
+
+    @Test fun preDecoderCmsFailureCanSelectOtherAuthorizedProvider() {
+        var fallbackCount = 0
+        compose.setContent {
+            PlayerStartupSurface(
+                loading = false, offlineDemonstration = false,
+                cmsFailed = true, retryAvailable = true,
+                reducedMotion = true,
+                failureDiagnostic = PlaybackErrorReport.source("CMS", "HTTP 404"),
+                onRetry = {}, onBack = {},
+                onTryOtherSource = { fallbackCount++ }
+            )
+        }
+        compose.onNodeWithTag("player-startup-error").assertIsDisplayed()
+        compose.onNodeWithTag("player-startup-other-source").assertIsDisplayed()
+            .performClick()
+        compose.runOnIdle { assertEquals(1, fallbackCount) }
+    }
+
+    @Test fun loadingAndOfflineDemoNeverExposeSourceSwitch() {
+        compose.setContent {
+            PlayerStartupSurface(loading = true, offlineDemonstration = false,
+                cmsFailed = false, retryAvailable = false,
+                reducedMotion = true, onRetry = {}, onBack = {},
+                onTryOtherSource = {})
+        }
+        compose.onNodeWithTag("player-startup-other-source").assertDoesNotExist()
+        compose.setContent {
+            PlayerStartupSurface(loading = false, offlineDemonstration = true,
+                cmsFailed = false, retryAvailable = false,
+                reducedMotion = true, onRetry = {}, onBack = {},
+                onTryOtherSource = {})
+        }
+        compose.onNodeWithTag("player-startup-other-source").assertDoesNotExist()
+    }
+
     }
 
 }

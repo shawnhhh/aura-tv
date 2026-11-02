@@ -2706,6 +2706,27 @@ private fun Herrin() {
             "sites" -> renderSitesScreen()
             "browse", "search" -> renderBrowseSearch()
             "detail", "player", "settings" -> {
+                // An explicit user action can search other licensed providers
+                // even if CMS/Spider parsing failed before Media3 was created.
+                val tryOtherTmdbSource: (() -> Unit)? =
+                    if (screen == "player" && film.id.startsWith("tmdb-") &&
+                        tmdbFallbackIndex.selected(film.id) != null) ({
+                        val target = film.id
+                        if (tmdbFallbackIndex.failSelected(target)) {
+                            tmdbPersonalPlayback.remove(target)
+                            tmdbPlaybackRoutes.forget(target)
+                            tmdbResolved[target]?.let { old ->
+                                tmdbResolved[target] = old.copy(
+                                    playbackEpisodes = emptyList(),
+                                    cmsVodId = null, spiderVodId = null)
+                            }
+                            activeCmsSite = null
+                            spiderActive = false
+                            tmdbSourceStatus = "当前来源播放失败，正在查找其他已授权片源…"
+                            tmdbLookupEpoch++
+                            screen = "detail"
+                        }
+                    }) else null
                 val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
                 val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
                 val cmsLine = if (screen == "player" && activeCmsSite != null &&
@@ -2762,26 +2783,7 @@ private fun Herrin() {
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
                         onRefreshSource = if (spiderActive || cmsJsonParser != null || cmsBrowserParser != null) ({ playerRetryEpoch++ }) else null,
-                        onTryOtherSource = if (film.id.startsWith("tmdb-") &&
-                            tmdbFallbackIndex.selected(film.id) != null) ({
-                            // The user explicitly requested a different provider.
-                            // Release the current player and preserve film metadata.
-                            val target = film.id
-                            if (tmdbFallbackIndex.failSelected(target)) {
-                                tmdbPersonalPlayback.remove(target)
-                                tmdbPlaybackRoutes.forget(target)
-                                tmdbResolved[target]?.let { current ->
-                                    tmdbResolved[target] = current.copy(
-                                        playbackEpisodes = emptyList(),
-                                        cmsVodId = null, spiderVodId = null)
-                                }
-                                activeCmsSite = null
-                                spiderActive = false
-                                tmdbSourceStatus = "当前来源播放失败，正在查找其他已授权片源…"
-                                tmdbLookupEpoch++
-                                screen = "detail"
-                            }
-                        }) else null,
+                        onTryOtherSource = tryOtherTmdbSource,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
@@ -2847,6 +2849,7 @@ private fun Herrin() {
                             }
                             playerRetryEpoch++
                         },
+                        onTryOtherSource = tryOtherTmdbSource,
                         onBack = {
                             if (cmsFailed) {
                                 cmsPlaybackPendingId = null

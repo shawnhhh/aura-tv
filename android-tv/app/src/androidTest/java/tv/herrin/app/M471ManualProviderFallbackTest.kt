@@ -8,8 +8,10 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -27,7 +29,12 @@ class M471ManualProviderFallbackTest {
     @Test fun failedSourceOffersRemoteSelectableOtherProviderWithoutSilentNetworkRequest() {
         val instrument = InstrumentationRegistry.getInstrumentation()
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setResponseCode(404))
+            // Media3 may retry the same authorized URL. Never block its
+            // second request behind MockWebServer's default queued response.
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    MockResponse().setResponseCode(404)
+            }
             server.start()
             ActivityScenario.launch<PlaybackTestActivity>(
                 Intent(instrument.targetContext, PlaybackTestActivity::class.java)

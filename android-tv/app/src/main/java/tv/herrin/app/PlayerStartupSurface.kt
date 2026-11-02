@@ -35,7 +35,8 @@ internal fun PlayerStartupSurface(
     failureHint: String? = null,
     failureDiagnostic: String? = null,
     onRetry: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onTryOtherSource: (() -> Unit)? = null
 ) {
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
         .testTag("player-startup-surface"), contentAlignment = Alignment.Center) {
@@ -69,6 +70,14 @@ internal fun PlayerStartupSurface(
                     TvButton(if (failureHint != null) "重新向来源解析" else "重新播放",
                         modifier = Modifier.testTag("player-startup-retry"),
                         reduced = reducedMotion, onClick = onRetry)
+                }
+                // A provider can fail during CMS/Spider URL parsing, before any
+                // ExoPlayer exists. It must expose the same explicit fallback
+                // as a decoder failure, without silently starting playback.
+                if (!offlineDemonstration) onTryOtherSource?.let { action ->
+                    TvButton("查找其他片源",
+                        modifier = Modifier.testTag("player-startup-other-source"),
+                        reduced = reducedMotion, onClick = action)
                 }
             }
             TvButton(if (cmsFailed) "返回片库" else "返回选集",
