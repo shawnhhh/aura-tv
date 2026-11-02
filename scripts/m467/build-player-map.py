@@ -39,6 +39,15 @@ for line in inventory.splitlines():
             "buildPlayer", "buildLoadControl", "buildRenderersFactory", "buildTrackSelector"}:
         target, method = base + "tv/herrin/app/FongMiExoPlayerFactory.kt", "create"
         status, test = "PARTIAL_PUBLISHED_ABI_ADAPTATION", "M467EngineContainerTest (8 cases)"
+    elif source == "player/exo/ExoUtil.java" and name == "extractHeaders":
+        target, method = base + "tv/herrin/app/FongMiPlaybackItemSupport.kt", "extractHeaders"
+        status, test = "MINIMAL_HOST_ABI_ADAPTATION", "M467MediaItemCompatibilityTest (2 Android cases)"
+    elif source == "player/media/MediaItemFactory.java" and name in {
+            "buildSubtitleConfigs", "findPreferredSubtitleIndex", "create", "get"}:
+        target, method = base + "tv/herrin/app/FongMiPlaybackItemSupport.kt", "subtitleSelectionFlags"
+        status = ("PARTIAL_HOST_LANGUAGE_ADAPTATION" if name == "findPreferredSubtitleIndex"
+                  else "PARTIAL_NO_EXPLICIT_SUB_FLAGS")
+        test = "M467FongMiMediaContractTest (5 JVM cases)"
     elif source == "player/media/MediaItemFactory.java" and name in {
             "from", "buildSubConfig", "buildRequestMetadata", "toBundle"}:
         target, method = base + "tv/herrin/app/FongMiExoPlayerFactory.kt", "mediaItem"
