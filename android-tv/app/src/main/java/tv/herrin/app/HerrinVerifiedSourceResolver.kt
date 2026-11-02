@@ -31,24 +31,31 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                     catch (_: Exception) { null }
                     (result as? PlaybackResult.Ready)?.media?.let { candidate to it }
                 }
-                // Probe the highest-ranked media within an eight-request budget.
-                // If every attempted URL is inaccessible, advance to the next
-                // tier instead of advertising a non-playable NAS/cloud match.
-                // Once one real file responds, keep unprobed series episodes
-                // selectable: each later episode is still checked by Media3.
-                val probed = mutableListOf<Pair<HerrinSourceMovie, PlaybackMedia>>()
+                // At most eight one-byte requests, but stop at the FIRST
+                // verified file. Probing all 8 after an immediate success
+                // added up to 20 seconds of unnecessary TV remote latency.
+                // Keep later season episodes selectable without eagerly
+                // downloading or probing every episode. Media3 will validate
+                // each chosen file during real playback.
                 val knownUnavailable = mutableSetOf<HerrinSourceMovie>()
+                var verifiedOne = false
                 for ((candidate, media) in prepared.take(8)) {
-                    val valid = kotlinx.coroutines.withTimeoutOrNull(2_500L) {
-                        verifyPersonal(media)
-                    } == true
-                    if (valid) probed += candidate to media
-                    else knownUnavailable += candidate
+                    val valid = try {
+                        kotlinx.coroutines.withTimeoutOrNull(2_500L) {
+                            verifyPersonal(media)
+                        } == true
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) { false }
+                    if (valid) {
+                        verifiedOne = true
+                        break
+                    }
+                    knownUnavailable += candidate
                 }
-                if (probed.isEmpty()) emptyList()
+                if (!verifiedOne) emptyList()
                 else {
-                    val accepted = (probed + prepared.drop(8))
-                        .filterNot { it.first in knownUnavailable }
+                    val accepted = prepared.filterNot { it.first in knownUnavailable }
                     val readyByOffer = accepted.toMap()
                     val built = HerrinPersonalPlaylistBuilder.create(
                         accepted.map { it.first }) { candidate ->

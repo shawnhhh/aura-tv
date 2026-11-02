@@ -121,6 +121,86 @@ class M471PlaybackFlowTest {
         assertEquals("cloud-ok", result.lookup.options.single().film.id)
     }
 
+    @Test fun personalProbeStopsAfterFirstVerifiedFileAndRetainsLaterEpisodes() = runBlocking {
+        val calls = mutableListOf<String>()
+        val candidates = (1..15).map { index ->
+            offer("episode-$index", "nas", HerrinSourceType.NAS, 1080)
+        }
+        val adapter = object : HerrinFilmSource {
+            override val id = "nas"
+            override val type = HerrinSourceType.NAS
+            override suspend fun search(identity: HerrinFilmIdentity) = candidates
+        }
+        var probeCount = 0
+        val result = HerrinVerifiedSourceResolver(listOf(adapter)).find(
+            identity,
+            personalPlayback = { playable("https://authorized.example/" + it.film.id + ".mp4") },
+            verifyPersonal = { probeCount++; true },
+            remoteDetails = { null })
+        assertEquals(1, probeCount)
+        assertEquals(HerrinSourceTier.PERSONAL, result.lookup.selectedTier)
+        assertEquals(15, result.lookup.options.size)
+        assertEquals(15, result.personalPlaylist!!.mediaByLine.size)
+    }
+
+    @Test fun probeSkipsBrokenHighestQualityAndContinuesOnException() = runBlocking {
+        val offers = listOf(
+            offer("first-broken", "nas", HerrinSourceType.NAS, 2160),
+            offer("second-throws", "nas", HerrinSourceType.NAS, 1080),
+            offer("third-ready", "nas", HerrinSourceType.NAS, 720))
+        val visited = mutableListOf<String>()
+        val result = HerrinVerifiedSourceResolver(listOf(
+            object : HerrinFilmSource {
+                override val id = "nas"
+                override val type = HerrinSourceType.NAS
+                override suspend fun search(identity: HerrinFilmIdentity) = offers
+            }
+        )).find(identity,
+            personalPlayback = { playable("https://authorized.example/" + it.film.id + ".mp4") },
+            verifyPersonal = {
+                val id = it.uri.substringAfterLast('/').substringBefore(".mp4")
+                visited += id
+                when(id) {
+                    "first-broken" -> false
+                    "second-throws" -> error("WebDAV gateway temporarily unavailable")
+                    else -> true
+                }
+            },
+            remoteDetails = { null })
+        assertEquals(listOf("first-broken", "second-throws", "third-ready"), visited)
+        assertEquals(listOf("third-ready"), result.lookup.options.map { it.film.id })
+        assertEquals(1, result.personalPlaylist!!.episodes.size)
+    }
+
+    @Test fun eightDeadFileProbeBudgetFallsBackToCloud() = runBlocking {
+        val calls = mutableListOf<String>()
+        val dead = (1..13).map { offer("dead-$it", "nas", HerrinSourceType.NAS, 2160) }
+        val cloud = offer("ready-cloud", "cloud", HerrinSourceType.CLOUD, 720)
+        val adapters = listOf(
+            object : HerrinFilmSource {
+                override val id = "nas"
+                override val type = HerrinSourceType.NAS
+                override suspend fun search(identity: HerrinFilmIdentity) =
+                    dead.also { calls += "nas" }
+            },
+            source("cloud", HerrinSourceType.CLOUD, cloud, calls)
+        )
+        var failedProbeCount = 0
+        val result = HerrinVerifiedSourceResolver(adapters).find(
+            identity,
+            personalPlayback = { playable("https://authorized.example/" + it.film.id + ".mp4") },
+            verifyPersonal = {
+                if (it.uri.contains("/dead-")) {
+                    failedProbeCount++
+                    false
+                } else true
+            },
+            remoteDetails = { null })
+        assertEquals(8, failedProbeCount)
+        assertEquals(listOf("nas", "cloud"), calls)
+        assertEquals("ready-cloud", result.lookup.options.single().film.id)
+    }
+
     @Test fun tmdbNeverUsesFakeEpisodeOrEmptyUriAsPlayable() {
         val posterOnly = Film("tmdb-movie-157336", "Interstellar", "",
             "电影", "2014", "", R.drawable.photofilm_orbit)
