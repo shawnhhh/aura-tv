@@ -33,4 +33,33 @@ class M467FongMiMediaContractTest {
         assertEquals("application/ttml+xml", FongMiSubtitleFormats.mimeType("a.dfxp"))
         assertEquals("", FongMiSubtitleFormats.mimeType(null))
     }
+
+    @Test fun chineseSubtitleIsDefaultEvenWhenEnglishIsFirst() {
+        val flags = FongMiPlaybackItemSupport.subtitleSelectionFlags(listOf("en", "zh-CN", "ja"))
+        assertEquals(listOf(
+            androidx.media3.common.C.SELECTION_FLAG_AUTOSELECT,
+            androidx.media3.common.C.SELECTION_FLAG_DEFAULT,
+            androidx.media3.common.C.SELECTION_FLAG_AUTOSELECT
+        ), flags)
+    }
+    @Test fun iso639ChineseAliasesAndUnderscoresAreAccepted() {
+        val flags = FongMiPlaybackItemSupport.subtitleSelectionFlags(listOf("fr", "CHI", "zh_TW"))
+        assertEquals(androidx.media3.common.C.SELECTION_FLAG_DEFAULT, flags[2])
+        assertEquals(androidx.media3.common.C.SELECTION_FLAG_AUTOSELECT, flags[1])
+    }
+    @Test fun fallbackDefaultsToFirstTrackWhenLanguageIsUnknown() {
+        val flags = FongMiPlaybackItemSupport.subtitleSelectionFlags(listOf(null, "en", "ja"))
+        assertEquals(androidx.media3.common.C.SELECTION_FLAG_DEFAULT, flags[0])
+        assertEquals(androidx.media3.common.C.SELECTION_FLAG_AUTOSELECT, flags[1])
+    }
+    @Test fun singleSubtitleAndEmptyListPreserveFongMiBehavior() {
+        assertEquals(emptyList<Int>(), FongMiPlaybackItemSupport.subtitleSelectionFlags(emptyList()))
+        assertEquals(listOf(androidx.media3.common.C.SELECTION_FLAG_DEFAULT),
+            FongMiPlaybackItemSupport.subtitleSelectionFlags(listOf("en")))
+    }
+    @Test fun callerPreferredLanguageTakesPriorityOverChineseDefault() {
+        val flags = FongMiPlaybackItemSupport.subtitleSelectionFlags(listOf("zh", "en-US", "ja"),
+            listOf("en", "zh"))
+        assertEquals(androidx.media3.common.C.SELECTION_FLAG_DEFAULT, flags[1])
+    }
 }
