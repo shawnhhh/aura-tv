@@ -195,7 +195,7 @@ private fun TvNavTabs(
     onFocus: (String) -> Unit,
     onSelect: (String) -> Unit
 ) {
-    val categories = remember { listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "直播", "我的") }
+    val categories = remember { listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播", "我的") }
     Row(
         Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
             .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
@@ -343,6 +343,12 @@ private fun Herrin() {
             }
         }
     }
+    var tmdbHomeFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
+    var tmdbTop250Films by remember { mutableStateOf<List<Film>>(emptyList()) }
+    val tmdbResolved = remember { mutableStateMapOf<String, Film>() }
+    val tmdbPersonalPlayback = remember { mutableStateMapOf<String, PlaybackMedia>() }
+    var tmdbDiscoveryStatus by remember { mutableStateOf("") }
+    var tmdbSourceStatus by remember { mutableStateOf("") }
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
     var filmId by rememberSaveable { mutableStateOf(demoFilms.first().id) }
@@ -654,8 +660,12 @@ private fun Herrin() {
     var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
     var catalogRefresh by remember { mutableIntStateOf(0) }
-    val sourceConfigured = configuredTvBoxUrl.isNotBlank()
-    val films = providerFilms ?: if (sourceConfigured) emptyList() else demoFilms
+    val sourceConfigured = configuredTvBoxUrl.isNotBlank() || tmdbHomeFilms.isNotEmpty() ||
+        prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
+    val films = if (tmdbHomeFilms.isNotEmpty()) {
+        (tmdbHomeFilms + tmdbTop250Films).distinctBy(Film::id)
+            .map { tmdbResolved[it.id] ?: it }
+    } else providerFilms ?: if (sourceConfigured) emptyList() else demoFilms
     fun readDeviceStatus(): String {
         val activity = context as? ComponentActivity ?: return "当前环境不支持读取屏幕刷新率"
         @Suppress("DEPRECATION")
@@ -768,7 +778,8 @@ private fun Herrin() {
             screen = "live-player"
         }
     }
-    val catalogScope = tvBoxVodScope ?: prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
+    val catalogScope = if (tmdbHomeFilms.isNotEmpty()) "tmdb:discovery"
+        else tvBoxVodScope ?: prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
     // Only the source's playback identity survives enrichment. Every network
     // result modifies display fields in-place and never alters episode links,
     // favorites IDs or history keys.
@@ -924,7 +935,7 @@ private fun Herrin() {
             hasEnteredHome = true
         }
     }
-    val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
+    val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val facetResultState = rememberLazyListState()
     // M4.25: only the active, already-loaded catalog is grouped. This is a
     // display projection; Film.id and the licensed playback paths stay intact.
@@ -1648,6 +1659,8 @@ private fun Herrin() {
                     query, searchCategory, searchNewestFirst, favorites) {
                     if (isSearch) showCatalog.search(query, searchCategory, searchNewestFirst)
                     else if (category == "我的") showCatalog.favorites(favorites)
+                    else if (category == "Top 250" && tmdbHomeFilms.isNotEmpty())
+                        showCatalog.collapse(tmdbTop250Films.map { tmdbResolved[it.id] ?: it })
                     else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
                 }
                 // History is recomputed on returning from playback or when the
