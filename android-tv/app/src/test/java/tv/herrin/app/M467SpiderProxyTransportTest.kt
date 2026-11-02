@@ -92,7 +92,7 @@ class M467SpiderProxyTransportTest {
 
     @Test fun continuouslyStreamsBeyondFormer512MiBLimitWithBoundedReadBuffer() {
         val expected = 513L * 1024 * 1024 + 37
-        val released = AtomicBoolean()
+        val released = CountDownLatch(1)
         SpiderLoopbackProxy("long-stream") {
             val source = object : InputStream() {
                 var remaining = expected
@@ -102,7 +102,7 @@ class M467SpiderProxyTransportTest {
                     val count = minOf(length.toLong(), remaining).toInt()
                     bytes.fill(0x5a, offset, offset + count); remaining -= count; return count
                 }
-                override fun close() { released.set(true) }
+                override fun close() { released.countDown() }
             }
             arrayOf(200, "video/x-matroska", source)
         }.use { proxy ->
@@ -118,7 +118,10 @@ class M467SpiderProxyTransportTest {
                     received += count
                 }
             }
-            assertEquals(expected, received); assertTrue(released.get()); conn.disconnect()
+            assertEquals(expected, received)
+            conn.disconnect()
+            assertTrue("Server did not close the 513 MiB HTTP stream",
+                released.await(5, TimeUnit.SECONDS))
         }
     }
 

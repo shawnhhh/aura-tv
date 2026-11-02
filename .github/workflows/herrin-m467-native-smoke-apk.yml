@@ -1,0 +1,113 @@
+name: HERRIN M4.67 Native MPV Smoke APK (opt-in)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/herrin-m467-native-smoke-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: m467-native-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-smoke-apk:
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 78
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      NATIVE_RUN: '41377578441'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Wait for the pinned native source build to finish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NATIVE_RUN}" --jq '.status + ":" + (.conclusion // "")')"
+            echo "Native run ${NATIVE_RUN} state: ${status} (poll ${attempt}/120)"
+            if [[ "$status" == completed:success ]]; then exit 0; fi
+            if [[ "$status" == completed:* ]]; then
+              echo "Native build is not successful. No native test APK can be built." >&2
+              exit 2
+            fi
+            sleep 15
+          done
+          echo "No successful native build within bounded 30-minute integration window." >&2
+          exit 2
+      - name: Download exact raw ARM native .so artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-M467-mpv-native-candidates
+          run-id: 41377578441
+          github-token: ${{ github.token }}
+          path: native-candidates
+      - name: Validate same-run native binaries and stage native-enabled debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          for abi in arm64-v8a armeabi-v7a; do
+            dst="android-tv/app/src/main/jniLibs/${abi}"
+            mkdir -p "$dst"
+            for lib in libffmpeg.so libmpv.so libplayer.so libc++_shared.so; do
+              mapfile -t matches < <(find native-candidates -type f -path "*/${abi}/${lib}")
+              if (( ${#matches[@]} != 1 )); then
+                echo "Missing or ambiguous native source ${abi}/${lib}" >&2
+                exit 2
+              fi
+              cp "${matches[0]}" "$dst/$lib"
+            done
+            expected='ARM'
+            if [[ "$abi" == arm64-v8a ]]; then expected='AArch64'; fi
+            readelf -h "$dst/libplayer.so" | grep -Fq "Machine:                           ${expected}"
+            # Host linker must find the same unified FFmpeg SONAME in both ABIs.
+            readelf -d "$dst/libplayer.so" | grep -Fq '[libffmpeg.so]'
+            readelf -d "$dst/libplayer.so" | grep -Fq '[libmpv.so]'
+          done
+          echo "Native libraries staged for opt-in smoke APK; no change to standard APK output."
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          test -x "$sdk_manager"
+          "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile actual JNI bridge, secure-stream tests and native-enabled Debug APK
+        working-directory: android-tv
+        run: |
+          gradle --no-daemon :app:testDebugUnitTest --tests tv.herrin.app.M467MpvSecureHttpStreamTest :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+      - name: Collect smoke-only artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-smoke-output
+          cp android-tv/app/build/outputs/apk/debug/app-debug.apk native-smoke-output/HERRIN-M467-native-mpv-smoke-arm.apk
+          find android-tv/app/build/outputs/apk/androidTest -name '*.apk' -exec cp {} native-smoke-output/HERRIN-M467-native-instrumentation.apk \;
+          sha256sum native-smoke-output/*.apk > native-smoke-output/SHA256SUMS
+          cat > native-smoke-output/README.txt <<'NOTE'
+          DEBUG-ONLY native MPV candidate for arm64-v8a/armeabi-v7a.
+          Not production-ready. Requires actual ARM hardware to run native frame test.
+          Source: FongMi/mpv-android@049ade89abc85fc05ef73dc9ba6f1810466c9f8a.
+          Native binaries: Github Actions run 41377578441, source-compiled.
+          All existing Herrin UI and TMDB remain unchanged. Default player is Media3.
+          Native MPV playback is only reachable from a debug-only test Activity.
+          Passing APK compilation is not equivalent to decoded video output.
+          NOTE
+      - name: Upload opt-in MPV smoke APK and Android test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-M467-native-mpv-smoke-APK
+          path: native-smoke-output/
+          if-no-files-found: error
+          retention-days: 14
