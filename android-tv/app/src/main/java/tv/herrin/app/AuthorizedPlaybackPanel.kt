@@ -211,6 +211,8 @@ private fun AuthorizedPlaybackSession(
                         httpStatus, error, failedUrl)
                     val diagnostic = PlaybackErrorReport.media(error.errorCodeName,
                         error.errorCode, httpStatus, error, failedUrl, activeVariant + 1, candidates.size)
+                    HerrinPlaybackDiagnosticJournal.record("MEDIA3", "PLAYBACK_ERROR",
+                        "CODE=${error.errorCode}")
                     // FongMi source fallback: a server-side 5xx on one explicitly
                     // authorized URL need not consume two delayed retries while a
                     // separately provided healthy media URL is available. Switch
@@ -617,6 +619,15 @@ private fun AuthorizedPlaybackSession(
             }
             if (errorMessage != null) {
                 Text(errorMessage!!, color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
+                Button(onClick = {
+                    val clipboard = context.getSystemService(
+                        android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+                        "Herrin 播放诊断", errorMessage!! + "\n" +
+                            HerrinPlaybackDiagnosticJournal.export()))
+                }, modifier = Modifier.testTag("player-copy-diagnostics")) {
+                    Text("复制详细诊断日志")
+                }
                 Button(onClick = { retryPlayback() },
                     modifier = Modifier.focusRequester(retryControl)
                         .testTag("player-retry")) { Text("重试播放") }
