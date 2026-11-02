@@ -308,6 +308,20 @@ class HerrinUiSmokeTest {
         capture("m473-my-between-live-and-search")
     }
 
+    @Test fun myPersonalSourcesShortcutOpensRealNasAndCloudEditors() {
+        focus("nav-我的")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("my-manage-personal-sources").performClick()
+        compose.onNodeWithTag("settings-list").assertExists()
+        compose.onNodeWithTag("settings-list")
+            .performScrollToNode(hasTestTag("nas-webdav-url"))
+        compose.onNodeWithTag("nas-webdav-url").assertIsDisplayed()
+        compose.onNodeWithTag("settings-list")
+            .performScrollToNode(hasTestTag("cloud-webdav-save"))
+        compose.onNodeWithTag("cloud-webdav-save").assertIsDisplayed()
+        capture("m473-my-nas-cloud-shortcut")
+    }
+
     @Test fun favoritedMovieAppearsInPersonalTabWithoutChangingOriginalPlayback() {
         focus("card-orbit")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
