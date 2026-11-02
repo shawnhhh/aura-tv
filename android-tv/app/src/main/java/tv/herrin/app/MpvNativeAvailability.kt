@@ -41,10 +41,21 @@ internal object MpvNativeAvailability {
                 }.toSet()
             }
         } catch (_: Exception) { emptySet() }
-        val missing = requiredLibraries.filter { lib ->
-            val extracted = directory?.resolve(lib)?.let { it.isFile && it.length() > 0 } == true
-            !extracted && abiCandidates.none { "$it:$lib" in packaged }
+        val extracted = requiredLibraries.filter { lib ->
+            directory?.resolve(lib)?.let { it.isFile && it.length() > 0 } == true
+        }.toSet()
+        if (extracted.size == requiredLibraries.size) return Check(true, emptyList())
+        // Do not pass an APK with e.g. arm64 FFmpeg and x86_64 player JNI.
+        val completeApkAbi = abiCandidates.firstOrNull { abi ->
+            requiredLibraries.all { "$abi:$it" in packaged }
         }
-        return Check(missing.isEmpty(), missing)
+        if (completeApkAbi != null) return Check(true, emptyList())
+        val bestApkAbi = abiCandidates.maxByOrNull { abi ->
+            requiredLibraries.count { "$abi:$it" in packaged }
+        }
+        val missing = requiredLibraries.filter { lib ->
+            lib !in extracted && (bestApkAbi == null || "$bestApkAbi:$lib" !in packaged)
+        }
+        return Check(false, missing.ifEmpty { requiredLibraries })
     }
 }
