@@ -560,7 +560,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val normalized = SpiderProxyPlayback.normalizePlayerResponse(
                 raw, activeSiteKey.orEmpty(), localProxy)
                 ?: return@attempt PlaybackResult.Unavailable(
-                    "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE）")
+                    "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE route_reason=" +
+                        SpiderProxyPlayback.playerResponseReason(
+                            raw, activeSiteKey.orEmpty(), localProxy) + "）")
             // Reuse the upstream FongMi ParseJob routing precedence within
             // HERRIN's existing isolated Spider playback process. The result
             // is still just PlaybackMedia; no film metadata or UI is mutated.
