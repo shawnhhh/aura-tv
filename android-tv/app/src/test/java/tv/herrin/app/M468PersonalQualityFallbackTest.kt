@@ -29,6 +29,9 @@ class M468PersonalQualityFallbackTest {
         val highest = playlist.mediaByLine.getValue("personal-1-0")
         assertEquals(listOf("https://nas.example.net/dav/Interstellar.1080.mkv"),
             highest.alternateUris)
+        assertTrue(highest.safeNotFoundFallback)
+        assertTrue(PlaybackFormatRetry.Session(highest.uri, highest.alternateUris, null,
+            allowNotFoundFallback = highest.safeNotFoundFallback).next(2004, 404) != null)
         assertEquals("Basic same-nas", highest.headers["Authorization"])
         assertFalse(highest.alternateUris.any { it.contains("cloud.example.org") })
         val lower = playlist.mediaByLine.getValue("personal-1-1")
@@ -43,5 +46,6 @@ class M468PersonalQualityFallbackTest {
                 headers = mapOf("Authorization" to it.film.id)))
         }
         assertTrue(playlist.mediaByLine.values.all { it.alternateUris.isEmpty() })
+        assertTrue(playlist.mediaByLine.values.none { it.safeNotFoundFallback })
     }
 }
