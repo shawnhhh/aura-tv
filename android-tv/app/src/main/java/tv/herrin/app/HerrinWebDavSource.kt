@@ -79,7 +79,14 @@ internal class HerrinWebDavSource(
                 catch (_: Exception) { emptyList() }
                 for (child in children.take(250)) {
                     if (child.isCollection) {
-                        if (depth < 2) folders.addLast(child.address to depth + 1)
+                        if (depth < 2) {
+                            // Collection hrefs may omit '/', making relative
+                            // grandchildren resolve against the wrong parent.
+                            val collection = child.address.substringBefore('?').trimEnd('/') + "/" +
+                                (if ('?' in child.address) "?" + child.address.substringAfter('?') else "")
+                            if (sameOriginUnderRoot(collection))
+                                folders.addLast(collection to depth + 1)
+                        }
                         continue
                     }
                     val filename = URI(child.address).path.substringAfterLast('/')
