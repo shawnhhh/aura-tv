@@ -86,12 +86,18 @@ internal class HerrinTmdbDiscovery(
         val type = pair.first
         val id = pair.second
         val url = base + "/" + type + "/" + id +
-            "?language=zh-CN&append_to_response=credits"
+            "?language=zh-CN&append_to_response=credits,external_ids"
         val json = fetcher.load(url, token) ?: return@withContext film
         val obj = JSONObject(json)
         if (obj.optInt("id") != id) return@withContext film
         val credits = TmdbCreditsParser.parse(json, type)
+        val imdbId = obj.optJSONObject("external_ids")?.optString("imdb_id")
+            ?.takeIf { it.matches(Regex("""tt\d{7,10}""")) }
+            ?: obj.optString("imdb_id").takeIf {
+                it.matches(Regex("""tt\d{7,10}"""))
+            }
         film.copy(
+            imdbId = imdbId ?: film.imdbId,
             synopsis = obj.optString("overview").take(2_000).ifBlank { film.synopsis },
             actors = credits.actors.ifEmpty { film.actors },
             directors = credits.directors.ifEmpty { film.directors },
