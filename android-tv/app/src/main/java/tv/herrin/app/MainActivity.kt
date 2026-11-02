@@ -1100,6 +1100,27 @@ private fun Herrin() {
                         ?: PlaybackResult.Unavailable("该个人媒体来源未授权")
                 },
                 verifyPersonal = { media -> reachability.canRead(media) },
+                verifyRemote = { offer, detailed ->
+                    val selected = HerrinPlaybackEntry.firstPlayable(detailed)
+                    val playable = if (selected == null) false else
+                        when (val adapter = remotes[offer.sourceId]) {
+                            is HerrinTvBoxSpiderSource -> {
+                                val resolvedMedia = withTimeoutOrNull(9_000L) {
+                                    spiderBridge.play(detailed, selected.first, selected.second,
+                                        tvBoxAllowHttp)
+                                }
+                                val good = resolvedMedia is PlaybackResult.Ready
+                                HerrinPlaybackDiagnosticJournal.record("SPIDER",
+                                    if (good) "PLAYER_ROUTE_READY" else "PLAYER_ROUTE_REJECTED")
+                                good
+                            }
+                            is HerrinTvBoxCmsSource ->
+                                adapter.play(detailed, selected.first, selected.second)
+                                    is PlaybackResult.Ready
+                            else -> false
+                        }
+                    playable
+                },
                 remoteDetails = { offer ->
                     withTimeoutOrNull(4_000L) {
                         when (val adapter = remotes[offer.sourceId]) {
@@ -3724,6 +3745,29 @@ private fun Herrin() {
                             Text(tmdbSourceStatus.ifBlank { "请选择影片后自动搜索已配置的 NAS、云盘、TVBox" },
                                 modifier = Modifier.testTag("tmdb-source-lookup-status"),
                                 color = Color(0xFFCFD7E4), fontSize = 14.sp)
+                        }
+                        if (film.id.startsWith("tmdb-") && screen == "detail" &&
+                            HerrinPlaybackEntry.firstPlayable(film) != null) item {
+                            TvButton("查找更清晰的其他影视点",
+                                modifier = Modifier.testTag("tmdb-next-source-batch"),
+                                reduced = reduceMotion) {
+                                // Never silently switch a working video. Explicit
+                                // remote action excludes the chosen provider and
+                                // examines the next bounded group of trusted nodes.
+                                if (tmdbFallbackIndex.failSelected(film.id)) {
+                                    tmdbPlaybackRoutes.forget(film.id)
+                                    tmdbPersonalPlayback.remove(film.id)
+                                    tmdbResolved[film.id]?.let { old ->
+                                        tmdbResolved[film.id] = old.copy(
+                                            playbackEpisodes = emptyList(),
+                                            cmsVodId = null, spiderVodId = null)
+                                    }
+                                    activeCmsSite = null
+                                    spiderActive = false
+                                    tmdbSourceStatus = "正在检索下一批授权影视点；清晰度标签不等于真实解码规格"
+                                    tmdbLookupEpoch++
+                                }
+                            }
                         }
                         if (showGroup != null && screen == "detail") item {
                             Text("多季整合 · 当前目录 ${showGroup.members.size} 个原始条目 · 播放仍使用原影视点",
