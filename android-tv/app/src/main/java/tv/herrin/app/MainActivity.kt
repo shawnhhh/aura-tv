@@ -657,10 +657,12 @@ private fun Herrin() {
                     vodImportFeedback = "未获取到影片"
                 }
             }
-            // TVBox single warehouses can carry their own live channel groups.
-            // Respect an independently configured live source if one exists.
-            if (prefs.tvBoxLiveSourceUrl.isBlank() && prefs.livePlaylistUrl.isBlank() &&
-                !prefs.tvBoxLiveActive) {
+            // Always build a backup channel pool from user-applied TVBox
+            // warehouses, EVEN when an independent M3U is configured. The
+            // independent playlist remains first in HerrinLivePriority.combine.
+            if (prefs.tvBoxLiveSourceUrl.isBlank()) {
+                var backups = tvBoxLiveStore.load()
+                var added = false
                 for (live in tvBoxSingle!!.lives.take(4)) {
                     val loaded = if (live.channels.isNotEmpty()) {
                         val channels = live.channels.filter { TvBoxUrl.normalize(it.url, true) != null }
@@ -668,12 +670,18 @@ private fun Herrin() {
                         else TvBoxLiveResult.Ready(channels)
                     } else if (live.sourceUrl != null) tvBoxLiveRepo.load(live.sourceUrl, true)
                     else continue
-                    if (loaded is TvBoxLiveResult.Ready && tvBoxLiveStore.save(loaded.channels, true)) {
-                        prefs.tvBoxLiveActive = true
-                        liveRefresh++
-                        tvBoxStatus += "；直播页已导入 ${loaded.channels.size} 个频道"
-                        break
+                    if (loaded is TvBoxLiveResult.Ready) {
+                        val merged = HerrinLivePriority.combine(backups, loaded.channels).take(250)
+                        if (merged.size > backups.size) {
+                            backups = merged
+                            added = true
+                        }
                     }
+                }
+                if (added && tvBoxLiveStore.save(backups, true)) {
+                    if (prefs.livePlaylistUrl.isBlank()) prefs.tvBoxLiveActive = true
+                    liveRefresh++
+                    tvBoxStatus += "；已备份 ${backups.size} 条 TVBox 直播线路（独立直播源优先）"
                 }
             }
         }
