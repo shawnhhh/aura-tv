@@ -1142,7 +1142,9 @@ private fun Herrin() {
                     searchIdentity, currentTvbox.sites,
                     allowed = { site ->
                         val runtime = site.jar ?: currentTvbox.spiderJar ?: site.scriptApi.orEmpty()
-                        runtime.isNotBlank() &&
+                        // An approved Java JAR must not silently approve
+                        // unrelated JS/Python/node runtime definitions.
+                        site.spiderApi != null && runtime.isNotBlank() &&
                             TvBoxSpiderPolicy.mayRun(false, approvedRoot, runtime,
                                 trustedSpiderRoot, trustedSpiderJar) &&
                             "spider:" + site.key !in tmdbFallbackIndex.rejected(targetId)
