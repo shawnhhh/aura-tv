@@ -86,6 +86,8 @@ internal object PlaybackErrorReport {
         else null
         val proxyHealth = Regex("PROXY_(?:NOT_RUNNING|INVALID_ROUTE|NOT_CATVOD|INVALID_SESSION|INVALID_PORT|HTTP_403|HTTP_404|HTTP_5XX|HTTP_OTHER|CONNECT_REFUSED|TIMEOUT|IO_FAILURE)")
             .find(raw)?.value
+        val routeReason = Regex("route_reason=(INVALID_ALIAS|QUERY_TOO_LONG|INVALID_QUERY|INVALID_PLAYER_JSON|MALFORMED_URI|NOT_LOCAL_PROXY|NOT_PROXY_PATH|UNSUPPORTED_OPERATION|SITE_KEY_MISMATCH|STATIC_MARKER_FORGED|TOO_MANY_PARAMETERS|ALIAS_REJECTED|LOOPBACK_ROUTE_REJECTED|MISSING_PLAYER_URL|PROXY_STOPPED|EMPTY_URL)")
+            .find(raw)?.groupValues?.get(1)
         val kind = when {
             proxyHealth != null -> "SOURCE_$proxyHealth"
             http != null -> "SOURCE_HTTP_$http"
@@ -114,6 +116,7 @@ internal object PlaybackErrorReport {
         return buildString {
             append("失败阶段：").append(safeStage)
             append("\n诊断分类：").append(kind)
+            if (routeReason != null) append("\n代理路由校验：").append(routeReason)
             if (http != null) append("\nHTTP ").append(http).append("（实际状态码）")
             if (kind == "SOURCE_UNCLASSIFIED")
                 append("\n来源未提供可安全识别的错误码；未进入 Media3")
