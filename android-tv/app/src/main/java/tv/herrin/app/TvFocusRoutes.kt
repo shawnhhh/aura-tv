@@ -44,7 +44,11 @@ internal object TvFocusRoutes {
         val tmdbHeading = 5 + if (sourceStatus) 1 else 0
         val tmdbForm = tmdbHeading + 2
         val tmdbAction = tmdbHeading + 3
-        val liveHeading = tmdbHeading + 5 +
+        // Fourteen compact NAS/WebDAV, cloud/WebDAV and IMDb rows are placed
+        // between TMDB controls and live input. LazyColumn indices must include
+        // them or D-pad navigation will focus a detached, off-screen item.
+        val personalSourceItems = 14
+        val liveHeading = tmdbHeading + 5 + personalSourceItems +
             (if (connectedStatus) 1 else 0) +
             (if (failedStatus) 1 else 0) +
             (if (noMatchesStatus) 1 else 0)

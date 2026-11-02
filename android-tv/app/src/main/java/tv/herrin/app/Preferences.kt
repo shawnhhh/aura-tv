@@ -73,6 +73,19 @@ class Preferences(context: Context) : FavoritesStore {
     var playbackFillScreen: Boolean
         get() = prefs.getBoolean("playback_fill_screen", true)
         set(value) { prefs.edit().putBoolean("playback_fill_screen", value).apply() }
+    /** Explicit personal WebDAV bridge URLs; no internet-wide NAS scanning. */
+    var nasWebDavUrl: String
+        get() = prefs.getString("nas_webdav_url", "") ?: ""
+        set(value) { prefs.edit().putString("nas_webdav_url", value.trim()).apply() }
+    var cloudWebDavUrl: String
+        get() = prefs.getString("cloud_webdav_url", "") ?: ""
+        set(value) { prefs.edit().putString("cloud_webdav_url", value.trim()).apply() }
+    var nasAllowHttp: Boolean
+        get() = prefs.getBoolean("nas_allow_http", false)
+        set(value) { prefs.edit().putBoolean("nas_allow_http", value).apply() }
+    var cloudAllowHttp: Boolean
+        get() = prefs.getBoolean("cloud_allow_http", false)
+        set(value) { prefs.edit().putBoolean("cloud_allow_http", value).apply() }
     /** Optional personal TMDB API Read Access Token; empty disables metadata calls. */
     var tmdbReadToken: String
         get() = prefs.getString("tmdb_read_token", "") ?: ""

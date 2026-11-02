@@ -9,6 +9,8 @@ import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -49,6 +51,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
@@ -183,7 +190,98 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
     }
 }
 
-/** Compact D-pad navigation: focused pill alone marks the active target. */
+/** Compact cinematic tabs: one visual language for Chinese labels and icon controls.
+ * D-pad focus remains immediate; only GPU scale is animated. */
+@Composable
+private fun TvNavTab(
+    label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
+    selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val focusScale by animateFloatAsState(
+        if (focused && !reduced) 1.018f else 1f,
+        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 850f),
+        label = "nav-tab-focus"
+    )
+    val fill = when {
+        focused -> Color(0xFFF0F1F3)
+        selected -> Color(0xFFD3D6DB)
+        else -> Color.Transparent
+    }
+    val textColor = if (focused || selected) Color(0xFF1D222B) else Color(0xE6EEF1F6)
+    Box(modifier.graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
+        .clip(RoundedCornerShape(22.dp))
+        .background(fill)
+        .clickable(onClick = onClick)
+        .padding(horizontal = 12.dp, vertical = 7.dp),
+        contentAlignment = Alignment.Center) {
+        // Top250's Latin letters and numerals appear optically larger than CJK glyphs
+        // at equal sp. Set it one step smaller for balanced visual height.
+        Text(label, color = textColor,
+            fontSize = if (label == "Top250") 12.sp else 13.sp,
+            fontWeight = FontWeight.Medium)
+    }
+}
+
+/** Search lives in the centered tab rail; settings remains independently on the far right.
+ * Both glyphs share subdued stroke weights with the new typographic tabs. */
+@Composable
+private fun TvHeaderIconButton(
+    gear: Boolean, modifier: Modifier = Modifier, reduced: Boolean = false,
+    selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(22.dp)
+    val focusScale by animateFloatAsState(
+        if (focused && !reduced) 1.025f else 1f,
+        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 850f),
+        label = "header-icon-focus"
+    )
+    val foreground = if (focused || selected) Color(0xFF1D222B) else Color(0xDCEBF0F7)
+    val label = if (gear) "设置" else "搜索"
+    Box(modifier.size(if (gear) 35.dp else 33.dp)
+        .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+        .semantics { contentDescription = label }
+        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
+        .clip(shape)
+        .background(if (focused) Color(0xFFF0F1F3)
+            else if (selected) Color(0xFFD3D6DB) else Color.Transparent)
+        .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(if (gear) 18.dp else 17.dp)) {
+            val d = size.minDimension
+            val centerAt = Offset(d / 2f, d / 2f)
+            if (!gear) {
+                drawCircle(foreground, radius = d * 0.28f,
+                    center = Offset(d * 0.40f, d * 0.40f),
+                    style = Stroke(width = d * 0.09f))
+                drawLine(foreground,
+                    Offset(d * 0.61f, d * 0.61f),
+                    Offset(d * 0.88f, d * 0.88f),
+                    strokeWidth = d * 0.11f, cap = StrokeCap.Round)
+            } else {
+                drawCircle(foreground, radius = d * 0.29f, center = centerAt,
+                    style = Stroke(width = d * 0.10f))
+                drawCircle(foreground, radius = d * 0.087f, center = centerAt,
+                    style = Stroke(width = d * 0.075f))
+                for (index in 0 until 8) {
+                    val angle = (index * kotlin.math.PI / 4).toFloat()
+                    val ux = kotlin.math.cos(angle)
+                    val uy = kotlin.math.sin(angle)
+                    drawLine(foreground,
+                        Offset(centerAt.x + ux * d * 0.35f,
+                            centerAt.y + uy * d * 0.35f),
+                        Offset(centerAt.x + ux * d * 0.46f,
+                            centerAt.y + uy * d * 0.46f),
+                        strokeWidth = d * 0.095f, cap = StrokeCap.Round)
+                }
+            }
+        }
+    }
+}
+
+/** Eight text tabs plus the search icon form one *centered* navigation group. */
 @Composable
 private fun TvNavTabs(
     category: String,
@@ -193,25 +291,38 @@ private fun TvNavTabs(
     downTarget: FocusRequester?,
     requester: (String) -> FocusRequester,
     onFocus: (String) -> Unit,
-    onSelect: (String) -> Unit
+    onSelect: (String) -> Unit,
+    onSearch: () -> Unit
 ) {
-    val categories = remember { listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "直播", "我的") }
+    val categories = remember {
+        listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播")
+    }
     Row(
-        Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
-            .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
-            .padding(horizontal = 5.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        Modifier.testTag("nav-shell")
+            .clip(RoundedCornerShape(50.dp))
+            .background(Color(0xAD121820))
+            .border(1.dp, Color(0x2EFFFFFF), RoundedCornerShape(50.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         categories.forEach { cat ->
-            TvButton(cat,
+            TvNavTab(if (cat == "Top 250") "Top250" else cat,
                 Modifier.testTag("nav-$cat")
                     .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
                         else Modifier)
                     .focusRequester(requester("nav-$cat")),
-                reducedMotion, category == cat && !isSearch,
-                quiet = true, onFocus = { onFocus("nav-$cat") }
+                reduced = reducedMotion, selected = category == cat && !isSearch,
+                onFocus = { onFocus("nav-$cat") }
             ) { onSelect(cat) }
         }
+        TvHeaderIconButton(gear = false,
+            modifier = Modifier.testTag("search")
+                .then(if (downTarget != null) Modifier.focusProperties { down = downTarget }
+                    else Modifier)
+                .focusRequester(requester("search")),
+            reduced = reducedMotion, selected = isSearch,
+            onFocus = { onFocus("search") }, onClick = onSearch)
     }
 }
 
@@ -264,6 +375,25 @@ private fun Herrin() {
     var pendingLiveSearchFocus by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
     val uiScope = rememberCoroutineScope()
+    val personalImdbRatings = remember(context) { HerrinImdbRatings(context) }
+    var imdbRatingsEpoch by remember { mutableIntStateOf(0) }
+    var imdbImportStatus by remember { mutableStateOf("IMDb 数据需用户自行导入；不随开源 APK 分发") }
+    val imdbImportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) uiScope.launch {
+            imdbImportStatus = "正在本机导入 IMDb ratings TSV.gz；不上传文件…"
+            val result = runCatching { personalImdbRatings.importUserFile(uri) }
+            imdbImportStatus = result.fold(
+                onSuccess = { count ->
+                    imdbRatingsEpoch++
+                    "已导入 " + count + " 条本地 IMDb 评分（仅保存在本设备）"
+                },
+                onFailure = { "IMDb 数据导入失败，请确认文件为 title.ratings.tsv.gz" }
+            )
+        }
+    }
+
     val profileStore = remember(context) { CatalogProfiles(context) }
     val watchHistory = remember(context) { PlaybackHistory(context) }
     val demoCatalog: CatalogSource = remember { DemoCatalog() }
@@ -298,7 +428,7 @@ private fun Herrin() {
     var epgRefresh by remember { mutableIntStateOf(0) }
     var liveClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var liveRefresh by remember { mutableIntStateOf(0) }
-    val liveFavoriteScope = if (prefs.tvBoxLiveActive) "tvbox-selected-live" else prefs.livePlaylistUrl
+    val liveFavoriteScope = if (prefs.livePlaylistUrl.isNotBlank()) prefs.livePlaylistUrl else "tvbox-selected-live"
     LaunchedEffect(epgRefresh) {
         val endpoint = prefs.liveEpgUrl
         if (endpoint.isBlank()) {
@@ -318,25 +448,48 @@ private fun Herrin() {
     }
     LaunchedEffect(liveRefresh) {
         val endpoint = prefs.livePlaylistUrl
-        if (prefs.tvBoxLiveActive) {
-            liveChannels = tvBoxLiveStore.load()
-            liveStatus = if (liveChannels.isEmpty()) "上次导入的 TVBox 频道已失效，请重新导入"
-                else "已从本地加载 ${liveChannels.size} 个 TVBox 直播频道"
-        } else if (endpoint.isBlank()) {
-            liveChannels = emptyList()
-            liveStatus = "请在设置中配置自己的授权 HTTPS M3U 直播列表"
+        // Direct M3U always has priority. TVBox is a per-channel backup,
+        // never allowed to silently shadow a working user-supplied playlist.
+        // A cached TVBox playlist is not authorization to activate it.
+        // Only a playlist the user explicitly applied in current preferences
+        // may participate as a live source or backup after relaunch/reset.
+        val tvBoxBackup = if (prefs.tvBoxLiveActive) tvBoxLiveStore.load() else emptyList()
+        if (endpoint.isBlank()) {
+            liveChannels = tvBoxBackup
+            liveStatus = if (tvBoxBackup.isEmpty())
+                "请在设置中配置自己的授权 M3U 或 TVBox 直播源"
+            else "已加载 ${tvBoxBackup.size} 条 TVBox 备用直播线路"
         } else {
-            liveStatus = "正在加载授权直播列表…"
+            liveStatus = "正在优先读取独立直播源…"
             when (val loaded = liveRepo.load(endpoint)) {
                 is LivePlaylistResult.Ready -> {
-                    liveChannels = loaded.channels
-                    liveStatus = "已加载 ${loaded.channels.size} 个授权直播频道"
+                    liveChannels = HerrinLivePriority.combine(loaded.channels, tvBoxBackup)
+                    liveStatus = "独立直播源 ${loaded.channels.size} 条优先；TVBox 备用 ${tvBoxBackup.size} 条"
                 }
-                is LivePlaylistResult.Error -> liveStatus = if (liveChannels.isEmpty()) loaded.reason
-                    else "${loaded.reason}；保留上次读取的频道列表"
+                is LivePlaylistResult.Error -> {
+                    liveChannels = tvBoxBackup.ifEmpty { liveChannels }
+                    liveStatus = if (tvBoxBackup.isNotEmpty())
+                        "独立直播源读取失败，已使用 ${tvBoxBackup.size} 条 TVBox 备用线路"
+                    else if (liveChannels.isEmpty()) loaded.reason
+                    else "${loaded.reason}；保留上次频道列表"
+                }
             }
         }
     }
+    var personalSourceConfigEpoch by remember { mutableIntStateOf(0) }
+    var nasDavUrlDraft by remember { mutableStateOf(prefs.nasWebDavUrl) }
+    var cloudDavUrlDraft by remember { mutableStateOf(prefs.cloudWebDavUrl) }
+    var nasDavUserDraft by remember { mutableStateOf("") }
+    var nasDavPasswordDraft by remember { mutableStateOf("") }
+    var cloudDavUserDraft by remember { mutableStateOf("") }
+    var cloudDavPasswordDraft by remember { mutableStateOf("") }
+    var personalSourceFeedback by remember { mutableStateOf("") }
+    var tmdbHomeFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
+    var tmdbTop250Films by remember { mutableStateOf<List<Film>>(emptyList()) }
+    val tmdbResolved = remember { mutableStateMapOf<String, Film>() }
+    val tmdbPersonalPlayback = remember { mutableStateMapOf<String, Map<String, PlaybackMedia>>() }
+    var tmdbDiscoveryStatus by remember { mutableStateOf("") }
+    var tmdbSourceStatus by remember { mutableStateOf("") }
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
     var filmId by rememberSaveable { mutableStateOf(demoFilms.first().id) }
@@ -616,10 +769,12 @@ private fun Herrin() {
                     vodImportFeedback = "未获取到影片"
                 }
             }
-            // TVBox single warehouses can carry their own live channel groups.
-            // Respect an independently configured live source if one exists.
-            if (prefs.tvBoxLiveSourceUrl.isBlank() && prefs.livePlaylistUrl.isBlank() &&
-                !prefs.tvBoxLiveActive) {
+            // Always build a backup channel pool from user-applied TVBox
+            // warehouses, EVEN when an independent M3U is configured. The
+            // independent playlist remains first in HerrinLivePriority.combine.
+            if (prefs.tvBoxLiveSourceUrl.isBlank()) {
+                var backups = tvBoxLiveStore.load()
+                var added = false
                 for (live in tvBoxSingle!!.lives.take(4)) {
                     val loaded = if (live.channels.isNotEmpty()) {
                         val channels = live.channels.filter { TvBoxUrl.normalize(it.url, true) != null }
@@ -627,12 +782,18 @@ private fun Herrin() {
                         else TvBoxLiveResult.Ready(channels)
                     } else if (live.sourceUrl != null) tvBoxLiveRepo.load(live.sourceUrl, true)
                     else continue
-                    if (loaded is TvBoxLiveResult.Ready && tvBoxLiveStore.save(loaded.channels, true)) {
-                        prefs.tvBoxLiveActive = true
-                        liveRefresh++
-                        tvBoxStatus += "；直播页已导入 ${loaded.channels.size} 个频道"
-                        break
+                    if (loaded is TvBoxLiveResult.Ready) {
+                        val merged = HerrinLivePriority.combine(backups, loaded.channels).take(250)
+                        if (merged.size > backups.size) {
+                            backups = merged
+                            added = true
+                        }
                     }
+                }
+                if (added && tvBoxLiveStore.save(backups, true)) {
+                    if (prefs.livePlaylistUrl.isBlank()) prefs.tvBoxLiveActive = true
+                    liveRefresh++
+                    tvBoxStatus += "；已备份 ${backups.size} 条 TVBox 直播线路（独立直播源优先）"
                 }
             }
         }
@@ -648,8 +809,12 @@ private fun Herrin() {
     var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
     var catalogRefresh by remember { mutableIntStateOf(0) }
-    val sourceConfigured = configuredTvBoxUrl.isNotBlank()
-    val films = providerFilms ?: if (sourceConfigured) emptyList() else demoFilms
+    val sourceConfigured = configuredTvBoxUrl.isNotBlank() || tmdbHomeFilms.isNotEmpty() ||
+        prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
+    val films = if (tmdbHomeFilms.isNotEmpty()) {
+        (tmdbHomeFilms + tmdbTop250Films).distinctBy(Film::id)
+            .map { tmdbResolved[it.id] ?: it }
+    } else providerFilms ?: if (sourceConfigured) emptyList() else demoFilms
     fun readDeviceStatus(): String {
         val activity = context as? ComponentActivity ?: return "当前环境不支持读取屏幕刷新率"
         @Suppress("DEPRECATION")
@@ -743,6 +908,9 @@ private fun Herrin() {
     var query by rememberSaveable { mutableStateOf("") }
     var searchCategory by rememberSaveable { mutableStateOf("全部") }
     var searchNewestFirst by rememberSaveable { mutableStateOf(false) }
+    // Saved under Search; Home intentionally has no independent Favorites/Filter tab.
+    var searchFavoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var showSearchAdvancedFilters by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
     var detailSelectedSeason by rememberSaveable { mutableIntStateOf(0) }
@@ -762,7 +930,8 @@ private fun Herrin() {
             screen = "live-player"
         }
     }
-    val catalogScope = tvBoxVodScope ?: prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
+    val catalogScope = if (tmdbHomeFilms.isNotEmpty()) "tmdb:discovery"
+        else tvBoxVodScope ?: prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
     // Only the source's playback identity survives enrichment. Every network
     // result modifies display fields in-place and never alters episode links,
     // favorites IDs or history keys.
@@ -792,6 +961,208 @@ private fun Herrin() {
             metadataRescanEpoch++
         }
     }
+    val tmdbDiscovery = remember { HerrinTmdbDiscovery() }
+    // TMDB is the authoritative discovery index. No video-site homepage is
+    // consulted to build the hero, ratings or poster rails.
+    LaunchedEffect(metadataToken, tmdbConnectivity) {
+        if (tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
+        tmdbDiscoveryStatus = "正在加载 TMDB 热播影片与类型推荐…"
+        val keys = listOf("trending-movies", "trending-tv", "new-movies",
+            "on-air-tv", "top250", "sci-fi", "action", "mystery", "animation")
+        val loaded = mutableListOf<Film>()
+        for (key in keys) {
+            val section = tmdbDiscovery.sections.first { it.key == key }
+            val shelf = runCatching { tmdbDiscovery.load(section, metadataToken) }.getOrNull()
+            if (shelf != null) loaded += shelf.films
+        }
+        if (loaded.isNotEmpty()) {
+            tmdbHomeFilms = loaded.distinctBy(Film::id)
+            if (tmdbHomeFilms.none { it.id == filmId }) filmId = tmdbHomeFilms.first().id
+            tmdbDiscoveryStatus = "TMDB 已加载 ${tmdbHomeFilms.size} 部作品；播放时优先检索 NAS／云盘"
+        } else {
+            tmdbDiscoveryStatus = "TMDB 未返回可用影视资料；保留已配置的本地片库"
+        }
+    }
+    LaunchedEffect(category, metadataToken, tmdbConnectivity) {
+        if (category != "Top 250" || tmdbConnectivity != TmdbProbeState.CONNECTED ||
+            metadataToken.isBlank() || tmdbTop250Films.size >= 250) return@LaunchedEffect
+        tmdbDiscoveryStatus = "正在读取 TMDB 高分电影 Top 250…"
+        val shelf = runCatching { tmdbDiscovery.loadTop250(metadataToken) }.getOrNull()
+        if (shelf != null) {
+            tmdbTop250Films = shelf.films
+            tmdbDiscoveryStatus = if (shelf.isComplete)
+                "TMDB Top 250 已加载 250 部电影"
+            else "TMDB 高分榜只加载了 ${shelf.films.size} 部；可稍后重试"
+        }
+    }
+    // A TMDB detail starts a REAL per-title resource lookup. This never uses
+    // the scraped poster/title as an executable source or auto-plays a video.
+    LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle,
+        tvBoxWarehouses, personalSourceConfigEpoch) {
+        if (screen != "detail" || !filmId.startsWith("tmdb-") ||
+            tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true) return@LaunchedEffect
+        val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
+            ?: return@LaunchedEffect
+        val tmdbKey = tmdbDiscovery.identity(tmdbFilm) ?: return@LaunchedEffect
+        val targetId = tmdbFilm.id
+        val searchIdentity = HerrinFilmIdentity(
+            tmdbKey.second, tmdbKey.first,
+            listOf(tmdbFilm.title, tmdbFilm.subtitle).filter(String::isNotBlank),
+            tmdbFilm.year.toIntOrNull()
+        )
+        tmdbSourceStatus = "正在优先检索 NAS／云盘的对应影片…"
+        val currentTvbox = tvBoxSingle
+        val importedWarehouses = tvBoxWarehouses.take(3)
+        // Spider is a privileged plugin: only an existing user-applied session
+        // may be searched. Never start a new Spider while browsing TMDB.
+        val activeSpiderKey = spiderBridge.approvedActiveSiteKey()
+        val approvedSpiderSite = if (spiderActive && activeSpiderKey != null)
+            currentTvbox?.sites?.firstOrNull { it.key == activeSpiderKey &&
+                (it.spiderApi != null || it.scriptApi != null) }
+        else null
+        val nasUrl = prefs.nasWebDavUrl
+        val cloudUrl = prefs.cloudWebDavUrl
+        val allowNasHttp = prefs.nasAllowHttp
+        val allowCloudHttp = prefs.cloudAllowHttp
+        val (verified, sources) = withContext(Dispatchers.IO) {
+            val adapters = mutableListOf<HerrinFilmSource>()
+            for ((slot, url, insecure, kind) in listOf(
+                listOf("nas", nasUrl, allowNasHttp.toString(), "NAS"),
+                listOf("cloud", cloudUrl, allowCloudHttp.toString(), "CLOUD")
+            )) {
+                if (url.isBlank()) continue
+                val login = HerrinPersonalCredentialStore(context, slot).load()
+                val account = HerrinWebDavAccount(
+                    if (slot == "nas") "NAS" else "云盘", url,
+                    login.first, login.second,
+                    if (kind == "NAS") HerrinSourceType.NAS else HerrinSourceType.CLOUD,
+                    insecure.toBoolean()
+                )
+                runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
+            }
+            val directSites = mutableListOf<TvBoxSite>()
+            directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(6)
+            // Multiwarehouse configs are loaded as data (no JAR/JS execution).
+            // Only user-imported root warehouse URLs are eligible for bounded
+            // lookup; cap fan-out so a TV does not stall or scan the internet.
+            for (warehouse in importedWarehouses) {
+                if (directSites.size >= 10) break
+                when (val nested = tvBoxRepository.load(warehouse.url, tvBoxAllowHttp, preferCached = true)) {
+                    is TvBoxConfig.Single ->
+                        directSites += nested.sites.filter { it.apiUrl != null }.take(2)
+                    else -> Unit
+                }
+            }
+            directSites.distinctBy { it.apiUrl }.take(10).forEach { site ->
+                adapters += HerrinTvBoxCmsSource(site, tvBoxVodRepo, tvBoxAllowHttp)
+            }
+            approvedSpiderSite?.let { site ->
+                adapters += HerrinTvBoxSpiderSource(site, spiderBridge)
+            }
+            val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
+            val remotes = adapters.associateBy { it.id }
+            val resolved = HerrinVerifiedSourceResolver(adapters).find(
+                searchIdentity,
+                personalPlayback = { offer ->
+                    personals[offer.sourceId]?.playback(offer)
+                        ?: PlaybackResult.Unavailable("该个人媒体来源未授权")
+                },
+                remoteDetails = { offer ->
+                    withTimeoutOrNull(4_000L) {
+                        when (val adapter = remotes[offer.sourceId]) {
+                            is HerrinTvBoxCmsSource ->
+                                (adapter.details(offer) as? TvBoxVodDetailResult.Ready)?.film
+                            is HerrinTvBoxSpiderSource ->
+                                (adapter.details(offer) as? SpiderResult.Ready)?.value
+                            else -> null
+                        }
+                    }
+                }
+            )
+            resolved to adapters
+        }
+        val lookup = verified.lookup
+        val found = lookup.options.firstOrNull()
+        if (found == null) {
+            tmdbSourceStatus = "NAS／云盘／已接入 CMS 中未找到可信匹配的片源；影片资料仍可浏览"
+            return@LaunchedEffect
+        }
+        when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
+            is HerrinWebDavSource -> {
+                val playlist = verified.personalPlaylist
+                if (playlist == null || playlist.episodes.isEmpty()) {
+                    tmdbSourceStatus = "个人媒体没有可用的授权播放线路，已尝试其他来源"
+                    return@LaunchedEffect
+                }
+                tmdbPersonalPlayback[targetId] = playlist.mediaByLine
+                activeCmsSite = null
+                spiderActive = false
+                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                    playbackEpisodes = playlist.episodes,
+                    episodes = playlist.episodes.size
+                )
+                tmdbSourceStatus = "已找到 ${playlist.episodes.size} 组个人媒体选集、${playlist.mediaByLine.size} 条可选清晰度线路"
+            }
+            is HerrinTvBoxSpiderSource -> {
+                val detailed = verified.sourceDetails
+                if (detailed == null || detailed.playbackEpisodes.isEmpty()) {
+                    tmdbSourceStatus = "Spider 搜索完成，但没有可用选集"
+                    return@LaunchedEffect
+                }
+                tmdbPersonalPlayback.remove(targetId)
+                activeCmsSite = null
+                spiderActive = true
+                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                    spiderVodId = detailed.spiderVodId,
+                    playbackEpisodes = detailed.playbackEpisodes,
+                    episodes = maxOf(1, detailed.playbackEpisodes.size)
+                )
+                tmdbSourceStatus = "已匹配已授权的 Spider 影视点：${adapter.site.name}"
+            }
+            is HerrinTvBoxCmsSource -> {
+                val detailed = verified.sourceDetails
+                if (detailed == null || detailed.playbackEpisodes.isEmpty()) {
+                    tmdbSourceStatus = "TVBox 搜索完成，但没有可用选集"
+                    return@LaunchedEffect
+                }
+                tmdbPersonalPlayback.remove(targetId)
+                activeCmsSite = adapter.site
+                spiderActive = false
+                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                    cmsVodId = detailed.cmsVodId,
+                    playbackEpisodes = detailed.playbackEpisodes,
+                    episodes = maxOf(1, detailed.playbackEpisodes.size)
+                )
+                tmdbSourceStatus = "已匹配 TVBox ${adapter.site.name} · ${detailed.playbackEpisodes.size} 集"
+            }
+            else -> tmdbSourceStatus = "影视源没有返回可用于当前播放器的授权线路"
+        }
+    }
+    LaunchedEffect(screen, filmId, metadataToken, imdbRatingsEpoch) {
+        if (screen != "detail" || !filmId.startsWith("tmdb-") ||
+            metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
+            return@LaunchedEffect
+        val filmToEnrich = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
+            ?: return@LaunchedEffect
+        val detailed = runCatching { tmdbDiscovery.detail(filmToEnrich, metadataToken) }.getOrNull()
+            ?: return@LaunchedEffect
+        val imdbScore = withContext(Dispatchers.IO) {
+            runCatching { personalImdbRatings.lookup(detailed.imdbId) }.getOrNull()
+        }
+        val current = tmdbResolved[detailed.id] ?: filmToEnrich
+        tmdbResolved[detailed.id] = current.copy(
+            synopsis = detailed.synopsis,
+            actors = detailed.actors,
+            directors = detailed.directors,
+            people = detailed.people,
+            regions = detailed.regions,
+            releaseDate = detailed.releaseDate,
+            runtimeMinutes = detailed.runtimeMinutes,
+            imdbId = detailed.imdbId,
+            imdbRating = imdbScore?.value,
+            imdbVotes = imdbScore?.votes
+        )
+    }
     // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
     val catalogIdentity = remember(providerFilms) {
         providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
@@ -815,8 +1186,8 @@ private fun Herrin() {
         // A configuration-only success never authorizes bulk search. Wait for
         // a real TMDB search endpoint response; otherwise 0/20 looks like
         // twenty bad movie names when the API is rate-limited or blocked.
-        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
-            return@LaunchedEffect
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED ||
+            tmdbHomeFilms.isNotEmpty()) return@LaunchedEffect
         val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
         // Network work stays at most three concurrent, but catalog publication
         // is coalesced to one update per 12 items instead of one per item.
@@ -865,8 +1236,8 @@ private fun Herrin() {
     // cap are matched *on demand* after cursor dwell, instead of reintroducing
     // a second TMDB client inside every visible PosterArtwork composable.
     LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
-        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
-            return@LaunchedEffect
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED ||
+            tmdbHomeFilms.isNotEmpty()) return@LaunchedEffect
         delay(ArtworkScrapePolicy.FOCUS_DWELL_MS)
         val candidates = providerFilms.orEmpty()
         val index = candidates.indexOfFirst { it.id == filmId }
@@ -918,7 +1289,7 @@ private fun Herrin() {
             hasEnteredHome = true
         }
     }
-    val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
+    val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
     val facetResultState = rememberLazyListState()
     // M4.25: only the active, already-loaded catalog is grouped. This is a
     // display projection; Film.id and the licensed playback paths stay intact.
@@ -1469,12 +1840,12 @@ private fun Herrin() {
             }
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
-                0.0f to Color(0xF905080D), 0.32f to Color(0xD9060A11),
-                0.66f to Color(0x4B060911), 1.0f to Color(0x13060911)
+                0.0f to Color(0xEA05080D), 0.36f to Color(0xBD060A11),
+                0.68f to Color(0x32060911), 1.0f to Color(0x10060911)
             )))
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
-                0.0f to Color(0x8A05070B), 0.18f to Color.Transparent,
-                0.53f to Color(0x1B05070B), 1.0f to Color(0xF606080B)
+                0.0f to Color(0x7C05070B), 0.17f to Color.Transparent,
+                0.54f to Color(0x2105070B), 1.0f to Color(0xF606080B)
             )))
         }
         // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
@@ -1639,10 +2010,23 @@ private fun Herrin() {
                 // Focus color animations can recompose every frame: searching,
                 // regrouping and reading playback history must NOT run per frame.
                 val filtered = remember(showCatalog, films, category, isSearch,
-                    query, searchCategory, searchNewestFirst, favorites) {
-                    if (isSearch) showCatalog.search(query, searchCategory, searchNewestFirst)
-                    else if (category == "我的") showCatalog.favorites(favorites)
-                    else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
+                    query, searchCategory, searchNewestFirst, favorites, searchFavoritesOnly,
+                    facetSelection, tmdbTop250Films) {
+                    if (isSearch) {
+                        val queried = showCatalog.search(query, searchCategory, searchNewestFirst)
+                        val favoritesOnly = if (searchFavoritesOnly) {
+                            val liked = showCatalog.favorites(favorites).map { it.id }.toSet()
+                            queried.filter { it.id in liked }
+                        } else queried
+                        showCatalog.collapse(FilmFacetFilters.results(favoritesOnly, facetSelection))
+                    }
+                    else if (category == "Top 250" && tmdbHomeFilms.isNotEmpty())
+                        showCatalog.collapse(tmdbTop250Films.map { tmdbResolved[it.id] ?: it })
+                    else showCatalog.collapse(films.filter {
+                        category == "首页" || it.category == category ||
+                            (category in setOf("科幻", "动作", "悬疑", "喜剧") &&
+                                category in it.genres)
+                    })
                 }
                 // History is recomputed on returning from playback or when the
                 // source/catalog changes, not on every D-pad/animation frame.
@@ -1681,50 +2065,52 @@ private fun Herrin() {
                     alpha = sceneReveal.value
                     translationY = (1f - sceneReveal.value) * sceneLift
                 }.verticalScroll(browseScroll).padding(horizontal = 40.dp, vertical = 14.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.size(34.dp).border(1.dp, Color(0xA5EFF2F8), RoundedCornerShape(9.dp)),
+                    Box(Modifier.fillMaxWidth().heightIn(min = 51.dp)) {
+                        Row(Modifier.align(Alignment.CenterStart).testTag("header-brand"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Box(Modifier.size(27.dp)
+                                .border(1.dp, Color(0x6FE2EAF3), RoundedCornerShape(7.dp)),
                                 contentAlignment = Alignment.Center) {
-                                Text("H", fontSize = 21.sp, fontWeight = FontWeight.Light, color = Color.White)
+                                Text("H", fontSize = 16.sp, fontWeight = FontWeight.Light,
+                                    color = Color(0xE7F3F5F8))
                             }
-                            Text("HERRIN", letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
+                            Text("HERRIN", letterSpacing = 2.5.sp,
+                                fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                                color = Color(0xE4F0F2F6))
                         }
-                        TvNavTabs(category, isSearch, focusId, reduceMotion, headerDownTarget,
+                        Box(Modifier.align(Alignment.Center)) {
+                            TvNavTabs(category, isSearch, focusId, reduceMotion, headerDownTarget,
                             { id -> requester(id) },
-                            onFocus = { focusId = it }) { selected ->
-                            category = selected
-                            if (selected == "直播" && liveChannels.isNotEmpty()) {
-                                if (activeLiveChannel?.url !in liveChannels.map { it.url }) {
-                                    activeLiveChannel = liveChannels.first()
-                                }
-                                screen = "live-player"
-                            } else screen = "browse"
+                            onFocus = { focusId = it },
+                            onSelect = { selected ->
+                                category = selected
+                                if (selected == "直播" && liveChannels.isNotEmpty()) {
+                                    if (activeLiveChannel?.url !in liveChannels.map { it.url }) {
+                                        activeLiveChannel = liveChannels.first()
+                                    }
+                                    screen = "live-player"
+                                } else screen = "browse"
+                            },
+                            onSearch = { focusId = "search"; screen = "search" })
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TvButton("搜索", Modifier.testTag("search")
-                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
-                                .focusRequester(requester("search")), reduceMotion, quiet = true,
-                                onFocus = { focusId = "search" }) { screen = "search" }
-                            TvButton("筛选", Modifier.testTag("facets")
-                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
-                                .focusRequester(requester("facets")), reduceMotion, quiet = true,
-                                onFocus = { focusId = "facets" }) {
-                                facetsReturnScreen = screen
-                                focusId = "screen-first"
-                                screen = "facets"
-                            }
-                            TvButton("设置", Modifier.testTag("settings")
-                                .then(if (headerDownTarget != null) Modifier.focusProperties { down = headerDownTarget } else Modifier)
-                                .focusRequester(requester("settings")), reduceMotion,
-                                quiet = true, onFocus = { focusId = "settings" }) {
-                                settingsTvBoxOnly = true
-                                screen = "settings"
-                            }
+                        TvHeaderIconButton(gear = true,
+                            modifier = Modifier.align(Alignment.CenterEnd)
+                                .testTag("settings")
+                                // Let the standalone gear sit directly on the hero:
+                                // only D-pad focus should introduce a visible fill.
+                                .then(if (headerDownTarget != null)
+                                    Modifier.focusProperties { down = headerDownTarget }
+                                    else Modifier)
+                                .focusRequester(requester("settings")),
+                            reduced = reduceMotion, onFocus = { focusId = "settings" }) {
+                            settingsTvBoxOnly = true
+                            screen = "settings"
                         }
                     }
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
-                        Text(if (providerFilms == null) "搜索 · 离线演示片库" else "搜索 · 当前授权目录", fontSize = 24.sp)
+                        Text("搜索影片 · 类型与资料筛选", fontSize = 24.sp)
                         OutlinedTextField(query, { query = it }, Modifier.testTag("search-input")
                             .focusProperties { down = requester("search-filter-全部") }
                             .focusRequester(requester("search-input"))
@@ -1748,10 +2134,60 @@ private fun Herrin() {
                                 selected = searchNewestFirst, reduced = reduceMotion, quiet = true,
                                 onFocus = { focusId = "search-sort" }
                             ) { searchNewestFirst = !searchNewestFirst }
+                            TvButton(if (searchFavoritesOnly) "★ 已收藏" else "☆ 我的收藏",
+                                modifier = Modifier.testTag("search-favorites")
+                                    .focusRequester(requester("search-favorites")),
+                                reduced = reduceMotion, selected = searchFavoritesOnly,
+                                quiet = true, onFocus = { focusId = "search-favorites" }) {
+                                searchFavoritesOnly = !searchFavoritesOnly
+                            }
+                            TvButton(if (showSearchAdvancedFilters) "收起筛选" else
+                                if (facetSelection.isEmpty) "更多筛选" else "更多筛选 · 已启用",
+                                modifier = Modifier.testTag("search-advanced-toggle")
+                                    .focusRequester(requester("search-advanced-toggle")),
+                                reduced = reduceMotion, selected = showSearchAdvancedFilters,
+                                quiet = true, onFocus = { focusId = "search-advanced-toggle" }) {
+                                showSearchAdvancedFilters = !showSearchAdvancedFilters
+                            }
                         }
-                        Text("当前筛选：$searchCategory · ${filtered.size} 个结果",
+                        Text("搜索结果 · ${filtered.size} 部 · ${searchCategory}" +
+                            (if (searchFavoritesOnly) " · 我的收藏" else "") +
+                            (if (!facetSelection.isEmpty) " · 高级条件" else ""),
                             modifier = Modifier.testTag("search-filter-status"),
                             fontSize = 12.sp, color = Color(0xFFC4CDDC))
+                        if (showSearchAdvancedFilters) {
+                            Column(Modifier.fillMaxWidth().testTag("search-advanced-filters"),
+                                verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("资料筛选 · 多条件组合", fontSize = 17.sp,
+                                        fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    TvButton("重置筛选", Modifier.testTag("search-facet-reset"),
+                                        reduced = reduceMotion, quiet = true) {
+                                        facetActor = null; facetDirector = null; facetRegion = null
+                                        facetYear = null; facetCategory = null; facetRating = null
+                                    }
+                                }
+                                FacetRail("分类", "category", FilmFacetFilters.categories(films),
+                                    facetCategory, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetCategory = it })
+                                FacetRail("年份", "year", FilmFacetFilters.years(films),
+                                    facetYear, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetYear = it })
+                                FacetRail("演员", "actor", FilmFacetFilters.actors(films),
+                                    facetActor, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetActor = it })
+                                FacetRail("导演", "director", FilmFacetFilters.directors(films),
+                                    facetDirector, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetDirector = it })
+                                FacetRail("国家 / 地区", "region", FilmFacetFilters.regions(films),
+                                    facetRegion, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetRegion = it })
+                                FacetRail("TMDB 评分", "rating", FilmFacetFilters.ratingBands,
+                                    facetRating, reduceMotion, onFocus = { focusId = it },
+                                    onSelect = { facetRating = it })
+                            }
+                        }
                         // An on-screen keyboard also permits search without a hardware keyboard or IME.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             suggestions.forEachIndexed { index, word ->
@@ -1786,34 +2222,38 @@ private fun Herrin() {
                         Spacer(Modifier.height(24.dp))
                     } else {
                         Spacer(Modifier.height(132.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.width(18.dp).height(2.dp).background(Color.White))
-                            Text(if (providerFilms == null) "HERRIN  ·  ORIGINAL PREMIERE" else "HERRIN  ·  USER CATALOG", fontSize = 12.sp, letterSpacing = 2.sp,
-                                fontWeight = FontWeight.Medium, color = Color(0xFFE5EAF2))
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Box(Modifier.width(13.dp).height(1.dp)
+                                .background(Color(0xB8DCE5F0)))
+                            Text(if (tmdbHomeFilms.isNotEmpty()) "TMDB 精选"
+                                else if (providerFilms == null) "演示片库" else "我的媒体",
+                                fontSize = 11.sp, letterSpacing = 1.2.sp,
+                                fontWeight = FontWeight.Medium, color = Color(0xC2DDE6F0))
                         }
                         Spacer(Modifier.height(11.dp))
-                        Text(displayFilm.title, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.sp, color = Color.White, lineHeight = 49.sp)
-                        Text(displayFilm.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
-                            color = Color(0xFFE4E7EF))
+                        Text(displayFilm.title, fontSize = 42.sp, fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.4.sp, color = Color(0xFFF5F7FA), lineHeight = 48.sp)
+                        Text(displayFilm.subtitle, fontSize = 12.sp, letterSpacing = 2.3.sp,
+                            color = Color(0xCADFE5EE))
                         Spacer(Modifier.height(12.dp))
-                        Text("${displayFilm.year}   ·   ${displayFilm.category}   ·   ${if (providerFilms == null) "ORIGINAL UI DEMO" else "USER-SUPPLIED CATALOG"}",
-                            fontSize = 13.sp, color = Color(0xFFF3F5F8))
+                        Text("${displayFilm.year}   ·   ${displayFilm.category}",
+                            fontSize = 12.sp, color = Color(0xD3E6EBF2))
                         if (displayFilm.ratingValue != null || displayFilm.genres.isNotEmpty())
                             Text(listOfNotNull(FilmMetadataEnrichment.ratingLabel(displayFilm),
                                 displayFilm.genres.take(3).joinToString(" · ").takeIf { it.isNotBlank() })
                                 .joinToString("   ·   "), fontSize = 13.sp,
                                 color = Color(0xFFE8CDA0), modifier = Modifier.testTag("hero-metadata"))
-                        Text(displayFilm.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 6.dp),
-                            fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
-                            color = Color(0xFFE0E4EA))
+                        Text(displayFilm.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 7.dp),
+                            fontSize = 12.sp, lineHeight = 19.sp, maxLines = 2,
+                            color = Color(0xCCDCE5EE))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton(if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
+                            TvButton(if (film.id.startsWith("tmdb-")) "搜索片源与选集" else if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
                                 selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },
                                 modifier = Modifier.testTag("play")
                                     .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
                                     .focusRequester(requester("play"))) {
-                                if (showGroup != null || providerFilms != null) details(film)
+                                if (film.id.startsWith("tmdb-") || showGroup != null || providerFilms != null) details(film)
                                 else {
                                     returnScreen = "browse"
                                     episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
@@ -2217,7 +2657,10 @@ private fun Herrin() {
                     CmsBrowserPlayback(cmsLine.uri, cmsBrowserParser, tvBoxAllowHttp, playerRetryEpoch)
                 else null
                 val cmsParseWaiting = (cmsJsonParser != null || cmsBrowserParser != null) && parsedCms == null
-                val licensed = if (spiderActive && screen == "player") spiderResolved
+                val personalMedia = if (screen == "player")
+                    tmdbPersonalPlayback[film.id]?.get(line) else null
+                val licensed = if (personalMedia != null) PlaybackResult.Ready(personalMedia)
+                    else if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
                             if (cmsJsonParser != null || cmsBrowserParser != null) parsedCms
@@ -2229,6 +2672,7 @@ private fun Herrin() {
                 // The independent testing URL must not start playing while a
                 // selected CMS film is still resolving its real licensed source.
                 val testMedia = if (screen == "player" && !spiderActive &&
+                    !film.id.startsWith("tmdb-") &&
                     activeCmsSite == null) AuthorizedUrls.https(prefs.testMediaUrl) else null
                 val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
@@ -2581,6 +3025,103 @@ private fun Herrin() {
                                     modifier = Modifier.testTag("compact-tmdb-no-matches"),
                                     color = Color(0xFFFFD49D))
                             }
+                        }
+                        if (settingsTvBoxOnly) {
+                            item { Text("个人影片资源优先 · NAS / 云盘", fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold) }
+                            item { Text("支持用户自己授权的 WebDAV 地址；NAS 可通过 WebDAV 服务共享，云盘需配置有权访问的 WebDAV 网关。SMB、阿里云盘、夸克和 115 原生 API 仍需后续单独接入。",
+                                color = Color(0xFFBDC9D7), lineHeight = 20.sp) }
+                            item { OutlinedTextField(nasDavUrlDraft, { nasDavUrlDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("nas-webdav-url"),
+                                label = { Text("NAS WebDAV 根目录 URL（优先）") }, singleLine = true) }
+                            item { OutlinedTextField(nasDavUserDraft, { nasDavUserDraft = it.take(256) },
+                                Modifier.fillMaxWidth().testTag("nas-webdav-user"),
+                                label = { Text("NAS 用户名（可留空）") }, singleLine = true) }
+                            item { OutlinedTextField(nasDavPasswordDraft, { nasDavPasswordDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("nas-webdav-password"),
+                                label = { Text("NAS 密码（不显示、不存明文）") }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation()) }
+                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                TvButton("保存 NAS 地址", modifier = Modifier.testTag("nas-webdav-save"),
+                                    reduced = reduceMotion) {
+                                    val valid = nasDavUrlDraft.isBlank() || runCatching {
+                                        HerrinWebDavSource(HerrinWebDavAccount("NAS", nasDavUrlDraft.trim(),
+                                            category = HerrinSourceType.NAS, allowInsecureHttp = prefs.nasAllowHttp))
+                                    }.isSuccess
+                                    if (!valid) personalSourceFeedback = "NAS URL 必须是合法 HTTPS；HTTP 需手动授权"
+                                    else {
+                                        val vault = HerrinPersonalCredentialStore(context, "nas")
+                                        val old = vault.load()
+                                        val saved = vault.save(nasDavUserDraft.ifBlank { old.first },
+                                            nasDavPasswordDraft.ifBlank { old.second })
+                                        if (saved) {
+                                            prefs.nasWebDavUrl = nasDavUrlDraft.trim()
+                                            nasDavPasswordDraft = ""
+                                            personalSourceConfigEpoch++
+                                            personalSourceFeedback = "NAS 地址和加密凭据已保存；详情将优先搜索 NAS"
+                                        } else personalSourceFeedback = "设备凭据加密失败，未保存 NAS 地址"
+                                    }
+                                }
+                                TvButton(if (prefs.nasAllowHttp) "NAS HTTP 已允许" else "允许 NAS HTTP（仅可信局域网）",
+                                    reduced = reduceMotion) {
+                                    prefs.nasAllowHttp = !prefs.nasAllowHttp
+                                    personalSourceConfigEpoch++
+                                }
+                            } }
+                            item { OutlinedTextField(cloudDavUrlDraft, { cloudDavUrlDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("cloud-webdav-url"),
+                                label = { Text("云盘 WebDAV 桥接根目录 URL") }, singleLine = true) }
+                            item { OutlinedTextField(cloudDavUserDraft, { cloudDavUserDraft = it.take(256) },
+                                Modifier.fillMaxWidth().testTag("cloud-webdav-user"),
+                                label = { Text("云盘 WebDAV 用户名（可留空）") }, singleLine = true) }
+                            item { OutlinedTextField(cloudDavPasswordDraft, { cloudDavPasswordDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("cloud-webdav-password"),
+                                label = { Text("云盘 WebDAV 密码（本机加密）") }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation()) }
+                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                TvButton("保存云盘 WebDAV", modifier = Modifier.testTag("cloud-webdav-save"),
+                                    reduced = reduceMotion) {
+                                    val valid = cloudDavUrlDraft.isBlank() || runCatching {
+                                        HerrinWebDavSource(HerrinWebDavAccount("云盘", cloudDavUrlDraft.trim(),
+                                            category = HerrinSourceType.CLOUD, allowInsecureHttp = prefs.cloudAllowHttp))
+                                    }.isSuccess
+                                    if (!valid) personalSourceFeedback = "云盘 WebDAV URL 无效；默认必须 HTTPS"
+                                    else {
+                                        val vault = HerrinPersonalCredentialStore(context, "cloud")
+                                        val old = vault.load()
+                                        val saved = vault.save(cloudDavUserDraft.ifBlank { old.first },
+                                            cloudDavPasswordDraft.ifBlank { old.second })
+                                        if (saved) {
+                                            prefs.cloudWebDavUrl = cloudDavUrlDraft.trim()
+                                            cloudDavPasswordDraft = ""
+                                            personalSourceConfigEpoch++
+                                            personalSourceFeedback = "云盘 WebDAV 已保存；优先于 TVBox 查找"
+                                        } else personalSourceFeedback = "设备加密失败，未保存云盘 URL"
+                                    }
+                                }
+                                TvButton(if (prefs.cloudAllowHttp) "云盘 HTTP 已允许" else "允许云盘 HTTP（不推荐）",
+                                    reduced = reduceMotion) {
+                                    prefs.cloudAllowHttp = !prefs.cloudAllowHttp
+                                    personalSourceConfigEpoch++
+                                }
+                            } }
+                            item { Text(personalSourceFeedback.ifBlank { tmdbDiscoveryStatus },
+                                modifier = Modifier.testTag("personal-source-feedback"),
+                                color = Color(0xFFBDD9EF)) }
+                            item { Text("IMDb 评分 · 用户自行导入", fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold) }
+                            item { TvButton("导入本地 IMDb title.ratings.tsv.gz",
+                                modifier = Modifier.testTag("imdb-import"),
+                                reduced = reduceMotion) {
+                                    runCatching {
+                                        imdbImportPicker.launch(arrayOf("application/gzip",
+                                            "application/x-gzip", "application/octet-stream"))
+                                    }.onFailure {
+                                        imdbImportStatus = "电视未提供文件选择器，请使用支持 SAF 的文件管理器"
+                                    }
+                                } }
+                            item { Text(imdbImportStatus, modifier = Modifier.testTag("imdb-import-status"),
+                                color = Color(0xFFCBD5E4), fontSize = 13.sp) }
                         }
                         item { Text("直播源", fontSize = 22.sp) }
                         item {
@@ -2979,11 +3520,13 @@ private fun Herrin() {
                     }
                     fun androidx.compose.foundation.lazy.LazyListScope.renderDetailItems() {
                         item { Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                            Text(if (screen == "player" && !spiderActive) "播放演示"
+                            Text(if (screen == "player" && !spiderActive && film.id.startsWith("tmdb-") &&
+                                    film.playbackEpisodes.isEmpty()) "片源搜索"
+                                else if (screen == "player" && !spiderActive && !film.id.startsWith("tmdb-")) "播放演示"
                                 else if (screen == "detail") displayFilm.title else film.title,
                                 fontSize = 38.sp, fontWeight = FontWeight.Bold)
+                            HerrinRatingBadges(displayFilm)
                             Text(buildString {
-                                FilmMetadataEnrichment.ratingLabel(displayFilm)?.let { append(it).append("  ·  ") }
                                 append(displayFilm.releaseDate ?: displayFilm.year).append("  ·  ")
                                 append(displayFilm.category)
                                 displayFilm.runtimeMinutes?.let {
@@ -3006,6 +3549,11 @@ private fun Herrin() {
                                     modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
                                     color = Color(0xFFE1E8F2))
                             } }
+                        if (film.id.startsWith("tmdb-") && screen == "detail") item {
+                            Text(tmdbSourceStatus.ifBlank { "请选择影片后自动搜索已配置的 NAS、云盘、TVBox" },
+                                modifier = Modifier.testTag("tmdb-source-lookup-status"),
+                                color = Color(0xFFCFD7E4), fontSize = 14.sp)
+                        }
                         if (showGroup != null && screen == "detail") item {
                             Text("多季整合 · 当前目录 ${showGroup.members.size} 个原始条目 · 播放仍使用原影视点",
                                 modifier = Modifier.testTag("group-detail-members"),
@@ -3700,19 +4248,28 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
             false
         }
         .clickable { RemoteTrace.event { "POSTER ${film.id} CLICK clickable" }; onClick() }) {
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().weight(1f).testTag("poster-image-${film.id}"),
-                contentAlignment = Alignment.Center) {
-                PosterArtwork(film, Modifier.fillMaxSize(), reduced)
-            }
-            Row(Modifier.fillMaxWidth().height(29.dp)
-                .background(Color(0xF0121822))
-                .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text(film.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
-                Text(film.year, fontSize = 10.sp, color = Color(0xFFD3D8E1), maxLines = 1)
-            }
+        // A single full-bleed image covers the entire card, including the
+        // area previously occupied by an opaque 29 dp metadata footer.
+        Box(Modifier.fillMaxSize().testTag("poster-image-${film.id}"),
+            contentAlignment = Alignment.Center) {
+            PosterArtwork(film, Modifier.fillMaxSize(), reduced)
+        }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(75.dp)
+            .background(Brush.verticalGradient(
+                0.0f to Color.Transparent,
+                0.40f to Color(0x66070C14),
+                1.0f to Color(0xF0080D16))))
+        Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .padding(start = 10.dp, end = 10.dp,
+                bottom = if (progress != null) 9.dp else 7.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text(film.title, Modifier.weight(1f).testTag("poster-title-${film.id}"),
+                fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                color = Color.White, maxLines = 1)
+            Text(film.releaseDate?.takeIf { it.isNotBlank() } ?: film.year,
+                Modifier.testTag("poster-date-${film.id}"),
+                fontSize = 10.sp, color = Color(0xFFE0E5EB), maxLines = 1)
         }
         if (progress != null) {
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp)

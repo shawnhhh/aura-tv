@@ -41,14 +41,14 @@ class TvFocusRoutesTest {
         assertEquals(4, TvFocusRoutes.compactSettingsItemIndex("settings-source-sites"))
         assertEquals(7, TvFocusRoutes.compactSettingsItemIndex("compact-tmdb-token"))
         assertEquals(8, TvFocusRoutes.compactSettingsItemIndex("compact-tmdb-save"))
-        assertEquals(11, TvFocusRoutes.compactSettingsItemIndex("tvbox-live-direct-url"))
-        assertEquals(14, TvFocusRoutes.compactSettingsItemIndex("settings-advanced"))
+        assertEquals(25, TvFocusRoutes.compactSettingsItemIndex("tvbox-live-direct-url"))
+        assertEquals(28, TvFocusRoutes.compactSettingsItemIndex("settings-advanced"))
         assertEquals(8, TvFocusRoutes.compactSettingsItemIndex(
             "compact-tmdb-token", sourceStatus = true))
-        assertEquals(14, TvFocusRoutes.compactSettingsItemIndex(
+        assertEquals(28, TvFocusRoutes.compactSettingsItemIndex(
             "tvbox-live-direct-url", sourceStatus = true,
             connectedStatus = true, failedStatus = true))
-        assertEquals(15, TvFocusRoutes.compactSettingsItemIndex(
+        assertEquals(29, TvFocusRoutes.compactSettingsItemIndex(
             "tvbox-live-direct-url", sourceStatus = true,
             connectedStatus = true, failedStatus = true, noMatchesStatus = true))
     }

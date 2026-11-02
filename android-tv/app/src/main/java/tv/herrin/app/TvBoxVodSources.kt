@@ -38,6 +38,14 @@ internal object TvBoxCmsEndpoint {
         else query += "ids=${URLEncoder.encode(safeId, Charsets.UTF_8.name())}"
         return TvBoxUrl.normalize("${root.scheme}://${root.rawAuthority}${root.rawPath.orEmpty()}?${query.joinToString("&")}", allowHttp)
     }
+    /** Search a configured CMS by title; never a broad spider/JAR scan. */
+    fun searchAddress(api: String, title: String, allowHttp: Boolean): String? {
+        val keyword = title.trim().take(120)
+        if (keyword.length < 2) return null
+        val catalog = address(api, allowHttp = allowHttp) ?: return null
+        return catalog + "&wd=" + URLEncoder.encode(keyword, Charsets.UTF_8.name())
+    }
+
 }
 
 /** Standard TVBox-compatible CMS JSON list. No Spider/JAR/JS is ever evaluated. */
@@ -157,6 +165,18 @@ internal class TvBoxVodRepository {
             TvBoxVodResult.Error("CMS 列表读取失败：${error.message.orEmpty().take(110)}")
         }
     }
+
+    /** Metadata-first discovery: bounded title search on an explicitly configured CMS. */
+    suspend fun search(site: TvBoxSite, title: String, allowHttp: Boolean): TvBoxVodResult =
+        withContext(Dispatchers.IO) {
+            val endpoint = TvBoxCmsEndpoint.searchAddress(site.apiUrl.orEmpty(), title, allowHttp)
+                ?: return@withContext TvBoxVodResult.Error("CMS 不支持该搜索地址")
+            try {
+                TvBoxVodResult.Ready(TvBoxVodCodec.decode(fetchJson(endpoint), allowHttp))
+            } catch (_: Exception) {
+                TvBoxVodResult.Error("CMS 片名搜索失败")
+            }
+        }
 
     /** Called on selection, never for every poster in the catalog. */
     suspend fun details(site: TvBoxSite, film: Film, allowHttp: Boolean): TvBoxVodDetailResult = withContext(Dispatchers.IO) {

@@ -46,13 +46,18 @@ internal object PlaybackFormatRetry {
         }
     }
 
-    fun retryNextSource(errorCode: Int, httpStatus: Int? = null): Boolean =
-        errorCode in 2000..4999 && errorCode !in setOf(2006, 2007) && httpStatus !in setOf(401, 403, 404, 410, 429)
+    fun retryNextSource(
+        errorCode: Int, httpStatus: Int? = null, allowNotFoundFallback: Boolean = false
+    ): Boolean =
+        errorCode in 2000..4999 && errorCode !in setOf(2006, 2007) &&
+            httpStatus !in setOf(401, 403, 429) &&
+            (allowNotFoundFallback || httpStatus !in setOf(404, 410))
 
     data class Attempt(val candidateIndex: Int, val uri: String, val mime: String?)
 
     /** One monotonic, bounded retry budget per user-selected playback session. */
-    class Session(primary: String, alternates: List<String>, private val primaryMime: String?) {
+    class Session(primary: String, alternates: List<String>, private val primaryMime: String?,
+                  private val allowNotFoundFallback: Boolean = false) {
         val candidates: List<String> = (listOf(primary) + alternates).distinct().take(8)
         var current: Attempt = attempt(0)
             private set
@@ -77,7 +82,8 @@ internal object PlaybackFormatRetry {
                 current = current.copy(mime = mime)
                 return current
             }
-            if (retryNextSource(errorCode, httpStatus) && current.candidateIndex < candidates.lastIndex) {
+            if (retryNextSource(errorCode, httpStatus, allowNotFoundFallback) &&
+                current.candidateIndex < candidates.lastIndex) {
                 current = attempt(current.candidateIndex + 1)
                 return current
             }

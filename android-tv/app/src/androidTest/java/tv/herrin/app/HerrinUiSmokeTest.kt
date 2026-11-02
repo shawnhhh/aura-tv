@@ -272,6 +272,69 @@ class HerrinUiSmokeTest {
         }
         capture("poster-cross-rail-vertical-focus")
     }
+    @Test fun centeredHeaderHasExactlyEightTabsPlusSearchAndRightOnlyGear() {
+        val expected = listOf("首页", "电影", "剧集", "动漫", "综艺",
+            "纪录片", "Top 250", "直播")
+        expected.forEach { compose.onNodeWithTag("nav-$it").assertIsDisplayed() }
+        for (removed in listOf("科幻", "动作", "悬疑", "喜剧", "我的"))
+            compose.onNodeWithTag("nav-$removed").assertDoesNotExist()
+        compose.onNodeWithTag("search").assertIsDisplayed()
+        compose.onNodeWithTag("settings").assertIsDisplayed()
+        compose.onNodeWithTag("facets").assertDoesNotExist()
+        focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
+        compose.onNodeWithTag("search-advanced-toggle").assertIsDisplayed()
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("search").assertIsFocused()
+        capture("m469-real-header-centered-search-right-gear")
+    }
+    @Test fun cinematicNavigationKeepsSearchInsideGlassRailAndGearSeparate() {
+        val rail = compose.onNodeWithTag("nav-shell").fetchSemanticsNode().boundsInRoot
+        val searchButton = compose.onNodeWithTag("search").fetchSemanticsNode().boundsInRoot
+        val gearButton = compose.onNodeWithTag("settings").fetchSemanticsNode().boundsInRoot
+        assertTrue("Search should be inside the centered navigation capsule",
+            searchButton.left >= rail.left && searchButton.right <= rail.right)
+        assertTrue("The settings gear should stand apart at the far-right edge",
+            gearButton.left > rail.right)
+        compose.onNodeWithTag("header-brand").assertIsDisplayed()
+        focus("nav-首页")
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("nav-电影").assertIsFocused()
+        focus("search")
+        compose.onNodeWithTag("search").assertIsFocused()
+        capture("m470-cinematic-glass-navigation")
+    }
+
+    @Test fun top250TabAndUnframedGearKeepRemoteFocus() {
+        // The Top250 optical font adjustment must not change its navigation identity.
+        compose.onNodeWithTag("nav-Top 250").assertIsDisplayed()
+        focus("nav-Top 250")
+        compose.onNodeWithTag("nav-Top 250").assertIsFocused()
+        val rail = compose.onNodeWithTag("nav-shell").fetchSemanticsNode().boundsInRoot
+        val gear = compose.onNodeWithTag("settings").fetchSemanticsNode().boundsInRoot
+        assertTrue("The gear remains separate from the navigation rail", gear.left > rail.right)
+        focus("settings")
+        compose.onNodeWithTag("settings").assertIsFocused()
+        capture("m470-balanced-top250-no-gear-halo")
+    }
+
+    @Test fun posterArtworkFillsEntireCardWithTitleAndYearOverlay() {
+        // Compare actual Compose layout bounds rather than a synthetic mockup.
+        val card = compose.onNodeWithTag("card-orbit").fetchSemanticsNode().boundsInRoot
+        // The same title can appear in continue-watching and recommendations.
+        // Verify the first rendered occurrence rather than requiring a unique ID.
+        val poster = compose.onAllNodesWithTag("poster-image-orbit", useUnmergedTree = true)
+            .onFirst().fetchSemanticsNode().boundsInRoot
+        assertTrue("Artwork must fill card width", abs(card.width - poster.width) < 3f)
+        assertTrue("Artwork must fill card height instead of leaving opaque title footer",
+            abs(card.height - poster.height) < 3f)
+        compose.onAllNodesWithTag("poster-title-orbit", useUnmergedTree = true)
+            .onFirst().assertExists()
+        compose.onAllNodesWithTag("poster-date-orbit", useUnmergedTree = true)
+            .onFirst().assertExists()
+        capture("m469-real-home-fullbleed-overlaid-poster")
+    }
+
     @Test fun searchFilterDpadDownReachesSuggestionsAndResultAndUpReturns() {
         focus("search")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -510,17 +573,16 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("search").assertIsFocused()
     }
-    @Test fun favoritesPersistAndRemovingLastFavoriteRestoresNavigation() {
+    @Test fun favoritesRemainAvailableUnderSearchAfterRestartAndCanBeRemoved() {
         focus("card-orbit"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         activate("♡ 添加收藏")
         compose.onNodeWithText("♥ 已收藏 · 取消").assertExists()
         key(KeyEvent.KEYCODE_BACK)
-        focus("nav-我的"); key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithText("我的收藏").assertExists()
+        focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("search-favorites"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("card-orbit").assertIsDisplayed()
+        compose.onNodeWithTag("nav-我的").assertDoesNotExist()
         compose.activityRule.scenario.recreate()
-        // An Activity recreation intentionally replays the full HERRIN curtain.
-        // Wait for the new home to become interactive before reading LazyRow bounds.
         compose.waitUntil(15_000) {
             runCatching {
                 compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
@@ -528,29 +590,26 @@ http://example.org/live/channel.m3u8
             }.isSuccess
         }
         compose.waitForIdle()
-        capture("favorites-persisted")
+        capture("favorites-inside-search-persisted")
         focus("card-orbit"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         activate("♥ 已收藏 · 取消")
         key(KeyEvent.KEYCODE_BACK)
-        compose.onNodeWithText("暂无收藏，进入影片详情添加").assertExists()
-        compose.onNodeWithTag("nav-我的").assertIsFocused()
-        capture("favorites-empty")
+        compose.onNodeWithText("没有找到匹配影片").assertExists()
+        compose.onNodeWithTag("search-favorites").assertExists()
+        capture("favorites-inside-search-empty")
     }
-    @Test fun metadataFacetsNavigateByRemoteIntoAutoScrolledMoviePoster() {
-        focus("facets")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("facet-screen").assertExists()
-        compose.onNodeWithTag("facet-coverage").assertExists()
-        // Rating is the last facet rail; a single Down must reach the first poster.
-        focus("facet-rating-all")
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("facet-result-orbit").assertIsFocused()
-        compose.onNodeWithTag("facet-result-orbit").assertIsDisplayed()
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithText("最后的轨道").assertExists()
-        key(KeyEvent.KEYCODE_BACK)
-        compose.onNodeWithTag("facet-screen").assertExists()
-        capture("metadata-facet-dpad")
+    @Test fun advancedMetadataFiltersOpenInsideSearchAndWorkWithDpad() {
+        focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("facets").assertDoesNotExist()
+        focus("search-advanced-toggle"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("search-advanced-filters").assertExists()
+        compose.onNodeWithTag("facet-rating-all").assertExists()
+        focus("facet-rating-all"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("search-filter-status").assertTextContains("6", substring = true)
+        focus("search-facet-reset"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("search-advanced-toggle"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("search-advanced-filters").assertDoesNotExist()
+        capture("advanced-filters-inside-search")
     }
     @Test fun filmDetailOmitsUnknownQualityAndKeepsSynopsisWithoutSeparateSpecPanel() {
         focus("details")
@@ -732,14 +791,14 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         focus("search-filter-动漫")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("search-filter-status").assertTextContains("动漫 · 2 个结果", substring = true)
+        compose.onNodeWithTag("search-filter-status").assertTextContains("2 部 · 动漫", substring = true)
         compose.onNodeWithTag("card-night").assertExists()
         focus("search-sort")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("排序：最新优先").assertExists()
         focus("search-filter-全部")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("search-filter-status").assertTextContains("全部 · 6 个结果", substring = true)
+        compose.onNodeWithTag("search-filter-status").assertTextContains("6 部 · 全部", substring = true)
         capture("search-filter-sort")
     }
 
