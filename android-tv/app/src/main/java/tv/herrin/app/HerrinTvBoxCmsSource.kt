@@ -9,7 +9,7 @@ package tv.herrin.app
  * existing TvBoxVodRepository.details / TvBoxCmsPlaybackResolver.
  */
 internal class HerrinTvBoxCmsSource(
-    private val site: TvBoxSite,
+    internal val site: TvBoxSite,
     private val repo: TvBoxVodRepository,
     private val allowHttp: Boolean
 ) : HerrinFilmSource {
