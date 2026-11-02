@@ -492,6 +492,9 @@ private fun Herrin() {
     // The global CMS/Spider route alone is not safe to reuse on Back/return.
     val tmdbPlaybackRoutes = remember { HerrinTmdbPlaybackRouteStore() }
     val tmdbFallbackIndex = remember { HerrinTmdbFallbackIndex() }
+    // Explicit retry scans the NEXT bounded batch rather than repeating
+    // the same 6 dead plugin sites forever.
+    val tmdbSpiderBatchOffsets = remember { mutableStateMapOf<String, Int>() }
     var tmdbDiscoveryStatus by remember { mutableStateOf("") }
     var tmdbSourceStatus by remember { mutableStateOf("") }
     // Explicit retry and source changes must invalidate old TMDB playback mappings.
@@ -833,6 +836,7 @@ private fun Herrin() {
         tmdbPersonalPlayback.clear()
         tmdbPlaybackRoutes.clear()
         tmdbFallbackIndex.clear()
+        tmdbSpiderBatchOffsets.clear()
         tmdbLookupEpoch++
     }
     fun readDeviceStatus(): String {
@@ -1030,8 +1034,13 @@ private fun Herrin() {
             listOf(tmdbFilm.title, tmdbFilm.subtitle).filter(String::isNotBlank),
             tmdbFilm.year.toIntOrNull()
         )
-        tmdbSourceStatus = "正在优先检索 NAS／云盘的对应影片…"
+        tmdbSourceStatus = "正在检索 NAS／云盘及已授权的多个影视点…"
+        HerrinPlaybackDiagnosticJournal.record("LOOKUP", "TMDB_SEARCH_STARTED")
         val currentTvbox = tvBoxSingle
+        val trustedSpiderRoot = prefs.tvBoxTrustedSpiderRootUrl
+        val trustedSpiderJar = prefs.tvBoxTrustedSpiderJarSpec
+        val approvedRoot = prefs.tvBoxWarehouseUrl
+        val spiderPageOffset = tmdbSpiderBatchOffsets[targetId] ?: 0
         val importedWarehouses = tvBoxWarehouses.take(3)
         // Spider is a privileged plugin: only an existing user-applied session
         // may be searched. Never start a new Spider while browsing TMDB.
@@ -1044,7 +1053,7 @@ private fun Herrin() {
         val cloudUrl = prefs.cloudWebDavUrl
         val allowNasHttp = prefs.nasAllowHttp
         val allowCloudHttp = prefs.cloudAllowHttp
-        val (verified, sources) = withContext(Dispatchers.IO) {
+        val (verified, sources, batchScan) = withContext(Dispatchers.IO) {
             val adapters = mutableListOf<HerrinFilmSource>()
             for ((slot, url, insecure, kind) in listOf(
                 listOf("nas", nasUrl, allowNasHttp.toString(), "NAS"),
@@ -1103,17 +1112,85 @@ private fun Herrin() {
                     }
                 }
             )
-            resolved to adapters
+            // Direct-CMS results are checked first. If none actually exposes
+            // a usable episode, scan other Spider nodes only under the exact
+            // runtime JAR/root already explicitly approved by the user.
+            val batch = if (resolved.lookup.options.isEmpty() && currentTvbox != null &&
+                trustedSpiderJar.isNotBlank() && approvedRoot == trustedSpiderRoot) {
+                HerrinApprovedSpiderBatch.scan(
+                    searchIdentity, currentTvbox.sites,
+                    allowed = { site ->
+                        val runtime = site.jar ?: currentTvbox.spiderJar ?: site.scriptApi.orEmpty()
+                        runtime.isNotBlank() &&
+                            TvBoxSpiderPolicy.mayRun(false, approvedRoot, runtime,
+                                trustedSpiderRoot, trustedSpiderJar) &&
+                            "spider:" + site.key !in tmdbFallbackIndex.rejected(targetId)
+                    },
+                    offset = spiderPageOffset,
+                    session = object : HerrinApprovedSpiderBatch.Session {
+                        override suspend fun activate(site: TvBoxSite): Boolean =
+                            spiderBridge.browse(site, currentTvbox) is SpiderResult.Ready
+                        override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                            HerrinTvBoxSpiderSource(site, spiderBridge).search(identity)
+                        override suspend fun details(candidate: HerrinSourceMovie): Film? =
+                            (spiderBridge.details(candidate.film) as? SpiderResult.Ready)?.value
+                        override suspend fun canPlay(detailed: Film): Boolean {
+                            val (ep, selectedLine) = HerrinPlaybackEntry.firstPlayable(detailed)
+                                ?: return false
+                            return spiderBridge.play(detailed, ep, selectedLine, tvBoxAllowHttp)
+                                is PlaybackResult.Ready
+                        }
+                    }
+                )
+            } else null
+            if (batch?.match == null && approvedSpiderSite != null && currentTvbox != null &&
+                batch != null) {
+                // A failed batch may have changed the active worker site.
+                // Restore the site the user explicitly selected on entry.
+                withTimeoutOrNull(7_000L) {
+                    spiderBridge.browse(approvedSpiderSite, currentTvbox)
+                }
+            }
+            Triple(resolved, adapters, batch)
         }
         val lookup = verified.lookup
+        if (batchScan != null) {
+            tmdbSpiderBatchOffsets[targetId] = batchScan.nextOffset
+            HerrinPlaybackDiagnosticJournal.record("LOOKUP", "SPIDER_BATCH_FINISHED",
+                "CHECKED=${batchScan.checked}")
+        }
+        val batchMatch = batchScan?.match
+        if (batchMatch != null) {
+            val detail = batchMatch.detailed
+            tmdbFallbackIndex.select(targetId, "spider:" + batchMatch.site.key)
+            tmdbPersonalPlayback.remove(targetId)
+            tmdbPlaybackRoutes.spider(targetId, batchMatch.site.key)
+            activeCmsSite = null
+            spiderActive = true
+            tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                spiderVodId = detail.spiderVodId,
+                playbackEpisodes = detail.playbackEpisodes,
+                episodes = maxOf(1, detail.playbackEpisodes.size))
+            HerrinPlaybackEntry.firstPlayable(tmdbResolved[targetId])?.let { (number, id) ->
+                episode = number
+                line = id
+            }
+            tmdbSourceStatus = "已从 ${batchScan.checked} 个授权影视点中匹配并验证可播放线路：${batchMatch.site.name}；标称清晰度 ${if (batchMatch.claim >= 2160) "4K" else if (batchMatch.claim > 0) "${batchMatch.claim}p" else "未知"}，非实际解码画质"
+            HerrinPlaybackDiagnosticJournal.record("SOURCE", "SPIDER_VERIFIED")
+            return@LaunchedEffect
+        }
         val found = lookup.options.firstOrNull()
         if (found == null) {
-            tmdbSourceStatus = if (lookup.errors.isNotEmpty())
+            HerrinPlaybackDiagnosticJournal.record("SOURCE", "NO_VERIFIED_MEDIA")
+            tmdbSourceStatus = if (batchScan != null)
+                "已尝试本批 ${batchScan.checked} 个授权 Spider 影视点（可用节点总数 ${batchScan.eligible}），没有通过播放地址验证的线路；点击重新检索可继续下一批"
+            else if (lookup.errors.isNotEmpty())
                 "部分资源源检索失败或超时，尚未找到可播放的授权选集；可重新检索"
             else "NAS／云盘／TVBox 均未找到可播放的授权选集；可重新检索"
             return@LaunchedEffect
         }
         tmdbFallbackIndex.select(targetId, found.sourceId)
+        HerrinPlaybackDiagnosticJournal.record("SOURCE", "VERIFIED_SOURCE_SELECTED")
         when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
             is HerrinWebDavSource -> {
                 val playlist = verified.personalPlaylist
