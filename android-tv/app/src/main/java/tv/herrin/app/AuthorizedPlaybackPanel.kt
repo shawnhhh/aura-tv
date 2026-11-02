@@ -158,7 +158,8 @@ private fun AuthorizedPlaybackSession(
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media, isLive) {
         PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime,
-            allowNotFoundFallback = isLive && media.headers.isEmpty())
+            allowNotFoundFallback = (isLive && media.headers.isEmpty()) ||
+                media.safeNotFoundFallback)
     }
     val candidates = retries.candidates
     val journey = remember(media) { PlaybackJourneyTrace() }
@@ -216,8 +217,8 @@ private fun AuthorizedPlaybackSession(
                     // reason to ignore a user-authorized TVBox backup. Only
                     // header-free live choices may cross source origins; 401,
                     // 403 and 429 still stop automatic retries.
-                    val liveNotFoundBackup = isLive && media.headers.isEmpty() &&
-                        httpStatus in setOf(404, 410)
+                    val liveNotFoundBackup = ((isLive && media.headers.isEmpty()) ||
+                        media.safeNotFoundFallback) && httpStatus in setOf(404, 410)
                     val failover = if (liveNotFoundBackup ||
                         FongMiPlaybackRecovery.preferAuthorizedAlternate(
                             httpStatus, retries.current.candidateIndex < candidates.lastIndex))
