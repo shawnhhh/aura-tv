@@ -64,7 +64,15 @@ internal data class HerrinFilmLookupResult(
  * later during actual playback; source title claims are merely a tie breaker.
  */
 internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
-    suspend fun find(identity: HerrinFilmIdentity): HerrinFilmLookupResult {
+    /**
+     * Verify actual resource usability before accepting a priority tier.
+     * If every matched NAS/cloud offer is unusable, continue to TVBox.
+     * For TVBox a verifier can try multiple candidates' details/episode lists.
+     */
+    suspend fun find(
+        identity: HerrinFilmIdentity,
+        accept: suspend (List<HerrinSourceMovie>) -> List<HerrinSourceMovie> = { it }
+    ): HerrinFilmLookupResult {
         val errors = linkedMapOf<String, String>()
         val searched = mutableListOf<String>()
         for (tier in listOf(HerrinSourceTier.PERSONAL, HerrinSourceTier.TVBOX)) {
@@ -97,7 +105,9 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                 }.sortedWith(compareByDescending<HerrinSourceMovie> {
                     it.resolutionClaim ?: 0
                 }.thenByDescending { it.hdrClaim }.thenBy { it.sourceId })
-                return HerrinFilmLookupResult(ranked, tier, errors, searched)
+                val accepted = accept(ranked).filter { it in ranked }
+                if (accepted.isNotEmpty())
+                    return HerrinFilmLookupResult(accepted, tier, errors, searched)
             }
         }
         return HerrinFilmLookupResult(emptyList(), null, errors, searched)
