@@ -7,6 +7,7 @@
 package tv.herrin.app
 
 import android.content.Context
+import android.os.Handler
 import android.os.Looper
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -37,7 +38,8 @@ internal class MpvNativePlaybackView(context: Context) :
     private var closed = false
     private var sourceUri: String? = null
     private var loading = false
-    private var listener: Listener? = null
+    @Volatile private var listener: Listener? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val observer = object : MPVLib.EventObserver {
         override fun eventProperty(property: String) {}
         override fun eventProperty(property: String, value: Long) {}
@@ -45,14 +47,19 @@ internal class MpvNativePlaybackView(context: Context) :
         override fun eventProperty(property: String, value: String) {}
         override fun eventProperty(property: String, value: Double) {}
         override fun event(eventId: Int) {
-            if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED) listener?.onLoaded()
+            if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED)
+                mainHandler.post { listener?.onLoaded() }
             if (eventId == MPVLib.MpvEvent.MPV_EVENT_SHUTDOWN) {
-                lifecycleLock.nativeOwner.set(false)
-                MPVLib.removeObserver(this)
+                // Upstream iterates a synchronized mutable observer list:
+                // removing within its callback could trigger CME. Defer it.
+                mainHandler.post {
+                    MPVLib.removeObserver(this)
+                    lifecycleLock.nativeOwner.set(false)
+                }
             }
         }
         override fun eventEndFile(reason: Int, error: Int, errorString: String?) {
-            if (error < 0) listener?.onFailure(reason, error)
+            if (error < 0) mainHandler.post { listener?.onFailure(reason, error) }
         }
     }
 
