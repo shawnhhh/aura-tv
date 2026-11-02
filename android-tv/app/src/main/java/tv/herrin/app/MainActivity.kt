@@ -488,6 +488,9 @@ private fun Herrin() {
     var tmdbTop250Films by remember { mutableStateOf<List<Film>>(emptyList()) }
     val tmdbResolved = remember { mutableStateMapOf<String, Film>() }
     val tmdbPersonalPlayback = remember { mutableStateMapOf<String, Map<String, PlaybackMedia>>() }
+    // A film's playback origin must survive opening other TMDB films.
+    // The global CMS/Spider route alone is not safe to reuse on Back/return.
+    val tmdbPlaybackRoutes = remember { HerrinTmdbPlaybackRouteStore() }
     var tmdbDiscoveryStatus by remember { mutableStateOf("") }
     var tmdbSourceStatus by remember { mutableStateOf("") }
     // Explicit retry and source changes must invalidate old TMDB playback mappings.
@@ -827,6 +830,7 @@ private fun Herrin() {
             }
         }
         tmdbPersonalPlayback.clear()
+        tmdbPlaybackRoutes.clear()
         tmdbLookupEpoch++
     }
     fun readDeviceStatus(): String {
@@ -1113,6 +1117,7 @@ private fun Herrin() {
                     return@LaunchedEffect
                 }
                 tmdbPersonalPlayback[targetId] = playlist.mediaByLine
+                tmdbPlaybackRoutes.personal(targetId)
                 activeCmsSite = null
                 spiderActive = false
                 tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
@@ -1128,6 +1133,7 @@ private fun Herrin() {
                     return@LaunchedEffect
                 }
                 tmdbPersonalPlayback.remove(targetId)
+                tmdbPlaybackRoutes.spider(targetId, adapter.site.key)
                 activeCmsSite = null
                 spiderActive = true
                 tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
@@ -1144,6 +1150,7 @@ private fun Herrin() {
                     return@LaunchedEffect
                 }
                 tmdbPersonalPlayback.remove(targetId)
+                tmdbPlaybackRoutes.cms(targetId, adapter.site)
                 activeCmsSite = adapter.site
                 spiderActive = false
                 tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
@@ -1686,6 +1693,40 @@ private fun Herrin() {
     fun details(f: Film) {
         RemoteTrace.event { "DETAILS invoked film=${f.id} from=$screen" }
         cmsDetailStatus = ""
+        if (f.id.startsWith("tmdb-")) {
+            // Restore exactly the source selected for this title before the user
+            // can start the player. A different title may have changed the
+            // global activeCmsSite/spiderActive since this title last opened.
+            when (val route = tmdbPlaybackRoutes.usable(
+                f.id, spiderBridge.approvedActiveSiteKey())) {
+                is HerrinTmdbPlaybackRouteStore.Route.Cms -> {
+                    activeCmsSite = route.site
+                    spiderActive = false
+                }
+                is HerrinTmdbPlaybackRouteStore.Route.Spider -> {
+                    activeCmsSite = null
+                    spiderActive = true
+                }
+                HerrinTmdbPlaybackRouteStore.Route.Personal -> {
+                    activeCmsSite = null
+                    spiderActive = false
+                }
+                null -> {
+                    // The old Spider session is no longer approved; a cached
+                    // playback route must not reactivate it or expose stale URLs.
+                    if (tmdbPlaybackRoutes.forFilm(f.id) != null) {
+                        tmdbPlaybackRoutes.forget(f.id)
+                        tmdbResolved[f.id]?.let { saved ->
+                            tmdbResolved[f.id] = saved.copy(playbackEpisodes = emptyList(),
+                                cmsVodId = null, spiderVodId = null)
+                        }
+                        tmdbPersonalPlayback.remove(f.id)
+                        tmdbSourceStatus = "之前的 Spider 会话已失效，正在重新检索授权片源"
+                        tmdbLookupEpoch++
+                    }
+                }
+            }
+        }
         filmId = f.id
         bypassGroupFilmId = null
         detailSelectedSeason = 0
