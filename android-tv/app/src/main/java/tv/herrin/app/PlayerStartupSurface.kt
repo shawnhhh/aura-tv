@@ -87,7 +87,7 @@ internal fun PlayerStartupSurface(
                         modifier = Modifier.testTag("player-startup-show-diagnostics"),
                         reduced = reducedMotion) { showJournal = !showJournal }
                     if (showJournal) {
-                        Text(HerrinPlaybackDiagnosticJournal.export().lineSequence()
+                        Text(HerrinPlaybackDiagnosticJournal.export().lines()
                             .takeLast(7).joinToString("\n"),
                             color = Color(0xFFB6D1E8), fontSize = 12.sp,
                             modifier = Modifier.testTag("player-startup-diagnostic-events"))
