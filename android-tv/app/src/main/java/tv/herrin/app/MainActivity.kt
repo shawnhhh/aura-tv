@@ -298,7 +298,7 @@ private fun Herrin() {
     var epgRefresh by remember { mutableIntStateOf(0) }
     var liveClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var liveRefresh by remember { mutableIntStateOf(0) }
-    val liveFavoriteScope = if (prefs.tvBoxLiveActive) "tvbox-selected-live" else prefs.livePlaylistUrl
+    val liveFavoriteScope = if (prefs.livePlaylistUrl.isNotBlank()) prefs.livePlaylistUrl else "tvbox-selected-live"
     LaunchedEffect(epgRefresh) {
         val endpoint = prefs.liveEpgUrl
         if (endpoint.isBlank()) {
@@ -318,22 +318,28 @@ private fun Herrin() {
     }
     LaunchedEffect(liveRefresh) {
         val endpoint = prefs.livePlaylistUrl
-        if (prefs.tvBoxLiveActive) {
-            liveChannels = tvBoxLiveStore.load()
-            liveStatus = if (liveChannels.isEmpty()) "上次导入的 TVBox 频道已失效，请重新导入"
-                else "已从本地加载 ${liveChannels.size} 个 TVBox 直播频道"
-        } else if (endpoint.isBlank()) {
-            liveChannels = emptyList()
-            liveStatus = "请在设置中配置自己的授权 HTTPS M3U 直播列表"
+        // Direct M3U always has priority. TVBox is a per-channel backup,
+        // never allowed to silently shadow a working user-supplied playlist.
+        val tvBoxBackup = tvBoxLiveStore.load()
+        if (endpoint.isBlank()) {
+            liveChannels = tvBoxBackup
+            liveStatus = if (tvBoxBackup.isEmpty())
+                "请在设置中配置自己的授权 M3U 或 TVBox 直播源"
+            else "已加载 ${tvBoxBackup.size} 条 TVBox 备用直播线路"
         } else {
-            liveStatus = "正在加载授权直播列表…"
+            liveStatus = "正在优先读取独立直播源…"
             when (val loaded = liveRepo.load(endpoint)) {
                 is LivePlaylistResult.Ready -> {
-                    liveChannels = loaded.channels
-                    liveStatus = "已加载 ${loaded.channels.size} 个授权直播频道"
+                    liveChannels = HerrinLivePriority.combine(loaded.channels, tvBoxBackup)
+                    liveStatus = "独立直播源 ${loaded.channels.size} 条优先；TVBox 备用 ${tvBoxBackup.size} 条"
                 }
-                is LivePlaylistResult.Error -> liveStatus = if (liveChannels.isEmpty()) loaded.reason
-                    else "${loaded.reason}；保留上次读取的频道列表"
+                is LivePlaylistResult.Error -> {
+                    liveChannels = tvBoxBackup.ifEmpty { liveChannels }
+                    liveStatus = if (tvBoxBackup.isNotEmpty())
+                        "独立直播源读取失败，已使用 ${tvBoxBackup.size} 条 TVBox 备用线路"
+                    else if (liveChannels.isEmpty()) loaded.reason
+                    else "${loaded.reason}；保留上次频道列表"
+                }
             }
         }
     }
