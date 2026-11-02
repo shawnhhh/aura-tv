@@ -16,9 +16,10 @@ class TvBoxSpiderBridgeTest {
             SpiderFailureDetails.message(nested))
     }
 
-    @Test fun `optional init follows reference loader but still requires installed runtimes`() {
+    @Test fun `init follows pinned reference loader and propagates failed bootstrap`() {
         val harmless = InvocationTargetException(IllegalStateException("optional bootstrap unavailable"))
-        assertEquals(null, SpiderInitPolicy.blocking(harmless))
+        assertEquals(harmless.targetException, SpiderInitPolicy.blocking(harmless))
+        assertEquals(null, SpiderInitPolicy.blocking(ClassNotFoundException("optional Init")))
         val missing = RuntimeModule.MissingException(RuntimeModule.QUICKJS)
         assertEquals(missing, SpiderInitPolicy.blocking(InvocationTargetException(missing)))
     }

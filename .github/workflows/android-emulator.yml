@@ -34,6 +34,8 @@ jobs:
           grep -q WEBVTT android-tv/app/src/androidTest/assets/synthetic.vtt
           grep -q '#EXTM3U' android-tv/app/src/androidTest/assets/synthetic-hls.m3u8
           ls -lh android-tv/app/src/androidTest/assets/synthetic*
+      - name: Rebuild original M4.67 DEX Spider fixture
+        run: python3 android-tv/scripts/build_m467_spider_fixture.py
       - name: Enable Linux KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

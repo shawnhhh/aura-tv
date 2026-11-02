@@ -19,11 +19,17 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.CookieManager
 import android.webkit.WebViewClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.net.URI
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -32,12 +38,13 @@ import kotlin.coroutines.resume
  * Playback-only browser resolver following the network-request interception
  * portion of FongMi ParseWebView, with no visible overlay and no changes to
  * HERRIN's Compose UI. Executed only after the user selects a configured
- * type=0 parser. No TLS bypass, JavaScript bridge or cross-host credentials.
+ * type=0 parser. No TLS bypass, JavaScript bridge or cross-host credentials. Requests are
+ * confirmed using HTTP content type / bounded media bytes, not extensions.
  *
  * Reference: FongMi/TV fongmi@5e191aaced, GPL-3.0.
  */
 internal object FongMiBrowserPlayback {
-    private const val TIMEOUT_MS = 18_000L
+    private const val TIMEOUT_MS = 15_000L
 
     internal fun candidate(raw: String, allowHttp: Boolean): String? {
         val url = TvBoxUrl.normalize(raw, allowHttp) ?: return null
@@ -67,10 +74,12 @@ internal object FongMiBrowserPlayback {
     @SuppressLint("SetJavaScriptEnabled")
     suspend fun resolve(
         context: Context, parser: TvBoxPlaybackParser,
-        sourceUrl: String, allowHttp: Boolean
+        sourceUrl: String, allowHttp: Boolean,
+        detect: Boolean = true, nestedUrls: MutableSet<String> = java.util.Collections.synchronizedSet(LinkedHashSet()),
+        videoCheck: ((String) -> Boolean)? = null
     ): PlaybackResult {
         if (parser.type != 0) return PlaybackResult.Unavailable("该解析器不是网页类型")
-        val prefix = TvBoxUrl.normalize(parser.url, allowHttp)
+        val prefix = if (parser.url.isEmpty()) "" else TvBoxUrl.normalize(parser.url, allowHttp)
             ?: return PlaybackResult.Unavailable("网页解析接口无效")
         val input = TvBoxUrl.normalize(sourceUrl, allowHttp)
             ?: return PlaybackResult.Unavailable("待解析地址无效")
@@ -79,21 +88,30 @@ internal object FongMiBrowserPlayback {
         val output = withTimeoutOrNull(TIMEOUT_MS) {
             withContext(Dispatchers.Main.immediate) {
                 val main = Handler(Looper.getMainLooper())
+                val children = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
                 suspendCancellableCoroutine<PlaybackResult> { cont ->
                     val view = try { WebView(context.applicationContext) }
                         catch (_: Exception) {
                             cont.resume(PlaybackResult.Unavailable("电视系统没有可用的网页解析运行环境"))
                             return@suspendCancellableCoroutine
                         }
-                    var stopped = false
+                    val stopped = java.util.concurrent.atomic.AtomicBoolean()
+                    val calls = java.util.concurrent.ConcurrentHashMap.newKeySet<okhttp3.Call>()
+                    val probes = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+                    // WebView's shouldInterceptRequest is a Chromium I/O callback,
+                    // not a place for a synchronous 4-second HTTP sniff. Bound
+                    // concurrent probe requests; cancellation closes their calls.
+                    val probeSlots = Semaphore(4)
                     fun cleanup() {
-                        if (stopped) return
-                        stopped = true
+                        if (!stopped.compareAndSet(false, true)) return
+                        calls.forEach { it.cancel() }
+                        calls.clear()
+                        children.cancel()
                         runCatching { view.stopLoading() }
                         runCatching { view.destroy() }
                     }
                     fun finish(result: PlaybackResult) {
-                        if (!cont.isActive || stopped) return
+                        if (!cont.isActive || stopped.get()) return
                         cleanup()
                         cont.resume(result)
                     }
@@ -118,9 +136,23 @@ internal object FongMiBrowserPlayback {
                         override fun shouldInterceptRequest(
                             view: WebView, request: WebResourceRequest
                         ): WebResourceResponse? {
-                            if (!stopped) {
-                                val found = candidate(request.url.toString(), allowHttp)
-                                if (found != null && found != target) {
+                            if (!stopped.get()) {
+                                val found = TvBoxUrl.normalize(request.url.toString(), allowHttp)
+                                val requestHeaders = request.requestHeaders + parser.headers.filterKeys {
+                                    it.equals("User-Agent", true) || it.equals("Referer", true)
+                                }
+                                if (found != null && detect && Regex("player.*https?://").containsMatchIn(found) &&
+                                    synchronized(nestedUrls) { nestedUrls.size < 5 && nestedUrls.add(found) }) {
+                                    main.post {
+                                        if (!stopped.get() && cont.isActive) children.launch {
+                                            val child = resolve(context, parser.copy(url = "", headers = requestHeaders),
+                                                found, allowHttp, false, nestedUrls, videoCheck)
+                                            if (child is PlaybackResult.Ready) finish(child)
+                                        }
+                                    }
+                                }
+                                if (found != null && (detect || found != target) &&
+                                    probes.size < 128 && probes.add(found)) {
                                     val mediaHeaders = buildMap<String, String> {
                                         val agent = ua ?: defaultAgent
                                         if (!agent.isNullOrBlank()) put("User-Agent", agent)
@@ -130,23 +162,37 @@ internal object FongMiBrowserPlayback {
                                         if (!ref.isNullOrBlank() && ref.length < 2_048)
                                             put("Referer", ref)
                                     }
-                                    main.post {
-                                        // Chromium provides only cookies scoped to
-                                        // this exact media URL, never site-wide
-                                        // API credentials from a different host.
-                                        val scopedCookie = runCatching {
-                                            CookieManager.getInstance().getCookie(found)
-                                        }.getOrNull().orEmpty()
-                                        val finalHeaders = if (scopedCookie.isNotBlank() &&
-                                            scopedCookie.length <= 2_048 &&
-                                            '\r' !in scopedCookie && '\n' !in scopedCookie)
-                                            mediaHeaders + ("Cookie" to scopedCookie)
-                                        else mediaHeaders
-                                        finish(PlaybackResult.Ready(PlaybackMedia(
-                                            uri = found, headers = finalHeaders,
-                                            allowHttpRedirects = allowHttp,
-                                            declaredMime = PlaybackFormatRetry.initialMime(found)
-                                        )))
+                                    // Keep Chromium's request interception fast.
+                                    // A hanging parser endpoint must not block the
+                                    // WebView from discovering a later media request.
+                                    children.launch(Dispatchers.IO) {
+                                        probeSlots.withPermit {
+                                            if (!stopped.get() && cont.isActive &&
+                                                (videoCheck == null ||
+                                                    runCatching { videoCheck(found) }.getOrDefault(false)) &&
+                                                FongMiMediaProbe.probe(found, requestHeaders, allowHttp, calls)) {
+                                                main.post {
+                                                    if (stopped.get() || !cont.isActive)
+                                                        return@post
+                                                    // Only cookies scoped to the exact media
+                                                    // URL; never expose parser credentials
+                                                    // to unrelated hosts.
+                                                    val scopedCookie = runCatching {
+                                                        CookieManager.getInstance().getCookie(found)
+                                                    }.getOrNull().orEmpty()
+                                                    val finalHeaders = if (scopedCookie.isNotBlank() &&
+                                                        scopedCookie.length <= 2_048 &&
+                                                        '\r' !in scopedCookie && '\n' !in scopedCookie)
+                                                        mediaHeaders + ("Cookie" to scopedCookie)
+                                                    else mediaHeaders
+                                                    finish(PlaybackResult.Ready(PlaybackMedia(
+                                                        uri = found, headers = finalHeaders,
+                                                        allowHttpRedirects = allowHttp,
+                                                        declaredMime = PlaybackFormatRetry.initialMime(found)
+                                                    )))
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -171,7 +217,7 @@ internal object FongMiBrowserPlayback {
                         // pages never request the video even though a
                         // WebView-based TVBox player can resolve it.
                         override fun onPageFinished(view: WebView, url: String) {
-                            if (stopped || !cont.isActive || parser.click.isBlank()) return
+                            if (stopped.get() || !cont.isActive || parser.click.isBlank()) return
                             // Executed only in the disposable, isolated player
                             // resolver; no JS bridge or access to app UI/DB.
                             if (TvBoxUrl.normalize(url, allowHttp) == null) return
@@ -187,9 +233,13 @@ internal object FongMiBrowserPlayback {
                         }
                     }
                     try {
-                        view.loadUrl(target, parser.headers.filterKeys { key ->
-                            key.equals("Referer", true) || key.equals("User-Agent", true)
-                        })
+                        val cookie = parser.headers.entries.firstOrNull { it.key.equals("Cookie", true) }?.value
+                        if (!cookie.isNullOrBlank()) CookieManager.getInstance().setCookie(target, cookie)
+                        // CookieManager applies origin/path scoping through redirects.
+                        // WebView.loadUrl extra headers have no redirect-origin hook;
+                        // never place raw credentials in that extra-header map.
+                        view.loadUrl(target, FongMiParsePlayback.safeHeaders(parser.headers, target, target)
+                            .filterKeys { !it.equals("Cookie", true) && !it.equals("Authorization", true) })
                     } catch (_: Exception) {
                         finish(PlaybackResult.Unavailable("网页解析入口启动失败"))
                     }

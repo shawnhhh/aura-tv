@@ -66,6 +66,7 @@ class PlaybackDiagnosticsIntegrationTest {
                         return MockResponse().setResponseCode(path.substringAfterLast('/').toInt())
                     val (asset, mime) = when (path) {
                         "/primary.m3u8" -> return MockResponse().setResponseCode(403)
+                        "/transient.m3u8" -> return MockResponse().setResponseCode(503)
                         "/mp4" -> "synthetic.mp4" to "video/mp4"
                         "/remote" -> "synthetic-remote.mp4" to "video/mp4"
                         "/hls" -> "synthetic-hls.m3u8" to "application/vnd.apple.mpegurl"
@@ -267,11 +268,28 @@ class PlaybackDiagnosticsIntegrationTest {
         }
     }
 
-    @Test fun hlsPrimaryDenialDoesNotForceHlsMimeOntoExtensionlessMp4Backup() {
+    @Test fun rejectedHlsSourceMustNotAutomaticallyTryIndependentlyAuthorizedBackup() {
         fixtures { server, requests ->
-            launch(server, "/primary.m3u8", "/mp4").use(::frames)
+            launch(server, "/primary.m3u8", "/mp4").use {
+                compose.waitUntil(30_000) {
+                    runCatching {
+                        compose.onNodeWithTag("player-error")
+                            .assertTextContains("HTTP 403", substring = true)
+                    }.isSuccess
+                }
+            }
             assertTrue(requests.contains("/primary.m3u8"))
-            assertTrue(requests.contains("/mp4"))
+            assertFalse("HTTP 403 is an authorization denial, not a transient source error",
+                requests.contains("/mp4"))
+        }
+    }
+
+    @Test fun transientHlsServerErrorFallsBackToExtensionlessMp4WithoutInheritingManifestMime() {
+        fixtures { server, requests ->
+            launch(server, "/transient.m3u8", "/mp4").use(::frames)
+            assertTrue(requests.contains("/transient.m3u8"))
+            assertTrue("Temporary 503 may move to the explicitly supplied backup",
+                requests.contains("/mp4"))
         }
     }
 

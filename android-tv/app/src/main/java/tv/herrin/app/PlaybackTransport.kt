@@ -2,7 +2,7 @@ package tv.herrin.app
 
 import androidx.media3.common.C
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
+import com.fongmi.android.tv.player.track.TrackUtil
 
 /** Focusable Android TV controls call these operations; never infer a stream URL. */
 object PlaybackTransport {
@@ -66,11 +66,16 @@ object PlaybackTransport {
         }
         val choice = choices[next % choices.size]
         val group = player.currentTracks.groups[choice.groupIndex]
+        // Preserve FongMi's format/language/ordinal identity when tracks are rebuilt
+        // after a new manifest or decoder selection; do not rely on stale group indices.
+        val format = group.getTrackFormat(choice.trackIndex)
+        val ordinal = player.currentTracks.groups.take(choice.groupIndex)
+            .filter { it.type == trackType }.sumOf { it.length } + choice.trackIndex
+        val track = TrackUtil.createTrack(trackType, choice.label, format, ordinal)
+            .apply { isSelected = true }
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(trackType, false)
-            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(choice.trackIndex)))
-            .build()
-        return true
+            .setTrackTypeDisabled(trackType, false).build()
+        return TrackUtil.setTrackSelection(player, track)
     }
 
     fun currentLabel(player: Player, type: Int): String {

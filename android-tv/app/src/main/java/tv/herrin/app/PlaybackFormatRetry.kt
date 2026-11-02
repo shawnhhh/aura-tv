@@ -47,7 +47,7 @@ internal object PlaybackFormatRetry {
     }
 
     fun retryNextSource(errorCode: Int, httpStatus: Int? = null): Boolean =
-        errorCode in 2000..4999 && errorCode !in setOf(2006, 2007) && httpStatus != 429
+        errorCode in 2000..4999 && errorCode !in setOf(2006, 2007) && httpStatus !in setOf(401, 403, 404, 410, 429)
 
     data class Attempt(val candidateIndex: Int, val uri: String, val mime: String?)
 

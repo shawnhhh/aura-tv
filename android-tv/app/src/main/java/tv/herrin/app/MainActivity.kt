@@ -705,6 +705,13 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    // Media rekeys (refresh, episode and line) keep their active source. Only
+    // leaving the player releases its Spider resources and next play rehydrates.
+    DisposableEffect(screen == "player", spiderActive) {
+        val ownsPlayback = screen == "player" && spiderActive
+        onDispose { if (ownsPlayback) spiderBridge.releasePlayback() }
+    }
+
     LaunchedEffect(screen, filmId) {
         // A Back press during a slow CMS request must not leave a stale
         // pending lookup that can later attach to an unrelated navigation.
@@ -1036,6 +1043,10 @@ private fun Herrin() {
             remaining > 0 -> "仍有 $remaining 个条目无可用选集；请检查影视点是否提供详情或更换线路"
             else -> ""
         }
+    }
+    // One finite budget for the explicit selection; URL refreshes do not reset it.
+    val playbackRecovery = remember(catalogScope, film.id, episode, line, screen) {
+        FongMiPlaybackRecovery.Session()
     }
     LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch) {
         spiderResolved = null
@@ -2231,6 +2242,7 @@ private fun Herrin() {
                     key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
+                        recoverySession = playbackRecovery,
                         startPositionMs = previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,

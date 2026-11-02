@@ -17,6 +17,7 @@ import android.os.Messenger
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,6 +25,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -40,6 +42,7 @@ internal object SpiderIpc {
     const val DETAILS = 2
     const val PLAY = 3
     const val PROXY_SELF_TEST = 20
+    const val RELEASE_PLAYBACK = 21
     const val AUTH_SHOW = 10
     const val AUTH_ACTION = 11
     const val AUTH_CLOSE = 12
@@ -50,7 +53,7 @@ internal object SpiderIpc {
         .put("name", site.name).put("key", site.key)
         .put("spiderApi", site.spiderApi ?: "").put("scriptApi", site.scriptApi ?: "")
         .put("ext", site.extension)
-        .put("jar", site.jar ?: "")
+        .put("jar", site.jar ?: "").put("click", site.click)
         .put("header", JSONObject(site.headers))
 
     fun readSite(obj: JSONObject): TvBoxSite = TvBoxSite(
@@ -65,6 +68,7 @@ internal object SpiderIpc {
                     api.substringBefore('?').endsWith(".py", true)))
         },
         extension = obj.optString("ext").take(64_000),
+        click = obj.optString("click").take(4096),
         jar = obj.optString("jar").takeIf { it.isNotBlank() },
         headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))
 
@@ -296,6 +300,12 @@ class TvBoxSpiderService : Service() {
                                     is SpiderResult.Failure -> SpiderIpc.error(result.message)
                                 }
                             }
+                            SpiderIpc.RELEASE_PLAYBACK -> {
+                                proxySelfTest?.close()
+                                proxySelfTest = null
+                                worker.releasePlayback()
+                                JSONObject().put("ok", true)
+                            }
                             SpiderIpc.PROXY_SELF_TEST -> {
                                 check((applicationInfo.flags and
                                     android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
@@ -407,9 +417,15 @@ internal class TvBoxSpiderBridge(context: Context) {
     private var bound = false
     private var closed = false
     private val requests = Mutex()
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var cleanupJob: Job? = null
     @Volatile private var generation = 0
     @Volatile private var hydratedGeneration = -1
     @Volatile private var lastBrowse: String? = null
+    // Only host-observed Binder/transport events authorize a single replay.
+    // Provider messages, authentication denials and initialization errors do not.
+    private enum class TransportFault { PROCESS_EXITED, DISCONNECTED, TIMEOUT }
+    @Volatile private var lastTransportFault: TransportFault? = null
 
     private val responses = Messenger(Handler(Looper.getMainLooper()) { message ->
         if (message.what == SpiderIpc.AUTH_SHOW || message.what == SpiderIpc.AUTH_CLOSE) {
@@ -460,12 +476,12 @@ internal class TvBoxSpiderBridge(context: Context) {
             invalidate("Spider 子进程异常退出" +
                 (stage?.let { "，最后阶段：$it" } ?: "") +
                 (cause?.let { "，系统原因：$it" } ?: "") +
-                "；可换一条直链或重新应用站点")
+                "；可换一条直链或重新应用站点", TransportFault.PROCESS_EXITED)
         }
 
         override fun onBindingDied(name: ComponentName?) {
             if (epoch != generation || connection !== this) return
-            invalidate("Spider 服务连接失效，请重试")
+            invalidate("Spider 服务连接失效，请重试", TransportFault.DISCONNECTED)
         }
 
         override fun onNullBinding(name: ComponentName?) {
@@ -475,7 +491,8 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     /** Main-thread only: release dead registrations and reject every outstanding caller. */
-    private fun invalidate(reason: String) {
+    private fun invalidate(reason: String, fault: TransportFault? = null) {
+        lastTransportFault = fault
         SpiderAuthorizationUi.clear(this)
         generation++
         hydratedGeneration = -1
@@ -505,7 +522,7 @@ internal class TvBoxSpiderBridge(context: Context) {
             }
             return withTimeout(10_000) { waiter.await() }
         } catch (timeout: TimeoutCancellationException) {
-            invalidate("Spider 服务启动超时，请重试")
+            invalidate("Spider 服务启动超时，请重试", TransportFault.TIMEOUT)
             throw timeout
         } finally {
             waitingForBind.remove(waiter)
@@ -513,42 +530,46 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
     }
 
-    // Serialize source changes and media calls. After a crash, rebuild exactly the
-    // last successful site once before a detail/play operation; never loop retries.
+    // Serialize source changes and media calls. A Binder death can be observed
+    // during playerContent, so rehydrate the exact approved source before one
+    // replay. Never replay a failed browse or an authentication/provider error.
     private suspend fun request(operation: Int, payload: JSONObject): SpiderResult<JSONObject> =
         requests.withLock {
-            val startedGeneration = generation
-            val remembered = lastBrowse
-            if (operation != SpiderIpc.BROWSE && remembered == null)
-                return@withLock SpiderResult.Failure("Spider 站点尚未就绪，请重新应用站点")
-            if (operation != SpiderIpc.BROWSE && remembered != null && hydratedGeneration != generation) {
-                when (val restored = sendRequest(SpiderIpc.BROWSE, JSONObject(remembered))) {
-                    is SpiderResult.Failure -> return@withLock restored
-                    is SpiderResult.Ready -> {
-                        if (startedGeneration != generation)
-                            return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
-                        hydratedGeneration = generation
-                    }
-                }
-            }
             if (operation == SpiderIpc.BROWSE) {
                 lastBrowse = null
                 hydratedGeneration = -1
-            }
-            val result = sendRequest(operation, payload)
-            if (startedGeneration != generation && result is SpiderResult.Ready)
-                return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
-            if (operation == SpiderIpc.BROWSE) {
+                val result = sendRequest(operation, payload)
                 if (result is SpiderResult.Ready) {
                     lastBrowse = payload.toString()
                     hydratedGeneration = generation
-                } else {
-                    // A failed source switch cannot resurrect the previous source.
-                    lastBrowse = null
-                    hydratedGeneration = -1
                 }
+                return@withLock result
             }
-            result
+            val remembered = lastBrowse
+                ?: return@withLock SpiderResult.Failure("Spider 站点尚未就绪，请重新应用站点")
+            for (attempt in 0..1) {
+                val startedGeneration = generation
+                if (hydratedGeneration != generation) {
+                    when (val restored = sendRequest(SpiderIpc.BROWSE, JSONObject(remembered))) {
+                        is SpiderResult.Failure -> return@withLock restored
+                        is SpiderResult.Ready -> {
+                            if (startedGeneration != generation)
+                                return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
+                            hydratedGeneration = generation
+                        }
+                    }
+                }
+                val result = sendRequest(operation, payload)
+                if (startedGeneration == generation) return@withLock result
+                if (result is SpiderResult.Ready)
+                    return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
+                if (attempt == 1 || lastTransportFault == null)
+                    return@withLock result
+                delay(400L) // Cancellation propagates; leaving playback never rebinds later.
+                if (lastBrowse != remembered || closed || lastTransportFault == null)
+                    return@withLock SpiderResult.Failure("Spider 会话已结束或变化，已取消恢复")
+            }
+            error("Unreachable bounded Spider recovery")
         }
 
     private suspend fun sendRequest(operation: Int, payload: JSONObject): SpiderResult<JSONObject> = try {
@@ -567,10 +588,10 @@ internal class TvBoxSpiderBridge(context: Context) {
                 })
                 withTimeout(165_000) { deferred.await() }
             } catch (timeout: TimeoutCancellationException) {
-                invalidate("Spider 操作超时，请重新应用站点")
+                invalidate("Spider 操作超时，请重新应用站点", TransportFault.TIMEOUT)
                 throw timeout
             } catch (error: android.os.RemoteException) {
-                invalidate("Spider 服务已断开，请重试")
+                invalidate("Spider 服务已断开，请重试", TransportFault.DISCONNECTED)
                 throw error
             } finally {
                 pending.remove(id)
@@ -641,14 +662,21 @@ internal class TvBoxSpiderBridge(context: Context) {
                 val ready = SpiderIpc.readPlayback(response.value, allowHttp)
                 if (ready is PlaybackResult.Ready && SpiderProxyPlayback.isCatVodProxy(ready.media.uri)) {
                     val health = SpiderProxyPlayback.diagnose(ready.media.uri)
-                    if (health != SpiderProxyPlayback.Health.READY) {
+                    if (health != SpiderProxyPlayback.Health.READY &&
+                        !FongMiPlaybackRecovery.canRebuildProxy(health.name)) {
+                        PlaybackResult.Unavailable("本机 Spider 代理拒绝当前会话（PROXY_${health.name}）")
+                    } else if (health != SpiderProxyPlayback.Health.READY) {
                         // The remote process can die between returning playerContent
                         // and the Media3 connection. Explicitly invalidate its
                         // bound session and retry at most once from the last
                         // previously approved source, never an arbitrary URL.
+                        val rememberedSource = lastBrowse
                         withContext(Dispatchers.Main.immediate) {
                             invalidate("Spider 播放代理连接失效")
                         }
+                        delay(400L)
+                        if (rememberedSource == null || lastBrowse != rememberedSource)
+                            return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消恢复")
                         when (val retried = request(SpiderIpc.PLAY, payload)) {
                             is SpiderResult.Failure -> PlaybackResult.Unavailable(
                                 "本机 Spider 代理重连失败（PROXY_${health.name}）；" +
@@ -667,22 +695,61 @@ internal class TvBoxSpiderBridge(context: Context) {
                         }
                     } else ready
                 } else ready
+            } catch (cancel: CancellationException) {
+                throw cancel
             } catch (error: Exception) {
                 PlaybackResult.Unavailable("Spider 播放信息无效：" + SpiderFailureDetails.message(error))
             }
         }
     }
 
+    /**
+     * Close before a subsequent play can reuse the bound service. Android may
+     * rebind a service before onDestroy, so unbind alone is not a close barrier.
+     * This job is owned by the bridge, not the outgoing media composition.
+     */
+    fun releasePlayback() {
+        val selectedSource = lastBrowse
+        val selectedGeneration = generation
+        cleanupJob?.cancel()
+        cleanupJob = cleanupScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            requests.withLock {
+                if (generation != selectedGeneration || lastBrowse != selectedSource) return@withLock
+                if (remote == null && !bound) {
+                    invalidate("Spider 播放会话已结束")
+                    return@withLock
+                }
+                try {
+                    withTimeout(6_000L) {
+                        sendRequest(SpiderIpc.RELEASE_PLAYBACK, JSONObject())
+                    }
+                } catch (_: CancellationException) {
+                    // Explicit close cancels this cleanup. The finally fence
+                    // still releases registrations of this exact generation.
+                } finally {
+                    if (generation == selectedGeneration && lastBrowse == selectedSource)
+                        invalidate("Spider 播放会话已结束")
+                }
+            }
+        }
+    }
+
+    internal suspend fun awaitPlaybackReleaseForInstrumentation() { cleanupJob?.join() }
+
     internal suspend fun probeRemoteProxyForInstrumentation(): SpiderResult<String> =
-        when (val result = sendRequest(SpiderIpc.PROXY_SELF_TEST, JSONObject())) {
-            is SpiderResult.Failure -> result
-            is SpiderResult.Ready -> SpiderResult.Ready(result.value.optString("uri"))
+        requests.withLock {
+            when (val result = sendRequest(SpiderIpc.PROXY_SELF_TEST, JSONObject())) {
+                is SpiderResult.Failure -> result
+                is SpiderResult.Ready -> SpiderResult.Ready(result.value.optString("uri"))
+            }
         }
 
     fun close() {
         Handler(Looper.getMainLooper()).post {
             if (closed) return@post
             closed = true
+            cleanupJob?.cancel()
+            cleanupJob = null
             lastBrowse = null
             invalidate("Spider 会话已结束")
             closed = false // A later "应用影视源" starts a new bound session.

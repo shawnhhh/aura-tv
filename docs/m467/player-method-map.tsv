@@ -1,0 +1,206 @@
+upstream_file	upstream_line	upstream_method	herrin_file	herrin_method	status	automated_case
+player/exo/ExoPlayerEngine.java	62	<init>(Player.Listener listener)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	78	updateEventLogger()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	89	onAudioTrackInitialized(@NonNull EventTime eventTime,@NonNull AudioSink.AudioTrackConfig audioTrackConfig)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	94	onAudioTrackReleased(@NonNull EventTime eventTime,@NonNull AudioSink.AudioTrackConfig audioTrackConfig)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	99	onAudioSinkError(@NonNull EventTime eventTime,@NonNull Exception error)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	112	onTracksChanged(@NonNull EventTime eventTime,@NonNull Tracks tracks)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	117	getType()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	122	needsRebuild()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	127	getPlayer()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	132	getPlaybackLog()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	137	getDiscMenuController()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	142	getAudioChannelCount()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	148	getEffect()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	153	release()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	172	getSupportedDecoderModes(@C.TrackType int trackType)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	177	getDecoderMode(@C.TrackType int trackType)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	184	setDecoderMode(@C.TrackType int trackType,DecoderMode mode)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	190	prepareForNewMedia()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	195	setMediaItem(PlaySpec spec,long startPositionMs)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	211	setEnding(long endingMs)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	219	isEndingManaged()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	224	getOriginalDurationMs()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	229	preload(PlaySpec spec,long startPositionMs,Runnable onError)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	241	onPreloadReady(MediaItem item,PlaySpec spec,long startPositionMs)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	248	onPreloadError(MediaItem item,Runnable onError)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	254	seekToNext()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	262	consumePreload(MediaItem item)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	281	clearPreload()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	287	clearPreloadQueue()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	296	bindPlayerView(PlayerView playerView)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	302	applySubtitleStyle()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	307	getSubtitleSelectionState()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	312	getSubtitleContent(TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	322	getSubtitleOffsets()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	327	setSubtitleOffsets(SubtitleOffsets offsets)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	332	supportsSubtitleOffsets()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	337	supportsSubtitleTranscript()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	342	setSubtitleContentEnabled(boolean enabled)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	347	canRetrySubtitleContent(Format format)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	352	retrySubtitleContent(Format format)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	357	setSecondarySubtitleSelection(@Nullable TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	362	restoreSecondarySubtitleSelection(@Nullable TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	367	stop()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	375	getErrorMessage(PlaybackException e)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	380	handleError(PlaybackException e)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerEngine.java	389	seekToDefaultPosition()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	55	<init>(AudioProcessor audioProcessor)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	75	player()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	79	libassPlaybackSession()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	83	subtitleTranscriptSession()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	87	libassSubtitleController()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	91	hasLibassSettingChanged()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	95	decoderMode(@C.TrackType int trackType)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	104	setDecoderMode(@C.TrackType int trackType,DecoderMode mode)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	111	preload(MediaItem mediaItem,long startPositionMs,Runnable onReady,Runnable onError)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	121	usePreloadedMediaSource(MediaItem mediaItem)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	129	createMediaSource(MediaItem mediaItem)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	136	clearPreload()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	145	release()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	155	getPreloadStartPositionMs()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	159	createPreloadManagerBuilder(AudioProcessor audioProcessor,SecondaryTextTrackSelector.Factory secondaryTextTrackSelectorFactory,SecondaryTextOutput secondaryTextOutput)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	163	createLibassPlaybackSession(boolean libassEnabled)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	175	onCompleted(@NonNull MediaItem mediaItem)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	180	onPreloadPaused(@NonNull MediaItem mediaItem)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	185	onPreloadReady(MediaItem mediaItem)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoPlayerSession.java	192	onError(PreloadException exception)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	57	<init>(LibassPlaybackSession libassPlaybackSession,SubtitleTranscriptSession subtitleTranscriptSession)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	63	supplier(LibassPlaybackSession libassPlaybackSession,SubtitleTranscriptSession subtitleTranscriptSession)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	65	setCache(Cache cache)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	71	setDataSourceFactory(DataSource.Factory dataSourceFactory)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	77	get()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	84	createUpstreamDataSourceFactory(Map<String, String> headers,Auth.Context auth)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	90	createDataSourceFactory(Map<String, String> headers)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	94	createDataSourceFactory(Map<String, String> headers,Auth.Context auth)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	100	getCache()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	106	getDatabaseProvider()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	111	getMaxCacheSize(File dir)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	120	setDrmSessionManagerProvider(@NonNull DrmSessionManagerProvider drmSessionManagerProvider)	android-tv/app/src/main/java/com/fongmi/android/tv/player/exo/ExoMediaSourceFactory.java	setDrmSessionManagerProvider	MINIMAL_HOST_ABI_ADAPTATION	M467EngineContainerTest (8 cases);PlaybackTransportTest
+player/exo/ExoMediaSourceFactory.java	126	setLoadErrorHandlingPolicy(@NonNull LoadErrorHandlingPolicy loadErrorHandlingPolicy)	android-tv/app/src/main/java/com/fongmi/android/tv/player/exo/ExoMediaSourceFactory.java	setLoadErrorHandlingPolicy	MINIMAL_HOST_ABI_ADAPTATION	M467EngineContainerTest (8 cases);PlaybackTransportTest
+player/exo/ExoMediaSourceFactory.java	132	getSupportedTypes()	android-tv/app/src/main/java/com/fongmi/android/tv/player/exo/ExoMediaSourceFactory.java	getSupportedTypes	MINIMAL_HOST_ABI_ADAPTATION	M467EngineContainerTest (8 cases);PlaybackTransportTest
+player/exo/ExoMediaSourceFactory.java	138	createMediaSource(@NonNull MediaItem mediaItem)	android-tv/app/src/main/java/com/fongmi/android/tv/player/exo/ExoMediaSourceFactory.java	createMediaSource	MINIMAL_HOST_ABI_ADAPTATION	M467EngineContainerTest (8 cases);PlaybackTransportTest
+player/exo/ExoMediaSourceFactory.java	149	createMediaSourceFactory(MediaItem mediaItem)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoMediaSourceFactory.java	164	createDefaultExtractorsFactory()	android-tv/app/src/main/java/com/fongmi/android/tv/player/exo/ExoMediaSourceFactory.java	createDefaultExtractorsFactory	PARTIAL_CUSTOM_MATROSKA_FLAG_UNAVAILABLE	M467EngineContainerTest (8 cases);PlaybackTransportTest
+player/exo/ExoUtil.java	46	buildPlayer(DefaultPreloadManager.Builder preloadManagerBuilder)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	create	PARTIAL_PUBLISHED_ABI_ADAPTATION	M467EngineContainerTest (8 cases)
+player/exo/ExoUtil.java	55	buildLoadControl(int maxPreloadBufferBytes)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	create	PARTIAL_PUBLISHED_ABI_ADAPTATION	M467EngineContainerTest (8 cases)
+player/exo/ExoUtil.java	64	extractHeaders(MediaItem item)	android-tv/app/src/main/java/tv/herrin/app/FongMiPlaybackItemSupport.kt	extractHeaders	MINIMAL_HOST_ABI_ADAPTATION	M467MediaItemCompatibilityTest (2 Android cases)
+player/exo/ExoUtil.java	70	extractAuth(MediaItem item)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoUtil.java	74	buildTrackSelector(DecoderManager decoderManager)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	create	PARTIAL_PUBLISHED_ABI_ADAPTATION	M467EngineContainerTest (8 cases)
+player/exo/ExoUtil.java	85	buildRenderersFactory()	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	create	PARTIAL_PUBLISHED_ABI_ADAPTATION	M467EngineContainerTest (8 cases)
+player/exo/ExoUtil.java	89	buildRenderersFactory(AudioProcessor audioProcessor,TextOutput secondaryTextOutput,LibassPlaybackSession libassPlaybackSession,DecoderManager decoderManager)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	create	PARTIAL_PUBLISHED_ABI_ADAPTATION	M467EngineContainerTest (8 cases)
+player/exo/ExoUtil.java	93	buildAudioSink(Context context,boolean enableFloatOutput,boolean enableAudioOutputPlaybackParams,@Nullable AudioProcessor audioProcessor)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoUtil.java	106	<init>(@Nullable AudioProcessor audioProcessor,@Nullable TextOutput secondaryTextOutput,@Nullable LibassPlaybackSession libassPlaybackSession,@Nullable DecoderManager decoderManager)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoUtil.java	119	buildAudioSink(@NonNull Context context,boolean enableFloatOutput,boolean enableAudioOutputPlaybackParams)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoUtil.java	124	buildMiscellaneousRenderers(@NonNull Context context,@NonNull Handler eventHandler,int extensionRendererMode,@NonNull ArrayList<Renderer> out)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoUtil.java	130	buildTextRenderers(@NonNull Context context,@NonNull TextOutput output,@NonNull Looper outputLooper,int extensionRendererMode,@NonNull ArrayList<Renderer> out)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	21	<init>(ExoPlayerSession session,Player player)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	29	release()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	33	bindPlayerView(PlayerView playerView)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	37	applySubtitleStyle()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	45	getSubtitleSelectionState()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	49	setSecondarySubtitleSelection(@Nullable TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	54	restoreSecondarySubtitleSelection(@Nullable TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	59	prepareForNewMedia()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	63	applySecondarySubtitleMode()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	67	applySecondarySubtitleStyle(SubtitleView subtitleView)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/exo/ExoSubtitleController.java	73	getSecondaryBottomPositionFraction()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	44	<init>(Player.Listener listener)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	57	updateLogLevel()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	61	isAvailable()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	65	getType()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	70	getPlayer()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	75	getDiscMenuController()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	80	getAudioChannelCount()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	85	getEffect()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	90	release()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	100	applySubtitleStyle()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	105	runScript(MpvScripts.Item item)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	109	getScriptStatus(String id)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	113	getScriptBindings()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	117	reloadScripts(boolean reloadStartupScripts,String reloadButtonId)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	121	getSubtitleSelectionState()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	126	getSubtitleContent(TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	131	getSubtitleOffsets()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	136	setSubtitleOffsets(SubtitleOffsets offsets)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	141	supportsSubtitleOffsets()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	146	setSubtitleContentEnabled(boolean enabled)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	151	supportsSubtitleTranscript()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	156	canRetrySubtitleContent(Format format)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	161	retrySubtitleContent(Format format)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	166	setSecondarySubtitleSelection(@Nullable TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	173	restoreSecondarySubtitleSelection(@Nullable TrackSelectionOverride selection)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	179	prepareForNewMedia()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	184	addSubtitle(Sub sub)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	191	getSupportedDecoderModes(@C.TrackType int trackType)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	196	getDecoderMode(@C.TrackType int trackType)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	203	setDecoderMode(@C.TrackType int trackType,DecoderMode mode)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	209	onTracksChanged(@NonNull Tracks tracks)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	214	setMediaItem(PlaySpec spec,long startPositionMs)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	226	stop()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	231	getErrorMessage(PlaybackException e)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	236	handleError(PlaybackException e)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvPlayerEngine.java	241	applySecondarySubtitleMode(int mode)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	60	checkInstalled()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	66	isAvailable()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	80	loadRuntime()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	92	isVulkanSupported()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	96	buildPlayer(Player.Listener listener)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	105	applySubtitleStyle(MpvPlayer player)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	109	getManagedOptionNames()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	125	createDataSourceFactory()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	131	buildConfig()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	143	readScripts()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	152	buildAndroidOptions(File shaderCacheDirectory)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	159	setPreferredTextLanguages(MpvPlayer player)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	163	buildSubtitleOptions(@Nullable ExternalFont.Item font)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/mpv/MpvUtil.java	178	setCaptionStyle(MpvSubtitleOptions.Builder builder)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	19	create(Player.Listener listener)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	23	create(PlaySpec spec,Player.Listener listener)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	27	create(PlayerEngine.Type type,Player.Listener listener)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	34	matches(PlayerEngine engine,PlaySpec spec)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	38	canPreload(PlaySpec spec)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	42	resolve(PlaySpec spec)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	46	resolve()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	50	requiresExo(PlaySpec spec)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	54	isCmg(PlaySpec spec)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/engine/PlayerEngineFactory.java	58	isMpvReady()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	33	buildMetadata(String title,String artist,String artUri)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	40	buildLiveMetadata(String title,@Nullable EpgData data,String artUri)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	45	getArtworkUri(String artUri)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	50	getDisplayTitle(MediaMetadata metadata)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	56	getDefaultUserAgent()	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	60	from(PlaySpec spec)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	mediaItem	PARTIAL_HOST_MODEL_ADAPTATION	M467EngineContainerTest (8 cases)
+player/media/MediaItemFactory.java	75	buildRequestMetadata(PlaySpec spec)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	mediaItem	PARTIAL_HOST_MODEL_ADAPTATION	M467EngineContainerTest (8 cases)
+player/media/MediaItemFactory.java	79	toBundle(Map<String, String> headers)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	mediaItem	PARTIAL_HOST_MODEL_ADAPTATION	M467EngineContainerTest (8 cases)
+player/media/MediaItemFactory.java	85	buildSubtitleConfigs(List<Sub> subs)	android-tv/app/src/main/java/tv/herrin/app/FongMiPlaybackItemSupport.kt	subtitleSelectionFlags	PARTIAL_NO_EXPLICIT_SUB_FLAGS	M467FongMiMediaContractTest (5 JVM cases)
+player/media/MediaItemFactory.java	93	buildSubConfig(Sub sub)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	mediaItem	PARTIAL_HOST_MODEL_ADAPTATION	M467EngineContainerTest (8 cases)
+player/media/MediaItemFactory.java	97	buildSubConfig(Sub sub,int flag)	android-tv/app/src/main/java/tv/herrin/app/FongMiExoPlayerFactory.kt	mediaItem	PARTIAL_HOST_MODEL_ADAPTATION	M467EngineContainerTest (8 cases)
+player/media/MediaItemFactory.java	104	findPreferredSubtitleIndex(List<Sub> subs)	android-tv/app/src/main/java/tv/herrin/app/FongMiPlaybackItemSupport.kt	subtitleSelectionFlags	PARTIAL_HOST_LANGUAGE_ADAPTATION	M467FongMiMediaContractTest (5 JVM cases)
+player/media/MediaItemFactory.java	117	buildDrmConfig(Drm drm)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	125	create(List<Sub> subs)	android-tv/app/src/main/java/tv/herrin/app/FongMiPlaybackItemSupport.kt	subtitleSelectionFlags	PARTIAL_NO_EXPLICIT_SUB_FLAGS	M467FongMiMediaContractTest (5 JVM cases)
+player/media/MediaItemFactory.java	132	hasExplicitFlags(List<Sub> subs)	—	—	BLOCKED_CURRENT_MEDIA3_ABI	NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET
+player/media/MediaItemFactory.java	136	get(Sub sub,int index)	android-tv/app/src/main/java/tv/herrin/app/FongMiPlaybackItemSupport.kt	subtitleSelectionFlags	PARTIAL_NO_EXPLICIT_SUB_FLAGS	M467FongMiMediaContractTest (5 JVM cases)
+player/media/ConcatenatingUrl.java	10	matches(String url)	android-tv/app/src/main/java/com/fongmi/android/tv/player/media/ConcatenatingUrl.java	matches(String url)	DIRECT_SOURCE	M467FongMiMediaContractTest.concatenationPreservesSignedSourceAndDurationAndUtf8Length;malformedSegmentsAreRejectedBeforeOpeningAnySource
+player/media/ConcatenatingUrl.java	14	parse(String url)	android-tv/app/src/main/java/com/fongmi/android/tv/player/media/ConcatenatingUrl.java	parse(String url)	DIRECT_SOURCE	M467FongMiMediaContractTest.concatenationPreservesSignedSourceAndDurationAndUtf8Length;malformedSegmentsAreRejectedBeforeOpeningAnySource
+player/media/ConcatenatingUrl.java	26	parseSegment(String entry,long durationMs)	android-tv/app/src/main/java/com/fongmi/android/tv/player/media/ConcatenatingUrl.java	parseSegment(String entry,long durationMs)	DIRECT_SOURCE	M467FongMiMediaContractTest.concatenationPreservesSignedSourceAndDurationAndUtf8Length;malformedSegmentsAreRejectedBeforeOpeningAnySource
+player/media/ConcatenatingUrl.java	35	toEdl(String url)	android-tv/app/src/main/java/com/fongmi/android/tv/player/media/ConcatenatingUrl.java	toEdl(String url)	DIRECT_SOURCE	M467FongMiMediaContractTest.concatenationPreservesSignedSourceAndDurationAndUtf8Length;malformedSegmentsAreRejectedBeforeOpeningAnySource
+player/media/ConcatenatingUrl.java	43	appendSegment(StringBuilder edl,Segment segment)	android-tv/app/src/main/java/com/fongmi/android/tv/player/media/ConcatenatingUrl.java	appendSegment(StringBuilder edl,Segment segment)	DIRECT_SOURCE	M467FongMiMediaContractTest.concatenationPreservesSignedSourceAndDurationAndUtf8Length;malformedSegmentsAreRejectedBeforeOpeningAnySource
+player/track/TrackUtil.java	26	describeFormat(Format format)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	describeFormat(Format format)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	42	getSubtitleMimeType(String path)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	getSubtitleMimeType(String path)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	51	count(Tracks tracks,int type)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	count(Tracks tracks,int type)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	55	createTrack(int type,String name,Format format,int ordinal)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	createTrack(int type,String name,Format format,int ordinal)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	64	fromSelection(Tracks tracks,TrackSelectionOverride selection,int role)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	fromSelection(Tracks tracks,TrackSelectionOverride selection,int role)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	79	createSelectedTrack(Tracks.Group group,int index,int ordinal,int role)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	createSelectedTrack(Tracks.Group group,int index,int ordinal,int role)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	88	reset(Player player)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	reset(Player player)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	92	createResetBuilder(Player player)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	createResetBuilder(Player player)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	96	findSelection(Player player,Track track)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	findSelection(Player player,Track track)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	102	find(Tracks tracks,Track track)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	find(Tracks tracks,Track track)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	138	getMatchScore(Track track,Format format)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	getMatchScore(Track track,Format format)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	153	normalize(@Nullable CharSequence value)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	normalize(@Nullable CharSequence value)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	160	normalizeLanguage(@Nullable String language)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	normalizeLanguage(@Nullable String language)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	166	setTrackSelection(Player player,Track track)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	setTrackSelection(Player player,Track track)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	173	findRestorationOverride(Tracks tracks,Track track)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	findRestorationOverride(Tracks tracks,Track track)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	183	setTrackSelection(Player player,List<Track> tracks)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	setTrackSelection(Player player,List<Track> tracks)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	194	putOverride(Tracks currentTracks,Track track,Map<Integer, TrackSelectionOverride> overridesByType,List<Track> pending)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	putOverride(Tracks currentTracks,Track track,Map<Integer, TrackSelectionOverride> overridesByType,List<Track> pending)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks
+player/track/TrackUtil.java	205	createOverride(Track track,TrackInfo info)	android-tv/app/src/main/java/com/fongmi/android/tv/player/track/TrackUtil.java	createOverride(Track track,TrackInfo info)	DIRECT_SOURCE_HOST_NULL_CHECK	M467FongMiMediaContractTest.subtitleFormatMatchesUpstreamAcrossSrtAssSsaVttAndUnknown;M467FongMiTrackRestoreTest (3 cases);PlaybackTransportTest.realRemoteSeekAndDecodedAudioSubtitleTracks

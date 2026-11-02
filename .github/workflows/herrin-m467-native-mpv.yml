@@ -1,0 +1,120 @@
+name: HERRIN M4.67 Native MPV Candidate Build
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/herrin-m467-native-mpv.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: herrin-m467-native-mpv-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-arm:
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 76
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      MPV_ANDROID_ARCHES: armv7l arm64
+      MPV_GIT_URL: https://github.com/FongMi/mpv.git
+      MPV_GIT_REF: fongmi
+      MPV_ANDROID_NATIVE_ONLY: '1'
+    steps:
+      - name: Checkout Herrin playback integration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout exact public FongMi mpv-android build recipes
+        uses: actions/checkout@v4
+        with:
+          repository: FongMi/mpv-android
+          ref: 049ade89abc85fc05ef73dc9ba6f1810466c9f8a
+          path: native/mpv-android
+          persist-credentials: false
+      - name: Verify source build SHA, NDK and API before installing
+        shell: bash
+        run: |
+          set -euo pipefail
+          source=native/mpv-android
+          test "$(git -C "$source" rev-parse HEAD)" = '049ade89abc85fc05ef73dc9ba6f1810466c9f8a'
+          grep -qx 'v_ndk=r30' "$source/buildscripts/include/depinfo.sh"
+          grep -qx 'v_ndk_n=30.0.16248370' "$source/buildscripts/include/depinfo.sh"
+          grep -q 'android_api=24' "$source/buildscripts/buildall.sh"
+          bash -n "$source/buildscripts/buildall.sh"
+          bash -n scripts/m467/build_native_candidates.sh
+      - name: Install system native-build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake libtool pkg-config ninja-build cmake \
+            python3-venv python3-pip gperf nasm patch ant wget unzip libssl-dev
+          python3 -m venv "$RUNNER_TEMP/native-meson-venv"
+          "$RUNNER_TEMP/native-meson-venv/bin/pip" install --disable-pip-version-check meson
+          echo "$RUNNER_TEMP/native-meson-venv/bin" >> "$GITHUB_PATH"
+      - name: Set up Java 17 and resolve immutable native dependency SHAs
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Resolve dependency revisions using pinned upstream recipe
+        shell: bash
+        working-directory: native/mpv-android
+        run: |
+          set -euo pipefail
+          buildscripts/include/ci.sh export | tee "$RUNNER_TEMP/native-source.lock" >> "$GITHUB_ENV"
+          cat "$RUNNER_TEMP/native-source.lock"
+          mkdir -p "$RUNNER_TEMP/m467-native-evidence"
+          cp "$RUNNER_TEMP/native-source.lock" "$RUNNER_TEMP/m467-native-evidence/native-source.lock"
+          echo "MPV_ANDROID_BUILD_RECIPES=049ade89abc85fc05ef73dc9ba6f1810466c9f8a" >> "$RUNNER_TEMP/m467-native-evidence/native-source.lock"
+      - name: Cache immutable FFmpeg/mpv dependency prefix
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/mpv-native-cache
+          key: m467-native-${{ env.CACHE_IDENTIFIER }}
+      - name: Prepare NDK r30 and build FFmpeg dependencies for both ARM ABIs
+        shell: bash
+        working-directory: native/mpv-android
+        run: |
+          set -euo pipefail
+          CACHE_MODE=folder CACHE_FOLDER="$RUNNER_TEMP/mpv-native-cache" buildscripts/include/ci.sh install
+      - name: Build unified FFmpeg, MPV and JNI for both ARM ABIs
+        shell: bash
+        working-directory: native/mpv-android
+        run: |
+          set -euo pipefail
+          buildscripts/include/ci.sh build
+          printf 'mpv source commit: %s\n' "$(git -C buildscripts/deps/mpv rev-parse HEAD)" \
+            >> "$RUNNER_TEMP/m467-native-evidence/native-source.lock"
+      - name: Validate actual native ELF outputs and archive checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          source=native/mpv-android
+          for abi in arm64-v8a armeabi-v7a; do
+            dir="$source/app/src/main/libs/$abi"
+            test -d "$dir"
+            for lib in libmpv.so libplayer.so libffmpeg.so; do
+              test -s "$dir/$lib"
+              file "$dir/$lib"
+              if readelf -d "$dir/$lib" | grep -Eq 'Shared library: \[lib(av|sw)[^]]+\.so'; then
+                echo "Split FFmpeg: $abi/$lib" >&2
+                exit 1
+              fi
+            done
+            python3 "$source/buildscripts/include/ffmpeg-shared.py" verify-package "$dir" --readelf readelf
+          done
+          find "$source/app/src/main/libs" -type f -name '*.so' -print0 | sort -z | xargs -0 sha256sum \
+            > "$RUNNER_TEMP/m467-native-evidence/native-libraries.sha256"
+          printf 'Only raw native candidates, NOT FongMi/TV compatible AARs or validated TCL playback.\n' \
+            > "$RUNNER_TEMP/m467-native-evidence/READ_ME_FIRST.txt"
+      - name: Upload native candidates and provenance
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-M467-mpv-native-candidates
+          path: |
+            native/mpv-android/app/src/main/libs/**/*.so
+            ${{ runner.temp }}/m467-native-evidence/
+          if-no-files-found: error
+          retention-days: 14
