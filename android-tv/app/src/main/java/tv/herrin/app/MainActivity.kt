@@ -1643,6 +1643,8 @@ private fun Herrin() {
                 }
                 is PlaybackResult.Ready ->
                     HerrinPlaybackDiagnosticJournal.record("SPIDER", "MEDIA_ROUTE_READY")
+                null ->
+                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYBACK_EMPTY")
             }
             spiderStatus = when (val result = spiderResolved) {
                 is PlaybackResult.Ready -> "播放地址已解析，正在准备播放器"
