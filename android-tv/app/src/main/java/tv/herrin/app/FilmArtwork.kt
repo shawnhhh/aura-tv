@@ -118,10 +118,9 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
                 Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         if (poster != null) {
-            // Fill ONLY the artwork viewport of each 217 x 116 dp tile.
-            // Poster() owns the separate 29 dp opaque title/year row below;
-            // never stretch the image into that row or change its text/focus.
-            // Crop from the centre rather than distorting any aspect ratio.
+            // Fill the entire 217 x 116 dp card; title and release date
+            // now overlay its bottom gradient in Poster(), with no opaque footer.
+            // Crop from the centre rather than distorting image proportions.
             Image(poster.asImageBitmap(), film.title,
                 Modifier.fillMaxSize().alpha(posterAlpha)
                     .testTag("poster-remote-ready"),
