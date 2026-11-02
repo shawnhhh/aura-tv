@@ -875,7 +875,7 @@ private fun Herrin() {
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
     // the scraped poster/title as an executable source or auto-plays a video.
     LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle,
-        personalSourceConfigEpoch) {
+        tvBoxWarehouses, personalSourceConfigEpoch) {
         if (screen != "detail" || !filmId.startsWith("tmdb-") ||
             tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true) return@LaunchedEffect
         val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
@@ -889,6 +889,13 @@ private fun Herrin() {
         )
         tmdbSourceStatus = "正在优先检索 NAS／云盘的对应影片…"
         val currentTvbox = tvBoxSingle
+        val importedWarehouses = tvBoxWarehouses.take(3)
+        // Spider is a privileged plugin: only an existing user-applied session
+        // may be searched. Never start a new Spider while browsing TMDB.
+        val approvedSpiderSite = if (spiderActive)
+            currentTvbox?.sites?.firstOrNull { it.key.isNotBlank() &&
+                it.spiderApi != null && it.key == tvBoxSelectedName }
+        else null
         val nasUrl = prefs.nasWebDavUrl
         val cloudUrl = prefs.cloudWebDavUrl
         val allowNasHttp = prefs.nasAllowHttp
@@ -909,10 +916,25 @@ private fun Herrin() {
                 )
                 runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
             }
-            currentTvbox?.sites?.asSequence()?.filter { it.apiUrl != null }
-                ?.take(8)?.forEach { site ->
-                    adapters += HerrinTvBoxCmsSource(site, tvBoxVodRepo, tvBoxAllowHttp)
+            val directSites = mutableListOf<TvBoxSite>()
+            directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(6)
+            // Multiwarehouse configs are loaded as data (no JAR/JS execution).
+            // Only user-imported root warehouse URLs are eligible for bounded
+            // lookup; cap fan-out so a TV does not stall or scan the internet.
+            for (warehouse in importedWarehouses) {
+                if (directSites.size >= 10) break
+                when (val nested = tvBoxRepository.load(warehouse.url, tvBoxAllowHttp, preferCached = true)) {
+                    is TvBoxConfig.Single ->
+                        directSites += nested.sites.filter { it.apiUrl != null }.take(2)
+                    else -> Unit
                 }
+            }
+            directSites.distinctBy { it.apiUrl }.take(10).forEach { site ->
+                adapters += HerrinTvBoxCmsSource(site, tvBoxVodRepo, tvBoxAllowHttp)
+            }
+            approvedSpiderSite?.let { site ->
+                adapters += HerrinTvBoxSpiderSource(site, spiderBridge)
+            }
             HerrinFilmRouter(adapters).find(searchIdentity) to adapters
         }
         val found = lookup.options.firstOrNull()
@@ -934,6 +956,28 @@ private fun Herrin() {
                 )
                 spiderActive = false
                 tmdbSourceStatus = "已优先匹配 ${if (found.sourceType == HerrinSourceType.NAS) "NAS" else "云盘"} 文件；请选择播放"
+            }
+            is HerrinTvBoxSpiderSource -> {
+                tmdbSourceStatus = "NAS／云盘无匹配，已在用户授权 Spider 中找到对应影片，正在读集数…"
+                when (val detailed = adapter.details(found)) {
+                    is SpiderResult.Ready -> {
+                        if (detailed.value.playbackEpisodes.isEmpty()) {
+                            tmdbSourceStatus = "Spider 找到影片，但没有返回可用选集"
+                            return@LaunchedEffect
+                        }
+                        tmdbPersonalPlayback.remove(targetId)
+                        activeCmsSite = null
+                        spiderActive = true
+                        tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                            spiderVodId = detailed.value.spiderVodId,
+                            playbackEpisodes = detailed.value.playbackEpisodes,
+                            episodes = maxOf(1, detailed.value.playbackEpisodes.size)
+                        )
+                        tmdbSourceStatus = "已匹配已授权的 Spider 影视点：${adapter.site.name}"
+                    }
+                    is SpiderResult.Failure -> tmdbSourceStatus =
+                        "Spider 找到影片但读取播放线路失败：${detailed.message.take(90)}"
+                }
             }
             is HerrinTvBoxCmsSource -> {
                 tmdbSourceStatus = "个人媒体未找到；正在读取 TVBox 对应作品的实际选集…"
