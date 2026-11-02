@@ -156,7 +156,7 @@ private fun AuthorizedPlaybackSession(
     val latestRefreshSource by rememberUpdatedState(onRefreshSource)
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
-    val retries = remember(media) {
+    val retries = remember(media, isLive) {
         PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime,
             allowNotFoundFallback = isLive && media.headers.isEmpty())
     }
