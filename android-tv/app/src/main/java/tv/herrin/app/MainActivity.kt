@@ -2780,6 +2780,103 @@ private fun Herrin() {
                                     color = Color(0xFFFFD49D))
                             }
                         }
+                        if (settingsTvBoxOnly) {
+                            item { Text("个人影片资源优先 · NAS / 云盘", fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold) }
+                            item { Text("支持用户自己授权的 WebDAV 地址；NAS 可通过 WebDAV 服务共享，云盘需配置有权访问的 WebDAV 网关。SMB、阿里云盘、夸克和 115 原生 API 仍需后续单独接入。",
+                                color = Color(0xFFBDC9D7), lineHeight = 20.sp) }
+                            item { OutlinedTextField(nasDavUrlDraft, { nasDavUrlDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("nas-webdav-url"),
+                                label = { Text("NAS WebDAV 根目录 URL（优先）") }, singleLine = true) }
+                            item { OutlinedTextField(nasDavUserDraft, { nasDavUserDraft = it.take(256) },
+                                Modifier.fillMaxWidth().testTag("nas-webdav-user"),
+                                label = { Text("NAS 用户名（可留空）") }, singleLine = true) }
+                            item { OutlinedTextField(nasDavPasswordDraft, { nasDavPasswordDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("nas-webdav-password"),
+                                label = { Text("NAS 密码（不显示、不存明文）") }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation()) }
+                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                TvButton("保存 NAS 地址", modifier = Modifier.testTag("nas-webdav-save"),
+                                    reduced = reduceMotion) {
+                                    val valid = nasDavUrlDraft.isBlank() || runCatching {
+                                        HerrinWebDavSource(HerrinWebDavAccount("NAS", nasDavUrlDraft.trim(),
+                                            category = HerrinSourceType.NAS, allowInsecureHttp = prefs.nasAllowHttp))
+                                    }.isSuccess
+                                    if (!valid) personalSourceFeedback = "NAS URL 必须是合法 HTTPS；HTTP 需手动授权"
+                                    else {
+                                        val vault = HerrinPersonalCredentialStore(context, "nas")
+                                        val old = vault.load()
+                                        val saved = vault.save(nasDavUserDraft.ifBlank { old.first },
+                                            nasDavPasswordDraft.ifBlank { old.second })
+                                        if (saved) {
+                                            prefs.nasWebDavUrl = nasDavUrlDraft.trim()
+                                            nasDavPasswordDraft = ""
+                                            personalSourceConfigEpoch++
+                                            personalSourceFeedback = "NAS 地址和加密凭据已保存；详情将优先搜索 NAS"
+                                        } else personalSourceFeedback = "设备凭据加密失败，未保存 NAS 地址"
+                                    }
+                                }
+                                TvButton(if (prefs.nasAllowHttp) "NAS HTTP 已允许" else "允许 NAS HTTP（仅可信局域网）",
+                                    reduced = reduceMotion) {
+                                    prefs.nasAllowHttp = !prefs.nasAllowHttp
+                                    personalSourceConfigEpoch++
+                                }
+                            } }
+                            item { OutlinedTextField(cloudDavUrlDraft, { cloudDavUrlDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("cloud-webdav-url"),
+                                label = { Text("云盘 WebDAV 桥接根目录 URL") }, singleLine = true) }
+                            item { OutlinedTextField(cloudDavUserDraft, { cloudDavUserDraft = it.take(256) },
+                                Modifier.fillMaxWidth().testTag("cloud-webdav-user"),
+                                label = { Text("云盘 WebDAV 用户名（可留空）") }, singleLine = true) }
+                            item { OutlinedTextField(cloudDavPasswordDraft, { cloudDavPasswordDraft = it.take(2048) },
+                                Modifier.fillMaxWidth().testTag("cloud-webdav-password"),
+                                label = { Text("云盘 WebDAV 密码（本机加密）") }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation()) }
+                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                TvButton("保存云盘 WebDAV", modifier = Modifier.testTag("cloud-webdav-save"),
+                                    reduced = reduceMotion) {
+                                    val valid = cloudDavUrlDraft.isBlank() || runCatching {
+                                        HerrinWebDavSource(HerrinWebDavAccount("云盘", cloudDavUrlDraft.trim(),
+                                            category = HerrinSourceType.CLOUD, allowInsecureHttp = prefs.cloudAllowHttp))
+                                    }.isSuccess
+                                    if (!valid) personalSourceFeedback = "云盘 WebDAV URL 无效；默认必须 HTTPS"
+                                    else {
+                                        val vault = HerrinPersonalCredentialStore(context, "cloud")
+                                        val old = vault.load()
+                                        val saved = vault.save(cloudDavUserDraft.ifBlank { old.first },
+                                            cloudDavPasswordDraft.ifBlank { old.second })
+                                        if (saved) {
+                                            prefs.cloudWebDavUrl = cloudDavUrlDraft.trim()
+                                            cloudDavPasswordDraft = ""
+                                            personalSourceConfigEpoch++
+                                            personalSourceFeedback = "云盘 WebDAV 已保存；优先于 TVBox 查找"
+                                        } else personalSourceFeedback = "设备加密失败，未保存云盘 URL"
+                                    }
+                                }
+                                TvButton(if (prefs.cloudAllowHttp) "云盘 HTTP 已允许" else "允许云盘 HTTP（不推荐）",
+                                    reduced = reduceMotion) {
+                                    prefs.cloudAllowHttp = !prefs.cloudAllowHttp
+                                    personalSourceConfigEpoch++
+                                }
+                            } }
+                            item { Text(personalSourceFeedback.ifBlank { tmdbDiscoveryStatus },
+                                modifier = Modifier.testTag("personal-source-feedback"),
+                                color = Color(0xFFBDD9EF)) }
+                            item { Text("IMDb 评分 · 用户自行导入", fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold) }
+                            item { TvButton("导入本地 IMDb title.ratings.tsv.gz",
+                                modifier = Modifier.testTag("imdb-import"),
+                                reduced = reduceMotion) {
+                                    runCatching {
+                                        imdbImportPicker.launch(arrayOf("application/gzip",
+                                            "application/x-gzip", "application/octet-stream"))
+                                    }.onFailure {
+                                        imdbImportStatus = "电视未提供文件选择器，请使用支持 SAF 的文件管理器"
+                                    }
+                                } }
+                            item { Text(imdbImportStatus, modifier = Modifier.testTag("imdb-import-status"),
+                                color = Color(0xFFCBD5E4), fontSize = 13.sp) }
+                        }
                         item { Text("直播源", fontSize = 22.sp) }
                         item {
                             if (settingsTvBoxOnly) TvSourceInput(
