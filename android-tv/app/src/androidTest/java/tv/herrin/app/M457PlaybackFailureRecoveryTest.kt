@@ -98,6 +98,7 @@ class M457PlaybackFailureRecoveryTest {
             .assertTextContains("HTTP 403", substring = true)
         compose.onNodeWithTag("player-startup-retry").assertExists()
         compose.onNodeWithTag("player-startup-back").assertExists()
+    }
 
     @Test fun preDecoderCmsFailureCanSelectOtherAuthorizedProvider() {
         var fallbackCount = 0
@@ -118,22 +119,16 @@ class M457PlaybackFailureRecoveryTest {
     }
 
     @Test fun loadingAndOfflineDemoNeverExposeSourceSwitch() {
+        val loading = androidx.compose.runtime.mutableStateOf(true)
         compose.setContent {
-            PlayerStartupSurface(loading = true, offlineDemonstration = false,
+            PlayerStartupSurface(loading = loading.value, offlineDemonstration = !loading.value,
                 cmsFailed = false, retryAvailable = false,
                 reducedMotion = true, onRetry = {}, onBack = {},
                 onTryOtherSource = {})
         }
         compose.onNodeWithTag("player-startup-other-source").assertDoesNotExist()
-        compose.setContent {
-            PlayerStartupSurface(loading = false, offlineDemonstration = true,
-                cmsFailed = false, retryAvailable = false,
-                reducedMotion = true, onRetry = {}, onBack = {},
-                onTryOtherSource = {})
-        }
+        compose.runOnIdle { loading.value = false }
+        compose.onNodeWithTag("player-demo-status").assertIsDisplayed()
         compose.onNodeWithTag("player-startup-other-source").assertDoesNotExist()
     }
-
-    }
-
 }
