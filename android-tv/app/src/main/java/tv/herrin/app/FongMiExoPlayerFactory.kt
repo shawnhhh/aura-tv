@@ -91,6 +91,7 @@ internal object FongMiExoPlayerFactory {
     fun mediaItem(media: PlaybackMedia, uri: String = media.uri,
                   mimeOverride: String? = media.declaredMime): MediaItem {
         val headers = Bundle().apply { media.headers.forEach { (name, value) -> putString(name, value) } }
+        val subtitleFlags = FongMiPlaybackItemSupport.subtitleSelectionFlags(media.subtitles.map { it.language })
         return MediaItem.Builder().setUri(uri)
             .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(Uri.parse(uri))
                 .setExtras(headers).build())
@@ -101,7 +102,7 @@ internal object FongMiExoPlayerFactory {
                     .setId("external:" + UUID.nameUUIDFromBytes(subtitle.uri.toByteArray(StandardCharsets.UTF_8)))
                     .setMimeType(FongMiSubtitleFormats.mimeType(subtitleUri.path))
                     .setLanguage(subtitle.language).setLabel(subtitle.title)
-                    .setSelectionFlags(if (index == 0) C.SELECTION_FLAG_DEFAULT else C.SELECTION_FLAG_AUTOSELECT)
+                    .setSelectionFlags(subtitleFlags[index])
                     .build()
             }).build()
     }
