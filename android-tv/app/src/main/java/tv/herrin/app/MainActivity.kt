@@ -281,7 +281,7 @@ private fun TvHeaderIconButton(
     }
 }
 
-/** Eight text tabs plus the search icon form one *centered* navigation group. */
+/** Nine text tabs plus the search icon form one *centered* navigation group. */
 @Composable
 private fun TvNavTabs(
     category: String,
@@ -295,7 +295,7 @@ private fun TvNavTabs(
     onSearch: () -> Unit
 ) {
     val categories = remember {
-        listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播")
+        listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播", "我的")
     }
     Row(
         Modifier.testTag("nav-shell")
@@ -934,7 +934,8 @@ private fun Herrin() {
     var query by rememberSaveable { mutableStateOf("") }
     var searchCategory by rememberSaveable { mutableStateOf("全部") }
     var searchNewestFirst by rememberSaveable { mutableStateOf(false) }
-    // Saved under Search; Home intentionally has no independent Favorites/Filter tab.
+    // Search has its own quick filter; the independent 我的 tab now shows
+    // favorite films and resumeable playback from the same active catalog.
     var searchFavoritesOnly by rememberSaveable { mutableStateOf(false) }
     var showSearchAdvancedFilters by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
@@ -999,7 +1000,17 @@ private fun Herrin() {
         for (key in keys) {
             val section = tmdbDiscovery.sections.first { it.key == key }
             val shelf = runCatching { tmdbDiscovery.load(section, metadataToken) }.getOrNull()
-            if (shelf != null) loaded += shelf.films
+            if (shelf != null) {
+                loaded += shelf.films
+                // Top Rated is already loaded as a home recommendation.
+                // Reuse its valid first page immediately in Top250 instead
+                // of showing an empty tab until a separate 13-page fetch.
+                if (key == "top250" && shelf.films.isNotEmpty() &&
+                    tmdbTop250Films.isEmpty()) {
+                    tmdbTop250Films = shelf.films
+                    tmdbTop250Status = "已读取高分电影 ${shelf.films.size}/250 部，打开榜单可继续加载"
+                }
+            }
         }
         if (loaded.isNotEmpty()) {
             tmdbHomeFilms = loaded.distinctBy(Film::id)
@@ -2207,7 +2218,7 @@ private fun Herrin() {
                 // regrouping and reading playback history must NOT run per frame.
                 val filtered = remember(showCatalog, films, category, isSearch,
                     query, searchCategory, searchNewestFirst, favorites, searchFavoritesOnly,
-                    facetSelection, tmdbTop250Films) {
+                    facetSelection, tmdbTop250Films, screen, catalogScope) {
                     if (isSearch) {
                         val queried = showCatalog.search(query, searchCategory, searchNewestFirst)
                         val favoritesOnly = if (searchFavoritesOnly) {
@@ -2217,7 +2228,14 @@ private fun Herrin() {
                         showCatalog.collapse(FilmFacetFilters.results(favoritesOnly, facetSelection))
                     }
                     else if (category == "Top 250")
-                        showCatalog.collapse(tmdbTop250Films.map { tmdbResolved[it.id] ?: it })
+                        // TMDB Top Rated identity and order are authoritative;
+                        // metadata grouping is not allowed to hide its ranks.
+                        tmdbTop250Films.map { tmdbResolved[it.id] ?: it }.distinctBy(Film::id)
+                    else if (category == "我的") {
+                        val recent = watchHistory.recent(catalogScope, films)
+                        val saved = showCatalog.favorites(favorites)
+                        showCatalog.collapse(HerrinMyLibrary.combine(recent, saved))
+                    }
                     else showCatalog.collapse(films.filter {
                         category == "首页" || it.category == category ||
                             (category in setOf("科幻", "动作", "悬疑", "喜剧") &&
@@ -2245,6 +2263,8 @@ private fun Herrin() {
                 val headerDownTarget = when {
                     isSearch -> "search-input"
                     category == "直播" -> if (liveChannels.isEmpty()) "live-config" else "live-group-all"
+                    category == "我的" && railFilms.isEmpty() -> null
+                    category == "Top 250" && railFilms.isEmpty() -> "top250-retry"
                     sourceConfigured && films.isEmpty() -> null
                     films.isNotEmpty() -> "play"
                     else -> null
@@ -2409,29 +2429,51 @@ private fun Herrin() {
                         Text("你授权的频道 · HTTPS M3U · 可选 XMLTV / .xml.gz 节目预览",
                             fontSize = 13.sp, color = Color(0xFFBDC8D6))
                         Spacer(Modifier.height(18.dp))
-                    } else if (category == "Top 250" && railFilms.isEmpty()) {
-                        Spacer(Modifier.height(110.dp))
-                        Text("TMDB 高分电影 Top 250", fontSize = 30.sp,
-                            modifier = Modifier.testTag("top250-empty-title"))
-                        Text(tmdbTop250Status.ifBlank { "正在等待 TMDB 高分榜数据…" },
-                            fontSize = 16.sp, lineHeight = 24.sp,
+                    } else if (category == "Top 250") {
+                        Spacer(Modifier.height(56.dp))
+                        Text("TMDB 高分电影 Top 250", fontSize = 32.sp,
+                            modifier = Modifier.testTag("top250-heading"))
+                        Text(tmdbTop250Status.ifBlank {
+                            if (railFilms.isNotEmpty()) "已读取 ${railFilms.size} 部高分电影"
+                            else "正在等待 TMDB 高分榜数据…"
+                        }, fontSize = 14.sp, lineHeight = 21.sp,
                             color = Color(0xFFD2DEEA),
                             modifier = Modifier.testTag("top250-network-status"))
-                        Spacer(Modifier.height(14.dp))
-                        TvButton("重新加载 Top250",
-                            modifier = Modifier.testTag("top250-retry"),
-                            reduced = reduceMotion) {
-                            if (tmdbConnectivity == TmdbProbeState.CONNECTED)
-                                tmdbTop250RetryEpoch++
-                            else tmdbProbeEpoch++
+                        if (railFilms.isEmpty()) {
+                            Spacer(Modifier.height(16.dp))
+                            Text("高分榜还没有加载结果；其他 TMDB 分类正常不代表此接口请求已成功。",
+                                color = Color(0xFFC4CEDD), fontSize = 15.sp,
+                                modifier = Modifier.testTag("top250-empty-title"))
+                            Spacer(Modifier.height(12.dp))
+                            TvButton("重新加载 Top250",
+                                modifier = Modifier.testTag("top250-retry")
+                                    .focusRequester(requester("top250-retry")),
+                                reduced = reduceMotion) {
+                                if (tmdbConnectivity == TmdbProbeState.CONNECTED)
+                                    tmdbTop250RetryEpoch++
+                                else tmdbProbeEpoch++
+                            }
+                            if (metadataToken.isBlank()) TvButton("配置 TMDB 令牌",
+                                modifier = Modifier.testTag("top250-token-settings"),
+                                reduced = reduceMotion) {
+                                settingsTvBoxOnly = true
+                                screen = "settings"
+                            }
                         }
-                        if (metadataToken.isBlank()) TvButton("配置 TMDB 令牌",
-                            modifier = Modifier.testTag("top250-token-settings"),
-                            reduced = reduceMotion) {
-                            settingsTvBoxOnly = true
-                            screen = "settings"
+                        Spacer(Modifier.height(30.dp))
+                    } else if (category == "我的") {
+                        Spacer(Modifier.height(56.dp))
+                        Text("我的", fontSize = 34.sp,
+                            modifier = Modifier.testTag("my-library-heading"))
+                        Text("继续观看 · 我的收藏 · 当前影视资料库",
+                            fontSize = 14.sp, color = Color(0xFFD2DEEA))
+                        if (railFilms.isEmpty()) {
+                            Spacer(Modifier.height(16.dp))
+                            Text("暂无继续观看或收藏的影片。进入影片详情，添加收藏或播放后即可在这里查看。",
+                                modifier = Modifier.testTag("my-library-empty"),
+                                fontSize = 15.sp, color = Color(0xFFC4CEDD))
                         }
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(30.dp))
                     } else if (sourceConfigured && films.isEmpty()) {
                         Spacer(Modifier.height(135.dp))
                         Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,
@@ -2489,7 +2531,7 @@ private fun Herrin() {
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "我的收藏"; category == "首页" -> if (sourceConfigured) "来自影视源 · ${filtered.size} 部" else "继续观看"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
+                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "继续观看与收藏 · ${filtered.size} 部"; category == "首页" -> if (sourceConfigured) "来自影视源 · ${filtered.size} 部" else "继续观看"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
                             fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
                         Text(if (sourceConfigured) "${providerStatus.take(48)}" else if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN",
                             fontSize = 11.sp, letterSpacing = 1.5.sp,
