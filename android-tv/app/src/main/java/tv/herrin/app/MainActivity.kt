@@ -2467,6 +2467,22 @@ private fun Herrin() {
                             modifier = Modifier.testTag("my-library-heading"))
                         Text("继续观看 · 我的收藏 · 当前影视资料库",
                             fontSize = 14.sp, color = Color(0xFFD2DEEA))
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            TvButton("管理 NAS / 云盘",
+                                modifier = Modifier.testTag("my-manage-personal-sources"),
+                                reduced = reduceMotion) {
+                                // These fields live in advanced settings; the
+                                // compact source form is TVBox/M3U-only.
+                                settingsTvBoxOnly = false
+                                screen = "settings"
+                            }
+                            Text("NAS ${if (prefs.nasWebDavUrl.isBlank()) "未配置" else "已配置"}" +
+                                " · 云盘 ${if (prefs.cloudWebDavUrl.isBlank()) "未配置" else "已配置"}",
+                                modifier = Modifier.testTag("my-personal-source-status"),
+                                color = Color(0xFFAFC1D7), fontSize = 12.sp)
+                        }
                         if (railFilms.isEmpty()) {
                             Spacer(Modifier.height(16.dp))
                             Text("暂无继续观看或收藏的影片。进入影片详情，添加收藏或播放后即可在这里查看。",
