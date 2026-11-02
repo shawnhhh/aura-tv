@@ -809,6 +809,40 @@ private fun Herrin() {
             metadataRescanEpoch++
         }
     }
+    val tmdbDiscovery = remember { HerrinTmdbDiscovery() }
+    // TMDB is the authoritative discovery index. No video-site homepage is
+    // consulted to build the hero, ratings or poster rails.
+    LaunchedEffect(metadataToken, tmdbConnectivity) {
+        if (tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
+        tmdbDiscoveryStatus = "正在加载 TMDB 热播影片与类型推荐…"
+        val keys = listOf("trending-movies", "trending-tv", "new-movies",
+            "on-air-tv", "top250", "sci-fi", "action", "mystery", "animation")
+        val loaded = mutableListOf<Film>()
+        for (key in keys) {
+            val section = tmdbDiscovery.sections.first { it.key == key }
+            val shelf = runCatching { tmdbDiscovery.load(section, metadataToken) }.getOrNull()
+            if (shelf != null) loaded += shelf.films
+        }
+        if (loaded.isNotEmpty()) {
+            tmdbHomeFilms = loaded.distinctBy(Film::id)
+            if (tmdbHomeFilms.none { it.id == filmId }) filmId = tmdbHomeFilms.first().id
+            tmdbDiscoveryStatus = "TMDB 已加载 ${tmdbHomeFilms.size} 部作品；播放时优先检索 NAS／云盘"
+        } else {
+            tmdbDiscoveryStatus = "TMDB 未返回可用影视资料；保留已配置的本地片库"
+        }
+    }
+    LaunchedEffect(category, metadataToken, tmdbConnectivity) {
+        if (category != "Top 250" || tmdbConnectivity != TmdbProbeState.CONNECTED ||
+            metadataToken.isBlank() || tmdbTop250Films.size >= 250) return@LaunchedEffect
+        tmdbDiscoveryStatus = "正在读取 TMDB 高分电影 Top 250…"
+        val shelf = runCatching { tmdbDiscovery.loadTop250(metadataToken) }.getOrNull()
+        if (shelf != null) {
+            tmdbTop250Films = shelf.films
+            tmdbDiscoveryStatus = if (shelf.isComplete)
+                "TMDB Top 250 已加载 250 部电影"
+            else "TMDB 高分榜只加载了 ${shelf.films.size} 部；可稍后重试"
+        }
+    }
     // Do not rebuild a potentially 240-item identity string on every D-pad recomposition.
     val catalogIdentity = remember(providerFilms) {
         providerFilms?.joinToString("|") { "${it.id}:${it.originalDisplay?.title ?: it.title}" }
@@ -832,8 +866,8 @@ private fun Herrin() {
         // A configuration-only success never authorizes bulk search. Wait for
         // a real TMDB search endpoint response; otherwise 0/20 looks like
         // twenty bad movie names when the API is rate-limited or blocked.
-        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
-            return@LaunchedEffect
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED ||
+            tmdbHomeFilms.isNotEmpty()) return@LaunchedEffect
         val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
         // Network work stays at most three concurrent, but catalog publication
         // is coalesced to one update per 12 items instead of one per item.
@@ -882,8 +916,8 @@ private fun Herrin() {
     // cap are matched *on demand* after cursor dwell, instead of reintroducing
     // a second TMDB client inside every visible PosterArtwork composable.
     LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
-        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
-            return@LaunchedEffect
+        if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED ||
+            tmdbHomeFilms.isNotEmpty()) return@LaunchedEffect
         delay(ArtworkScrapePolicy.FOCUS_DWELL_MS)
         val candidates = providerFilms.orEmpty()
         val index = candidates.indexOfFirst { it.id == filmId }
