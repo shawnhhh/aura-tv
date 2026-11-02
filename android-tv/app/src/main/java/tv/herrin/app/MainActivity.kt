@@ -1021,7 +1021,14 @@ private fun Herrin() {
         }
         if (tmdbTop250Films.size >= 250) return@LaunchedEffect
         tmdbTop250Status = "正在载入 TMDB 高分榜，请稍候…"
-        val shelf = runCatching { tmdbDiscovery.loadTop250(metadataToken) }.getOrNull()
+        val shelf = runCatching {
+            tmdbDiscovery.loadTop250(metadataToken) { page ->
+                if (page.films.isNotEmpty()) {
+                    tmdbTop250Films = page.films
+                    tmdbTop250Status = "已读取 ${page.films.size}/250 部高分电影，正在继续加载…"
+                }
+            }
+        }.getOrNull()
         if (shelf == null) {
             tmdbTop250Status = "TMDB 高分榜请求失败；检查电视网络、DNS 或访问限制后重试"
         } else {

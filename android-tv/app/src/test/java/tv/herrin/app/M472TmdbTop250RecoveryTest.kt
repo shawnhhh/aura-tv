@@ -42,6 +42,20 @@ class M472TmdbTop250RecoveryTest {
         assertEquals(250, next.films.map { it.id }.distinct().size)
     }
 
+    @Test fun top250RendersFirstPageBeforeRemainingNetworkRequestsComplete() = runBlocking {
+        val counts = mutableListOf<Int>()
+        val discovery = HerrinTmdbDiscovery(ArtworkJsonFetcher { url, _ ->
+            val page = Regex("""page=(\d+)""").find(url)
+                ?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            if (page > 2) null
+            else """{"results":[${(1..20).joinToString(",") { movie((page-1)*20+it) }}]}"""
+        })
+        val output = discovery.loadTop250("token", onProgress = { counts += it.films.size })
+        assertEquals(listOf(20, 40), counts)
+        assertEquals(40, output.films.size)
+        assertFalse(output.isComplete)
+    }
+
     @Test fun tmdbTop250IsNotAnImdbLicensedChart() {
         val discovery = HerrinTmdbDiscovery()
         assertTrue(discovery.sections.first { it.key == "top250" }.title.contains("TMDB"))

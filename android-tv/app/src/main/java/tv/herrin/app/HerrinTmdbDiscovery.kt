@@ -1,5 +1,6 @@
 package tv.herrin.app
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -66,14 +67,21 @@ internal class HerrinTmdbDiscovery(
         }
 
     /** Only call on opening Top250 rail: 13 pages, capped to EXACTLY 250. */
-    suspend fun loadTop250(token: String): HerrinTmdbShelf {
+    suspend fun loadTop250(token: String,
+        onProgress: (HerrinTmdbShelf) -> Unit = {}): HerrinTmdbShelf {
         val section = sections.first { it.key == "top250" }
         val all = mutableListOf<Film>()
         var complete = true
         for (page in 1..13) {
-            val next = load(section, token, page)
+            val next = try { load(section, token, page) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { complete = false; break }
             if (!next.isComplete) { complete = false; break }
             all += next.films
+            // First 20 posters are usable before all 13 pages have returned.
+            // Never hold the entire grid blank behind a slow mainland API.
+            onProgress(HerrinTmdbShelf(section.key, section.title,
+                all.distinctBy(Film::id).take(250), false))
             if (all.size >= 250) break
         }
         return HerrinTmdbShelf(section.key, section.title,
