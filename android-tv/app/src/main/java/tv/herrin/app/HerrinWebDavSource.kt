@@ -175,7 +175,7 @@ internal class HerrinWebDavSource(
             // makes the conservative parser policy work on Android TV as well
             // as desktop JVM without silently treating valid DAV as empty.
             val xmlText = output.toString(Charsets.UTF_8.name())
-            if (Regex("""<!\\s*(?:DOCTYPE|ENTITY)\\b""", RegexOption.IGNORE_CASE)
+            if (Regex("""<!\s*(?:DOCTYPE|ENTITY)\b""", RegexOption.IGNORE_CASE)
                     .containsMatchIn(xmlText)) return emptyList()
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
