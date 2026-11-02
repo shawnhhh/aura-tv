@@ -51,7 +51,11 @@ internal class HerrinWebDavSource(
     }
     override val id: String = "webdav:" + account.name
     override val type: HerrinSourceType = account.category
-    private val root = URI(account.rootUrl)
+    // Normalize a user-pasted DAV collection without a trailing slash.
+    // Relative XML hrefs resolve as children only when the base ends in '/'.
+    // Preserve raw query data rather than re-encoding any gateway signature.
+    private val root = URI(account.rootUrl.substringBefore('?').trimEnd('/') + "/" +
+        (if ('?' in account.rootUrl) "?" + account.rootUrl.substringAfter('?') else ""))
     private val rootPrefix = root.path.orEmpty().trimEnd('/') + "/"
     private val extensions = setOf("mp4", "mkv", "mov", "m4v", "ts", "m2ts", "webm", "avi")
     private val seasonEp = Regex("""(?i)(?:^|[\s._-])S(\d{1,2})E(\d{1,3})(?=$|[\s._-])""")
