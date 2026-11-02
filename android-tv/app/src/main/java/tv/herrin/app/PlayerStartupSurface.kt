@@ -45,6 +45,7 @@ internal fun PlayerStartupSurface(
 ) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
+    var showJournal by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
         .testTag("player-startup-surface"), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally,
@@ -81,6 +82,15 @@ internal fun PlayerStartupSurface(
                             "Herrin 播放诊断", failureDiagnostic + "\n" +
                                 HerrinPlaybackDiagnosticJournal.export()))
                         copied = true
+                    }
+                    TvButton(if (showJournal) "收起诊断事件" else "展开诊断事件",
+                        modifier = Modifier.testTag("player-startup-show-diagnostics"),
+                        reduced = reducedMotion) { showJournal = !showJournal }
+                    if (showJournal) {
+                        Text(HerrinPlaybackDiagnosticJournal.export().lineSequence()
+                            .takeLast(7).joinToString("\n"),
+                            color = Color(0xFFB6D1E8), fontSize = 12.sp,
+                            modifier = Modifier.testTag("player-startup-diagnostic-events"))
                     }
                 }
                 if (retryAvailable) {
