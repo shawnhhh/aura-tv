@@ -92,6 +92,26 @@ class PlaybackFormatRetryTest {
         assertFalse(PlaybackFormatRetry.retryNextSource(2007))
     }
 
+    @Test fun missingIndependentLiveChannelUsesExplicitTvboxBackupButDenialsStillStop() {
+        val first = "https://iptv.example.test/channel.m3u8"
+        val backup = "https://tvbox.example.test/backup.m3u8"
+        val live = PlaybackFormatRetry.Session(first, listOf(backup), null,
+            allowNotFoundFallback = true)
+        assertEquals(backup, live.next(2004, 404)?.uri)
+        assertNull(live.next(2004, 410))
+        val gone = PlaybackFormatRetry.Session(first, listOf(backup), null,
+            allowNotFoundFallback = true)
+        assertEquals(backup, gone.next(2004, 410)?.uri)
+        val denied = PlaybackFormatRetry.Session(first, listOf(backup), null,
+            allowNotFoundFallback = true)
+        assertNull(denied.next(2004, 403))
+        assertNull(denied.next(2004, 503))
+        val defaultVideo = PlaybackFormatRetry.Session(first, listOf(backup), null)
+        assertNull(defaultVideo.next(2004, 404))
+        assertFalse(PlaybackFormatRetry.retryNextSource(2004, 404))
+        assertTrue(PlaybackFormatRetry.retryNextSource(2004, 404, allowNotFoundFallback = true))
+    }
+
     @Test fun declaredMp4AndDuplicateAddressesAreHandledWithoutExtraRequests() {
         assertEquals(PlaybackFormatRetry.MP4, PlaybackFormatRetry.declaredMime("video/mp4; codecs=avc1"))
         val uri = "https://media.test/play"
