@@ -41,7 +41,9 @@ data class PlaybackMedia(val uri: String, val headers: Map<String, String> = emp
                          val alternateUris: List<String> = emptyList(),
                          val allowHttpRedirects: Boolean = false,
                          val declaredMime: String? = null,
-                         val danmakuSources: List<DanmakuSource> = emptyList())
+                         val danmakuSources: List<DanmakuSource> = emptyList(),
+                         /** Set only after verifying every alternate has identical auth and origin. */
+                         val safeNotFoundFallback: Boolean = false)
 sealed interface PlaybackResult {
     data class Ready(val media: PlaybackMedia) : PlaybackResult
     data class Unavailable(val reason: String) : PlaybackResult
