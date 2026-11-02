@@ -48,9 +48,11 @@ internal object HerrinPersonalPlaylistBuilder {
                         sameOrigin(media.uri, other.second.uri) &&
                         other.second.uri != media.uri
                 }.map { it.second.uri }.distinct().take(5)
-                urls[id] = media.copy(alternateUris = (media.alternateUris.filter {
+                val safeCandidates = (media.alternateUris.filter {
                     sameOrigin(media.uri, it)
-                } + fallbacks).distinct().take(5))
+                } + fallbacks).distinct().take(5)
+                urls[id] = media.copy(alternateUris = safeCandidates,
+                    safeNotFoundFallback = safeCandidates.isNotEmpty())
                 val quality = offer.resolutionClaim?.let { if (it >= 2160) "4K" else it.toString() + "p" }
                     ?: "原画"
                 val hdr = if (offer.hdrClaim) " HDR（源标称）" else ""
