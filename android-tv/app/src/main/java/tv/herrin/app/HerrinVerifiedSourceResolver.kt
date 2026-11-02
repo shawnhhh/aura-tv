@@ -17,6 +17,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
         identity: HerrinFilmIdentity,
         personalPlayback: (HerrinSourceMovie) -> PlaybackResult,
         verifyPersonal: suspend (PlaybackMedia) -> Boolean = { true },
+        verifyRemote: suspend (HerrinSourceMovie, Film) -> Boolean = { _, _ -> true },
         remoteDetails: suspend (HerrinSourceMovie) -> Film?
     ): HerrinVerifiedSource {
         var personalPlaylist: HerrinPersonalPlaylist? = null
@@ -75,9 +76,12 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                     val detailed = try { remoteDetails(candidate) }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch (_: Exception) { null }
-                    if (HerrinPlaybackEntry.firstPlayable(detailed) != null) {
-                        detailedFilm = detailed
-                        true
+                    if (detailed != null && HerrinPlaybackEntry.firstPlayable(detailed) != null) {
+                        val verified = try { verifyRemote(candidate, detailed) }
+                        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                        catch (_: Exception) { false }
+                        if (verified) detailedFilm = detailed
+                        verified
                     } else false
                 }
                 listOfNotNull(playable)
