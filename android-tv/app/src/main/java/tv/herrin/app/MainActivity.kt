@@ -197,7 +197,7 @@ private fun TvNavTabs(
     onFocus: (String) -> Unit,
     onSelect: (String) -> Unit
 ) {
-    val categories = remember { listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播", "我的") }
+    val categories = remember { listOf("首页", "电影", "剧集", "动漫", "科幻", "动作", "悬疑", "喜剧", "综艺", "纪录片", "Top 250", "直播", "我的") }
     Row(
         Modifier.background(Color(0xE910131A), RoundedCornerShape(50.dp))
             .border(1.dp, Color(0x393B414B), RoundedCornerShape(50.dp))
@@ -1892,7 +1892,11 @@ private fun Herrin() {
                     else if (category == "我的") showCatalog.favorites(favorites)
                     else if (category == "Top 250" && tmdbHomeFilms.isNotEmpty())
                         showCatalog.collapse(tmdbTop250Films.map { tmdbResolved[it.id] ?: it })
-                    else showCatalog.collapse(films.filter { category == "首页" || it.category == category })
+                    else showCatalog.collapse(films.filter {
+                        category == "首页" || it.category == category ||
+                            (category in setOf("科幻", "动作", "悬疑", "喜剧") &&
+                                category in it.genres)
+                    })
                 }
                 // History is recomputed on returning from playback or when the
                 // source/catalog changes, not on every D-pad/animation frame.
