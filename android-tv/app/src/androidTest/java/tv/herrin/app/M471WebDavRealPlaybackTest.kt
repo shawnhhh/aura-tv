@@ -64,6 +64,16 @@ class M471WebDavRealPlaybackTest {
                 allowInsecureHttp = true))
             val probe = HerrinPersonalMediaProbe()
             val target = HerrinFilmIdentity(157336, "movie", listOf("Interstellar"), 2014)
+            // Separate URL discovery, authorization mapping and HTTP Range checks
+            // so the Android CI report identifies the actual failing stage.
+            val discovered = source.search(target)
+            assertTrue("WebDAV PROPFIND returned no matching files; requests=" + events.toList(),
+                discovered.isNotEmpty())
+            val direct = source.playback(discovered.first()) as? PlaybackResult.Ready
+            assertNotNull("WebDAV playback mapping rejected discovered file", direct)
+            val probeResult = probe.canRead(direct!!.media)
+            assertTrue("WebDAV Range check rejected authorized video; requests=" + events.toList(),
+                probeResult)
             val chosen = HerrinVerifiedSourceResolver(listOf(source)).find(
                 target,
                 personalPlayback = { source.playback(it) },
