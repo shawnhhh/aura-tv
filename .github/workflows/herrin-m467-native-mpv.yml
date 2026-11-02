@@ -67,12 +67,17 @@ jobs:
           mkdir -p "$RUNNER_TEMP/m467-native-evidence"
           cp "$RUNNER_TEMP/native-source.lock" "$RUNNER_TEMP/m467-native-evidence/native-source.lock"
           echo "MPV_ANDROID_BUILD_RECIPES=049ade89abc85fc05ef73dc9ba6f1810466c9f8a" >> "$RUNNER_TEMP/m467-native-evidence/native-source.lock"
+      - name: Cache immutable FFmpeg/mpv dependency prefix
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/mpv-native-cache
+          key: m467-native-${{ env.CACHE_IDENTIFIER }}
       - name: Prepare NDK r30 and build FFmpeg dependencies for both ARM ABIs
         shell: bash
         working-directory: native/mpv-android
         run: |
           set -euo pipefail
-          buildscripts/include/ci.sh install
+          CACHE_MODE=folder CACHE_FOLDER="$RUNNER_TEMP/mpv-native-cache" buildscripts/include/ci.sh install
       - name: Build unified FFmpeg, MPV and JNI for both ARM ABIs
         shell: bash
         working-directory: native/mpv-android
@@ -97,13 +102,14 @@ jobs:
                 exit 1
               fi
             done
-            python3 "$source/buildscripts/include/ffmpeg-shared.py" verify-package "$dir"
+            python3 "$source/buildscripts/include/ffmpeg-shared.py" verify-package "$dir" --readelf readelf
           done
           find "$source/app/src/main/libs" -type f -name '*.so' -print0 | sort -z | xargs -0 sha256sum \
             > "$RUNNER_TEMP/m467-native-evidence/native-libraries.sha256"
           printf 'Only raw native candidates, NOT FongMi/TV compatible AARs or validated TCL playback.\n' \
             > "$RUNNER_TEMP/m467-native-evidence/READ_ME_FIRST.txt"
       - name: Upload native candidates and provenance
+        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: HERRIN-M467-mpv-native-candidates
