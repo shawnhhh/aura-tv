@@ -297,7 +297,7 @@ class HerrinUiSmokeTest {
         assertTrue("Artwork must fill card height instead of leaving opaque title footer",
             abs(card.height - poster.height) < 3f)
         compose.onNodeWithTag("poster-title-orbit", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("poster-year-orbit", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("poster-date-orbit", useUnmergedTree = true).assertExists()
         capture("m469-real-home-fullbleed-overlaid-poster")
     }
 
