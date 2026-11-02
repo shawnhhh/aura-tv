@@ -157,7 +157,8 @@ private fun AuthorizedPlaybackSession(
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media) {
-        PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime)
+        PlaybackFormatRetry.Session(media.uri, media.alternateUris, media.declaredMime,
+            allowNotFoundFallback = isLive && media.headers.isEmpty())
     }
     val candidates = retries.candidates
     val journey = remember(media) { PlaybackJourneyTrace() }
@@ -211,7 +212,14 @@ private fun AuthorizedPlaybackSession(
                     // separately provided healthy media URL is available. Switch
                     // synchronously before scheduling the per-source retry budget.
                     // This is NEVER allowed for HTTP 401/403/429 denials.
-                    val failover = if (FongMiPlaybackRecovery.preferAuthorizedAlternate(
+                    // A missing live M3U channel (404/410) is not a valid
+                    // reason to ignore a user-authorized TVBox backup. Only
+                    // header-free live choices may cross source origins; 401,
+                    // 403 and 429 still stop automatic retries.
+                    val liveNotFoundBackup = isLive && media.headers.isEmpty() &&
+                        httpStatus in setOf(404, 410)
+                    val failover = if (liveNotFoundBackup ||
+                        FongMiPlaybackRecovery.preferAuthorizedAlternate(
                             httpStatus, retries.current.candidateIndex < candidates.lastIndex))
                         retries.next(error.errorCode, httpStatus) else null
                     if (failover != null) {
