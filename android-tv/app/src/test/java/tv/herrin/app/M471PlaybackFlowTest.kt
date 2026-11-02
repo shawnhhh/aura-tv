@@ -140,7 +140,9 @@ class M471PlaybackFlowTest {
         assertEquals(1, probeCount)
         assertEquals(HerrinSourceTier.PERSONAL, result.lookup.selectedTier)
         assertEquals(15, result.lookup.options.size)
-        assertEquals(15, result.personalPlaylist!!.mediaByLine.size)
+        // The UI intentionally caps one episode at 12 lines, even when
+        // lookup correctly keeps all 15 discovered media offers.
+        assertEquals(12, result.personalPlaylist!!.mediaByLine.size)
     }
 
     @Test fun probeSkipsBrokenHighestQualityAndContinuesOnException() = runBlocking {
