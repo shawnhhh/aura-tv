@@ -20,7 +20,7 @@
 | `ExoUtil#buildLoadControl/buildTrackSelector/buildPlayer/buildRenderersFactory` | `FongMiExoPlayerFactory.create` | 对照源码移植公开 ABI 支持的 streaming/local buffer、最高支持码率、语言、AAC、tunneling、预热、audio focus/noisy、headers；DecoderManager / 特制 renderer 部分阻断 |
 | `MediaItemFactory#from/buildSubConfig/buildRequestMetadata/toBundle`、`TrackUtil#getSubtitleMimeType` | `FongMiExoPlayerFactory.mediaItem` | 宿主播放模型接口适配：外部字幕稳定 ID、SRT/ASS/SSA/VTT/TTML MIME、headers。宿主不具备上游显式字幕 flags、DRM/ISO 模型，未虚称移植这些能力 |
 
-`player-method-map.tsv` 是上述 **11 个上游类的全部 205 个方法/构造器声明** 的逐方法清单，含上游行号、宿主文件、状态及对应测试。`InventoryPlayerMethods.java` 使用 JDK 的 Java AST，不靠文本命中猜测覆盖率。`scripts/m467/build-player-map.py` 可重生成机器可读 TSV；已用 CSV 解析校验全部 206 行（含表头）每行都是 7 列真实 TAB。205 行中 167 为 BLOCKED、11 为 PARTIAL，不能计作完成。`BLOCKED` 或 `PARTIAL` 行不算完成。无法运行的方法明确写 `NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET`。
+`player-method-map.tsv` 是上述 **11 个上游类的全部 205 个方法/构造器声明** 的逐方法清单，含上游行号、宿主文件、状态及对应测试。`InventoryPlayerMethods.java` 使用 JDK 的 Java AST，不靠文本命中猜测覆盖率。`scripts/m467/build-player-map.py` 可重生成机器可读 TSV；已用 CSV 解析校验全部 206 行（含表头）每行都是 7 列真实 TAB。205 行中 162 为 BLOCKED、15 为 PARTIAL，不能计作完成；另有 5 项 MINIMAL_HOST_ABI_ADAPTATION、23 项 DIRECT_SOURCE / 仅空判断适配。`BLOCKED` 或 `PARTIAL` 行不算完成。无法运行的方法明确写 `NOT_EXECUTABLE_CURRENT_DEPENDENCY_SET`。
 
 UI 连接由恢复 Agent 修改播放控制构造，不变更布局或影片资料。新增工厂不会设置 ClearKey、不会伪造 license/DRM provider；委托合法平台 DRM 验证。每会话 headers 不进入全局 URL-only 缓存，保留 Herrin 的凭据隔离。当前真实平台 codec fallback 被保留；它不是 FFmpeg 软件解码，不能拿来掩盖代理错误。
 
@@ -54,3 +54,11 @@ UI 连接由恢复 Agent 修改播放控制构造，不变更布局或影片资�
 - 新增 Android 仪器 8 例 `M467EngineContainerTest`：真实 HTTP MP4/MKV 双音轨/HLS 主子列表分段/DASH init+fragment → 实际 Media3 输出帧；SRT/ASS/SSA/VTT 实际 cue。ASS/SSA 只声称文字 cue，未声称 libass 特效。
 - 首轮 Gradle 命令：`:app:testDebugUnitTest --tests tv.herrin.app.M467FongMiMediaContractTest :app:compileDebugAndroidTestKotlin`。依赖解析被基线 `com.github.thegrizzlylabs:sardine-android:0.9` 的 `jitpack.io` HTTP403 阻断；没有执行 JVM 或模拟器测试。完整日志 `/workspace/logs/m467-engine-gradle.log`。后续运行结果必须追加，不允许把编译通过计为仪器通过。
 - 尚无 mpv/FFmpeg fallback、libass、预加载/decoder manager、4K/HDR 真机和 TCL 第三方源通过证据。不得将模拟器上的合成源输出帧扩大为这些结论。
+
+## 2026-11-02 播放资料与字幕部分补齐（真实接入，仍非完整版）
+
+- 新增 `FongMiPlaybackItemSupport.kt`（沿 FongMi upstream MediaItemFactory/ExoUtil 改造），已在 `FongMiExoPlayerFactory.mediaItem` 实际使用字幕语言优先算法：多条字幕优先 `zh/zho/chi`，否则第一条，单条即默认；在 Media3 Factory 中实际使用从当前会话 `MediaItem.requestMetadata.extras` 提取的 HTTP 请求头，不建立全局静态凭据缓存。
+- 补充 5 个 JVM 字幕排序/空语言/单轨/语言参数测试；补充 2 个 Android 仪器测试，用真实 Media3 RequestMetadata 和 Android Bundle 测试会话请求头隔离、非字符串字段过滤及空值。
+- 上游 `ExoUtil.extractHeaders` 成为可运行的 MINIMAL_HOST_ABI_ADAPTATION；`MediaItemFactory.buildSubtitleConfigs/findPreferredSubtitleIndex/SubtitleFlags.create/get` 作为 **PARTIAL** 记录：宿主 `PlaybackMedia.subtitles` 缺失上游 `Sub.rawFlag`，无法支持显式用户选择标志。`MediaItemFactory.hasExplicitFlags` 仍受阻，绝不计入已完成。
+- 这 5 项改动使 205 项总清单中 BLOCKED 从 167 降至 162；PARTIAL 从 11 升至 15，不等于 5 项完全移植。**7 个定制 Media3 API 与两个 native AAR 仍缺失；mpv/FFmpeg/libass/4K HDR/杜比真机仍不宣称可用。**
+- 保持 UI、TMDB、影片资料、所有其它播放域行为和 Draft PR 状态不变；CI 总验收以本轮最新 HEAD 的真实结果为准。
