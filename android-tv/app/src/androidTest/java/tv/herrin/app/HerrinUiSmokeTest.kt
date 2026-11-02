@@ -291,13 +291,17 @@ class HerrinUiSmokeTest {
     @Test fun posterArtworkFillsEntireCardWithTitleAndYearOverlay() {
         // Compare actual Compose layout bounds rather than a synthetic mockup.
         val card = compose.onNodeWithTag("card-orbit").fetchSemanticsNode().boundsInRoot
-        val poster = compose.onNodeWithTag("poster-image-orbit", useUnmergedTree = true)
-            .fetchSemanticsNode().boundsInRoot
+        // The same title can appear in continue-watching and recommendations.
+        // Verify the first rendered occurrence rather than requiring a unique ID.
+        val poster = compose.onAllNodesWithTag("poster-image-orbit", useUnmergedTree = true)
+            .onFirst().fetchSemanticsNode().boundsInRoot
         assertTrue("Artwork must fill card width", abs(card.width - poster.width) < 3f)
         assertTrue("Artwork must fill card height instead of leaving opaque title footer",
             abs(card.height - poster.height) < 3f)
-        compose.onNodeWithTag("poster-title-orbit", useUnmergedTree = true).assertExists()
-        compose.onNodeWithTag("poster-date-orbit", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithTag("poster-title-orbit", useUnmergedTree = true)
+            .onFirst().assertExists()
+        compose.onAllNodesWithTag("poster-date-orbit", useUnmergedTree = true)
+            .onFirst().assertExists()
         capture("m469-real-home-fullbleed-overlaid-poster")
     }
 

@@ -413,7 +413,10 @@ private fun Herrin() {
         val endpoint = prefs.livePlaylistUrl
         // Direct M3U always has priority. TVBox is a per-channel backup,
         // never allowed to silently shadow a working user-supplied playlist.
-        val tvBoxBackup = tvBoxLiveStore.load()
+        // A cached TVBox playlist is not authorization to activate it.
+        // Only a playlist the user explicitly applied in current preferences
+        // may participate as a live source or backup after relaunch/reset.
+        val tvBoxBackup = if (prefs.tvBoxLiveActive) tvBoxLiveStore.load() else emptyList()
         if (endpoint.isBlank()) {
             liveChannels = tvBoxBackup
             liveStatus = if (tvBoxBackup.isEmpty())
