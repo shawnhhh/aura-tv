@@ -24,7 +24,7 @@ internal object HerrinPersonalPlaylistBuilder {
         val groups = if (tv) valid.groupBy {
             (it.first.season ?: 1) to (it.first.episode ?: 1)
         }.toSortedMap(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
-        else sortedMapOf(1 to 1 to valid)
+        else mapOf((1 to 1) to valid)
         val urls = linkedMapOf<String, PlaybackMedia>()
         var count = 0
         val episodes = groups.entries.take(150).map { (coordinate, entries) ->
