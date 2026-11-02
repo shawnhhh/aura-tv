@@ -308,6 +308,21 @@ class HerrinUiSmokeTest {
         capture("m473-my-between-live-and-search")
     }
 
+    @Test fun favoritedMovieAppearsInPersonalTabWithoutChangingOriginalPlayback() {
+        focus("card-orbit")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        activate("♡ 添加收藏")
+        compose.onNodeWithText("♥ 已收藏 · 取消").assertExists()
+        key(KeyEvent.KEYCODE_BACK)
+        focus("nav-我的")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("my-library-heading").assertIsDisplayed()
+        compose.onNodeWithTag("my-library-empty").assertDoesNotExist()
+        compose.onNodeWithTag("card-orbit").assertIsDisplayed()
+        compose.onNodeWithText("继续观看与收藏 · 1 部").assertIsDisplayed()
+        capture("m473-my-favorite-actual-poster")
+    }
+
     @Test fun top250WithoutTmdbTokenExplainsEmptyListAndProvidesRetry() {
         focus("nav-Top 250")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
