@@ -375,7 +375,7 @@ private fun Herrin() {
     var tmdbHomeFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
     var tmdbTop250Films by remember { mutableStateOf<List<Film>>(emptyList()) }
     val tmdbResolved = remember { mutableStateMapOf<String, Film>() }
-    val tmdbPersonalPlayback = remember { mutableStateMapOf<String, PlaybackMedia>() }
+    val tmdbPersonalPlayback = remember { mutableStateMapOf<String, Map<String, PlaybackMedia>>() }
     var tmdbDiscoveryStatus by remember { mutableStateOf("") }
     var tmdbSourceStatus by remember { mutableStateOf("") }
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
@@ -945,18 +945,24 @@ private fun Herrin() {
         }
         when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
             is HerrinWebDavSource -> {
-                val playback = adapter.playback(found) as? PlaybackResult.Ready
-                if (playback == null) {
-                    tmdbSourceStatus = "找到个人媒体，但该文件无法生成授权播放地址"
+                val personalSources = sources.filterIsInstance<HerrinWebDavSource>()
+                    .associateBy { it.id }
+                val playlist = HerrinPersonalPlaylistBuilder.create(lookup.options) { offer ->
+                    personalSources[offer.sourceId]?.playback(offer)
+                        ?: PlaybackResult.Unavailable("该媒体来源已失效")
+                }
+                if (playlist.episodes.isEmpty()) {
+                    tmdbSourceStatus = "找到个人媒体，但对应 URL 无法生成授权播放地址"
                     return@LaunchedEffect
                 }
-                tmdbPersonalPlayback[targetId] = playback.media
-                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
-                    playbackEpisodes = found.film.playbackEpisodes,
-                    episodes = maxOf(1, found.film.playbackEpisodes.size)
-                )
+                tmdbPersonalPlayback[targetId] = playlist.mediaByLine
+                activeCmsSite = null
                 spiderActive = false
-                tmdbSourceStatus = "已优先匹配 ${if (found.sourceType == HerrinSourceType.NAS) "NAS" else "云盘"} 文件；请选择播放"
+                tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
+                    playbackEpisodes = playlist.episodes,
+                    episodes = playlist.episodes.size
+                )
+                tmdbSourceStatus = "已找到 ${playlist.episodes.size} 组个人媒体选集、${playlist.mediaByLine.size} 条可选清晰度线路"
             }
             is HerrinTvBoxSpiderSource -> {
                 tmdbSourceStatus = "NAS／云盘无匹配，已在用户授权 Spider 中找到对应影片，正在读集数…"
@@ -2458,7 +2464,7 @@ private fun Herrin() {
                 else null
                 val cmsParseWaiting = (cmsJsonParser != null || cmsBrowserParser != null) && parsedCms == null
                 val personalMedia = if (screen == "player")
-                    tmdbPersonalPlayback[film.id] else null
+                    tmdbPersonalPlayback[film.id]?.get(line) else null
                 val licensed = if (personalMedia != null) PlaybackResult.Ready(personalMedia)
                     else if (spiderActive && screen == "player") spiderResolved
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
@@ -2472,6 +2478,7 @@ private fun Herrin() {
                 // The independent testing URL must not start playing while a
                 // selected CMS film is still resolving its real licensed source.
                 val testMedia = if (screen == "player" && !spiderActive &&
+                    !film.id.startsWith("tmdb-") &&
                     activeCmsSite == null) AuthorizedUrls.https(prefs.testMediaUrl) else null
                 val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
