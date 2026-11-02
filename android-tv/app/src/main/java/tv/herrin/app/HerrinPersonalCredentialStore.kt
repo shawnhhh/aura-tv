@@ -15,9 +15,10 @@ import javax.crypto.spec.GCMParameterSpec
  * User-facing metadata (URL, label) can be public preferences; secrets cannot.
  * Failed decryption never silently falls back to plaintext persistence.
  */
-internal class HerrinPersonalCredentialStore(context: Context) {
+internal class HerrinPersonalCredentialStore(context: Context, private val slot: String = "nas") {
+    init { require(slot in setOf("nas", "cloud")) }
     private val prefs = context.getSharedPreferences("herrin_personal_secrets", Context.MODE_PRIVATE)
-    private val alias = "herrin-webdav-aes-gcm-v1"
+    private val alias = "herrin-webdav-aes-gcm-v1-" + slot
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -39,11 +40,11 @@ internal class HerrinPersonalCredentialStore(context: Context) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val bytes = cipher.iv + cipher.doFinal(value)
-        prefs.edit().putString("webdav", Base64.encodeToString(bytes, Base64.NO_WRAP)).commit()
+        prefs.edit().putString(slot, Base64.encodeToString(bytes, Base64.NO_WRAP)).commit()
     }.getOrDefault(false)
 
     fun load(): Pair<String, String> = runCatching {
-        val encoded = prefs.getString("webdav", "").orEmpty()
+        val encoded = prefs.getString(slot, "").orEmpty()
         if (encoded.isBlank()) return@runCatching "" to ""
         val bytes = Base64.decode(encoded, Base64.NO_WRAP)
         require(bytes.size in 28..2400)
@@ -54,5 +55,5 @@ internal class HerrinPersonalCredentialStore(context: Context) {
         plain.substringBefore('\u0000') to plain.substringAfter('\u0000')
     }.getOrDefault("" to "")
 
-    fun clear() { prefs.edit().remove("webdav").apply() }
+    fun clear() { prefs.edit().remove(slot).apply() }
 }
