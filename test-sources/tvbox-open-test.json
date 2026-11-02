@@ -1,0 +1,16 @@
+{
+  "sites": [
+    {
+      "key": "herrin_open_test_cms",
+      "name": "Herrin｜合法测试片源（MP4/HLS）",
+      "type": 1,
+      "api": "https://cdn.jsdelivr.net/gh/shawnhhh/aura-tv@herrin-test-20261102/test-sources/tvbox-cms.json"
+    }
+  ],
+  "lives": [
+    {
+      "name": "Herrin｜公开测试视频（非真正直播）",
+      "url": "https://cdn.jsdelivr.net/gh/shawnhhh/aura-tv@herrin-test-20261102/test-sources/test-streams.m3u"
+    }
+  ]
+}

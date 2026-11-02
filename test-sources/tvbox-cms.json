@@ -1,0 +1,34 @@
+{
+  "list": [
+    {
+      "vod_id": "herrin-flower-cc0",
+      "vod_name": "HERRIN 测试｜花朵 MP4（CC0）",
+      "type_name": "电影",
+      "vod_year": "2026",
+      "vod_remarks": "Mozilla 开放测试视频",
+      "vod_content": "Mozilla MDN 公开 CC0 片段，测试 HTTPS MP4、播放进度、返回键和解码出帧。",
+      "vod_play_from": "MP4",
+      "vod_play_url": "正片$https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+    },
+    {
+      "vod_id": "herrin-apple-hls",
+      "vod_name": "HERRIN 测试｜Apple HLS 高清 / HEVC",
+      "type_name": "电影",
+      "vod_year": "2026",
+      "vod_remarks": "Apple 官方 HLS 技术样例",
+      "vod_content": "Apple Developer HLS 演示流，测试 AVC、HEVC、不同封装、音轨与字幕；片源标签不代表设备实际输出 HDR/杜比。",
+      "vod_play_from": "AVC HLS$$$HEVC HLS$$$fMP4 HLS",
+      "vod_play_url": "正片$https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8$$$正片$https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8$$$正片$https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8"
+    },
+    {
+      "vod_id": "herrin-fallback",
+      "vod_name": "HERRIN 测试｜故障换线 404 → MP4",
+      "type_name": "电影",
+      "vod_year": "2026",
+      "vod_remarks": "首先故障，备用正常",
+      "vod_content": "用于验证播放失败错误信息、手动更换线路；第一条故意指向不存在的公开测试文件。",
+      "vod_play_from": "故障线路（预期404）$$$有效备用 MP4",
+      "vod_play_url": "正片$https://cdn.jsdelivr.net/gh/shawnhhh/aura-tv@herrin-test-20261102/test-sources/intentionally-missing-404.mp4$$$正片$https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+    }
+  ]
+}

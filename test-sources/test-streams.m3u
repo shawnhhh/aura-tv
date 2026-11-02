@@ -1,0 +1,9 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="herrin-mdn-mp4" group-title="Herrin 技术测试（非直播）",HERRIN · MDN 花朵 MP4（CC0）
+https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4
+#EXTINF:-1 tvg-id="herrin-apple-avc" group-title="Herrin 技术测试（非直播）",HERRIN · Apple AVC HLS
+https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8
+#EXTINF:-1 tvg-id="herrin-apple-hevc" group-title="Herrin 技术测试（非直播）",HERRIN · Apple HEVC HLS
+https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8
+#EXTINF:-1 tvg-id="herrin-apple-fmp4" group-title="Herrin 技术测试（非直播）",HERRIN · Apple fMP4 HLS
+https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8

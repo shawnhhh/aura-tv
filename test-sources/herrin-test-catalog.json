@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "flower",
+      "title": "HERRIN 测试 · 花朵 MP4",
+      "subtitle": "MDN CC0 · HTTPS MP4",
+      "category": "电影",
+      "year": "2026",
+      "synopsis": "公开 CC0 视频，测试播放、暂停、快进、返回及全屏。",
+      "playback": {
+        "episodes": [
+          {
+            "number": 1,
+            "title": "花朵视频",
+            "lines": [
+              {
+                "id": "mdn",
+                "title": "MDN CC0 MP4",
+                "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "hls-avc-hevc",
+      "title": "HERRIN 测试 · Apple HLS 高清",
+      "subtitle": "AVC / HEVC / fMP4",
+      "category": "电影",
+      "year": "2026",
+      "synopsis": "Apple Developer 官方 HLS 演示流：检查 AVC/H.264、HEVC、音轨字幕及 HLS 加载。",
+      "playback": {
+        "episodes": [
+          {
+            "number": 1,
+            "title": "HLS 技术测试",
+            "lines": [
+              {
+                "id": "apple-avc",
+                "title": "Apple AVC HLS",
+                "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8"
+              },
+              {
+                "id": "apple-hevc",
+                "title": "Apple HEVC HLS",
+                "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8"
+              },
+              {
+                "id": "apple-fmp4",
+                "title": "Apple fMP4 HLS",
+                "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "recovery-404",
+      "title": "HERRIN 测试 · 播放失败与换线",
+      "subtitle": "404 → 有效备用",
+      "category": "电影",
+      "year": "2026",
+      "synopsis": "第一条链接故意无效，第二条是 MDN 可播放视频，用来验证错误恢复和手动换线。",
+      "playback": {
+        "episodes": [
+          {
+            "number": 1,
+            "title": "故障测试",
+            "lines": [
+              {
+                "id": "intentional-404",
+                "title": "预期 404（故障测试）",
+                "url": "https://cdn.jsdelivr.net/gh/shawnhhh/aura-tv@herrin-test-20261102/test-sources/intentionally-missing-404.mp4"
+              },
+              {
+                "id": "backup-mp4",
+                "title": "有效备用 MP4",
+                "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
