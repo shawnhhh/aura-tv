@@ -75,8 +75,10 @@ internal object HerrinApprovedSpiderBatch {
         // Each browse modifies the remote active Spider. Re-activate only the
         // confirmed winner, otherwise never leave a randomly scanned site as
         // the selected playback session.
-        val restored = if (best != null) try {
-            withTimeoutOrNull(timeoutPerSiteMs) { session.activate(best.site) == true }
+        val restored: Boolean = if (best != null) try {
+            withTimeoutOrNull(timeoutPerSiteMs) {
+                session.activate(best.site)
+            } == true
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (_: Exception) { false } else false

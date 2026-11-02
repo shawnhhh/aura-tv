@@ -1114,9 +1114,11 @@ private fun Herrin() {
                                     if (good) "PLAYER_ROUTE_READY" else "PLAYER_ROUTE_REJECTED")
                                 good
                             }
-                            is HerrinTvBoxCmsSource ->
-                                adapter.play(detailed, selected.first, selected.second)
-                                    is PlaybackResult.Ready
+                            is HerrinTvBoxCmsSource -> {
+                                val resolvedMedia = adapter.play(
+                                    detailed, selected.first, selected.second)
+                                resolvedMedia is PlaybackResult.Ready
+                            }
                             else -> false
                         }
                     playable
@@ -1160,8 +1162,9 @@ private fun Herrin() {
                         override suspend fun canPlay(detailed: Film): Boolean {
                             val (ep, selectedLine) = HerrinPlaybackEntry.firstPlayable(detailed)
                                 ?: return false
-                            return spiderBridge.play(detailed, ep, selectedLine, tvBoxAllowHttp)
-                                is PlaybackResult.Ready
+                            val result = spiderBridge.play(
+                                detailed, ep, selectedLine, tvBoxAllowHttp)
+                            return result is PlaybackResult.Ready
                         }
                     }
                 )
