@@ -3127,8 +3127,8 @@ private fun Herrin() {
                                 else if (screen == "player" && !spiderActive && !film.id.startsWith("tmdb-")) "播放演示"
                                 else if (screen == "detail") displayFilm.title else film.title,
                                 fontSize = 38.sp, fontWeight = FontWeight.Bold)
+                            HerrinRatingBadges(displayFilm)
                             Text(buildString {
-                                FilmMetadataEnrichment.ratingLabel(displayFilm)?.let { append(it).append("  ·  ") }
                                 append(displayFilm.releaseDate ?: displayFilm.year).append("  ·  ")
                                 append(displayFilm.category)
                                 displayFilm.runtimeMinutes?.let {
