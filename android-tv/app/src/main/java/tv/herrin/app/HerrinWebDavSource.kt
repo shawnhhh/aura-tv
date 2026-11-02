@@ -1,6 +1,10 @@
 package tv.herrin.app
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
@@ -63,7 +67,12 @@ internal class HerrinWebDavSource(
             while (folders.isNotEmpty() && visited < 16 && found.size < 30) {
                 val (directory, depth) = folders.removeFirst()
                 visited++
-                val children = runCatching { list(directory) }.getOrDefault(emptyList())
+                currentCoroutineContext().ensureActive()
+                // Cancellation of the selected TMDB title must interrupt
+                // an old blocking NAS PROPFIND instead of stalling next title.
+                val children = try { runInterruptible { list(directory) } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { emptyList() }
                 for (child in children.take(250)) {
                     if (child.isCollection) {
                         if (depth < 2) folders.addLast(child.address to depth + 1)
