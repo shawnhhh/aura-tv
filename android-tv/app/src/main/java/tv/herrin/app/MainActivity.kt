@@ -4221,7 +4221,8 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
             Text(film.title, Modifier.weight(1f).testTag("poster-title-${film.id}"),
                 fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 color = Color.White, maxLines = 1)
-            Text(film.year, Modifier.testTag("poster-year-${film.id}"),
+            Text(film.releaseDate?.takeIf { it.isNotBlank() } ?: film.year,
+                Modifier.testTag("poster-date-${film.id}"),
                 fontSize = 10.sp, color = Color(0xFFE0E5EB), maxLines = 1)
         }
         if (progress != null) {
