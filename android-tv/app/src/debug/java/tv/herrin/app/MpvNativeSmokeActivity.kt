@@ -37,5 +37,5 @@ class MpvNativeSmokeActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    fun nativeSurface(): MpvNativePlaybackView? = nativeView
+    internal fun nativeSurface(): MpvNativePlaybackView? = nativeView
 }
