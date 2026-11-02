@@ -2038,7 +2038,7 @@ private fun Herrin() {
                         Spacer(Modifier.height(132.dp))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Box(Modifier.width(18.dp).height(2.dp).background(Color.White))
-                            Text(if (providerFilms == null) "HERRIN  ·  ORIGINAL PREMIERE" else "HERRIN  ·  USER CATALOG", fontSize = 12.sp, letterSpacing = 2.sp,
+                            Text(if (tmdbHomeFilms.isNotEmpty()) "HERRIN  ·  TMDB DISCOVER" else if (providerFilms == null) "HERRIN  ·  ORIGINAL PREMIERE" else "HERRIN  ·  USER CATALOG", fontSize = 12.sp, letterSpacing = 2.sp,
                                 fontWeight = FontWeight.Medium, color = Color(0xFFE5EAF2))
                         }
                         Spacer(Modifier.height(11.dp))
@@ -2047,7 +2047,7 @@ private fun Herrin() {
                         Text(displayFilm.subtitle, fontSize = 13.sp, letterSpacing = 3.sp,
                             color = Color(0xFFE4E7EF))
                         Spacer(Modifier.height(12.dp))
-                        Text("${displayFilm.year}   ·   ${displayFilm.category}   ·   ${if (providerFilms == null) "ORIGINAL UI DEMO" else "USER-SUPPLIED CATALOG"}",
+                        Text("${displayFilm.year}   ·   ${displayFilm.category}   ·   ${if (tmdbHomeFilms.isNotEmpty()) "TMDB FILM DATABASE" else if (providerFilms == null) "ORIGINAL UI DEMO" else "USER-SUPPLIED CATALOG"}",
                             fontSize = 13.sp, color = Color(0xFFF3F5F8))
                         if (displayFilm.ratingValue != null || displayFilm.genres.isNotEmpty())
                             Text(listOfNotNull(FilmMetadataEnrichment.ratingLabel(displayFilm),
@@ -2058,12 +2058,12 @@ private fun Herrin() {
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xFFE0E4EA))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton(if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
+                            TvButton(if (film.id.startsWith("tmdb-")) "搜索片源与选集" else if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
                                 selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },
                                 modifier = Modifier.testTag("play")
                                     .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
                                     .focusRequester(requester("play"))) {
-                                if (showGroup != null || providerFilms != null) details(film)
+                                if (film.id.startsWith("tmdb-") || showGroup != null || providerFilms != null) details(film)
                                 else {
                                     returnScreen = "browse"
                                     episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
