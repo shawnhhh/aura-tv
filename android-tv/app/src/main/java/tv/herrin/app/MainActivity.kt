@@ -490,6 +490,8 @@ private fun Herrin() {
     val tmdbPersonalPlayback = remember { mutableStateMapOf<String, Map<String, PlaybackMedia>>() }
     var tmdbDiscoveryStatus by remember { mutableStateOf("") }
     var tmdbSourceStatus by remember { mutableStateOf("") }
+    // Explicit retry and source changes must invalidate old TMDB playback mappings.
+    var tmdbLookupEpoch by remember { mutableIntStateOf(0) }
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
     var filmId by rememberSaveable { mutableStateOf(demoFilms.first().id) }
@@ -815,6 +817,18 @@ private fun Herrin() {
         (tmdbHomeFilms + tmdbTop250Films).distinctBy(Film::id)
             .map { tmdbResolved[it.id] ?: it }
     } else providerFilms ?: if (sourceConfigured) emptyList() else demoFilms
+    // Source settings can change independently of the TMDB title. Do not keep
+    // old playable URLs or credential maps after NAS/cloud/TVBox is reconfigured.
+    LaunchedEffect(personalSourceConfigEpoch, tvBoxSingle, tvBoxWarehouses, tvBoxAllowHttp) {
+        tmdbResolved.keys.toList().forEach { id ->
+            tmdbResolved[id]?.let { resolved ->
+                tmdbResolved[id] = resolved.copy(
+                    playbackEpisodes = emptyList(), cmsVodId = null, spiderVodId = null)
+            }
+        }
+        tmdbPersonalPlayback.clear()
+        tmdbLookupEpoch++
+    }
     fun readDeviceStatus(): String {
         val activity = context as? ComponentActivity ?: return "当前环境不支持读取屏幕刷新率"
         @Suppress("DEPRECATION")
@@ -998,7 +1012,7 @@ private fun Herrin() {
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
     // the scraped poster/title as an executable source or auto-plays a video.
     LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle,
-        tvBoxWarehouses, personalSourceConfigEpoch) {
+        tvBoxWarehouses, personalSourceConfigEpoch, tmdbLookupEpoch) {
         if (screen != "detail" || !filmId.startsWith("tmdb-") ||
             tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true) return@LaunchedEffect
         val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
@@ -1084,7 +1098,9 @@ private fun Herrin() {
         val lookup = verified.lookup
         val found = lookup.options.firstOrNull()
         if (found == null) {
-            tmdbSourceStatus = "NAS／云盘／已接入 CMS 中未找到可信匹配的片源；影片资料仍可浏览"
+            tmdbSourceStatus = if (lookup.errors.isNotEmpty())
+                "部分资源源检索失败或超时，尚未找到可播放的授权选集；可重新检索"
+            else "NAS／云盘／TVBox 均未找到可播放的授权选集；可重新检索"
             return@LaunchedEffect
         }
         when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
@@ -1136,6 +1152,12 @@ private fun Herrin() {
                 tmdbSourceStatus = "已匹配 TVBox ${adapter.site.name} · ${detailed.playbackEpisodes.size} 集"
             }
             else -> tmdbSourceStatus = "影视源没有返回可用于当前播放器的授权线路"
+        }
+        // The poster was opened before the network supplied its real episodes.
+        // Select a real first line rather than leaving "演示线路 A" in state.
+        HerrinPlaybackEntry.firstPlayable(tmdbResolved[targetId])?.let { (number, id) ->
+            episode = number
+            line = id
         }
     }
     LaunchedEffect(screen, filmId, metadataToken, imdbRatingsEpoch) {
@@ -1670,8 +1692,9 @@ private fun Herrin() {
         groupFocusedCoordinates = null
         detailSeasonLines.clear()
         detailSeasonEpisodeNumbers.clear()
-        episode = f.playbackEpisodes.firstOrNull()?.number ?: 1
-        line = f.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
+        val firstRealLine = HerrinPlaybackEntry.firstPlayable(f)
+        episode = firstRealLine?.first ?: 1
+        line = firstRealLine?.second ?: "演示线路 A"
         returnScreen = screen
         screen = "detail"
     }
@@ -3593,7 +3616,23 @@ private fun Herrin() {
                             } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                if (providerFilms == null) TvButton(when {
+                                if (HerrinPlaybackEntry.unavailableTmdb(film)) {
+                                    Text("正在检索或尚未找到真实片源",
+                                        modifier = Modifier.testTag("tmdb-playback-unavailable"),
+                                        color = Color(0xFFD9B78A), fontSize = 14.sp)
+                                    TvButton("重新检索片源",
+                                        modifier = Modifier.testTag("tmdb-source-retry"),
+                                        reduced = reduceMotion) {
+                                        tmdbResolved[film.id]?.let { current ->
+                                            tmdbResolved[film.id] = current.copy(
+                                                playbackEpisodes = emptyList(),
+                                                cmsVodId = null, spiderVodId = null)
+                                        }
+                                        tmdbPersonalPlayback.remove(film.id)
+                                        tmdbSourceStatus = "正在重新检索 NAS／云盘／TVBox…"
+                                        tmdbLookupEpoch++
+                                    }
+                                } else if (providerFilms == null || film.id.startsWith("tmdb-")) TvButton(when {
                                     showGroup != null && groupResume != null ->
                                         "▶ 继续播放 第${groupResume.first.season}季 第${groupResume.first.number}集 ${formatSeasonClock(groupResume.second.positionMs)}"
                                     showGroup != null && groupSection?.episodes?.isNotEmpty() == true ->
@@ -3646,10 +3685,12 @@ private fun Herrin() {
                                     screen = "player"
                                 } }
                             }
-                            if (showGroup == null) item { Text("线路",
+                            if (showGroup == null && !HerrinPlaybackEntry.unavailableTmdb(film))
+                                item { Text("线路",
                                 modifier = Modifier.testTag("detail-line-heading"),
                                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
-                            if (showGroup == null && (providerFilms == null || displayedLines.isNotEmpty())) item {
+                            if (showGroup == null && !HerrinPlaybackEntry.unavailableTmdb(film) &&
+                                (providerFilms == null || displayedLines.isNotEmpty())) item {
                                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (displayedLines.isEmpty()) {
@@ -3711,6 +3752,10 @@ private fun Herrin() {
                                         }, onPlay = { entry -> playSeasonEpisode(entry) },
                                         onMoveToCast = ::moveToDetailCast)
                                 }
+                            } else if (HerrinPlaybackEntry.unavailableTmdb(film)) {
+                                item { Text("尚无可播放的授权选集",
+                                    modifier = Modifier.testTag("tmdb-episodes-unavailable"),
+                                    fontSize = 18.sp, color = Color(0xFFD9B78A)) }
                             } else {
                                 item { Text(if (providerFilms != null && film.playbackEpisodes.isEmpty())
                                     "原始条目 · 尚无可播放的真实选集"

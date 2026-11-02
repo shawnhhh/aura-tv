@@ -59,9 +59,9 @@ internal data class HerrinFilmLookupResult(
 )
 
 /**
- * Priority is strict: NAS/cloud first. TVBox is queried only when no identity
- * match exists in personal sources. Within a tier prefer verified media metadata
- * later during actual playback; source title claims are merely a tie breaker.
+ * Strict source priority: NAS -> cloud WebDAV -> TVBox CMS/approved Spider.
+ * A cloud "4K" filename cannot outrank a verified NAS 1080p resource.
+ * Within a source tier, quality labels only break ties between matches.
  */
 internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
     /**
@@ -75,13 +75,16 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
     ): HerrinFilmLookupResult {
         val errors = linkedMapOf<String, String>()
         val searched = mutableListOf<String>()
-        for (tier in listOf(HerrinSourceTier.PERSONAL, HerrinSourceTier.TVBOX)) {
+        val sourceStages = listOf(
+            listOf(HerrinSourceType.NAS),
+            listOf(HerrinSourceType.CLOUD),
+            listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER)
+        )
+        for (stage in sourceStages) {
+            val tier = if (stage.first() == HerrinSourceType.TVBOX_CMS)
+                HerrinSourceTier.TVBOX else HerrinSourceTier.PERSONAL
             val results = mutableListOf<HerrinSourceMovie>()
-            for (source in sources.filter { source ->
-                if (tier == HerrinSourceTier.PERSONAL)
-                    source.type == HerrinSourceType.NAS || source.type == HerrinSourceType.CLOUD
-                else source.type in setOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER)
-            }.distinctBy { it.id }.take(16)) {
+            for (source in sources.filter { it.type in stage }.distinctBy { it.id }.take(16)) {
                 searched.add(source.id)
                 try {
                     val matches = withTimeoutOrNull(6_000L) { source.search(identity) }
