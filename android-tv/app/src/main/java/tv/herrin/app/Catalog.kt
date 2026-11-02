@@ -20,7 +20,9 @@ data class Film(val id: String, val title: String, val subtitle: String, val cat
                 val actors: List<String> = emptyList(), val directors: List<String> = emptyList(),
                 val regions: List<String> = emptyList(), val releaseDate: String? = null,
                 val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList(),
-                val tmdbTvId: Int? = null)
+                val tmdbTvId: Int? = null,
+                val imdbId: String? = null, val imdbRating: Double? = null,
+                val imdbVotes: Int? = null)
 class DemoCatalog : CatalogSource {
     override fun titles() = listOf(
         Film("orbit", "最后的轨道", "THE LAST ORBIT", "电影", "2026", "在寂静的远方，一位航行者寻找回家的信号。原创虚构故事，合成影像仅用于界面演示。", R.drawable.photofilm_orbit),
