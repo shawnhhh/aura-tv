@@ -892,9 +892,10 @@ private fun Herrin() {
         val importedWarehouses = tvBoxWarehouses.take(3)
         // Spider is a privileged plugin: only an existing user-applied session
         // may be searched. Never start a new Spider while browsing TMDB.
-        val approvedSpiderSite = if (spiderActive)
-            currentTvbox?.sites?.firstOrNull { it.key.isNotBlank() &&
-                it.spiderApi != null && it.key == tvBoxSelectedName }
+        val activeSpiderKey = spiderBridge.approvedActiveSiteKey()
+        val approvedSpiderSite = if (spiderActive && activeSpiderKey != null)
+            currentTvbox?.sites?.firstOrNull { it.key == activeSpiderKey &&
+                (it.spiderApi != null || it.scriptApi != null) }
         else null
         val nasUrl = prefs.nasWebDavUrl
         val cloudUrl = prefs.cloudWebDavUrl
