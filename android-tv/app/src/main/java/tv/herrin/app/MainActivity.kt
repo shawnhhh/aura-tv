@@ -3692,6 +3692,7 @@ private fun Herrin() {
                                         modifier = Modifier.testTag("tmdb-source-retry"),
                                         reduced = reduceMotion) {
                                         tmdbFallbackIndex.reset(film.id)
+                                        tmdbPlaybackRoutes.forget(film.id)
                                         tmdbResolved[film.id]?.let { current ->
                                             tmdbResolved[film.id] = current.copy(
                                                 playbackEpisodes = emptyList(),

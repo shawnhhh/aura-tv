@@ -13,6 +13,7 @@ class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
     var lineSelections = 0
     var episodeSelections = 0
+    var otherSourceSelections = 0
     data class ProgressEvent(val sessionUri: String, val positionMs: Long,
                              val durationMs: Long, val finished: Boolean)
     val progressEvents = java.util.concurrent.CopyOnWriteArrayList<ProgressEvent>()
@@ -88,6 +89,8 @@ class PlaybackTestActivity : ComponentActivity() {
                             ({ lineSelections++ }) else null,
                         onEpisodeSelection = if (intent.getBooleanExtra("withSelectionActions", false))
                             ({ episodeSelections++ }) else null,
+                        onTryOtherSource = if (intent.getBooleanExtra("withOtherSourceAction", false))
+                            ({ otherSourceSelections++ }) else null,
                         onBack = {
                             android.util.Log.i("HerrinPlayerBack", "debug onBack invoked showing=$showing")
                             showing = false
