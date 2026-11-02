@@ -486,6 +486,8 @@ private fun Herrin() {
     var personalSourceFeedback by remember { mutableStateOf("") }
     var tmdbHomeFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
     var tmdbTop250Films by remember { mutableStateOf<List<Film>>(emptyList()) }
+    var tmdbTop250Status by remember { mutableStateOf("") }
+    var tmdbTop250RetryEpoch by remember { mutableIntStateOf(0) }
     val tmdbResolved = remember { mutableStateMapOf<String, Film>() }
     val tmdbPersonalPlayback = remember { mutableStateMapOf<String, Map<String, PlaybackMedia>>() }
     // A film's playback origin must survive opening other TMDB films.
@@ -1007,17 +1009,30 @@ private fun Herrin() {
             tmdbDiscoveryStatus = "TMDB 未返回可用影视资料；保留已配置的本地片库"
         }
     }
-    LaunchedEffect(category, metadataToken, tmdbConnectivity) {
-        if (category != "Top 250" || tmdbConnectivity != TmdbProbeState.CONNECTED ||
-            metadataToken.isBlank() || tmdbTop250Films.size >= 250) return@LaunchedEffect
-        tmdbDiscoveryStatus = "正在读取 TMDB 高分电影 Top 250…"
-        val shelf = runCatching { tmdbDiscovery.loadTop250(metadataToken) }.getOrNull()
-        if (shelf != null) {
-            tmdbTop250Films = shelf.films
-            tmdbDiscoveryStatus = if (shelf.isComplete)
-                "TMDB Top 250 已加载 250 部电影"
-            else "TMDB 高分榜只加载了 ${shelf.films.size} 部；可稍后重试"
+    LaunchedEffect(category, metadataToken, tmdbConnectivity, tmdbTop250RetryEpoch) {
+        if (category != "Top 250") return@LaunchedEffect
+        if (metadataToken.isBlank()) {
+            tmdbTop250Status = "未配置 TMDB 访问令牌，请在设置中配置后重试"
+            return@LaunchedEffect
         }
+        if (tmdbConnectivity != TmdbProbeState.CONNECTED) {
+            tmdbTop250Status = tmdbProbeMessage
+            return@LaunchedEffect
+        }
+        if (tmdbTop250Films.size >= 250) return@LaunchedEffect
+        tmdbTop250Status = "正在载入 TMDB 高分榜，请稍候…"
+        val shelf = runCatching { tmdbDiscovery.loadTop250(metadataToken) }.getOrNull()
+        if (shelf == null) {
+            tmdbTop250Status = "TMDB 高分榜请求失败；检查电视网络、DNS 或访问限制后重试"
+        } else {
+            if (shelf.films.isNotEmpty()) tmdbTop250Films = shelf.films
+            tmdbTop250Status = when {
+                shelf.isComplete -> "已加载 TMDB 高分电影 250 部（非 IMDb 官方榜单）"
+                shelf.films.isNotEmpty() -> "已加载 ${shelf.films.size} 部；其余请求失败，可重试补齐"
+                else -> "TMDB Top250 未返回影片；检查 API 网络连通性后重试"
+            }
+        }
+        tmdbDiscoveryStatus = tmdbTop250Status
     }
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
     // the scraped poster/title as an executable source or auto-plays a video.
@@ -2194,7 +2209,7 @@ private fun Herrin() {
                         } else queried
                         showCatalog.collapse(FilmFacetFilters.results(favoritesOnly, facetSelection))
                     }
-                    else if (category == "Top 250" && tmdbHomeFilms.isNotEmpty())
+                    else if (category == "Top 250")
                         showCatalog.collapse(tmdbTop250Films.map { tmdbResolved[it.id] ?: it })
                     else showCatalog.collapse(films.filter {
                         category == "首页" || it.category == category ||
@@ -2387,6 +2402,29 @@ private fun Herrin() {
                         Text("你授权的频道 · HTTPS M3U · 可选 XMLTV / .xml.gz 节目预览",
                             fontSize = 13.sp, color = Color(0xFFBDC8D6))
                         Spacer(Modifier.height(18.dp))
+                    } else if (category == "Top 250" && railFilms.isEmpty()) {
+                        Spacer(Modifier.height(110.dp))
+                        Text("TMDB 高分电影 Top 250", fontSize = 30.sp,
+                            modifier = Modifier.testTag("top250-empty-title"))
+                        Text(tmdbTop250Status.ifBlank { "正在等待 TMDB 高分榜数据…" },
+                            fontSize = 16.sp, lineHeight = 24.sp,
+                            color = Color(0xFFD2DEEA),
+                            modifier = Modifier.testTag("top250-network-status"))
+                        Spacer(Modifier.height(14.dp))
+                        TvButton("重新加载 Top250",
+                            modifier = Modifier.testTag("top250-retry"),
+                            reduced = reduceMotion) {
+                            if (tmdbConnectivity == TmdbProbeState.CONNECTED)
+                                tmdbTop250RetryEpoch++
+                            else tmdbProbeEpoch++
+                        }
+                        if (metadataToken.isBlank()) TvButton("配置 TMDB 令牌",
+                            modifier = Modifier.testTag("top250-token-settings"),
+                            reduced = reduceMotion) {
+                            settingsTvBoxOnly = true
+                            screen = "settings"
+                        }
+                        Spacer(Modifier.height(24.dp))
                     } else if (sourceConfigured && films.isEmpty()) {
                         Spacer(Modifier.height(135.dp))
                         Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,

@@ -57,7 +57,11 @@ internal class HerrinTmdbDiscovery(
             val endpoint = section.endpoint + (if ('?' in section.endpoint) "&" else "?") +
                 "language=zh-CN&page=" + page + "&include_adult=false"
             val films = parsePage(fetcher.load(base + endpoint, token), section.kind)
-            cache[cacheKey] = Cached(clock() + 6 * 60 * 60 * 1000L, films)
+            // A transient timeout, DNS error or empty upstream response must
+            // not poison Top250 (or other shelves) for the next SIX hours.
+            // Cache verified non-empty pages only; failed pages are retriable.
+            if (films.isNotEmpty())
+                cache[cacheKey] = Cached(clock() + 6 * 60 * 60 * 1000L, films)
             HerrinTmdbShelf(section.key, section.title, films, films.isNotEmpty())
         }
 
