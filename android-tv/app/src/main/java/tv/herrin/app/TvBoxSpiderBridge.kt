@@ -523,6 +523,17 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         films
     }
 
+    /** Search only an active, explicitly user-approved Spider site. */
+    suspend fun search(site: TvBoxSite, query: String): SpiderResult<List<Film>> = attempt {
+        val keyword = query.trim().take(120)
+        require(keyword.length >= 2) { "搜索关键词太短" }
+        val spider = active ?: error("Spider 尚未由用户应用")
+        require(site.key.isNotBlank() && site.key == activeSiteKey) {
+            "拒绝在未应用的 Spider 站点自动检索"
+        }
+        SpiderVodCodec.listing(spider.searchContent(keyword, false), site)
+    }
+
     suspend fun details(film: Film): SpiderResult<Film> = attempt {
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DETAILS)
         val spider = active ?: error("站点 Spider 尚未加载")
