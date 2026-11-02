@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
 internal object SpiderIpc {
     const val BROWSE = 1
     const val DETAILS = 2
+    const val SEARCH = 4
     const val PLAY = 3
     const val PROXY_SELF_TEST = 20
     const val RELEASE_PLAYBACK = 21
@@ -289,6 +290,17 @@ class TvBoxSpiderService : Service() {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("films", JSONArray().apply {
                                             result.value.take(80).forEach { put(SpiderIpc.film(it)) }
+                                        })
+                                    is SpiderResult.Failure -> SpiderIpc.error(result.message)
+                                }
+                            }
+                            SpiderIpc.SEARCH -> {
+                                val site = SpiderIpc.readSite(request.getJSONObject("site"))
+                                val keyword = request.optString("query").trim().take(120)
+                                when (val result = worker.search(site, keyword)) {
+                                    is SpiderResult.Ready -> JSONObject().put("ok", true)
+                                        .put("films", JSONArray().apply {
+                                            result.value.take(60).forEach { put(SpiderIpc.film(it)) }
                                         })
                                     is SpiderResult.Failure -> SpiderIpc.error(result.message)
                                 }
@@ -626,6 +638,24 @@ internal class TvBoxSpiderBridge(context: Context) {
                 } catch (error: Exception) {
                     SpiderResult.Failure("Spider 影片数据无效：" + SpiderFailureDetails.message(error))
                 }
+            }
+        }
+    }
+
+    /** Search ONLY the previously user-applied active Spider site. */
+    suspend fun search(site: TvBoxSite, query: String): SpiderResult<List<Film>> {
+        val keyword = query.trim().take(120)
+        if (keyword.length < 2) return SpiderResult.Failure("搜索片名太短")
+        val payload = JSONObject().put("site", SpiderIpc.site(site)).put("query", keyword)
+        return when (val response = request(SpiderIpc.SEARCH, payload)) {
+            is SpiderResult.Failure -> response
+            is SpiderResult.Ready -> try {
+                val array = response.value.getJSONArray("films")
+                SpiderResult.Ready((0 until minOf(60, array.length())).map {
+                    SpiderIpc.readFilm(array.getJSONObject(it))
+                })
+            } catch (_: Exception) {
+                SpiderResult.Failure("Spider 搜索结果无效")
             }
         }
     }
