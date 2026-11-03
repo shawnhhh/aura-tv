@@ -48,6 +48,51 @@ internal object HerrinApprovedSpiderBatch {
         return label?.let(HerrinFilmIdentityMatch::resolutionClaim) ?: fallback
     }
 
+    /**
+     * A Spider site can change its playable line after re-activation. Rank
+     * candidates by the line verified in the CURRENT session, not the stale
+     * quality observed before another site's worker replaced the session.
+     *
+     * Stop as soon as the current verified line outranks every previously
+     * refreshed and still-unchecked candidate. Only extra-activate sites
+     * when a formerly better site has actually downgraded or expired.
+     */
+    private suspend fun restoreVerifiedBest(
+        winners: List<Match>, session: Session, timeoutPerSiteMs: Long
+    ): Match? {
+        val ranked = winners.sortedWith(compareByDescending<Match> { it.claim }
+            .thenByDescending { it.detailed.playbackEpisodes.size })
+
+        suspend fun refresh(winner: Match): Match? = try {
+            withTimeoutOrNull(timeoutPerSiteMs) {
+                if (!session.activate(winner.site)) return@withTimeoutOrNull null
+                val detail = session.details(winner.candidate)
+                    ?: return@withTimeoutOrNull null
+                val chosen = session.pick(detail) ?: return@withTimeoutOrNull null
+                winner.copy(detailed = detail,
+                    claim = selectedLineClaim(detail, chosen),
+                    episode = chosen.first, line = chosen.second)
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) { null }
+
+        val refreshed = mutableListOf<Match>()
+        for ((index, winner) in ranked.withIndex()) {
+            val current = refresh(winner) ?: continue
+            val earlierHigher = refreshed.any { it.claim > current.claim }
+            refreshed += current
+            val remainingHigher = ranked.drop(index + 1).any { it.claim > current.claim }
+            if (!earlierHigher && !remainingHigher) return current
+        }
+        // The last probed site owns the single active Spider session. Any
+        // previously checked fallback must be reactivated before returning.
+        for (winner in refreshed.sortedByDescending { it.claim }) {
+            refresh(winner)?.let { return it }
+        }
+        return null
+    }
+
     suspend fun scanAcrossPages(
         identity: HerrinFilmIdentity,
         sites: List<TvBoxSite>,
@@ -75,23 +120,7 @@ internal object HerrinApprovedSpiderBatch {
                     return@withTimeoutOrNull
             }
         }
-        var result: Match? = null
-        for (winner in winners.sortedByDescending { it.claim }) {
-            val validated = try {
-                withTimeoutOrNull(5_000L) {
-                    if (!session.activate(winner.site)) return@withTimeoutOrNull null
-                    val detail = session.details(winner.candidate)
-                        ?: return@withTimeoutOrNull null
-                    val chosen = session.pick(detail) ?: return@withTimeoutOrNull null
-                    winner.copy(detailed = detail,
-                        claim = selectedLineClaim(detail, chosen),
-                        episode = chosen.first, line = chosen.second)
-                }
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (_: Exception) { null }
-            if (validated != null) { result = validated; break }
-        }
+        val result = restoreVerifiedBest(winners, session, 5_000L)
         return Scan(result, checked, total, next, episodes)
     }
 
@@ -140,29 +169,10 @@ internal object HerrinApprovedSpiderBatch {
             } catch (_: Exception) { null }
             if (found != null) good += found
         }
-        val ranked = good.sortedWith(compareByDescending<Match> { it.claim }
-            .thenByDescending { it.detailed.playbackEpisodes.size })
-        // Every activate(site) may replace the active Spider and its loopback
-        // proxy session. Re-validate the winning candidate AFTER restoring
-        // its site, never hand the UI a media route verified in an old session.
-        // If the best site expired during the scan, try the next verified site.
-        var restored: Match? = null
-        for (winner in ranked) {
-            val current = try {
-                withTimeoutOrNull(timeoutPerSiteMs.coerceIn(1_000, 20_000)) {
-                    if (!session.activate(winner.site)) return@withTimeoutOrNull null
-                    val refreshed = session.details(winner.candidate)
-                        ?: return@withTimeoutOrNull null
-                    val chosen = session.pick(refreshed) ?: return@withTimeoutOrNull null
-                    winner.copy(detailed = refreshed,
-                        claim = selectedLineClaim(refreshed, chosen),
-                        episode = chosen.first, line = chosen.second)
-                }
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (_: Exception) { null }
-            if (current != null) { restored = current; break }
-        }
+        // Multiple site activations invalidate the previous live proxy.
+        // Revalidate candidates and compare their CURRENT selected line.
+        val restored = restoreVerifiedBest(good, session,
+            timeoutPerSiteMs.coerceIn(1_000, 20_000))
         return Scan(restored, checked, eligible.size,
             if (start + page.size >= eligible.size) 0 else start + page.size,
             episodesFound)
