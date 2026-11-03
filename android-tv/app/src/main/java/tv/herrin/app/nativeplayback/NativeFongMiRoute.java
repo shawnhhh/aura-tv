@@ -21,6 +21,63 @@ public final class NativeFongMiRoute {
     private static final int MAX_URL = 8192;
     private NativeFongMiRoute() {}
 
+    /** An authenticated native loopback route, independent of do operation. */
+    public static boolean isNativeProxy(String mediaUrl) {
+        try {
+            URI uri = new URI(mediaUrl);
+            if (!isLoopback(uri) || !"/proxy".equals(uri.getRawPath())) return false;
+            Map<String, String> params = parse(uri.getRawQuery());
+            return params != null && params.containsKey("session");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    public enum Health {
+        READY, NOT_PROXY, INVALID_SESSION, INVALID_PORT,
+        HTTP_403, HTTP_404, HTTP_5XX, HTTP_OTHER,
+        CONNECT_REFUSED, TIMEOUT, IO_FAILURE
+    }
+
+    /** A bounded real HTTP probe of this exact active loopback session. */
+    public static Health probe(String mediaUrl, String authorizedSite) {
+        URI uri;
+        try { uri = new URI(mediaUrl); }
+        catch (Exception invalid) { return Health.NOT_PROXY; }
+        if (!isLoopback(uri) || !"/proxy".equals(uri.getPath())) return Health.NOT_PROXY;
+        if (uri.getPort() < 1 || uri.getPort() > 65535) return Health.INVALID_PORT;
+        Map<String, String> args = parse(uri.getRawQuery());
+        if (args == null || args.get("session") == null ||
+            args.get("session").length() < 24 ||
+            authorizedSite == null || authorizedSite.isBlank()) return Health.INVALID_SESSION;
+        if (args.containsKey("siteKey") &&
+            !authorizedSite.equals(args.get("siteKey"))) return Health.HTTP_403;
+        String healthUrl = "http://127.0.0.1:" + uri.getPort() +
+            "/health?session=" + URLEncoder.encode(args.get("session"), StandardCharsets.UTF_8) +
+            "&siteKey=" + URLEncoder.encode(authorizedSite, StandardCharsets.UTF_8);
+        java.net.HttpURLConnection connection = null;
+        try {
+            connection = (java.net.HttpURLConnection) new URI(healthUrl).toURL().openConnection();
+            connection.setConnectTimeout(3000);
+            connection.setReadTimeout(3000);
+            connection.setInstanceFollowRedirects(false);
+            int status = connection.getResponseCode();
+            if (status == 204) return Health.READY;
+            if (status == 403) return Health.HTTP_403;
+            if (status == 404) return Health.HTTP_404;
+            if (status >= 500 && status <= 599) return Health.HTTP_5XX;
+            return Health.HTTP_OTHER;
+        } catch (java.net.ConnectException failure) {
+            return Health.CONNECT_REFUSED;
+        } catch (java.net.SocketTimeoutException failure) {
+            return Health.TIMEOUT;
+        } catch (Exception failure) {
+            return Health.IO_FAILURE;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
     /** Returns null for an invalid or foreign proxy. Ordinary external media
      * URLs are unchanged and validated by the existing media URL boundary. */
     public static String url(String source, String siteKey, NativeFongMiProxy proxy) {

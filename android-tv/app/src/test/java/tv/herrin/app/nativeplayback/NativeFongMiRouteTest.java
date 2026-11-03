@@ -6,6 +6,19 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public final class NativeFongMiRouteTest {
+    @Test public void healthProbeChecksActualSessionIncludingStaticJarRoutes() throws Exception {
+        try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", p -> null, p -> null)) {
+            assertEquals(NativeFongMiRoute.Health.READY,
+                NativeFongMiRoute.probe(proxy.siteUrl(), "approved"));
+            assertEquals(NativeFongMiRoute.Health.READY,
+                NativeFongMiRoute.probe(proxy.baseUrl() + "&do=parse", "approved"));
+            assertEquals(NativeFongMiRoute.Health.HTTP_403,
+                NativeFongMiRoute.probe(proxy.siteUrl(), "foreign"));
+            assertEquals(NativeFongMiRoute.Health.NOT_PROXY,
+                NativeFongMiRoute.probe("https://example.org/video.mp4", "approved"));
+        }
+    }
+
     @Test public void originalSpiderProxyAliasPreservesUnknownOperation() throws Exception {
         try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", p ->
             new Object[]{200, "video/mp4", new ByteArrayInputStream(new byte[]{1})}, p ->

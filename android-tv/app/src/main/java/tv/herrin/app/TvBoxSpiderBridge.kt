@@ -3,6 +3,8 @@ package tv.herrin.app
 import android.content.Context
 import com.github.catvod.Runtime
 import com.github.catvod.Proxy as CatVodProxy
+import tv.herrin.app.nativeplayback.NativeFongMiProxy
+import tv.herrin.app.nativeplayback.NativeFongMiRoute
 import com.github.catvod.crawler.Spider
 import com.github.catvod.net.Net
 import com.github.catvod.utils.Local
@@ -392,7 +394,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeSiteHeaders: Map<String, String> = emptyMap()
     private var activeSiteClick: String = ""
     private var activeHttpHost: SpiderHttpSessionHost? = null
-    private var activeLoopbackProxy: SpiderLoopbackProxy? = null
+    private var activeNativeProxy: NativeFongMiProxy? = null
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
         withTimeoutOrNull(150_000) {
@@ -427,15 +429,15 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 val runtime = FongMiScriptRuntimes(context)
                 try {
                     val created = runtime.create(site, host)
-                    val localProxy = SpiderLoopbackProxy(site.key, errorStatus = ::proxyErrorStatus) { params ->
+                    val localProxy = NativeFongMiProxy(site.key, { params ->
                         synchronized(created) { created.proxy(params) }
-                    }
-                    CatVodProxy.set(localProxy.port, localProxy.token)
+                    }, null)
+                    CatVodProxy.set(localProxy.port(), localProxy.sessionToken())
                     try {
                         initialize { created.init(context, site.extension) }
                         created.also {
                             active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = host
-                            activeLoopbackProxy = localProxy; activeScriptRuntime = runtime
+                            activeNativeProxy = localProxy; activeScriptRuntime = runtime
                         }
                     } catch (error: Throwable) {
                         localProxy.close()
@@ -475,13 +477,15 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val staticProxyMethod = runCatching {
                 loader.loadClass("com.github.catvod.spider.Proxy").getMethod("proxy", Map::class.java)
             }.getOrNull()?.takeIf { java.lang.reflect.Modifier.isStatic(it.modifiers) }
-            val localProxy = SpiderLoopbackProxy(site.key,
-                errorStatus = ::proxyErrorStatus,
-                staticHandler = { params ->
-                    staticProxyMethod?.invoke(null, params) as? Array<out Any?>
+            val staticCallback = staticProxyMethod?.let { method ->
+                NativeFongMiProxy.SpiderCallback { params ->
+                    method.invoke(null, params) as? Array<Any?>
                 }
-            ) { params -> created.get()?.proxy(params) }
-            CatVodProxy.set(localProxy.port, localProxy.token)
+            }
+            val localProxy = NativeFongMiProxy(site.key, { params ->
+                created.get()?.proxy(params)
+            }, staticCallback)
+            CatVodProxy.set(localProxy.port(), localProxy.sessionToken())
             try {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.INITIALIZER)
                 val initFailure = runCatching {
@@ -503,7 +507,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
                 initialize { spiderInstance.init(context, site.extension) }
                 spiderInstance.also { active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = httpHost
-                    activeLoopbackProxy = localProxy; activeDexLoader = loader }
+                    activeNativeProxy = localProxy; activeDexLoader = loader }
             } catch (error: Throwable) {
                 localProxy.close()
                 CatVodProxy.set(-1, "")
@@ -556,31 +560,19 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
             val raw = spider.playerContent(selected.title, selected.uri, activeVipFlags)
-            // FongMi supports proxy:// and fixed-port CatVod proxy URIs.
-            // Normalize them to this :spider worker's current authenticated
-            // loopback BEFORE the HTTP-only ParseJob/direct player sees them.
-            // Never translate generic localhost services or other site keys.
-            val localProxy = activeLoopbackProxy
+            val siteKey = activeSiteKey.orEmpty()
+            val localProxy = activeNativeProxy
                 ?: return@attempt PlaybackResult.Unavailable(
-                    "本机 Spider 播放代理尚未启动（PROXY_NOT_RUNNING）")
-            val normalized = SpiderProxyPlayback.normalizePlayerResponse(
-                raw, activeSiteKey.orEmpty(), localProxy)
-                ?: run {
-                    val reason = SpiderProxyPlayback.playerResponseReason(
-                        raw, activeSiteKey.orEmpty(), localProxy)
-                    val operation = SpiderProxyPlayback.safeOperation(raw, localProxy)
-                    android.util.Log.w("HerrinSpiderProxy",
-                        "phase=PLAYER_CONTENT_NORMALIZE code=PROXY_INVALID_ROUTE reason=$reason operation=$operation")
-                    return@attempt PlaybackResult.Unavailable(
-                        "Spider 返回了无法安全转接的代理地址（PROXY_INVALID_ROUTE route_reason=$reason route_operation=$operation）")
-                }
-            // Reuse the upstream FongMi ParseJob routing precedence within
-            // HERRIN's existing isolated Spider playback process. The result
-            // is still just PlaybackMedia; no film metadata or UI is mutated.
+                    "FongMi 原生 Spider 代理未启动（NATIVE_PROXY_NOT_RUNNING）")
+            // Pass the original CatVod proxy operation to the selected site's
+            // authorized Java Spider. No old do= whitelist or second loopback.
+            val nativeContent = NativeFongMiRoute.playerContent(raw, siteKey, localProxy)
+                ?: return@attempt PlaybackResult.Unavailable(
+                    "FongMi 原生代理拒绝了跨站点或过期的线路（NATIVE_PROXY_ROUTE_REJECTED）")
             val resolved = kotlinx.coroutines.runBlocking {
                 FongMiParsePlayback.resolve(
                     context = context,
-                    playerContent = normalized,
+                    playerContent = nativeContent,
                     flag = selected.title,
                     jsonParsers = activeJsonParsers,
                     allowHttp = allowHttp,
@@ -591,26 +583,26 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     vipFlags = activeVipFlags,
                     videoCheck = if (spider.manualVideoCheck()) spider::isVideoFormat else null,
                     normalizeMedia = { url ->
-                        SpiderProxyPlayback.rebaseUrl(url, activeSiteKey.orEmpty(), localProxy)
+                        NativeFongMiRoute.url(url, siteKey, localProxy)
                     })
             }
             val healthy = when (resolved) {
                 is PlaybackResult.Ready -> {
-                    SpiderProxyPlayback.rebind(
-                        resolved.media, activeSiteKey.orEmpty(), localProxy)
+                    val primary = NativeFongMiRoute.url(resolved.media.uri, siteKey, localProxy)
+                    if (primary == null) PlaybackResult.Unavailable(
+                        "FongMi 解析后的媒体代理不属于已授权站点（NATIVE_PROXY_ROUTE_REJECTED）")
+                    else {
+                        val alternates = resolved.media.alternateUris.mapNotNull {
+                            NativeFongMiRoute.url(it, siteKey, localProxy)
+                        }.filter { it != primary }.distinct()
+                        PlaybackResult.Ready(resolved.media.copy(
+                            uri = primary, alternateUris = alternates))
+                    }
                 }
                 is PlaybackResult.Unavailable -> resolved
             }
-            healthy.also {
-                if (it is PlaybackResult.Unavailable &&
-                    it.reason.contains("PROXY_INVALID_ROUTE")) {
-                    val code = Regex("route_reason=([A-Z_]+)").find(it.reason)
-                        ?.groupValues?.get(1) ?: "UNCLASSIFIED"
-                    android.util.Log.w("HerrinSpiderProxy",
-                        "phase=MEDIA_ROUTE_REBIND code=PROXY_INVALID_ROUTE reason=$code")
-                }
-                SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
-            }
+            SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
+            healthy
         }
         return when (attemptResult) {
             is SpiderResult.Ready -> attemptResult.value
@@ -626,8 +618,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     fun releasePlayback() = close()
 
     fun close() {
-        activeLoopbackProxy?.close()
-        activeLoopbackProxy = null
+        activeNativeProxy?.close()
+        activeNativeProxy = null
         CatVodProxy.set(-1, "")
         SpiderRuntimeCompat.dispose(active)
         active = null

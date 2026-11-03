@@ -1,6 +1,7 @@
 package tv.herrin.app
 
 import com.github.catvod.Runtime as CatVodRuntime
+import tv.herrin.app.nativeplayback.NativeFongMiRoute
 
 import android.app.ActivityManager
 import android.app.Service
@@ -705,12 +706,16 @@ internal class TvBoxSpiderBridge(context: Context) {
             }
             is SpiderResult.Ready -> try {
                 val ready = SpiderIpc.readPlayback(response.value, allowHttp)
-                if (ready is PlaybackResult.Ready && SpiderProxyPlayback.isCatVodProxy(ready.media.uri)) {
-                    val health = SpiderProxyPlayback.diagnose(ready.media.uri)
-                    if (health != SpiderProxyPlayback.Health.READY &&
+                val authorizedSiteKey = runCatching {
+                    lastBrowse?.let { SpiderIpc.readSite(JSONObject(it).getJSONObject("site")).key }
+                }.getOrNull().orEmpty()
+                if (ready is PlaybackResult.Ready &&
+                    NativeFongMiRoute.isNativeProxy(ready.media.uri)) {
+                    val health = NativeFongMiRoute.probe(ready.media.uri, authorizedSiteKey)
+                    if (health != NativeFongMiRoute.Health.READY &&
                         !FongMiPlaybackRecovery.canRebuildProxy(health.name)) {
                         PlaybackResult.Unavailable("本机 Spider 代理拒绝当前会话（PROXY_${health.name}）")
-                    } else if (health != SpiderProxyPlayback.Health.READY) {
+                    } else if (health != NativeFongMiRoute.Health.READY) {
                         // The remote process can die between returning playerContent
                         // and the Media3 connection. Explicitly invalidate its
                         // bound session and retry at most once from the last
@@ -729,9 +734,9 @@ internal class TvBoxSpiderBridge(context: Context) {
                             is SpiderResult.Ready -> {
                                 val fixed = SpiderIpc.readPlayback(retried.value, allowHttp)
                                 if (fixed is PlaybackResult.Ready &&
-                                    SpiderProxyPlayback.isCatVodProxy(fixed.media.uri)) {
-                                    val retriedHealth = SpiderProxyPlayback.diagnose(fixed.media.uri)
-                                    if (retriedHealth != SpiderProxyPlayback.Health.READY)
+                                    NativeFongMiRoute.isNativeProxy(fixed.media.uri)) {
+                                    val retriedHealth = NativeFongMiRoute.probe(fixed.media.uri, authorizedSiteKey)
+                                    if (retriedHealth != NativeFongMiRoute.Health.READY)
                                         PlaybackResult.Unavailable(
                                             "本机 Spider 播放代理无法启动（PROXY_${retriedHealth.name}），请重新应用影视站点")
                                     else fixed
