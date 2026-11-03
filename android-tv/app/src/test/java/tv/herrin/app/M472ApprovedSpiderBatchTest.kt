@@ -150,6 +150,34 @@ class M472ApprovedSpiderBatchTest {
         assertEquals(12, (1..12).count { "node-$it" in activated })
     }
 
+    @Test fun restoredWinnerNeverRetainsStale4kWhenLiveLineDowngrades() = runBlocking {
+        var activated = ""
+        var nodeOneDetailReads = 0
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                activated = site.key
+                return true
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                listOf(candidate(site, if (site.key == "node-1") 2160 else 1080))
+            override suspend fun details(candidate: HerrinSourceMovie): Film {
+                val quality = if (activated == "node-1") {
+                    nodeOneDetailReads++
+                    if (nodeOneDetailReads == 1) "4K" else "720p"
+                } else "1080p"
+                return fakePoster.copy(playbackEpisodes = listOf(
+                    PlaybackEpisode(1, "正片", listOf(PlaybackLine(
+                        "live", quality, "https://authorized.example/film.mp4")))))
+            }
+            override suspend fun canPlay(detailed: Film) = true
+        }
+        val result = HerrinApprovedSpiderBatch.scan(request, listOf(site(1)),
+            { true }, session)
+        assertEquals("node-1", result.match?.site?.key)
+        assertEquals(720, result.match?.claim)
+        assertEquals("live", result.match?.line)
+    }
+
     @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
         val attempted = mutableListOf<String>()
         val dead = object : HerrinApprovedSpiderBatch.Session {
