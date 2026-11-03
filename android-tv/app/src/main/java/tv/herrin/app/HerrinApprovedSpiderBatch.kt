@@ -114,12 +114,14 @@ internal object HerrinApprovedSpiderBatch {
                         // Spider playerContent must yield an actual authorized
                         // media route; broken PROXY_INVALID_ROUTE is rejected.
                         val chosen = session.pick(film) ?: continue
-                        val labels = film.playbackEpisodes.flatMap { ep ->
-                            ep.lines.map { it.title }
-                        }.take(30).joinToString(" ")
-                        val quality = maxOf(
-                            offer.resolutionClaim ?: 0,
-                            HerrinFilmIdentityMatch.resolutionClaim(labels) ?: 0)
+                        // The matching movie may advertise 4K even when the
+                        // *only verified* line is 720p. Rank by the selected
+                        // line first; catalog/filename claim is a fallback.
+                        val selectedLabel = film.playbackEpisodes.firstOrNull {
+                            it.number == chosen.first
+                        }?.lines?.firstOrNull { it.id == chosen.second }?.title.orEmpty()
+                        val quality = HerrinFilmIdentityMatch.resolutionClaim(
+                            selectedLabel) ?: offer.resolutionClaim ?: 0
                         return@withTimeoutOrNull Match(
                             site, film, quality, offer, chosen.first, chosen.second)
                     }

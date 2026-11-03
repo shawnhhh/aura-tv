@@ -1220,12 +1220,14 @@ private fun Herrin() {
             // Only interrupt a verified CMS selection for a demonstrably
             // higher-quality Spider claim. Personal NAS/cloud remains higher
             // priority. Labels rank verified-bytes choices; not HDR proof.
-            val cmsClaim = maxOf(
-                resolved.lookup.options.firstOrNull()?.resolutionClaim ?: 0,
-                HerrinFilmIdentityMatch.resolutionClaim(
-                    resolved.sourceDetails?.playbackEpisodes.orEmpty()
-                        .flatMap { ep -> ep.lines.map { it.title } }
-                        .take(24).joinToString(" ")) ?: 0)
+            val selectedCmsLabel = resolved.verifiedLine?.let { (ep, id) ->
+                resolved.sourceDetails?.playbackEpisodes
+                    ?.firstOrNull { it.number == ep }?.lines
+                    ?.firstOrNull { it.id == id }?.title
+            }
+            val cmsClaim = HerrinFilmIdentityMatch.resolutionClaim(
+                selectedCmsLabel.orEmpty())
+                ?: resolved.lookup.options.firstOrNull()?.resolutionClaim ?: 0
             val preferSpider = batch?.match != null &&
                 (resolved.lookup.options.isEmpty() ||
                     (resolved.lookup.selectedTier == HerrinSourceTier.TVBOX &&
