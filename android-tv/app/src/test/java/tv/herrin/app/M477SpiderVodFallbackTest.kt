@@ -42,6 +42,26 @@ class M477SpiderVodFallbackTest {
         assertNull(retries.next(2004, 404))
     }
 
+    @Test fun spiderIpcPreservesSafeFallbackButCannotForgeItWithAuthOrNoBackup() {
+        val media = (SpiderVodCodec.player(
+            """{"parse":0,"url":["$first","$backup"]}""", allowHttp = false)
+            as PlaybackResult.Ready).media
+        val encoded = SpiderIpc.playback(media)
+        val decoded = SpiderIpc.readPlayback(encoded, false) as PlaybackResult.Ready
+        assertEquals(media, decoded.media)
+        assertTrue(decoded.media.safeNotFoundFallback)
+
+        val withAuth = org.json.JSONObject(encoded.toString())
+            .put("headers", org.json.JSONObject().put("Authorization", "Bearer PRIVATE"))
+        val authenticated = SpiderIpc.readPlayback(withAuth, false) as PlaybackResult.Ready
+        assertFalse(authenticated.media.safeNotFoundFallback)
+
+        val withNoBackup = org.json.JSONObject(encoded.toString())
+            .put("alternates", org.json.JSONArray())
+        val noBackup = SpiderIpc.readPlayback(withNoBackup, false) as PlaybackResult.Ready
+        assertFalse(noBackup.media.safeNotFoundFallback)
+    }
+
     @Test fun singleUrlNeverOptedIntoNotFoundFallback() {
         val result = SpiderVodCodec.player(
             """{"parse":0,"url":"$first"}""", allowHttp = false)
