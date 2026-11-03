@@ -229,6 +229,29 @@ class M471PlaybackFlowTest {
         assertEquals("direct", HerrinPlaybackEntry.firstPlayable(result.sourceDetails)?.second)
     }
 
+    @Test fun verifiedRemoteReturnsExactlyTheEpisodeAndLineThatPassedMediaByteProbe() = runBlocking {
+        val film = offer("film", "cms", HerrinSourceType.TVBOX_CMS, 2160)
+        val calls = mutableListOf<String>()
+        val result = HerrinVerifiedSourceResolver(listOf(
+            object : HerrinFilmSource {
+                override val id = "cms"
+                override val type = HerrinSourceType.TVBOX_CMS
+                override suspend fun search(identity: HerrinFilmIdentity) = listOf(film)
+            }
+        )).find(identity,
+            personalPlayback = { PlaybackResult.Unavailable("not personal") },
+            verifyRemote = { _, _ -> calls.add("probe verified"); true },
+            selectRemote = { _, _ -> 2 to "working-backup" },
+            remoteDetails = { offer -> offer.film.copy(playbackEpisodes = listOf(
+                PlaybackEpisode(1, "首集", listOf(PlaybackLine("broken", "4K", "https://example.test/404"))),
+                PlaybackEpisode(2, "可播放", listOf(PlaybackLine(
+                    "working-backup", "1080p", "https://example.test/ready.mp4")))))
+            })
+        assertEquals(listOf("probe verified"), calls)
+        assertEquals(2 to "working-backup", result.verifiedLine)
+        assertEquals("film", result.lookup.options.single().film.id)
+    }
+
     @Test fun tmdbNeverUsesFakeEpisodeOrEmptyUriAsPlayable() {
         val posterOnly = Film("tmdb-movie-157336", "Interstellar", "",
             "电影", "2014", "", R.drawable.photofilm_orbit)

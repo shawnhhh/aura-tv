@@ -96,6 +96,25 @@ class M472ApprovedSpiderBatchTest {
         assertEquals(listOf("node-1", "node-2", "node-1", "node-2"), attempted)
     }
 
+    @Test fun batchResultKeepsActuallyValidatedAlternateLineNotTheBrokenFirstLine() = runBlocking {
+        val v = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite) = true
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                listOf(candidate(site, 2160))
+            override suspend fun details(candidate: HerrinSourceMovie) = fakePoster.copy(
+                playbackEpisodes = listOf(PlaybackEpisode(1, "正片", listOf(
+                    PlaybackLine("broken", "4K", "https://example.test/bad"),
+                    PlaybackLine("working", "1080p", "https://example.test/real.mp4")))))
+            override suspend fun canPlay(detailed: Film) = error(
+                "Production pick() must not rely on first line")
+            override suspend fun pick(detailed: Film): Pair<Int,String>? = 1 to "working"
+        }
+        val result = HerrinApprovedSpiderBatch.scan(request, listOf(site(1)),
+            { true }, v)
+        assertEquals("working", result.match?.line)
+        assertEquals(1, result.match?.episode)
+    }
+
     @Test fun neverLaunchesUnapprovedSiteAndPaginationDoesNotLoopFirstNodes() = runBlocking {
         val calls = mutableListOf<String>()
         val session = object : HerrinApprovedSpiderBatch.Session {
