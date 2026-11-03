@@ -1181,7 +1181,7 @@ private fun Herrin() {
             // Direct-CMS results are checked first. If none actually exposes
             // a usable episode, scan other Spider nodes only under the exact
             // runtime JAR/root already explicitly approved by the user.
-            val batch = if (resolved.lookup.selectedTier != HerrinSourceTier.PERSONAL &&
+            val batch = if (resolved.lookup.options.isEmpty() &&
                 currentTvbox != null && trustedSpiderJar.isNotBlank() &&
                 approvedRoot == trustedSpiderRoot) {
                 HerrinApprovedSpiderBatch.scanAcrossPages(
@@ -1196,6 +1196,23 @@ private fun Herrin() {
                             "spider:" + site.key !in tmdbFallbackIndex.rejected(targetId)
                     },
                     offset = spiderPageOffset,
+                    // Playback first: stop on the first media-byte-verified
+                    // source rather than waiting for a hypothetical 4K claim.
+                    stopAtFirstPlayable = true,
+                    onProgress = { progress ->
+                        // The Spider worker is scanned off the UI thread.
+                        // Publish a truthful cumulative count after each page
+                        // and persist the cursor for resume on cancellation.
+                        withContext(Dispatchers.Main) {
+                            tmdbSpiderBatchOffsets[targetId] = progress.nextOffset
+                            val visited = (spiderPageOffset + progress.checked)
+                                .coerceAtMost(progress.eligible)
+                            tmdbSourceStatus = if (progress.match != null)
+                                "已验证可播放影视点，正在载入选集…"
+                            else "正在自动检索授权 Spider 影视点：已检查 " +
+                                "$visited/${progress.eligible}，继续寻找可播放线路…"
+                        }
+                    },
                     session = object : HerrinApprovedSpiderBatch.Session {
                         override suspend fun activate(site: TvBoxSite): Boolean =
                             spiderBridge.browse(site, currentTvbox) is SpiderResult.Ready
@@ -1270,8 +1287,10 @@ private fun Herrin() {
         val found = lookup.options.firstOrNull()
         if (found == null) {
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "NO_VERIFIED_MEDIA")
-            tmdbSourceStatus = if (batchScan != null)
-                "已尝试本批 ${batchScan.checked} 个授权 Spider 影视点（可用节点总数 ${batchScan.eligible}），没有通过播放地址验证的线路；点击重新检索可继续下一批"
+            tmdbSourceStatus = if (batchScan != null && batchScan.nextOffset == 0)
+                "已自动检索全部 ${batchScan.eligible} 个授权 Spider 影视点，仍未找到通过播放地址验证的线路；请检查源的解析或代理兼容情况"
+            else if (batchScan != null)
+                "已检查 ${(spiderPageOffset + batchScan.checked).coerceAtMost(batchScan.eligible)}/${batchScan.eligible} 个授权 Spider 影视点，本次达到检索时间上限；点击重新检索可继续剩余节点"
             else if (lookup.errors.isNotEmpty())
                 "部分资源源检索失败或超时，尚未找到可播放的授权选集；可重新检索"
             else "NAS／云盘／TVBox 均未找到可播放的授权选集；可重新检索"
