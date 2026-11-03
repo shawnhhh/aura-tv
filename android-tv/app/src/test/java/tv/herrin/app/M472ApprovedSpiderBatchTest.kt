@@ -252,6 +252,29 @@ class M472ApprovedSpiderBatchTest {
         assertEquals(listOf(2160, 1080, 1080), inspectedClaims)
     }
 
+    @Test fun singleLookupMustAutomaticallyReachAllFortyFiveApprovedDeadNodes() = runBlocking {
+        val attempted = mutableListOf<String>()
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                attempted += site.key
+                return false
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                emptyList<HerrinSourceMovie>()
+            override suspend fun details(candidate: HerrinSourceMovie): Film? = null
+            override suspend fun canPlay(detailed: Film) = false
+        }
+        val eligible = (1..45).map(::site)
+        val result = HerrinApprovedSpiderBatch.scanAcrossPages(request,
+            eligible, { true }, session)
+        assertNull(result.match)
+        assertEquals("A single film-detail lookup must not stop after 6 or 24/45 sites",
+            45, result.checked)
+        assertEquals(45, result.eligible)
+        assertEquals(0, result.nextOffset)
+        assertEquals((1..45).map { "node-$it" }, attempted)
+    }
+
     @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
         val attempted = mutableListOf<String>()
         val dead = object : HerrinApprovedSpiderBatch.Session {
