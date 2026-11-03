@@ -35,3 +35,7 @@ assert spider_code.count('WebView') == 1 and 'WebView.setDataDirectorySuffix' in
 assert not any('WebView' in p.read_text() for p in root.glob('app/src/main/java/**/*.kt')
                if p.resolve() not in {browser_backend.resolve(), spider_runtime.resolve()})
 print('PASS: XML, TV manifest, official wrapper integrity, Gradle files, native-only source')
+
+# Verify GPL upstream staging as part of every debug CI run.
+from verify_fongmi_vendor import verify
+verify()
