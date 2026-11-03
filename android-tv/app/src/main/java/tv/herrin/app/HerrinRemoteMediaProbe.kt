@@ -86,9 +86,8 @@ internal class HerrinRemoteMediaProbe(
                 }
                 if (reply.code !in setOf(200, 206)) return Result.HTTP_ERROR
                 if (reply.code == 206 &&
-                    reply.header("Content-Range").orEmpty().let {
-                        !it.startsWith("bytes 0-") || !it.contains('/')
-                    }) return Result.INVALID_RANGE
+                    !validPartialContentRange(reply.header("Content-Range")))
+                    return Result.INVALID_RANGE
                 val contentType = reply.header("Content-Type").orEmpty()
                     .substringBefore(';').trim().lowercase()
                 if (contentType in setOf("text/html", "application/xhtml+xml",
@@ -128,6 +127,19 @@ internal class HerrinRemoteMediaProbe(
             }
         }
         return Result.HTTP_ERROR
+    }
+
+    // Source selection must not mistake a malformed or impossible partial
+    // response for a playable video. HTTP permits an unknown total ("*").
+    // The probe requests the first byte range, so the response must start at 0.
+    private val partialContentRange = Regex("""bytes 0-([0-9]{1,18})/([0-9]{1,18}|\\*)""")
+
+    private fun validPartialContentRange(header: String?): Boolean {
+        val match = partialContentRange.matchEntire(header.orEmpty().trim())
+            ?: return false
+        val end = match.groupValues[1].toLongOrNull() ?: return false
+        val total = match.groupValues[2]
+        return total == "*" || (total.toLongOrNull()?.let { it > end } == true)
     }
 
     private fun isLoopback(uri: URI) =
