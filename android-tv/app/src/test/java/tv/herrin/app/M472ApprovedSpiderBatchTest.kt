@@ -115,6 +115,57 @@ class M472ApprovedSpiderBatchTest {
         assertEquals(1, result.match?.episode)
     }
 
+    @Test fun oneTapAutomaticallyChecksNextPagesAndSelectsLaterVerified4kSite() = runBlocking {
+        val activated = mutableListOf<String>()
+        var active = ""
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                active = site.key
+                activated += site.key
+                return true
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                listOf(candidate(site, if (site.key == "node-9") 2160 else 720))
+            override suspend fun details(candidate: HerrinSourceMovie): Film? {
+                assertEquals(candidate.sourceId.substringAfter("spider:"), active)
+                return playable()
+            }
+            override suspend fun canPlay(detailed: Film): Boolean = true
+        }
+        val all = (1..15).map(::site)
+        val result = HerrinApprovedSpiderBatch.scanAcrossPages(
+            request, all, { true }, session, maxWallClockMs = 30_000)
+        assertEquals("node-9", result.match?.site?.key)
+        assertEquals(2160, result.match?.claim)
+        assertEquals(12, result.checked)
+        assertEquals(15, result.eligible)
+        assertEquals("node-9", active)
+        assertTrue("A user should never need to activate node 9 manually",
+            activated.contains("node-9"))
+        assertEquals(12, (1..12).count { "node-$it" in activated })
+    }
+
+    @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
+        val attempted = mutableListOf<String>()
+        val dead = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                attempted += site.key
+                return false
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                emptyList<HerrinSourceMovie>()
+            override suspend fun details(candidate: HerrinSourceMovie): Film? = null
+            override suspend fun canPlay(detailed: Film) = false
+        }
+        val all = (1..13).map(::site)
+        val result = HerrinApprovedSpiderBatch.scanAcrossPages(
+            request, all, { true }, dead)
+        assertNull(result.match)
+        assertEquals(13, result.checked)
+        assertEquals(0, result.nextOffset)
+        assertEquals((1..13).map { "node-$it" }, attempted)
+    }
+
     @Test fun neverLaunchesUnapprovedSiteAndPaginationDoesNotLoopFirstNodes() = runBlocking {
         val calls = mutableListOf<String>()
         val session = object : HerrinApprovedSpiderBatch.Session {
