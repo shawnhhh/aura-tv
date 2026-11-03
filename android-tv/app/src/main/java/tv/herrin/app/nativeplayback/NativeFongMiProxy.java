@@ -48,6 +48,7 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
 
     public int port() { return getListeningPort(); }
     public String sessionToken() { return token; }
+    public boolean hasStaticHandler() { return staticJarProxy != null; }
     public String baseUrl() {
         return "http://127.0.0.1:" + port() + "/proxy?session=" + token;
     }
@@ -89,7 +90,7 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             return fromUpstreamResponse(callback.proxy(params));
         } catch (Throwable failure) {
             // Never disclose plugin URLs, credentials or stack traces on wire.
-            return error(Response.Status.BAD_GATEWAY);
+            return error(BAD_GATEWAY);
         }
     }
 
@@ -102,12 +103,12 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
     /** FongMi Proxy.createResponse(Object[]) with a private-host error body. */
     public static Response fromUpstreamResponse(Object[] values) {
         if (values == null || values.length == 0) {
-            return error(Response.Status.BAD_GATEWAY);
+            return error(BAD_GATEWAY);
         }
         if (values[0] instanceof Response) return mark((Response) values[0]);
         if (values.length < 3 || !(values[0] instanceof Integer) ||
             !(values[1] instanceof String) || !(values[2] instanceof InputStream)) {
-            return error(Response.Status.BAD_GATEWAY);
+            return error(BAD_GATEWAY);
         }
         int code = (Integer) values[0];
         String mime = (String) values[1];
@@ -141,13 +142,15 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         }
     }
 
+    private static final Response.IStatus BAD_GATEWAY = new CustomStatus(502);
+
     private static Response mark(Response response) {
         if (response.getStatus().getRequestStatus() >= 400) {
             response.addHeader("X-TV-Proxy-Error", "1");
         }
         return response;
     }
-    private static Response error(Response.Status status) {
+    private static Response error(Response.IStatus status) {
         return mark(NanoHTTPD.newFixedLengthResponse(
             status, "text/plain", "Proxy unavailable"));
     }
