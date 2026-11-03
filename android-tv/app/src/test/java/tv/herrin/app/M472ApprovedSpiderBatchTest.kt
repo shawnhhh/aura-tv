@@ -265,14 +265,50 @@ class M472ApprovedSpiderBatchTest {
             override suspend fun canPlay(detailed: Film) = false
         }
         val eligible = (1..45).map(::site)
+        val progressCounts = mutableListOf<Int>()
         val result = HerrinApprovedSpiderBatch.scanAcrossPages(request,
-            eligible, { true }, session)
+            eligible, { true }, session,
+            onProgress = { progressCounts += it.checked })
+        assertEquals(listOf(6, 12, 18, 24, 30, 36, 42, 45), progressCounts)
         assertNull(result.match)
         assertEquals("A single film-detail lookup must not stop after 6 or 24/45 sites",
             45, result.checked)
         assertEquals(45, result.eligible)
         assertEquals(0, result.nextOffset)
         assertEquals((1..45).map { "node-$it" }, attempted)
+    }
+
+    @Test fun autoFindStopsAtFirstActuallyPlayableLaterSiteAndPreservesLiveSession() = runBlocking {
+        val visited = mutableListOf<String>()
+        val progress = mutableListOf<Int>()
+        var active = ""
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                active = site.key
+                visited += active
+                return true
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                if (site.key == "node-8") listOf(candidate(site, 720))
+                else emptyList<HerrinSourceMovie>()
+            override suspend fun details(candidate: HerrinSourceMovie): Film? {
+                assertEquals(candidate.sourceId.substringAfter("spider:"), active)
+                return playable()
+            }
+            override suspend fun canPlay(detailed: Film) = true
+        }
+        val result = HerrinApprovedSpiderBatch.scanAcrossPages(
+            request, (1..45).map(::site), { true }, session,
+            stopAtFirstPlayable = true,
+            onProgress = { progress += it.checked })
+        assertEquals("node-8", result.match?.site?.key)
+        assertEquals("node-8", active)
+        assertEquals(12, result.checked)
+        assertEquals(45, result.eligible)
+        assertEquals(12, result.nextOffset)
+        assertEquals(listOf(6, 12), progress)
+        assertFalse("Do not waste time looking for 4K after a byte-verified source",
+            visited.contains("node-13"))
     }
 
     @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
