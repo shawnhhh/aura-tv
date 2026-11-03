@@ -178,6 +178,44 @@ class M472ApprovedSpiderBatchTest {
         assertEquals("live", result.match?.line)
     }
 
+    /**
+     * A restored provider may downgrade its selected line after a Spider
+     * session change. An already verified 1080p source must then win over
+     * the revalidated 720p line; the returned source must be the active one.
+     */
+    @Test fun restoredFourKThatFallsTo720MustNotDisplaceStable1080() = runBlocking {
+        val detailReads = mutableMapOf<String, Int>()
+        var active = ""
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                active = site.key
+                return true
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                listOf(candidate(site, if (site.key == "node-1") 2160 else 1080))
+            override suspend fun details(candidate: HerrinSourceMovie): Film {
+                assertEquals(candidate.sourceId.substringAfter("spider:"), active)
+                val reads = (detailReads[active] ?: 0) + 1
+                detailReads[active] = reads
+                val label = when {
+                    active == "node-1" && reads == 1 -> "2160p"
+                    active == "node-1" -> "720p"
+                    else -> "1080p"
+                }
+                return fakePoster.copy(playbackEpisodes = listOf(
+                    PlaybackEpisode(1, "正片", listOf(PlaybackLine(
+                        "verified", label, "https://authorized.example/video.mp4")))))
+            }
+            override suspend fun canPlay(detailed: Film) = true
+        }
+
+        val result = HerrinApprovedSpiderBatch.scan(request,
+            listOf(site(1), site(2)), { true }, session)
+        assertEquals("node-2", result.match?.site?.key)
+        assertEquals(1080, result.match?.claim)
+        assertEquals("node-2", active)
+    }
+
     @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
         val attempted = mutableListOf<String>()
         val dead = object : HerrinApprovedSpiderBatch.Session {
