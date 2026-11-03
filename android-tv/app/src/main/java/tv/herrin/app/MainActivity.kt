@@ -1184,7 +1184,7 @@ private fun Herrin() {
             val batch = if (resolved.lookup.selectedTier != HerrinSourceTier.PERSONAL &&
                 currentTvbox != null && trustedSpiderJar.isNotBlank() &&
                 approvedRoot == trustedSpiderRoot) {
-                HerrinApprovedSpiderBatch.scan(
+                HerrinApprovedSpiderBatch.scanAcrossPages(
                     searchIdentity, currentTvbox.sites,
                     allowed = { site ->
                         val runtime = site.jar ?: currentTvbox.spiderJar ?: site.scriptApi.orEmpty()
