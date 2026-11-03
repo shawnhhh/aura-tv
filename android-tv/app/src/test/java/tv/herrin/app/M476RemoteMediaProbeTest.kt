@@ -88,6 +88,32 @@ class M476RemoteMediaProbeTest {
         }
     }
 
+    @Test fun partialResponseMustNotClaimBytesBeyondProbeRequest() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Content-Range", "bytes 0-1024/8192")
+                .setBody("x".repeat(1025)))
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Content-Range", "bytes 0-1023/8192")
+                .setBody("x".repeat(1024)))
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Content-Range", "bytes 0-15/*")
+                .setBody("0123456789ABCDEF"))
+            server.start()
+            val media = PlaybackMedia(server.url("/media.mp4").toString())
+            assertEquals(HerrinRemoteMediaProbe.Result.INVALID_RANGE, probe().probe(media))
+            assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, probe().probe(media))
+            assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, probe().probe(media))
+            assertEquals(3, server.requestCount)
+            repeat(3) {
+                assertEquals("bytes=0-1023", server.takeRequest().getHeader("Range"))
+            }
+        }
+    }
+
     @Test fun localProxyNeedsCurrentSessionAndRedirectNeverTargetsLoopback() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(200)
