@@ -108,7 +108,7 @@ internal object SpiderVodCodec {
             val path = url.substringBefore('?').lowercase(java.util.Locale.ROOT)
             path.endsWith(".m3u8") || path.endsWith(".mp4") ||
                 path.endsWith(".mpd") ||
-                SpiderProxyPlayback.isCatVodProxy(url) ||
+                NativeFongMiRoute.isNativeProxy(url) ||
                 (index == 0 && declaredMime != null)
         }
         if (needsWebParser && playable.isEmpty())
