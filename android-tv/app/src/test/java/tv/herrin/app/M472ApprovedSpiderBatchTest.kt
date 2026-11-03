@@ -41,6 +41,61 @@ class M472ApprovedSpiderBatchTest {
         assertEquals("activate:node-2", calls.last())
     }
 
+    @Test fun winnerIsVerifiedAgainAfterSwitchingFromAnotherSpiderSession() = runBlocking {
+        val activated = mutableListOf<String>()
+        val checked = mutableListOf<String>()
+        var current = ""
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                current = site.key
+                activated += site.key
+                return true
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                listOf(candidate(site, if (site.key == "node-1") 2160 else 1080))
+            override suspend fun details(candidate: HerrinSourceMovie): Film? {
+                assertEquals(candidate.sourceId.substringAfter("spider:"), current)
+                return playable()
+            }
+            override suspend fun canPlay(detailed: Film): Boolean {
+                checked += current
+                return true
+            }
+        }
+        val result = HerrinApprovedSpiderBatch.scan(request, listOf(site(1), site(2)),
+            { true }, session)
+        assertEquals("node-1", result.match?.site?.key)
+        assertEquals(listOf("node-1", "node-2", "node-1"), activated)
+        assertEquals(listOf("node-1", "node-2", "node-1"), checked)
+        assertEquals("node-1", current)
+    }
+
+    @Test fun expiredTopQualitySessionFallsThroughToRestorableSecondSite() = runBlocking {
+        val attempted = mutableListOf<String>()
+        val activations = mutableMapOf<String, Int>()
+        var current = ""
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                attempted += site.key
+                val count = (activations[site.key] ?: 0) + 1
+                activations[site.key] = count
+                if (site.key == "node-1" && count == 2) return false
+                current = site.key
+                return true
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                listOf(candidate(site, if (site.key == "node-1") 2160 else 1080))
+            override suspend fun details(candidate: HerrinSourceMovie): Film? = playable()
+            override suspend fun canPlay(detailed: Film) = current != ""
+        }
+        val result = HerrinApprovedSpiderBatch.scan(request,
+            listOf(site(1), site(2)), { true }, session)
+        assertEquals("node-2", result.match?.site?.key)
+        assertEquals(1080, result.match?.claim)
+        assertEquals("node-2", current)
+        assertEquals(listOf("node-1", "node-2", "node-1", "node-2"), attempted)
+    }
+
     @Test fun neverLaunchesUnapprovedSiteAndPaginationDoesNotLoopFirstNodes() = runBlocking {
         val calls = mutableListOf<String>()
         val session = object : HerrinApprovedSpiderBatch.Session {
