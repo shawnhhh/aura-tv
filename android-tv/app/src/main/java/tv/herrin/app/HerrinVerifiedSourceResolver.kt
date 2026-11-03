@@ -9,7 +9,8 @@ package tv.herrin.app
 internal data class HerrinVerifiedSource(
     val lookup: HerrinFilmLookupResult,
     val personalPlaylist: HerrinPersonalPlaylist? = null,
-    val sourceDetails: Film? = null
+    val sourceDetails: Film? = null,
+    val verifiedLine: Pair<Int, String>? = null
 )
 
 internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFilmSource>) {
@@ -18,10 +19,13 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
         personalPlayback: (HerrinSourceMovie) -> PlaybackResult,
         verifyPersonal: suspend (PlaybackMedia) -> Boolean = { true },
         verifyRemote: suspend (HerrinSourceMovie, Film) -> Boolean = { _, _ -> true },
+        selectRemote: suspend (HerrinSourceMovie, Film) -> Pair<Int, String>? =
+            { _, film -> HerrinPlaybackEntry.firstPlayable(film) },
         remoteDetails: suspend (HerrinSourceMovie) -> Film?
     ): HerrinVerifiedSource {
         var personalPlaylist: HerrinPersonalPlaylist? = null
         var detailedFilm: Film? = null
+        var verifiedLine: Pair<Int, String>? = null
         val result = HerrinFilmRouter(adapters).find(identity) { ranked ->
             if (ranked.firstOrNull()?.tier == HerrinSourceTier.PERSONAL) {
                 // Use exactly the same source-specific permission check as
@@ -80,13 +84,18 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                         val verified = try { verifyRemote(candidate, detailed) }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { false }
-                        if (verified) detailedFilm = detailed
-                        verified
+                        val choice = if (verified) selectRemote(candidate, detailed)
+                            else null
+                        if (choice != null) {
+                            detailedFilm = detailed
+                            verifiedLine = choice
+                        }
+                        choice != null
                     } else false
                 }
                 listOfNotNull(playable)
             }
         }
-        return HerrinVerifiedSource(result, personalPlaylist, detailedFilm)
+        return HerrinVerifiedSource(result, personalPlaylist, detailedFilm, verifiedLine)
     }
 }
