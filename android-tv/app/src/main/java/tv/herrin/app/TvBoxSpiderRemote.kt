@@ -178,6 +178,10 @@ internal object SpiderIpc {
         .put("uri", media.uri)
         .put("alternates", JSONArray(media.alternateUris.take(7)))
         .put("allowHttpRedirects", media.allowHttpRedirects)
+        // Without this field, a working header-free VOD backup loses its
+        // HTTP 404/410 failover permission between :spider and the player.
+        .put("safeNotFoundFallback", media.safeNotFoundFallback &&
+            media.alternateUris.isNotEmpty() && media.headers.isEmpty())
         .put("declaredMime", media.declaredMime ?: "")
         .put("danmaku", DanmakuProtocol.encodeSources(media.danmakuSources))
         .put("headers", JSONObject(media.headers))
@@ -220,6 +224,11 @@ internal object SpiderIpc {
         return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
             response.optBoolean("allowHttpRedirects") && allowHttp,
             declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime")),
+            // Re-validate in the receiving process. A malicious/forged IPC
+            // flag cannot enable cross-origin fallback for authenticated
+            // media or invent an absent provider-supplied backup.
+            safeNotFoundFallback = response.optBoolean("safeNotFoundFallback", false) &&
+                headers.isEmpty() && urls.isNotEmpty(),
             danmakuSources = DanmakuProtocol.decodeSources(response.opt("danmaku"))))
     }
 }
