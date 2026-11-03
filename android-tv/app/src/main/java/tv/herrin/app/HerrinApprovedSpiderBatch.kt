@@ -30,6 +30,59 @@ internal object HerrinApprovedSpiderBatch {
     data class Scan(val match: Match?, val checked: Int, val eligible: Int,
                     val nextOffset: Int, val candidatesWithEpisodes: Int)
 
+    /**
+     * One tap scans successive bounded pages of the already approved JAR
+     * without requiring the user to pre-select a particular node. A single
+     * Spider worker cannot safely run different sites concurrently, so the
+     * search uses a wall-clock budget and publishes the best confirmed match.
+     * Later pages may outrank the first page, but every returned winner is
+     * re-activated and re-verified under its CURRENT proxy session.
+     */
+    suspend fun scanAcrossPages(
+        identity: HerrinFilmIdentity,
+        sites: List<TvBoxSite>,
+        allowed: (TvBoxSite) -> Boolean,
+        session: Session,
+        offset: Int = 0,
+        maxPages: Int = 4,
+        maxWallClockMs: Long = 30_000L
+    ): Scan {
+        val winners = mutableListOf<Match>()
+        var checked = 0
+        var total = 0
+        var episodes = 0
+        var next = offset
+        kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(4_000, 60_000)) {
+            repeat(maxPages.coerceIn(1, 6)) {
+                val page = scan(identity, sites, allowed, session, offset = next,
+                    timeoutPerSiteMs = 4_500L)
+                checked += page.checked
+                total = page.eligible
+                episodes += page.candidatesWithEpisodes
+                page.match?.let(winners::add)
+                next = page.nextOffset
+                if (next == 0 || winners.any { it.claim >= 2160 })
+                    return@withTimeoutOrNull
+            }
+        }
+        var result: Match? = null
+        for (winner in winners.sortedByDescending { it.claim }) {
+            val validated = try {
+                withTimeoutOrNull(5_000L) {
+                    if (!session.activate(winner.site)) return@withTimeoutOrNull null
+                    val detail = session.details(winner.candidate)
+                        ?: return@withTimeoutOrNull null
+                    val chosen = session.pick(detail) ?: return@withTimeoutOrNull null
+                    winner.copy(detailed = detail, episode = chosen.first, line = chosen.second)
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) { null }
+            if (validated != null) { result = validated; break }
+        }
+        return Scan(result, checked, total, next, episodes)
+    }
+
     suspend fun scan(
         identity: HerrinFilmIdentity,
         sites: List<TvBoxSite>,
