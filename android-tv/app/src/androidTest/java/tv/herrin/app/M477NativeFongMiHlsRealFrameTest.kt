@@ -46,7 +46,9 @@ class M477NativeFongMiHlsRealFrameTest {
             assertEquals(NativeFongMiRoute.Health.READY,
                 NativeFongMiRoute.probe(url, "approved"))
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
-                HerrinRemoteMediaProbe().probe(PlaybackMedia(
+                HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                    NativeFongMiRoute.probe(candidate, "approved") == NativeFongMiRoute.Health.READY
+                }).probe(PlaybackMedia(
                     url, declaredMime = PlaybackFormatRetry.HLS)))
             ActivityScenario.launch<PlaybackTestActivity>(
                 Intent(inst.targetContext, PlaybackTestActivity::class.java)
