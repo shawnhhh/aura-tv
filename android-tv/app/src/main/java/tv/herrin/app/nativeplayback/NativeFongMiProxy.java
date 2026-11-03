@@ -71,7 +71,7 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         Map<String, String> params = new LinkedHashMap<>(session.getParms());
         String supplied = params.remove("session");
         if (!validToken(supplied)) return error(Response.Status.FORBIDDEN);
-        String selectedSite = params.remove("siteKey");
+        String selectedSite = params.get("siteKey");
         if (selectedSite != null && !siteKey.equals(selectedSite)) {
             return error(Response.Status.FORBIDDEN);
         }

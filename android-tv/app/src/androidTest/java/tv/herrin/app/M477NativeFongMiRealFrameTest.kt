@@ -29,7 +29,7 @@ class M477NativeFongMiRealFrameTest {
             assertEquals("jar", args["do"])
             assertEquals("fixture", args["id"])
             assertNull(args["session"])
-            assertNull(args["siteKey"])
+            assertEquals("approved", args["siteKey"])
             val range = args["range"]
             val begin = Regex("""bytes=(\d+)-""").find(range.orEmpty())
                 ?.groupValues?.get(1)?.toIntOrNull() ?: 0

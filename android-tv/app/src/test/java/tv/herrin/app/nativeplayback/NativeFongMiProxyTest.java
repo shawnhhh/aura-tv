@@ -16,7 +16,7 @@ public final class NativeFongMiProxyTest {
             calls.incrementAndGet();
             assertEquals("jar", params.get("do"));
             assertNull(params.get("session"));
-            assertNull(params.get("siteKey"));
+            assertEquals("site", params.get("siteKey"));
             return new Object[]{206, "video/mp4",
                 new ByteArrayInputStream(new byte[]{1,2,3,4}),
                 Map.of("Accept-Ranges", "bytes", "Content-Length", "999")};
