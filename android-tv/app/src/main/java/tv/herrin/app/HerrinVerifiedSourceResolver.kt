@@ -14,6 +14,21 @@ internal data class HerrinVerifiedSource(
 )
 
 internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFilmSource>) {
+    /**
+     * The catalog is sorted by untrusted quality labels. The first eight hits
+     * may all come from a single broken 4K CMS node, starving every other
+     * authorized provider. Give each source its first matching title before
+     * checking additional titles from the same source. Keep bounded budget.
+     */
+    internal fun fairRemoteCandidates(
+        ranked: List<HerrinSourceMovie>, budget: Int = 8
+    ): List<HerrinSourceMovie> {
+        val firstBySource = ranked.distinctBy { it.sourceId }
+        val firstItems = firstBySource.toHashSet()
+        return (firstBySource + ranked.filterNot { it in firstItems })
+            .take(budget.coerceIn(1, 16))
+    }
+
     suspend fun find(
         identity: HerrinFilmIdentity,
         personalPlayback: (HerrinSourceMovie) -> PlaybackResult,
@@ -76,7 +91,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
             } else {
                 // Read actual CMS/Spider episodes. Different same-name films
                 // can fail independently; do not stop after the first error.
-                val playable = ranked.take(8).firstOrNull { candidate ->
+                val playable = fairRemoteCandidates(ranked).firstOrNull { candidate ->
                     val detailed = try { remoteDetails(candidate) }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch (_: Exception) { null }

@@ -229,6 +229,61 @@ class M471PlaybackFlowTest {
         assertEquals("direct", HerrinPlaybackEntry.firstPlayable(result.sourceDetails)?.second)
     }
 
+    @Test fun manyDeadClaimed4kMatchesCannotStarveAnotherVerifiedCmsNode() = runBlocking {
+        val attempts = mutableListOf<String>()
+        val noisy = (1..14).map { index ->
+            offer("dead-$index", "cms:noisy", HerrinSourceType.TVBOX_CMS, 2160)
+        }
+        val working = offer("working", "cms:working", HerrinSourceType.TVBOX_CMS, 1080)
+        fun many(id: String, offers: List<HerrinSourceMovie>) = object : HerrinFilmSource {
+            override val id = id
+            override val type = HerrinSourceType.TVBOX_CMS
+            override suspend fun search(identity: HerrinFilmIdentity) = offers
+        }
+        val resolver = HerrinVerifiedSourceResolver(listOf(
+            many("cms:noisy", noisy), many("cms:working", listOf(working))
+        ))
+        val result = resolver.find(identity,
+            personalPlayback = { PlaybackResult.Unavailable("not a personal source") },
+            verifyRemote = { candidate, _ ->
+                attempts += candidate.sourceId
+                candidate.sourceId == "cms:working"
+            },
+            remoteDetails = { candidate -> candidate.film.copy(
+                playbackEpisodes = listOf(PlaybackEpisode(1, "正片", listOf(
+                    PlaybackLine("real", "1080p", "https://authorized.example/movie.mp4")))))
+            })
+        assertEquals(listOf("cms:noisy", "cms:working"), attempts)
+        assertEquals("working", result.lookup.options.single().film.id)
+        assertEquals(1 to "real", result.verifiedLine)
+    }
+
+    @Test fun singleCmsStillFallsThroughToAnotherTitleWithinBoundedBudget() = runBlocking {
+        val noisy = (1..12).map { index ->
+            offer("cms-$index", "cms:only", HerrinSourceType.TVBOX_CMS, 2160)
+        }
+        val resolver = HerrinVerifiedSourceResolver(listOf(
+            object : HerrinFilmSource {
+                override val id = "cms:only"
+                override val type = HerrinSourceType.TVBOX_CMS
+                override suspend fun search(identity: HerrinFilmIdentity) = noisy
+            }
+        ))
+        val attempts = mutableListOf<String>()
+        val result = resolver.find(identity,
+            personalPlayback = { PlaybackResult.Unavailable("not personal") },
+            verifyRemote = { offer, _ ->
+                attempts += offer.film.id
+                offer.film.id == "cms-3"
+            },
+            remoteDetails = { candidate -> candidate.film.copy(
+                playbackEpisodes = listOf(PlaybackEpisode(1, "正片", listOf(
+                    PlaybackLine("real", "1080p", "https://authorized.example/video.mp4")))))
+            })
+        assertEquals(listOf("cms-1", "cms-2", "cms-3"), attempts)
+        assertEquals("cms-3", result.lookup.options.single().film.id)
+    }
+
     @Test fun verifiedRemoteReturnsExactlyTheEpisodeAndLineThatPassedMediaByteProbe() = runBlocking {
         val film = offer("film", "cms", HerrinSourceType.TVBOX_CMS, 2160)
         val calls = mutableListOf<String>()
