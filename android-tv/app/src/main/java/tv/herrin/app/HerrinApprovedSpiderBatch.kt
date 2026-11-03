@@ -148,6 +148,12 @@ internal object HerrinApprovedSpiderBatch {
                     val options = session.search(site, identity)
                         .filter { it.sourceType == HerrinSourceType.TVBOX_SPIDER }
                         .sortedByDescending { it.resolutionClaim ?: 0 }.take(3)
+                    // Search rank is only a catalog claim. Examine all at
+                    // most three offers from this approved site and compare
+                    // the line actually accepted by playerContent/media probe.
+                    // Keep the per-site timeout and restore the eventual
+                    // winner under the current Spider session below.
+                    var best: Match? = null
                     for (offer in options) {
                         val film = session.details(offer) ?: continue
                         if (HerrinPlaybackEntry.firstPlayable(film) == null) continue
@@ -155,14 +161,14 @@ internal object HerrinApprovedSpiderBatch {
                         // Spider playerContent must yield an actual authorized
                         // media route; broken PROXY_INVALID_ROUTE is rejected.
                         val chosen = session.pick(film) ?: continue
-                        // The matching movie may advertise 4K even when the
-                        // *only verified* line is 720p. Rank by the selected
-                        // line first; catalog/filename claim is a fallback.
+                        // Do not let an advertised 4K filename outrank an
+                        // actually validated 1080p episode/line.
                         val quality = selectedLineClaim(film, chosen, offer.resolutionClaim ?: 0)
-                        return@withTimeoutOrNull Match(
-                            site, film, quality, offer, chosen.first, chosen.second)
+                        if (quality > (best?.claim ?: -1)) {
+                            best = Match(site, film, quality, offer, chosen.first, chosen.second)
+                        }
                     }
-                    null
+                    best
                 }
             } catch (cancel: CancellationException) {
                 throw cancel
