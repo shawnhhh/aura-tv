@@ -50,7 +50,7 @@ internal class HerrinRemoteMediaProbe(
             val request = try {
                 Request.Builder().url(url).get().apply {
                     headers.forEach { (name, value) -> header(name, value) }
-                    header("Range", "bytes=0-1023")
+                    header("Range", "bytes=0-$PROBE_RANGE_END")
                     header("Accept-Encoding", "identity")
                 }.build()
             } catch (_: IllegalArgumentException) {
@@ -139,7 +139,8 @@ internal class HerrinRemoteMediaProbe(
             ?: return false
         val end = match.groupValues[1].toLongOrNull() ?: return false
         val total = match.groupValues[2]
-        return total == "*" || (total.toLongOrNull()?.let { it > end } == true)
+        return end <= PROBE_RANGE_END &&
+            (total == "*" || (total.toLongOrNull()?.let { it > end } == true))
     }
 
     private fun isLoopback(uri: URI) =
@@ -151,4 +152,8 @@ internal class HerrinRemoteMediaProbe(
 
     private fun effectivePort(u: URI) = if (u.port != -1) u.port
         else if (u.scheme.equals("https", true)) 443 else 80
+
+    private companion object {
+        const val PROBE_RANGE_END = 1023L
+    }
 }
