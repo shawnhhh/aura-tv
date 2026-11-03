@@ -106,15 +106,15 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
             // details for a full minute before Spider search even began.
             // An active Spider uses one mutable JAR worker; never run its
             // operations concurrently with another Spider site.
-            val ordered = if (tier == HerrinSourceTier.TVBOX)
-                stageSources.filter { it.type == HerrinSourceType.TVBOX_CMS } +
-                    stageSources.filter { it.type == HerrinSourceType.TVBOX_SPIDER }
-            else stageSources
-            val cmsCount = ordered.count { it.type == HerrinSourceType.TVBOX_CMS }
-            val parallel = if (tier == HerrinSourceTier.TVBOX) cmsCount else 0
-            for ((index, group) in ordered.chunked(4).withIndex()) {
-                val shouldParallelize = parallel > 0 &&
-                    index * 4 < cmsCount &&
+            val groups: List<List<HerrinFilmSource>> =
+                if (tier == HerrinSourceTier.TVBOX)
+                    stageSources.filter { it.type == HerrinSourceType.TVBOX_CMS }.chunked(4) +
+                        stageSources.filter {
+                            it.type == HerrinSourceType.TVBOX_SPIDER
+                        }.map { listOf(it) }
+                else stageSources.map { listOf(it) }
+            for (group in groups) {
+                val shouldParallelize = tier == HerrinSourceTier.TVBOX &&
                     group.all { it.type == HerrinSourceType.TVBOX_CMS }
                 val fetched = if (shouldParallelize) coroutineScope {
                     group.map { source ->
