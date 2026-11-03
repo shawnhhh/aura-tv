@@ -18,10 +18,15 @@ internal object HerrinApprovedSpiderBatch {
         suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity): List<HerrinSourceMovie>
         suspend fun details(candidate: HerrinSourceMovie): Film?
         suspend fun canPlay(detailed: Film): Boolean
+        // Production returns the episode/line that survived playerContent AND
+        // bounded real-byte validation. JVM fake sessions use the legacy default.
+        suspend fun pick(detailed: Film): Pair<Int, String>? =
+            if (canPlay(detailed)) HerrinPlaybackEntry.firstPlayable(detailed) else null
     }
 
     data class Match(val site: TvBoxSite, val detailed: Film, val claim: Int,
-                     val candidate: HerrinSourceMovie)
+                     val candidate: HerrinSourceMovie,
+                     val episode: Int, val line: String)
     data class Scan(val match: Match?, val checked: Int, val eligible: Int,
                     val nextOffset: Int, val candidatesWithEpisodes: Int)
 
@@ -55,14 +60,15 @@ internal object HerrinApprovedSpiderBatch {
                         episodesFound++
                         // Spider playerContent must yield an actual authorized
                         // media route; broken PROXY_INVALID_ROUTE is rejected.
-                        if (!session.canPlay(film)) continue
+                        val chosen = session.pick(film) ?: continue
                         val labels = film.playbackEpisodes.flatMap { ep ->
                             ep.lines.map { it.title }
                         }.take(30).joinToString(" ")
                         val quality = maxOf(
                             offer.resolutionClaim ?: 0,
                             HerrinFilmIdentityMatch.resolutionClaim(labels) ?: 0)
-                        return@withTimeoutOrNull Match(site, film, quality, offer)
+                        return@withTimeoutOrNull Match(
+                            site, film, quality, offer, chosen.first, chosen.second)
                     }
                     null
                 }
@@ -84,9 +90,9 @@ internal object HerrinApprovedSpiderBatch {
                     if (!session.activate(winner.site)) return@withTimeoutOrNull null
                     val refreshed = session.details(winner.candidate)
                         ?: return@withTimeoutOrNull null
-                    if (HerrinPlaybackEntry.firstPlayable(refreshed) == null ||
-                        !session.canPlay(refreshed)) return@withTimeoutOrNull null
-                    winner.copy(detailed = refreshed)
+                    val chosen = session.pick(refreshed) ?: return@withTimeoutOrNull null
+                    winner.copy(detailed = refreshed,
+                        episode = chosen.first, line = chosen.second)
                 }
             } catch (cancel: CancellationException) {
                 throw cancel
