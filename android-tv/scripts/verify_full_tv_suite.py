@@ -36,6 +36,7 @@ REQUIRED_CLASSES = (
     "M471WebDavRealPlaybackTest",
     "M471ManualProviderFallbackTest",
     "M476SpiderAuthenticatedRealFrameTest",
+    "M477NativeFongMiRealFrameTest",
     "M476SpiderHlsRealFrameTest",
     "AuthorizedCatalogIntegrationTest",
     "TvBoxVodIntegrationTest",
