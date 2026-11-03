@@ -63,6 +63,43 @@ class M472ProxyRouteDiagnosticTest {
         }
     }
 
+    /**
+     * RED reproducer: normalizePlayerResponse walks every route and rejects
+     * the second one, but the former reporter blamed the first valid route.
+     * Do not mask an actually rejected proxy behind a harmless earlier line.
+     */
+    @Test fun rejectedSecondArrayRouteReportsItsRealOperationInsteadOfFirstJar() {
+        SpiderLoopbackProxy("approved") {
+            arrayOf(200, "video/mp4", java.io.ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            val raw = """{"url":["高清","proxy://do=jar&siteKey=approved&id=ok",
+                "备用","proxy://do=parse&siteKey=approved&token=SECRET"]}"""
+            assertNull(SpiderProxyPlayback.normalizePlayerResponse(raw, "approved", proxy))
+            assertEquals("UNSUPPORTED_OPERATION",
+                SpiderProxyPlayback.playerResponseReason(raw, "approved", proxy))
+            assertEquals("PARSE", SpiderProxyPlayback.safeOperation(raw, proxy))
+        }
+    }
+
+    @Test fun rejectedSecondNestedValueReportsSiteKeyMismatchNotEarlierValidCsp() {
+        SpiderLoopbackProxy("approved") {
+            arrayOf(200, "video/mp4", java.io.ByteArrayInputStream(byteArrayOf(1)))
+        }.use { proxy ->
+            val raw = """{"url":{"values":[
+                {"n":"正版","v":"proxy://do=csp&siteKey=approved&id=ok"},
+                {"n":"错误站点","v":"proxy://do=csp&siteKey=other&id=PRIVATE"}]}}"""
+            assertNull(SpiderProxyPlayback.normalizePlayerResponse(raw, "approved", proxy))
+            assertEquals("SITE_KEY_MISMATCH",
+                SpiderProxyPlayback.playerResponseReason(raw, "approved", proxy))
+            val report = PlaybackErrorReport.source("SPIDER",
+                "PROXY_INVALID_ROUTE route_reason=" +
+                    SpiderProxyPlayback.playerResponseReason(raw, "approved", proxy))
+            assertTrue(report.contains("SITE_KEY_MISMATCH"))
+            assertFalse(report.contains("PRIVATE"))
+            assertFalse(report.contains("other"))
+        }
+    }
+
     @Test fun malformedPlayerJsonAndInvalidPercentQueriesCannotLeakOrCrash() {
         SpiderLoopbackProxy("approved") {
             arrayOf(200, "video/mp4", java.io.ByteArrayInputStream(byteArrayOf()))
