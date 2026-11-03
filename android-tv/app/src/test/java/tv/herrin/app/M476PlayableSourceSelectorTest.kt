@@ -45,6 +45,42 @@ class M476PlayableSourceSelectorTest {
         assertEquals(listOf("ultra-broken", "hd-ready", "low-ready"), calls)
     }
 
+    @Test fun deadPrimaryMustNotHideVerifiedProviderBackupBeforePlayerStarts() = runBlocking {
+        val tested = mutableListOf<String>()
+        val primary = "https://stream.example.test/dead.mp4"
+        val backup = "https://stream.example.test/works.mp4"
+        val response = PlaybackMedia(primary, alternateUris = listOf(backup, primary))
+        val selected = HerrinPlayableSourceSelector.find(film(), { _, line ->
+            if (line == "ultra-broken") PlaybackResult.Ready(response)
+            else PlaybackResult.Unavailable("no need")
+        }, { media ->
+            tested += media.uri
+            media.uri == backup
+        })
+        assertEquals("ultra-broken", selected?.line)
+        assertEquals(backup, selected?.media?.uri)
+        assertTrue("Failed primary must not be returned as a player fallback",
+            selected?.media?.alternateUris.orEmpty().isEmpty())
+        assertEquals(listOf(primary, backup), tested)
+    }
+
+    @Test fun sensitiveHeadersNeverProbeUnrelatedAlternateOrigin() = runBlocking {
+        val checked = mutableListOf<String>()
+        val origin = "https://private.example.test/expired.m3u8"
+        val other = "https://unrelated.example.test/backup.m3u8"
+        val chosen = HerrinPlayableSourceSelector.find(film(), { _, line ->
+            if (line == "ultra-broken") PlaybackResult.Ready(PlaybackMedia(origin,
+                headers = mapOf("Authorization" to "Bearer PRIVATE"),
+                alternateUris = listOf(other)))
+            else PlaybackResult.Unavailable("missing")
+        }, { media ->
+            checked += media.uri
+            media.uri == other
+        })
+        assertNull(chosen)
+        assertEquals(listOf(origin), checked)
+    }
+
     @Test fun neverChecksMoreThanSixAuthorizedLines() = runBlocking {
         val ten = film().copy(playbackEpisodes = listOf(PlaybackEpisode(1, "正片",
             (1..10).map { PlaybackLine("line-$it", "1080p", "https://source.test/$it") })))
