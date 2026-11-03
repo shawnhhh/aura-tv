@@ -128,7 +128,12 @@ class M472ApprovedSpiderBatchTest {
                 listOf(candidate(site, if (site.key == "node-9") 2160 else 720))
             override suspend fun details(candidate: HerrinSourceMovie): Film? {
                 assertEquals(candidate.sourceId.substringAfter("spider:"), active)
-                return playable()
+                // The catalog claim alone must never be treated as verified 4K.
+                // Only node-9 exposes a real selected 4K-labelled playback line.
+                val lineLabel = if (active == "node-9") "2160p" else "720p"
+                return fakePoster.copy(playbackEpisodes = listOf(
+                    PlaybackEpisode(1, "正片", listOf(PlaybackLine(
+                        "line", lineLabel, "https://authorized.example/video.mp4")))))
             }
             override suspend fun canPlay(detailed: Film): Boolean = true
         }
