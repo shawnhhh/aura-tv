@@ -99,16 +99,22 @@ internal object HerrinApprovedSpiderBatch {
         allowed: (TvBoxSite) -> Boolean,
         session: Session,
         offset: Int = 0,
-        maxPages: Int = 4,
-        maxWallClockMs: Long = 30_000L
+        maxPages: Int = 17,
+        maxWallClockMs: Long = 240_000L,
+        stopAtFirstPlayable: Boolean = false,
+        onProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val winners = mutableListOf<Match>()
         var checked = 0
         var total = 0
         var episodes = 0
         var next = offset
-        kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(4_000, 60_000)) {
-            repeat(maxPages.coerceIn(1, 6)) {
+        // The old 30-second budget could expire after just six sites, leaving
+        // 39/45 unchecked and requiring repeated remote-control presses.
+        // Continue across finite six-site pages, still using each site's
+        // 4.5-second bound and a total wall-clock deadline.
+        kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(4_000L, 300_000L)) {
+            repeat(maxPages.coerceIn(1, 17)) {
                 val page = scan(identity, sites, allowed, session, offset = next,
                     timeoutPerSiteMs = 4_500L)
                 checked += page.checked
@@ -116,11 +122,17 @@ internal object HerrinApprovedSpiderBatch {
                 episodes += page.candidatesWithEpisodes
                 page.match?.let(winners::add)
                 next = page.nextOffset
-                if (next == 0 || winners.any { it.claim >= 2160 })
+                onProgress(Scan(page.match, checked, total, next, episodes))
+                if (stopAtFirstPlayable && page.match != null)
+                    return@withTimeoutOrNull
+                if (next == 0 || page.checked == 0 || winners.any { it.claim >= 2160 })
                     return@withTimeoutOrNull
             }
         }
-        val result = restoreVerifiedBest(winners, session, 5_000L)
+        // scan() already reactivated and verified its returned winner. Do not
+        // re-scan other sites just to chase 4K when first playback matters.
+        val result = if (stopAtFirstPlayable) winners.firstOrNull()
+            else restoreVerifiedBest(winners, session, 5_000L)
         return Scan(result, checked, total, next, episodes)
     }
 
