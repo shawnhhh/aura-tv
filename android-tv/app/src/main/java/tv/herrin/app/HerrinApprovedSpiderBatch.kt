@@ -38,6 +38,16 @@ internal object HerrinApprovedSpiderBatch {
      * Later pages may outrank the first page, but every returned winner is
      * re-activated and re-verified under its CURRENT proxy session.
      */
+    // A restored Spider session may return different episode/line labels.
+    // Never keep a stale 4K claim after the actual playable line changes.
+    private fun selectedLineClaim(
+        film: Film, chosen: Pair<Int, String>, fallback: Int = 0
+    ): Int {
+        val label = film.playbackEpisodes.firstOrNull { it.number == chosen.first }
+            ?.lines?.firstOrNull { it.id == chosen.second }?.title
+        return label?.let(HerrinFilmIdentityMatch::resolutionClaim) ?: fallback
+    }
+
     suspend fun scanAcrossPages(
         identity: HerrinFilmIdentity,
         sites: List<TvBoxSite>,
@@ -73,7 +83,9 @@ internal object HerrinApprovedSpiderBatch {
                     val detail = session.details(winner.candidate)
                         ?: return@withTimeoutOrNull null
                     val chosen = session.pick(detail) ?: return@withTimeoutOrNull null
-                    winner.copy(detailed = detail, episode = chosen.first, line = chosen.second)
+                    winner.copy(detailed = detail,
+                        claim = selectedLineClaim(detail, chosen),
+                        episode = chosen.first, line = chosen.second)
                 }
             } catch (cancel: CancellationException) {
                 throw cancel
@@ -117,11 +129,7 @@ internal object HerrinApprovedSpiderBatch {
                         // The matching movie may advertise 4K even when the
                         // *only verified* line is 720p. Rank by the selected
                         // line first; catalog/filename claim is a fallback.
-                        val selectedLabel = film.playbackEpisodes.firstOrNull {
-                            it.number == chosen.first
-                        }?.lines?.firstOrNull { it.id == chosen.second }?.title.orEmpty()
-                        val quality = HerrinFilmIdentityMatch.resolutionClaim(
-                            selectedLabel) ?: offer.resolutionClaim ?: 0
+                        val quality = selectedLineClaim(film, chosen, offer.resolutionClaim ?: 0)
                         return@withTimeoutOrNull Match(
                             site, film, quality, offer, chosen.first, chosen.second)
                     }
@@ -147,6 +155,7 @@ internal object HerrinApprovedSpiderBatch {
                         ?: return@withTimeoutOrNull null
                     val chosen = session.pick(refreshed) ?: return@withTimeoutOrNull null
                     winner.copy(detailed = refreshed,
+                        claim = selectedLineClaim(refreshed, chosen),
                         episode = chosen.first, line = chosen.second)
                 }
             } catch (cancel: CancellationException) {
