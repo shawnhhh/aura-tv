@@ -25,7 +25,7 @@ def verify():
         actual = git_blob_hash((VENDOR / relative).read_bytes())
         assert actual == sha, f"FongMi upstream source mismatch: {relative}"
         checked += 1
-    assert checked >= 22, f"Incomplete FongMi source import: only {checked}"
+    assert checked >= 43, f"Incomplete FongMi source import: only {checked}"
     print(f"PASS: {checked} exact pinned upstream FongMi files; not a playback test")
 
 if __name__ == "__main__":

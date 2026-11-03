@@ -9,9 +9,9 @@ This directory holds exact original upstream files, intentionally located
 outside `app/src/main`, so it does NOT alter the current build or run source
 code before the dependency graph is ported and validated.
 
-Imported: 22 source files: BaseLoader, JarLoader, ParseJob, Proxy,
+Imported: 43 source files: BaseLoader, JarLoader, ParseJob, Proxy,
 PlayerManager, two player-engine files, five player-media files and ten
-Exo-specific files. The SHA1 manifest `UPSTREAM_SHA1.txt` lists each exact
+Exo-specific files, plus 21 upstream VOD/bean/HTTP/WebView integration files. The SHA1 manifest `UPSTREAM_SHA1.txt` lists each exact
 upstream Git blob. Enforced in Android Debug CI via
 `android-tv/scripts/verify_fongmi_vendor.py`.
 
