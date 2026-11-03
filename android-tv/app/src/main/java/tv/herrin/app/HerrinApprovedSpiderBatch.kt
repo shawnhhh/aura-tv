@@ -20,7 +20,8 @@ internal object HerrinApprovedSpiderBatch {
         suspend fun canPlay(detailed: Film): Boolean
     }
 
-    data class Match(val site: TvBoxSite, val detailed: Film, val claim: Int)
+    data class Match(val site: TvBoxSite, val detailed: Film, val claim: Int,
+                     val candidate: HerrinSourceMovie)
     data class Scan(val match: Match?, val checked: Int, val eligible: Int,
                     val nextOffset: Int, val candidatesWithEpisodes: Int)
 
@@ -61,7 +62,7 @@ internal object HerrinApprovedSpiderBatch {
                         val quality = maxOf(
                             offer.resolutionClaim ?: 0,
                             HerrinFilmIdentityMatch.resolutionClaim(labels) ?: 0)
-                        return@withTimeoutOrNull Match(site, film, quality)
+                        return@withTimeoutOrNull Match(site, film, quality, offer)
                     }
                     null
                 }
@@ -70,19 +71,29 @@ internal object HerrinApprovedSpiderBatch {
             } catch (_: Exception) { null }
             if (found != null) good += found
         }
-        val best = good.maxWithOrNull(compareBy<Match> { it.claim }
-            .thenBy { it.detailed.playbackEpisodes.size })
-        // Each browse modifies the remote active Spider. Re-activate only the
-        // confirmed winner, otherwise never leave a randomly scanned site as
-        // the selected playback session.
-        val restored: Boolean = if (best != null) try {
-            withTimeoutOrNull(timeoutPerSiteMs) {
-                session.activate(best.site)
-            } == true
-        } catch (cancel: CancellationException) {
-            throw cancel
-        } catch (_: Exception) { false } else false
-        return Scan(best?.takeIf { restored }, checked, eligible.size,
+        val ranked = good.sortedWith(compareByDescending<Match> { it.claim }
+            .thenByDescending { it.detailed.playbackEpisodes.size })
+        // Every activate(site) may replace the active Spider and its loopback
+        // proxy session. Re-validate the winning candidate AFTER restoring
+        // its site, never hand the UI a media route verified in an old session.
+        // If the best site expired during the scan, try the next verified site.
+        var restored: Match? = null
+        for (winner in ranked) {
+            val current = try {
+                withTimeoutOrNull(timeoutPerSiteMs.coerceIn(1_000, 20_000)) {
+                    if (!session.activate(winner.site)) return@withTimeoutOrNull null
+                    val refreshed = session.details(winner.candidate)
+                        ?: return@withTimeoutOrNull null
+                    if (HerrinPlaybackEntry.firstPlayable(refreshed) == null ||
+                        !session.canPlay(refreshed)) return@withTimeoutOrNull null
+                    winner.copy(detailed = refreshed)
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) { null }
+            if (current != null) { restored = current; break }
+        }
+        return Scan(restored, checked, eligible.size,
             if (start + page.size >= eligible.size) 0 else start + page.size,
             episodesFound)
     }
