@@ -185,43 +185,60 @@ internal object SpiderProxyPlayback {
         return if (legacy) "ALIAS_REJECTED" else "LOOPBACK_ROUTE_REJECTED"
     }
 
+    /**
+     * Diagnostic routing must follow the same playerContent URL order and
+     * session validation as normalizePlayerResponse(). The old code read the
+     * FIRST proxy from an array / values block even if that proxy succeeded
+     * and a LATER route caused normalization to abort.
+     *
+     * This helper is diagnostic only: it never opens a URL and its raw result
+     * is never placed in a message or Logcat.
+     */
+    private fun diagnosticUrls(obj: JSONObject): List<String> = when (val value = obj.opt("url")) {
+        is String -> listOf(value)
+        is JSONArray -> (0 until minOf(value.length(), 32)).map { value.optString(it) }
+        is JSONObject -> value.optJSONArray("values")?.let { values ->
+            (0 until minOf(values.length(), 20)).mapNotNull { i ->
+                values.optJSONObject(i)?.takeIf { it.has("v") }?.optString("v")
+            }
+        }.orEmpty()
+        else -> emptyList()
+    }
+
+    private fun isProxyCandidate(value: String): Boolean =
+        value.startsWith("proxy://", ignoreCase = true) || runCatching {
+            val uri = URI(value)
+            local(uri) && uri.path == "/proxy"
+        }.getOrDefault(false)
+
+    private fun diagnosedRoute(
+        obj: JSONObject, siteKey: String, proxy: SpiderLoopbackProxy
+    ): String? {
+        val urls = diagnosticUrls(obj)
+        return urls.firstOrNull {
+            isProxyCandidate(it) && rebaseUrl(it, siteKey, proxy) == null
+        } ?: urls.firstOrNull(::isProxyCandidate)
+            ?: (obj.opt("url") as? String)
+    }
+
     internal fun playerResponseReason(rawJson: String, siteKey: String,
                                       proxy: SpiderLoopbackProxy): String {
         val obj = runCatching { JSONObject(rawJson) }.getOrNull()
             ?: return "INVALID_PLAYER_JSON"
-        val raw = when (val value = obj.opt("url")) {
-            is String -> value
-            is JSONArray -> (0 until minOf(value.length(), 32)).mapNotNull {
-                value.optString(it).takeIf(String::isNotBlank)
-            }.firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
-            is JSONObject -> value.optJSONArray("values")?.let { values ->
-                (0 until minOf(values.length(), 20)).mapNotNull {
-                    values.optJSONObject(it)?.optString("v")
-                }.firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
-            }
-            else -> null
-        } ?: return "MISSING_PLAYER_URL"
+        val raw = diagnosedRoute(obj, siteKey, proxy) ?: return "MISSING_PLAYER_URL"
         return routeReason(raw, siteKey, proxy)
     }
 
     /**
-     * Log only the "do" operation identifier, not the URL or any other query
-     * fields. Unknown/untrusted values are displayed as OTHER, never copied.
+     * Classify the ACTUAL rejected route, but never export its original URL,
+     * operation when unknown, query values, credentials or session.
      */
     internal fun safeOperation(rawJson: String, proxy: SpiderLoopbackProxy): String {
         val obj = runCatching { JSONObject(rawJson) }.getOrNull() ?: return "UNAVAILABLE"
-        val url = when (val value = obj.opt("url")) {
-            is String -> value
-            is JSONArray -> (0 until minOf(32, value.length()))
-                .map { value.optString(it) }
-                .firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
-            is JSONObject -> value.optJSONArray("values")?.let { arr ->
-                (0 until minOf(arr.length(), 20))
-                    .mapNotNull { arr.optJSONObject(it)?.optString("v") }
-                    .firstOrNull { it.startsWith("proxy://") || it.contains("/proxy?") }
-            }
-            else -> null
-        } ?: return "UNAVAILABLE"
+        val siteKey = runCatching {
+            query(URI(proxy.url).rawQuery)["siteKey"]
+        }.getOrNull().orEmpty()
+        val url = diagnosedRoute(obj, siteKey, proxy) ?: return "UNAVAILABLE"
         val rawQuery = if (url.startsWith("proxy://", ignoreCase = true))
             url.substring(8).removePrefix("?")
         else runCatching { proxy.compatibleQuery(URI(url).rawQuery) }.getOrNull()
