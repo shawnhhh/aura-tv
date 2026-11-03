@@ -65,6 +65,29 @@ class M476RemoteMediaProbeTest {
         }
     }
 
+    @Test fun malformedPartialContentMustNotQualifyAsReadableMedia() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Content-Range", "bytes 0-not-a-number/8192")
+                .setBody("0123456789ABCDEF"))
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Content-Range", "bytes 0-15/8")
+                .setBody("0123456789ABCDEF"))
+            server.enqueue(MockResponse().setResponseCode(206)
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Content-Range", "bytes 0-15/*")
+                .setBody("0123456789ABCDEF"))
+            server.start()
+            val media = PlaybackMedia(server.url("/real-media.mp4").toString())
+            assertEquals(HerrinRemoteMediaProbe.Result.INVALID_RANGE, probe().probe(media))
+            assertEquals(HerrinRemoteMediaProbe.Result.INVALID_RANGE, probe().probe(media))
+            assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, probe().probe(media))
+            assertEquals(3, server.requestCount)
+        }
+    }
+
     @Test fun localProxyNeedsCurrentSessionAndRedirectNeverTargetsLoopback() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(200)
