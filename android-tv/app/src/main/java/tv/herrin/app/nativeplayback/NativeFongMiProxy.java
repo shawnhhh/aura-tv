@@ -9,6 +9,9 @@ package tv.herrin.app.nativeplayback;
 import fi.iki.elonen.NanoHTTPD;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.PushbackInputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -87,7 +90,7 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             }
         }
         try {
-            return fromUpstreamResponse(callback.proxy(params));
+            return fromUpstreamResponse(rewriteHls(callback.proxy(params)));
         } catch (Throwable failure) {
             // Never disclose plugin URLs, credentials or stack traces on wire.
             return error(BAD_GATEWAY);
@@ -98,6 +101,65 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         return supplied != null && MessageDigest.isEqual(
             token.getBytes(StandardCharsets.US_ASCII),
             supplied.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    /**
+     * FongMi's fixed-port aliases inside an HLS manifest must use the current
+     * private Spider session. Inspect only status-200 playlist bytes and leave
+     * binary MP4/TS, partial responses and compressed streams untouched.
+     */
+    private Object[] rewriteHls(Object[] response) throws IOException {
+        if (response == null || response.length < 3 ||
+            !(response[0] instanceof Integer) || ((Integer) response[0]) != 200 ||
+            !(response[1] instanceof String) || !(response[2] instanceof InputStream)) {
+            return response;
+        }
+        if (response.length > 3 && response[3] instanceof Map) {
+            for (Object header : ((Map<?, ?>) response[3]).keySet()) {
+                if ("content-encoding".equalsIgnoreCase(String.valueOf(header))) {
+                    return response;
+                }
+            }
+        }
+        String mime = ((String) response[1]).toLowerCase(java.util.Locale.ROOT);
+        boolean declared = mime.contains("mpegurl") || mime.contains("m3u8");
+        PushbackInputStream probe = new PushbackInputStream((InputStream) response[2], 7);
+        byte[] signature = "#EXTM3U".getBytes(StandardCharsets.US_ASCII);
+        byte[] first = new byte[7];
+        int count = 0;
+        while (count < first.length) {
+            int bytes = probe.read(first, count, first.length - count);
+            if (bytes <= 0) break;
+            count += bytes;
+        }
+        if (count > 0) probe.unread(first, 0, count);
+        boolean identified = count == 7 &&
+            java.util.Arrays.equals(first, signature);
+        if (!declared && !identified) {
+            Object[] copy = response.clone();
+            copy[2] = probe;
+            return copy;
+        }
+        ByteArrayOutputStream content = new ByteArrayOutputStream();
+        byte[] chunk = new byte[4096];
+        try {
+            int size;
+            while ((size = probe.read(chunk)) != -1) {
+                if (content.size() + size > NativeFongMiHls.MAX_MANIFEST_BYTES) {
+                    throw new IOException("HLS manifest exceeded safe size");
+                }
+                content.write(chunk, 0, size);
+            }
+        } finally {
+            probe.close();
+        }
+        String rewritten = NativeFongMiHls.rewrite(
+            new String(content.toByteArray(), StandardCharsets.UTF_8), siteKey, this);
+        if (rewritten == null) throw new IOException("Invalid approved HLS playlist");
+        Object[] copy = response.clone();
+        copy[1] = "application/vnd.apple.mpegurl";
+        copy[2] = new ByteArrayInputStream(rewritten.getBytes(StandardCharsets.UTF_8));
+        return copy;
     }
 
     /** FongMi Proxy.createResponse(Object[]) with a private-host error body. */
