@@ -107,9 +107,13 @@ internal class HerrinRemoteMediaProbe(
                 }
                 if (size <= 0) return Result.EMPTY_BODY
                 val beginning = buffer.copyOf(size).toString(Charsets.UTF_8).trimStart('\uFEFF',' ','\n','\r','\t')
+                // An expired media URL can return a JSON status/player
+                // envelope with a misleading binary/video Content-Type.
+                // This is control text, never actual Media3 video bytes.
+                val jsonEnvelope = beginning.startsWith("{") &&
+                    beginning.drop(1).trimStart().startsWith("\"")
                 if (beginning.startsWith("<!DOCTYPE html", true) ||
-                    beginning.startsWith("<html", true) ||
-                    beginning.startsWith("{\"error\"", true))
+                    beginning.startsWith("<html", true) || jsonEnvelope)
                     return Result.LOGIN_OR_TEXT
                 val looksHls = contentType.contains("mpegurl") ||
                     url.substringBefore('?').lowercase().endsWith(".m3u8") ||
