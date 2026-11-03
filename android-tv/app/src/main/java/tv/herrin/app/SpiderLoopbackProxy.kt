@@ -160,7 +160,7 @@ internal class SpiderLoopbackProxy(
             var payload: InputStream = stream
             val isHls = mime.lowercase().contains("mpegurl")
             if (status == 200 && method == "GET" && isHls &&
-                params["range"] == null && safeHeaders.none {
+                safeHeaders.none {
                     it.first.equals("content-encoding", true)
                 }) {
                 val limit = HerrinSpiderHlsProxyRewrite.MAX_MANIFEST_BYTES

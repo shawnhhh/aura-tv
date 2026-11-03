@@ -56,7 +56,8 @@ class PlaybackTestActivity : ComponentActivity() {
                         subtitles = intent.getStringExtra("subtitle")?.let {
                             listOf(AuthorizedSubtitle("zh", "简体中文测试字幕", it))
                         }.orEmpty(),
-                        alternateUris = intent.getStringExtra("alternate")?.let { listOf(it) }.orEmpty()
+                        alternateUris = intent.getStringExtra("alternate")?.let { listOf(it) }.orEmpty(),
+                        declaredMime = intent.getStringExtra("fixtureMime")
                     )
                     val sessionUri = media.uri
                     AuthorizedPlaybackPanel(
