@@ -114,6 +114,18 @@ class M476RemoteMediaProbeTest {
         }
     }
 
+    @Test fun jsonStatusBodyIsNotPlayableMedia() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(200)
+                .setHeader("Content-Type", "application/octet-stream")
+                .setBody("""{"status":"unavailable","reason":"try later"}"""))
+            server.start()
+            val media = PlaybackMedia(server.url("/film.mp4").toString())
+            assertEquals(HerrinRemoteMediaProbe.Result.LOGIN_OR_TEXT, probe().probe(media))
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test fun localProxyNeedsCurrentSessionAndRedirectNeverTargetsLoopback() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(200)
