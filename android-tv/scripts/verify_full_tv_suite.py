@@ -32,6 +32,10 @@ REQUIRED_CLASSES = (
     "M467PlaybackRecoveryTest",
     "M467EngineContainerTest",
     "M467HlsRecoveryEndToEndTest",
+    # P0: prove actual media bytes and decoded frames, not only URL strings.
+    "M471WebDavRealPlaybackTest",
+    "M471ManualProviderFallbackTest",
+    "M476SpiderAuthenticatedRealFrameTest",
     "AuthorizedCatalogIntegrationTest",
     "TvBoxVodIntegrationTest",
     "TvBoxWarehouseIntegrationTest",
