@@ -51,8 +51,8 @@ class M476SpiderHlsRewriteTest {
     }
 
     @Test fun genericMimeHlsMustRebindNestedProxySegmentsBeforeMedia3ReadsThem() {
-        val manifest = "#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:5,\\n" +
-            "proxy://do=jar&siteKey=approved&segment=1\\n"
+        val manifest = "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:5,\n" +
+            "proxy://do=jar&siteKey=approved&segment=1\n"
         SpiderLoopbackProxy("approved", staticHandler = { params ->
             assertEquals("jar", params["do"])
             arrayOf(200, "application/octet-stream",
