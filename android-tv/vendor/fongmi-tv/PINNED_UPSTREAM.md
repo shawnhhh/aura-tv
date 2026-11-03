@@ -1,24 +1,23 @@
-# FongMi/TV playback-core replacement: upstream source lock
+# Original FongMi/TV playback source staged for Herrin P0
 
-Upstream project: https://github.com/FongMi/TV
-Branch: `fongmi`
-Pinned commit: `305dff233cde512e2c83f71529b7c3ecfd61fefc`
-License: GPL-3.0. Original authors retain their copyright.
-Local GPL text: `android-tv/LICENSE-GPL-3.0.md`.
+Original source: https://github.com/FongMi/TV
+Upstream branch: `fongmi`; pinned revision `305dff233cde512e2c83f71529b7c3ecfd61fefc`.
+License: GPL-3.0; preserve upstream copyrights and required notices.
+GPL text in this repository: `android-tv/LICENSE-GPL-3.0.md`.
 
-This folder contains **verbatim upstream source**, staged outside
-`app/src/main` so it cannot silently replace the playable production build.
-Run `python3 android-tv/scripts/verify_fongmi_vendor.py` to check the bytes
-against Git blob SHAs from the pinned upstream commit.
+This directory holds exact original upstream files, intentionally located
+outside `app/src/main`, so it does NOT alter the current build or run source
+code before the dependency graph is ported and validated.
 
-Imported now:
-- `api/loader/BaseLoader.java`
-- `api/loader/JarLoader.java`
-- `player/parse/ParseJob.java`
-- `server/process/Proxy.java`
+Imported: 22 source files: BaseLoader, JarLoader, ParseJob, Proxy,
+PlayerManager, two player-engine files, five player-media files and ten
+Exo-specific files. The SHA1 manifest `UPSTREAM_SHA1.txt` lists each exact
+upstream Git blob. Enforced in Android Debug CI via
+`android-tv/scripts/verify_fongmi_vendor.py`.
 
-Not yet imported or integrated: upstream VodConfig/Result/Parse/HTTP server,
-WebView host, PlayerManager, PlaySpec, MediaItemFactory, engine/exo sources and
-their dependencies. This staging is **not** an app playback implementation.
-Neither the old playback core nor its runtime call sites have been removed.
-Do not claim P0 complete or a TCL playback fix from this import.
+Still missing for a complete production migration: upstream model and config
+classes, native HTTP server lifecycle, browser host, MPV/engine dependencies,
+audio/video effect/track modules, customized Media3 build, and a minimal
+Herrin playback UI adapter. As of this staging, Herrin's legacy
+SpiderProxyPlayback is still the active production path. Do not infer true
+TVBox playback or real TCL decoding from a clean source-integrity check.

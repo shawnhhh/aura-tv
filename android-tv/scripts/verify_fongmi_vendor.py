@@ -1,26 +1,32 @@
-"""Offline integrity check for pinned FongMi source; no code is executed."""
+"""Verify immutable FongMi upstream source files without executing vendor code."""
 from pathlib import Path
 import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = {
-    "api/loader/BaseLoader.java": "a4129fc79a16c2920907d184c8e264dd49435cb3",
-    "api/loader/JarLoader.java": "c7cab88da3bd189f0b73af8af73f5ad65e6a378a",
-    "player/parse/ParseJob.java": "36f6dc832798358c2c4d40c9937863733f37ea1e",
-    "server/process/Proxy.java": "994ad408a82bd1625e460657d4620d0776c99684",
-}
-SOURCE = ROOT / "vendor/fongmi-tv/app/src/main/java/com/fongmi/android/tv"
+VENDOR = ROOT / "vendor/fongmi-tv"
+MANIFEST = VENDOR / "UPSTREAM_SHA1.txt"
+
+def git_blob_hash(data):
+    return hashlib.sha1(
+        b"blob " + str(len(data)).encode("ascii") + b"\0" + data
+    ).hexdigest()
 
 def verify():
-    for relative, expected in FILES.items():
-        path = SOURCE / relative
-        contents = path.read_bytes()
-        actual = hashlib.sha1(
-            b"blob " + str(len(contents)).encode() + b"\0" + contents
-        ).hexdigest()
-        assert actual == expected, f"FongMi source mismatch: {relative}"
-    assert (ROOT / "LICENSE-GPL-3.0.md").is_file()
-    print(f"PASS: {len(FILES)} pinned FongMi source files match upstream Git blobs")
+    assert (ROOT / "LICENSE-GPL-3.0.md").is_file(), "GPL license missing"
+    checked = 0
+    paths = set()
+    for line in MANIFEST.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        sha, relative = line.split("  ", 1)
+        assert len(sha) == 40 and relative.startswith("app/src/main/java/")
+        assert relative not in paths, f"Duplicate staged file: {relative}"
+        paths.add(relative)
+        actual = git_blob_hash((VENDOR / relative).read_bytes())
+        assert actual == sha, f"FongMi upstream source mismatch: {relative}"
+        checked += 1
+    assert checked >= 22, f"Incomplete FongMi source import: only {checked}"
+    print(f"PASS: {checked} exact pinned upstream FongMi files; not a playback test")
 
 if __name__ == "__main__":
     verify()
