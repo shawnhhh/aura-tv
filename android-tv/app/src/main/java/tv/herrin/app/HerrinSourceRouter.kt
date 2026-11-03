@@ -2,7 +2,9 @@ package tv.herrin.app
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
@@ -84,22 +86,46 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
             val tier = if (stage.first() == HerrinSourceType.TVBOX_CMS)
                 HerrinSourceTier.TVBOX else HerrinSourceTier.PERSONAL
             val results = mutableListOf<HerrinSourceMovie>()
-            for (source in sources.filter { it.type in stage }.distinctBy { it.id }.take(16)) {
-                searched.add(source.id)
-                try {
+            val stageSources = sources.filter { it.type in stage }.distinctBy { it.id }.take(16)
+            suspend fun fetch(source: HerrinFilmSource): Pair<List<HerrinSourceMovie>, String?> {
+                return try {
                     val matches = withTimeoutOrNull(6_000L) { source.search(identity) }
-                    if (matches == null) {
-                        errors[source.id] = "搜索超时"
-                        continue
-                    }
-                    results += matches.take(80).filter {
+                        ?: return emptyList<HerrinSourceMovie>() to "搜索超时"
+                    matches.take(80).filter {
                         it.sourceId == source.id && it.sourceType == source.type &&
                             HerrinFilmIdentityMatch.matches(identity, it)
-                    }
+                    } to null
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (error: Exception) {
-                    errors[source.id] = "来源检索失败"
+                } catch (_: Exception) {
+                    emptyList<HerrinSourceMovie>() to "来源检索失败"
+                }
+            }
+            // CMS is passive HTTP and safe to query in four-way bounded
+            // fan-out. Previously 10 x 6-second timeouts could block TMDB
+            // details for a full minute before Spider search even began.
+            // An active Spider uses one mutable JAR worker; never run its
+            // operations concurrently with another Spider site.
+            val ordered = if (tier == HerrinSourceTier.TVBOX)
+                stageSources.filter { it.type == HerrinSourceType.TVBOX_CMS } +
+                    stageSources.filter { it.type == HerrinSourceType.TVBOX_SPIDER }
+            else stageSources
+            val cmsCount = ordered.count { it.type == HerrinSourceType.TVBOX_CMS }
+            val parallel = if (tier == HerrinSourceTier.TVBOX) cmsCount else 0
+            for ((index, group) in ordered.chunked(4).withIndex()) {
+                val shouldParallelize = parallel > 0 &&
+                    index * 4 < cmsCount &&
+                    group.all { it.type == HerrinSourceType.TVBOX_CMS }
+                val fetched = if (shouldParallelize) coroutineScope {
+                    group.map { source ->
+                        async(Dispatchers.IO) { fetch(source) }
+                    }.awaitAll()
+                } else group.map { fetch(it) }
+                for ((i, source) in group.withIndex()) {
+                    searched += source.id
+                    val (offers, failure) = fetched[i]
+                    results += offers
+                    if (failure != null) errors[source.id] = failure
                 }
             }
             if (results.isNotEmpty()) {
