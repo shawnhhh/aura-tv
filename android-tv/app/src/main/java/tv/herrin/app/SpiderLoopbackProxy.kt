@@ -152,6 +152,44 @@ internal class SpiderLoopbackProxy(
                 failure(output, 502)
                 return
             }
+            // A Spider's HLS playlist may contain nested old TVBox
+            // localhost URLs. Before Media3 receives an HTTP 200 manifest,
+            // rebase those segment/key references into this authenticated
+            // worker's random-port session. Bounded to 256 KiB and NEVER
+            // applied to MP4/MKV/TS binary streams or Range 206 responses.
+            var payload: InputStream = stream
+            val isHls = mime.lowercase().contains("mpegurl")
+            if (status == 200 && method == "GET" && isHls &&
+                params["range"] == null && safeHeaders.none {
+                    it.first.equals("content-encoding", true)
+                }) {
+                val limit = HerrinSpiderHlsProxyRewrite.MAX_MANIFEST_BYTES
+                val prefix = ByteArray(limit + 1)
+                var count = 0
+                var complete = false
+                while (count < prefix.size) {
+                    val read = stream.read(prefix, count, prefix.size - count)
+                    if (read < 0) { complete = true; break }
+                    if (read == 0) break
+                    count += read
+                }
+                if (complete && count <= limit) {
+                    val transformed = HerrinSpiderHlsProxyRewrite.rewrite(
+                        String(prefix, 0, count, StandardCharsets.UTF_8),
+                        siteKey, this)
+                    if (transformed == null) {
+                        failure(output, 502)
+                        return
+                    }
+                    payload = java.io.ByteArrayInputStream(
+                        transformed.toByteArray(StandardCharsets.UTF_8))
+                } else {
+                    // Oversized/streaming manifests retain their exact original
+                    // bytes; never materialize an unbounded media stream.
+                    payload = java.io.SequenceInputStream(
+                        java.io.ByteArrayInputStream(prefix.copyOf(count)), stream)
+                }
+            }
             val noBody = method == "HEAD" || status in 100..199 || status == 204 || status == 304
             val head = buildString {
                 append("HTTP/1.1 "); append(status); append(" Proxy Response\r\n")
@@ -172,7 +210,7 @@ internal class SpiderLoopbackProxy(
             // Stream with a fixed 16 KiB buffer until EOF or cancellation;
             // bound memory, sockets and concurrent workers instead of bytes.
             while (!closed.get()) {
-                val size = stream.read(buffer)
+                val size = payload.read(buffer)
                 if (size < 0) break
                 if (size == 0) continue
                 output.write(Integer.toHexString(size).toByteArray(StandardCharsets.US_ASCII))
