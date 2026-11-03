@@ -132,7 +132,7 @@ internal class HerrinRemoteMediaProbe(
     // Source selection must not mistake a malformed or impossible partial
     // response for a playable video. HTTP permits an unknown total ("*").
     // The probe requests the first byte range, so the response must start at 0.
-    private val partialContentRange = Regex("""bytes 0-([0-9]{1,18})/([0-9]{1,18}|\\*)""")
+    private val partialContentRange = Regex("""bytes 0-([0-9]{1,18})/([0-9]{1,18}|[*])""")
 
     private fun validPartialContentRange(header: String?): Boolean {
         val match = partialContentRange.matchEntire(header.orEmpty().trim())
