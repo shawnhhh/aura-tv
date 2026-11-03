@@ -136,9 +136,15 @@ internal object SpiderVodCodec {
             val name = track.optString("name").trim().take(64).ifBlank { "字幕 ${index + 1}" }
             AuthorizedSubtitle(lang, name, subtitleUrl)
         }
+        // These URLs are explicitly supplied by this approved player's result.
+        // If no origin-specific headers are required, a dead 404/410 primary
+        // must not prevent Media3 trying the next authorized backup address.
+        // Authenticated results and HTTP 401/403/429 remain non-fallback.
+        val safeNotFoundFallback = playable.size > 1 && headers.isEmpty()
         return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles,
             alternateUris = playable.drop(1), allowHttpRedirects = allowHttp,
             declaredMime = declaredMime,
+            safeNotFoundFallback = safeNotFoundFallback,
             danmakuSources = DanmakuProtocol.decodeSources(data.opt("danmaku"))))
     }
 
