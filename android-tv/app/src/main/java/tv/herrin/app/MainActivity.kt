@@ -1124,6 +1124,8 @@ private fun Herrin() {
             val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
             val remotes = adapters.associateBy { it.id }
             val reachability = HerrinPersonalMediaProbe()
+            val remoteReachability = HerrinRemoteMediaProbe()
+            val verifiedRemoteLines = mutableMapOf<String, Pair<Int, String>>()
             val resolved = HerrinVerifiedSourceResolver(
                 adapters.filterNot { it.id in tmdbFallbackIndex.rejected(targetId) }
             ).find(
@@ -1134,27 +1136,35 @@ private fun Herrin() {
                 },
                 verifyPersonal = { media -> reachability.canRead(media) },
                 verifyRemote = { offer, detailed ->
-                    val selected = HerrinPlaybackEntry.firstPlayable(detailed)
-                    val playable = if (selected == null) false else
-                        when (val adapter = remotes[offer.sourceId]) {
-                            is HerrinTvBoxSpiderSource -> {
-                                val resolvedMedia = withTimeoutOrNull(9_000L) {
-                                    spiderBridge.play(detailed, selected.first, selected.second,
-                                        tvBoxAllowHttp)
-                                }
-                                val good = resolvedMedia is PlaybackResult.Ready
-                                HerrinPlaybackDiagnosticJournal.record("SPIDER",
-                                    if (good) "PLAYER_ROUTE_READY" else "PLAYER_ROUTE_REJECTED")
-                                good
+                    // A working episode-list or playerContent URL alone is NOT
+                    // proof of playable video. Try the selected title's lines,
+                    // bounded to six, and inspect actual media response bytes.
+                    val verifiedLine = HerrinPlayableSourceSelector.find(
+                        detailed,
+                        resolve = { number, lineId ->
+                            when (val adapter = remotes[offer.sourceId]) {
+                                is HerrinTvBoxSpiderSource ->
+                                    withTimeoutOrNull(9_000L) {
+                                        spiderBridge.play(detailed, number, lineId,
+                                            tvBoxAllowHttp)
+                                    } ?: PlaybackResult.Unavailable("Spider 播放解析超时")
+                                is HerrinTvBoxCmsSource ->
+                                    adapter.play(detailed, number, lineId)
+                                else -> PlaybackResult.Unavailable("未授权的影视点")
                             }
-                            is HerrinTvBoxCmsSource -> {
-                                val resolvedMedia = adapter.play(
-                                    detailed, selected.first, selected.second)
-                                resolvedMedia is PlaybackResult.Ready
-                            }
-                            else -> false
-                        }
-                    playable
+                        },
+                        verifyMedia = { media -> remoteReachability.canRead(media) })
+                    val passed = verifiedLine != null
+                    if (passed) {
+                        verifiedRemoteLines[offer.sourceId + ":" + offer.film.id] =
+                            verifiedLine!!.episode to verifiedLine.line
+                    }
+                    HerrinPlaybackDiagnosticJournal.record("SOURCE",
+                        if (passed) "MEDIA_BYTES_VERIFIED" else "MEDIA_BYTES_REJECTED")
+                    passed
+                },
+                selectRemote = { offer, _ ->
+                    verifiedRemoteLines[offer.sourceId + ":" + offer.film.id]
                 },
                 remoteDetails = { offer ->
                     withTimeoutOrNull(4_000L) {
@@ -1171,8 +1181,9 @@ private fun Herrin() {
             // Direct-CMS results are checked first. If none actually exposes
             // a usable episode, scan other Spider nodes only under the exact
             // runtime JAR/root already explicitly approved by the user.
-            val batch = if (resolved.lookup.options.isEmpty() && currentTvbox != null &&
-                trustedSpiderJar.isNotBlank() && approvedRoot == trustedSpiderRoot) {
+            val batch = if (resolved.lookup.selectedTier != HerrinSourceTier.PERSONAL &&
+                currentTvbox != null && trustedSpiderJar.isNotBlank() &&
+                approvedRoot == trustedSpiderRoot) {
                 HerrinApprovedSpiderBatch.scan(
                     searchIdentity, currentTvbox.sites,
                     allowed = { site ->
@@ -1192,25 +1203,43 @@ private fun Herrin() {
                             HerrinTvBoxSpiderSource(site, spiderBridge).search(identity)
                         override suspend fun details(candidate: HerrinSourceMovie): Film? =
                             (spiderBridge.details(candidate.film) as? SpiderResult.Ready)?.value
-                        override suspend fun canPlay(detailed: Film): Boolean {
-                            val (ep, selectedLine) = HerrinPlaybackEntry.firstPlayable(detailed)
-                                ?: return false
-                            val result = spiderBridge.play(
-                                detailed, ep, selectedLine, tvBoxAllowHttp)
-                            return result is PlaybackResult.Ready
-                        }
+                        override suspend fun canPlay(detailed: Film): Boolean =
+                            pick(detailed) != null
+                        override suspend fun pick(detailed: Film): Pair<Int, String>? =
+                            HerrinPlayableSourceSelector.find(
+                                detailed,
+                                resolve = { number, lineId ->
+                                    spiderBridge.play(detailed, number, lineId, tvBoxAllowHttp)
+                                },
+                                verifyMedia = { media ->
+                                    remoteReachability.canRead(media)
+                                })?.let { it.episode to it.line }
                     }
                 )
             } else null
-            if (batch?.match == null && approvedSpiderSite != null && currentTvbox != null &&
+            // Only interrupt a verified CMS selection for a demonstrably
+            // higher-quality Spider claim. Personal NAS/cloud remains higher
+            // priority. Labels rank verified-bytes choices; not HDR proof.
+            val cmsClaim = maxOf(
+                resolved.lookup.options.firstOrNull()?.resolutionClaim ?: 0,
+                HerrinFilmIdentityMatch.resolutionClaim(
+                    resolved.sourceDetails?.playbackEpisodes.orEmpty()
+                        .flatMap { ep -> ep.lines.map { it.title } }
+                        .take(24).joinToString(" ")) ?: 0)
+            val preferSpider = batch?.match != null &&
+                (resolved.lookup.options.isEmpty() ||
+                    (resolved.lookup.selectedTier == HerrinSourceTier.TVBOX &&
+                        batch.match.claim > cmsClaim))
+            if (!preferSpider && approvedSpiderSite != null && currentTvbox != null &&
                 batch != null) {
-                // A failed batch may have changed the active worker site.
-                // Restore the site the user explicitly selected on entry.
+                // Scan changed active session; restore the user's previously
+                // approved choice before displaying CMS or a no-result state.
                 withTimeoutOrNull(7_000L) {
                     spiderBridge.browse(approvedSpiderSite, currentTvbox)
                 }
             }
-            Triple(resolved, adapters, batch)
+            Triple(resolved, adapters, if (preferSpider) batch
+                else batch?.copy(match = null))
         }
         val lookup = verified.lookup
         if (batchScan != null) {
@@ -1230,10 +1259,8 @@ private fun Herrin() {
                 spiderVodId = detail.spiderVodId,
                 playbackEpisodes = detail.playbackEpisodes,
                 episodes = maxOf(1, detail.playbackEpisodes.size))
-            HerrinPlaybackEntry.firstPlayable(tmdbResolved[targetId])?.let { (number, id) ->
-                episode = number
-                line = id
-            }
+            episode = batchMatch.episode
+            line = batchMatch.line
             tmdbSourceStatus = "已从 ${batchScan.checked} 个授权影视点中匹配并验证可播放线路：${batchMatch.site.name}；标称清晰度 ${if (batchMatch.claim >= 2160) "4K" else if (batchMatch.claim > 0) "${batchMatch.claim}p" else "未知"}，非实际解码画质"
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "SPIDER_VERIFIED")
             return@LaunchedEffect
@@ -1305,10 +1332,13 @@ private fun Herrin() {
         }
         // The poster was opened before the network supplied its real episodes.
         // Select a real first line rather than leaving "演示线路 A" in state.
-        HerrinPlaybackEntry.firstPlayable(tmdbResolved[targetId])?.let { (number, id) ->
-            episode = number
-            line = id
-        }
+        (if (found.tier == HerrinSourceTier.TVBOX) verified.verifiedLine
+            else null
+            ?: HerrinPlaybackEntry.firstPlayable(tmdbResolved[targetId]))
+            ?.let { (number, id) ->
+                episode = number
+                line = id
+            }
     }
     LaunchedEffect(screen, filmId, metadataToken, imdbRatingsEpoch) {
         if (screen != "detail" || !filmId.startsWith("tmdb-") ||
