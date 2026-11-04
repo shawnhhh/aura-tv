@@ -9,6 +9,7 @@
 package tv.herrin.app
 
 import android.content.Context
+import tv.herrin.app.nativeplayback.FongMiPlaybackAdapter
 import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.AudioAttributes
@@ -41,6 +42,10 @@ internal object FongMiExoPlayerFactory {
     }
 
     fun create(context: Context, media: PlaybackMedia, settings: Settings = Settings()): ExoPlayer {
+        // The existing Compose surface, MediaSession, remote controls and
+        // recovery retain sole ownership of this player. Reuse the native
+        // adapter's resolved-URI boundary; never allocate a second Exo.
+        FongMiPlaybackAdapter.requireResolvedMediaUrl(media.uri)
         val appContext = context.applicationContext
         val renderers = DefaultRenderersFactory(appContext)
             .setEnableDecoderFallback(settings.platformDecoderFallback)
