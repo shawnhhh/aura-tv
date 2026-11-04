@@ -23,6 +23,22 @@ public final class FongMiPlaybackAdapter {
     private FongMiPlaybackAdapter() {}
 
     /**
+     * Validate an already-resolved media URI before the existing Compose player
+     * creates its single ExoPlayer. No extra session, network probe or proxy.
+     */
+    @NonNull
+    public static String requireResolvedMediaUrl(@NonNull String resolvedUrl) {
+        android.net.Uri uri = android.net.Uri.parse(resolvedUrl);
+        String scheme = uri.getScheme();
+        if (uri.getHost() == null ||
+                !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) ||
+                uri.getUserInfo() != null) {
+            throw new IllegalArgumentException("Expected resolved HTTP(S) media URI");
+        }
+        return resolvedUrl;
+    }
+
+    /**
      * Main-process entry for a Spider result already resolved by the isolated
      * authorized Spider worker and ParseJob. The worker owns the native proxy;
      * the main process must never create a second proxy or re-run the JAR.
