@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 /**
  * Thin production boundary between an authorized FongMi playerContent response
@@ -40,9 +41,9 @@ public final class FongMiPlaybackAdapter {
         if (normalized == null) throw new IllegalArgumentException("Invalid authorized proxy route");
         JSONObject parsed = new JSONObject(normalized);
         Object urlValue = parsed.opt("url");
-        if (!(urlValue instanceof String) || ((String) urlValue).isBlank())
-            throw new IllegalArgumentException("Expected one resolved media URL");
-        String url = (String) urlValue;
+        String url = selectResolvedUrl(urlValue);
+        if (url == null || url.isBlank())
+            throw new IllegalArgumentException("Expected a resolved media URL");
         Map<String, String> headers = new HashMap<>();
         JSONObject jsonHeaders = parsed.optJSONObject("header");
         if (jsonHeaders != null) {
@@ -65,5 +66,25 @@ public final class FongMiPlaybackAdapter {
             session.close();
             throw failure;
         }
+    }
+
+    /** FongMi PlaybackContent.url may carry named quality variants. */
+    @Nullable
+    private static String selectResolvedUrl(@Nullable Object value) {
+        if (value instanceof String) return (String) value;
+        if (value instanceof JSONObject) {
+            JSONObject options = (JSONObject) value;
+            JSONArray values = options.optJSONArray("values");
+            if (values == null || values.length() == 0) return null;
+            int selected = options.optInt("position", 0);
+            if (selected < 0 || selected >= values.length()) return null;
+            JSONObject choice = values.optJSONObject(selected);
+            return choice == null ? null : choice.optString("v", null);
+        }
+        if (value instanceof JSONArray) {
+            JSONArray urls = (JSONArray) value;
+            return urls.length() == 1 ? urls.optString(0, null) : null;
+        }
+        return null;
     }
 }
