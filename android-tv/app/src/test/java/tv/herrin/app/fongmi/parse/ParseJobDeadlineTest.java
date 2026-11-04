@@ -48,7 +48,7 @@ public class ParseJobDeadlineTest {
                 public void onParseSuccess(Map<String, String> headers, String url, String from) { throw new AssertionError("unexpected success"); }
                 public void onParseError() { failed.countDown(); }
             });
-            job.start(Result.fromObject("{\\"url\\":\\"https://video.example/1\\"}"), false);
+            job.start(Result.fromObject("{\"url\":\"https://video.example/1\"}"), false);
             assertTrue("WebView must launch", started.await(2, TimeUnit.SECONDS));
             assertTrue("timeout must fire after worker returns", failed.await(3, TimeUnit.SECONDS));
             assertEquals(1, failures.get());
