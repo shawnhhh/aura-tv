@@ -57,6 +57,40 @@ public final class NativeFongMiHlsTest {
         }
     }
 
+    @Test public void rewritesBomPrefixedGenericMimeHlsAndServesRealSegments() throws Exception {
+        String playlist = "\uFEFF#EXTM3U\n"
+            + "#EXT-X-TARGETDURATION:6\n"
+            + "#EXTINF:6.0,\n"
+            + "http://127.0.0.1:9978/proxy?do=jar&siteKey=approved&segment=0\n"
+            + "#EXT-X-ENDLIST\n";
+        AtomicInteger segmentRequests = new AtomicInteger();
+        try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", params -> {
+            assertEquals("0", params.get("segment"));
+            segmentRequests.incrementAndGet();
+            return new Object[]{200, "video/mp2t",
+                new ByteArrayInputStream(new byte[]{0x47, 0x02, 0x03})};
+        }, params -> new Object[]{200, "application/octet-stream",
+            new ByteArrayInputStream(playlist.getBytes(StandardCharsets.UTF_8))})) {
+            HttpURLConnection manifestRequest = connection(proxy.baseUrl());
+            assertEquals(200, manifestRequest.getResponseCode());
+            String rewritten = new String(
+                manifestRequest.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            manifestRequest.disconnect();
+            assertFalse("BOM/generic-MIME HLS must not retain TVBox's stale 9978 port",
+                rewritten.contains(":9978/"));
+            assertTrue("Segments must use this approved Spider session",
+                rewritten.contains(proxy.baseUrl()));
+            String segmentUrl = rewritten.lines().filter(l -> l.startsWith("http://"))
+                .findFirst().orElseThrow();
+            HttpURLConnection segment = connection(segmentUrl);
+            assertEquals(200, segment.getResponseCode());
+            assertArrayEquals(new byte[]{0x47, 0x02, 0x03},
+                segment.getInputStream().readAllBytes());
+            segment.disconnect();
+            assertEquals(1, segmentRequests.get());
+        }
+    }
+
     @Test public void doesNotModifyOrdinaryBinaryVideo() throws Exception {
         try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", p ->
             new Object[]{200, "video/mp4",
