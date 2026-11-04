@@ -4,6 +4,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tv.herrin.app.nativeplayback.NativeFongMiRoute
 
 /** Uses a nonexistent JAR, so no downloaded plugin code is executed in CI. */
 class SpiderRemoteProcessTest {
@@ -61,7 +62,7 @@ class SpiderRemoteProcessTest {
                 probe is SpiderResult.Ready)
             val uri = (probe as SpiderResult.Ready).value
             assertTrue("The main process must reach :spider health endpoint",
-                SpiderProxyPlayback.ping(uri))
+                NativeFongMiRoute.probe(uri, "ci-proxy") == NativeFongMiRoute.Health.READY)
             val connection = java.net.URL(uri).openConnection() as java.net.HttpURLConnection
             try {
                 connection.connectTimeout = 2_000

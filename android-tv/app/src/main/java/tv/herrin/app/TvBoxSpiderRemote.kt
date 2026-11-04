@@ -2,6 +2,7 @@ package tv.herrin.app
 
 import com.github.catvod.Runtime as CatVodRuntime
 import tv.herrin.app.nativeplayback.NativeFongMiRoute
+import tv.herrin.app.nativeplayback.NativeFongMiProxy
 
 import android.app.ActivityManager
 import android.app.Service
@@ -245,7 +246,7 @@ class TvBoxSpiderService : Service() {
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
     private val worker by lazy { TvBoxSpiderWorker(applicationContext) }
     // Debug-only smoke fixture, never registered as a user-configurable source.
-    private var proxySelfTest: SpiderLoopbackProxy? = null
+    private var proxySelfTest: NativeFongMiProxy? = null
     @Volatile private var authCaller: Pair<Messenger, Int>? = null
     private val authorization = SpiderAuthorizationSession { dialogId, payload ->
         authCaller?.let { (caller, operationId) ->
@@ -333,12 +334,12 @@ class TvBoxSpiderService : Service() {
                                     android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                                     "Proxy smoke endpoint disabled in production"
                                 }
-                                val active = proxySelfTest ?: SpiderLoopbackProxy("ci-proxy") {
+                                val active = proxySelfTest ?: NativeFongMiProxy("ci-proxy", { _ ->
                                     arrayOf(200, "video/mp4",
                                         java.io.ByteArrayInputStream(byteArrayOf(8, 9, 10)))
-                                }.also { proxySelfTest = it }
+                                }, null).also { proxySelfTest = it }
                                 JSONObject().put("ok", true)
-                                    .put("uri", active.url + "&part=probe")
+                                    .put("uri", active.siteUrl() + "&part=probe")
                             }
                             SpiderIpc.PLAY -> {
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
