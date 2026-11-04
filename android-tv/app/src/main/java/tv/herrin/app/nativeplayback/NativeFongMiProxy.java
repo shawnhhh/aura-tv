@@ -123,9 +123,11 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         }
         String mime = ((String) response[1]).toLowerCase(java.util.Locale.ROOT);
         boolean declared = mime.contains("mpegurl") || mime.contains("m3u8");
-        PushbackInputStream probe = new PushbackInputStream((InputStream) response[2], 7);
+        // A UTF-8 BOM precedes #EXTM3U in some generic-MIME Spider streams.
+        // Peek at most 10 bytes, then unread all bytes for binary responses.
+        PushbackInputStream probe = new PushbackInputStream((InputStream) response[2], 10);
         byte[] signature = "#EXTM3U".getBytes(StandardCharsets.US_ASCII);
-        byte[] first = new byte[7];
+        byte[] first = new byte[10];
         int count = 0;
         while (count < first.length) {
             int bytes = probe.read(first, count, first.length - count);
@@ -133,8 +135,12 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             count += bytes;
         }
         if (count > 0) probe.unread(first, 0, count);
-        boolean identified = count == 7 &&
-            java.util.Arrays.equals(first, signature);
+        int offset = count >= 3 && first[0] == (byte) 0xEF &&
+            first[1] == (byte) 0xBB && first[2] == (byte) 0xBF ? 3 : 0;
+        boolean identified = count - offset >= signature.length;
+        for (int i = 0; i < signature.length && identified; i++) {
+            if (first[offset + i] != signature[i]) identified = false;
+        }
         if (!declared && !identified) {
             Object[] copy = response.clone();
             copy[2] = probe;
