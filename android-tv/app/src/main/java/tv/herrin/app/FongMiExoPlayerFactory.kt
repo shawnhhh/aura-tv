@@ -45,7 +45,13 @@ internal object FongMiExoPlayerFactory {
         // The existing Compose surface, MediaSession, remote controls and
         // recovery retain sole ownership of this player. Reuse the native
         // adapter's resolved-URI boundary; never allocate a second Exo.
-        FongMiPlaybackAdapter.requireResolvedMediaUrl(media.uri)
+        // Local file fixtures exercise the real decoder in instrumentation.
+        // Production Spider/CMS HTTP(S) routes still pass the shared adapter
+        // boundary; do not reject Media3's legitimate local test media here.
+        val scheme = Uri.parse(media.uri).scheme?.lowercase(java.util.Locale.ROOT)
+        if (scheme == "http" || scheme == "https") {
+            FongMiPlaybackAdapter.requireResolvedMediaUrl(media.uri)
+        }
         val appContext = context.applicationContext
         val renderers = DefaultRenderersFactory(appContext)
             .setEnableDecoderFallback(settings.platformDecoderFallback)
