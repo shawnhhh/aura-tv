@@ -45,7 +45,12 @@ class M476SpiderAuthenticatedRealFrameTest {
                 "verified-spider", proxy) as? PlaybackResult.Ready
                 ?: throw AssertionError("Approved Java route must resolve")
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
-                HerrinRemoteMediaProbe().probe(media.media))
+                HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                    val uri = runCatching { java.net.URI(candidate) }.getOrNull()
+                    uri?.scheme == "http" && uri.host == "127.0.0.1" &&
+                        uri.port == proxy.port && uri.path == "/proxy" &&
+                        uri.rawQuery?.split('&')?.any { it == "session=${proxy.token}" } == true
+                }).probe(media.media))
             ActivityScenario.launch<PlaybackTestActivity>(
                 Intent(inst.targetContext, PlaybackTestActivity::class.java)
                     .putExtra("fixture", media.media.uri)
