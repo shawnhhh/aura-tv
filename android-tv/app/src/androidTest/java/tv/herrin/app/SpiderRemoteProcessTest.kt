@@ -24,6 +24,34 @@ class SpiderRemoteProcessTest {
             client.close()
         }
     }
+    @Test fun isolatedSpiderServicePreservesNativeFongMiDoOperationsAcrossBinder() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bridge = TvBoxSpiderBridge(context)
+        try {
+            val initial = bridge.probeRemoteProxyForInstrumentation()
+            assertTrue("Debug-only native Spider route must be returned",
+                initial is SpiderResult.Ready)
+            val url = (initial as SpiderResult.Ready).value
+            // The legacy loopback implementation rejects all but do=jar.
+            // An actual native FongMi route must forward an authorized do=part.
+            val changed = url.replace("&do=jar", "&do=part")
+            assertTrue("Fixture must exercise the part operation", changed != url)
+            val target = java.net.URL(changed).openConnection() as java.net.HttpURLConnection
+            try {
+                target.connectTimeout = 2_000
+                target.readTimeout = 3_000
+                assertTrue("do=part should be dispatched by the real :spider process",
+                    target.responseCode == 200)
+                assertTrue("Real bytes must cross :spider -> main process",
+                    target.inputStream.use { it.readBytes().contentEquals(byteArrayOf(8, 9, 10)) })
+            } finally {
+                target.disconnect()
+            }
+        } finally {
+            bridge.close()
+        }
+    }
+
     @Test fun actualIsolatedSpiderServiceProxySocketIsReachableFromMainProcess() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val bridge = TvBoxSpiderBridge(context)
