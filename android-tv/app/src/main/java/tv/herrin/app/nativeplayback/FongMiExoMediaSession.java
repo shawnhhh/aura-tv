@@ -72,11 +72,11 @@ public final class FongMiExoMediaSession implements AutoCloseable {
     public void prepare(@NonNull String mediaId, @NonNull String url,
                         @Nullable String mimeType) {
         ensureActive();
-        Uri uri = Uri.parse(url);
-        String scheme = uri.getScheme();
-        if (mediaId.isBlank() || uri.getHost() == null ||
-                !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
-            throw new IllegalArgumentException("Expected authorized HTTP(S) media URI");
+        // This native host accepts only the authorized remote-media contract.
+        // The Compose test-fixture player handles local files separately.
+        Uri uri = Uri.parse(FongMiPlaybackAdapter.requireResolvedMediaUrl(url));
+        if (mediaId.isBlank()) {
+            throw new IllegalArgumentException("Expected nonempty media ID");
         }
         MediaItem.Builder item = new MediaItem.Builder()
                 .setMediaId(mediaId)
