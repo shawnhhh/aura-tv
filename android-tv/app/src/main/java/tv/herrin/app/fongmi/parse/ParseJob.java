@@ -238,7 +238,8 @@ public class ParseJob implements ParseCallback {
             callback.onParseError();
             return;
         }
-        host.post(() -> {
+        try {
+            host.post(() -> {
             if (done.get()) return;
             try {
                 AutoCloseable view = host.startWeb(key, from, headers, url, click, callback, !url.contains("player/?url="));
@@ -259,7 +260,13 @@ public class ParseJob implements ParseCallback {
                 host.onFailure(failure);
                 if (!done.get()) callback.onParseError();
             }
-        });
+            });
+        } catch (RuntimeException failure) {
+            // A destroyed UI dispatcher may reject posting before the WebView
+            // starts. Report the failure rather than stranding the ParseJob.
+            host.onFailure(failure);
+            if (!done.get()) callback.onParseError();
+        }
     }
 
     private Map<String, String> getHeaders(Parse item) {
