@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /** New P0 proxy: real HLS playlist -> fixed-port segment rewrite -> TS -> decoder frames. */
 @RunWith(AndroidJUnit4::class)
 class M477NativeFongMiHlsRealFrameTest {
-    @Test fun nativeFongMiProxyStreamsRealHlsTransportFrames() = runBlocking {
+    @Test fun nativeFongMiProxyStreamsRealHlsTransportFramesWithBomGenericMime() = runBlocking {
         val inst = InstrumentationRegistry.getInstrumentation()
         val videoTs = inst.context.assets.open("synthetic-segment-00.ts")
             .use { it.readBytes() }
@@ -29,7 +29,7 @@ class M477NativeFongMiHlsRealFrameTest {
             arrayOf(200, "video/mp2t", ByteArrayInputStream(videoTs))
         }, { _ ->
             manifests.incrementAndGet()
-            val playlist = """
+            val playlist = "\uFEFF" + """
                 #EXTM3U
                 #EXT-X-VERSION:3
                 #EXT-X-TARGETDURATION:8
@@ -38,7 +38,7 @@ class M477NativeFongMiHlsRealFrameTest {
                 http://127.0.0.1:9978/proxy?do=jar&siteKey=approved&segment=0
                 #EXT-X-ENDLIST
             """.trimIndent() + "\n"
-            arrayOf(200, "application/vnd.apple.mpegurl",
+            arrayOf(200, "application/octet-stream",
                 ByteArrayInputStream(playlist.toByteArray(Charsets.UTF_8)))
         }).use { proxy ->
             val url = NativeFongMiRoute.url("proxy://", "approved", proxy)
