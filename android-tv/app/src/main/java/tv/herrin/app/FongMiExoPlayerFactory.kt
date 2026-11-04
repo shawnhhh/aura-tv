@@ -2,15 +2,15 @@
  * Derived from FongMi/TV fongmi@5e191aaced194e5cac5668cc91908ecb65336222:
  * player/exo/{ExoUtil,ExoMediaSourceFactory}.java, player/media/MediaItemFactory.java.
  * Original author: FongMi. GPL-3.0; see android-tv/LICENSE-GPL-3.0.md.
- * 2026-11-01: explicit host Context/settings and published Media3 1.9.4 ABI adapter.
+ * Pinned contract comparison: 305dff233cde512e2c83f71529b7c3ecfd61fefc.
+ * 2026-11-04: pinned upstream comparison; official Media3 1.9.4, explicit host
+ * settings and per-attempt source creation through nativeplayback.player.
  * This ports the compatible source paths; it does NOT claim the unavailable patched
  * Media3/libass/mpv ABI has been supplied. See docs/m467/player-engine.md.
  */
 package tv.herrin.app
 
 import android.content.Context
-import android.net.Uri
-import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -22,8 +22,6 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import com.fongmi.android.tv.player.exo.ExoMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import java.nio.charset.StandardCharsets
-import java.util.UUID
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal object FongMiExoPlayerFactory {
@@ -71,7 +69,8 @@ internal object FongMiExoPlayerFactory {
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory(appContext, media))
             .build().apply {
-                setAudioAttributes(AudioAttributes.DEFAULT, true)
+                setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
                 setHandleAudioBecomingNoisy(true)
                 playWhenReady = true
             }
@@ -81,29 +80,17 @@ internal object FongMiExoPlayerFactory {
         // Request credentials remain per playback session. A global shared factory or
         // an upstream shared URL-only cache would cross Herrin's authorization boundary.
         val http = DefaultHttpDataSource.Factory()
+            .setUserAgent(androidx.media3.common.util.Util.getUserAgent(context, "tv.herrin.app"))
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(12_000)
-            .setDefaultRequestProperties(FongMiPlaybackItemSupport.extractHeaders(mediaItem(media)))
+            .setDefaultRequestProperties(media.headers)
         return ExoMediaSourceFactory(DefaultDataSource.Factory(context, http))
     }
 
     fun mediaItem(media: PlaybackMedia, uri: String = media.uri,
                   mimeOverride: String? = media.declaredMime): MediaItem {
-        val headers = Bundle().apply { media.headers.forEach { (name, value) -> putString(name, value) } }
-        val subtitleFlags = FongMiPlaybackItemSupport.subtitleSelectionFlags(media.subtitles.map { it.language })
-        return MediaItem.Builder().setUri(uri)
-            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(Uri.parse(uri))
-                .setExtras(headers).build())
-            .setMimeType(mimeOverride)
-            .setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
-                val subtitleUri = Uri.parse(subtitle.uri)
-                MediaItem.SubtitleConfiguration.Builder(subtitleUri)
-                    .setId("external:" + UUID.nameUUIDFromBytes(subtitle.uri.toByteArray(StandardCharsets.UTF_8)))
-                    .setMimeType(FongMiSubtitleFormats.mimeType(subtitleUri.path))
-                    .setLanguage(subtitle.language).setLabel(subtitle.title)
-                    .setSelectionFlags(subtitleFlags[index])
-                    .build()
-            }).build()
+        return tv.herrin.app.nativeplayback.player.MediaItemFactory.from(
+            tv.herrin.app.nativeplayback.player.PlaySpec.from(media, uri, mimeOverride))
     }
 }

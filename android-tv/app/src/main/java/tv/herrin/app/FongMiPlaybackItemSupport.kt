@@ -1,6 +1,8 @@
 /*
  * FongMi/TV player/media/MediaItemFactory.java and player/exo/ExoUtil.java
  * upstream fongmi@5e191aaced194e5cac5668cc91908ecb65336222.
+ * 2026-11-04 compared to pinned 305dff233cde512e2c83f71529b7c3ecfd61fefc.
+ * Existing host language policy retained; not the full LangUtil scoring pipeline.
  * GPL-3.0-only; see android-tv/LICENSE-GPL-3.0.md.
  * Host adaptation: PlaybackMedia does not expose Sub.rawFlag, so only the
  * language-preference/default-index branch is applicable. Never invent flags.
