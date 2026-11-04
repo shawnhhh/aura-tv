@@ -51,7 +51,7 @@ public class ParseJobStartupFailureTest {
         ExecutorService worker = (ExecutorService) executorField.get(job);
         ExecutorService aggregate = (ExecutorService) infiniteField.get(job);
         try {
-            job.start(Result.fromObject("{\\"url\\":\\"https://video.example/1\\"}"), false);
+            job.start(Result.fromObject("{\"url\":\"https://video.example/1\"}"), false);
             fail("rejected scheduler should fail startup");
         } catch (RejectedExecutionException expected) {
             assertTrue(worker.isShutdown());
