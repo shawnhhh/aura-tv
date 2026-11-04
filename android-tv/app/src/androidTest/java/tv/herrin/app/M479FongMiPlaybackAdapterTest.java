@@ -16,6 +16,23 @@ import tv.herrin.app.nativeplayback.NativeFongMiProxy;
 @UnstableApi
 @RunWith(AndroidJUnit4.class)
 public final class M479FongMiPlaybackAdapterTest {
+    @Test public void isolatedWorkerResolvedMediaReachesMainProcessExo() {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            try (FongMiExoMediaSession session = FongMiPlaybackAdapter.prepareMedia(
+                    context, "spider/episode/2", "https://example.org/video.m3u8",
+                    java.util.Collections.singletonMap("Referer", "https://example.org/"),
+                    "application/x-mpegURL")) {
+                assertEquals("spider/episode/2", session.player().getCurrentMediaItem().mediaId);
+                assertEquals("https://example.org/video.m3u8",
+                    session.player().getCurrentMediaItem().localConfiguration.uri.toString());
+            }
+            assertThrows(IllegalArgumentException.class, () ->
+                FongMiPlaybackAdapter.prepareMedia(context, "bad", "javascript:alert(1)",
+                    java.util.Collections.emptyMap(), null));
+        });
+    }
+
     @Test public void resolvedProxyRouteReachesExoWithoutLegacyProxy() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved",
