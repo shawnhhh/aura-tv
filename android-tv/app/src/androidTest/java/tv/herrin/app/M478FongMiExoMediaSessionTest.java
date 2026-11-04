@@ -10,7 +10,7 @@ import org.junit.runner.RunWith;
 import tv.herrin.app.nativeplayback.FongMiExoMediaSession;
 import java.util.Map;
 
-/** Media3 host-bridge contract; does not execute a remote Spider or load external media. */
+/** Media3 host-bridge contract; does not execute a remote Spider or contact external media hosts. */
 @RunWith(AndroidJUnit4.class)
 public final class M478FongMiExoMediaSessionTest {
     @Test public void createsRealExoPlayerAndPreparesAuthorizedMediaItem() {
@@ -18,7 +18,7 @@ public final class M478FongMiExoMediaSessionTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             try (FongMiExoMediaSession session = FongMiExoMediaSession.create(
                     context, Map.of("Referer", "https://authorized.example/"))) {
-                session.prepare("site/episode/1", "https://authorized.example/playlist.m3u8",
+                session.prepare("site/episode/1", "http://127.0.0.1:1/playlist.m3u8",
                         MimeTypes.APPLICATION_M3U8);
                 assertNotNull(session.player());
                 assertNotNull(session.player().getCurrentMediaItem());
@@ -42,7 +42,7 @@ public final class M478FongMiExoMediaSessionTest {
                 assertThrows(IllegalArgumentException.class,
                         () -> session.prepare("id", "javascript:alert(1)", null));
                 assertThrows(IllegalArgumentException.class,
-                        () -> session.prepare("", "https://authorized.example/video.mp4", null));
+                        () -> session.prepare("", "http://127.0.0.1:1/video.mp4", null));
             }
         });
     }
