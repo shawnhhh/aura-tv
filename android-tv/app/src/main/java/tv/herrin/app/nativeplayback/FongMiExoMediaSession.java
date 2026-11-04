@@ -5,6 +5,7 @@ import android.net.Uri;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -25,6 +26,7 @@ import java.util.Map;
  * FongMi/TV fongmi@305dff233cde512e2c83f71529b7c3ecfd61fefc,
  * GPL-3.0; this integration code is part of Herrin's GPL-3.0 playback work.
  */
+@UnstableApi
 public final class FongMiExoMediaSession implements AutoCloseable {
     private final ExoPlayer player;
     private boolean released;
