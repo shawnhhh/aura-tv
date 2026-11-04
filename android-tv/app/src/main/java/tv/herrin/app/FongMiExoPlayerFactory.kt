@@ -49,8 +49,10 @@ internal object FongMiExoPlayerFactory {
         // Production Spider/CMS HTTP(S) routes still pass the shared adapter
         // boundary; do not reject Media3's legitimate local test media here.
         val scheme = Uri.parse(media.uri).scheme?.lowercase(java.util.Locale.ROOT)
-        if (scheme == "http" || scheme == "https") {
-            FongMiPlaybackAdapter.requireResolvedMediaUrl(media.uri)
+        when (scheme) {
+            "http", "https" -> FongMiPlaybackAdapter.requireResolvedMediaUrl(media.uri)
+            "file" -> Unit // Local decoder fixture; not a Spider/playerContent route.
+            else -> throw IllegalArgumentException("Unsupported media URI scheme")
         }
         val appContext = context.applicationContext
         val renderers = DefaultRenderersFactory(appContext)
