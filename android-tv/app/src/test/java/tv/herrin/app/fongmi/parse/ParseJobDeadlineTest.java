@@ -76,7 +76,7 @@ public class ParseJobDeadlineTest {
                 public boolean webSupported() { return true; }
                 public void post(Runnable task) {
                     // Reject only the initial WebView launch, not the completion callback.
-                    if (Thread.currentThread().getName().startsWith("pool-"))
+                    if (failures.get() == 0)
                         throw new IllegalStateException("UI dispatcher unavailable");
                     task.run();
                 }
