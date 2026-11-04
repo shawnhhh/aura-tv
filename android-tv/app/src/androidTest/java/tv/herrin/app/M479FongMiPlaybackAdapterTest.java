@@ -39,6 +39,13 @@ public final class M479FongMiPlaybackAdapterTest {
             assertThrows(IllegalArgumentException.class, () ->
                 FongMiPlaybackAdapter.prepareMedia(context, "bad", "javascript:alert(1)",
                     java.util.Collections.emptyMap(), null));
+            assertThrows(IllegalArgumentException.class, () ->
+                FongMiPlaybackAdapter.prepareMedia(context, "bad",
+                    "https://user:secret@example.org/video.mp4",
+                    java.util.Collections.emptyMap(), null));
+            assertThrows(IllegalArgumentException.class, () ->
+                FongMiPlaybackAdapter.prepareMedia(context, "bad",
+                    "file:///sdcard/secret.mp4", java.util.Collections.emptyMap(), null));
         });
     }
 
