@@ -27,9 +27,10 @@ internal class HerrinRemoteMediaProbe(
         .readTimeout(1_500, TimeUnit.MILLISECONDS)
         .callTimeout(2_800, TimeUnit.MILLISECONDS)
         .build(),
-    private val authorizeLocal: suspend (String) -> Boolean = {
-        SpiderProxyPlayback.diagnose(it) == SpiderProxyPlayback.Health.READY
-    }
+    // A token embedded in an untrusted URL is not user authorization.
+    // Global TMDB source lookup explicitly supplies FongMiSessionAuthorization
+    // for its current approved Spider site; all other callers fail closed.
+    private val authorizeLocal: suspend (String) -> Boolean = { false }
 ) {
     enum class Result {
         MEDIA, INVALID_URL, UNAUTHORIZED_LOCAL, HTTP_ERROR, LOGIN_OR_TEXT,

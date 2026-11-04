@@ -35,6 +35,14 @@ spider_code = spider_runtime.read_text()
 # Never reintroduce the legacy SpiderLoopbackProxy for any live Binder operation.
 assert 'SpiderLoopbackProxy' not in spider_code
 assert 'NativeFongMiProxy' in spider_code
+# The historical Spider/loopback implementation remains available ONLY to
+# legacy tests. Shipping it in the production APK reintroduces two engines.
+legacy = ('SpiderProxyPlayback.kt', 'SpiderLoopbackProxy.kt',
+          'HerrinSpiderHlsProxyRewrite.kt')
+for name in legacy:
+    assert not (root / 'app/src/main/java/tv/herrin/app' / name).exists(), name
+    assert (root / 'app/src/test/java/tv/herrin/app' / name).is_file(), name
+    assert (root / 'app/src/androidTest/java/tv/herrin/app' / name).is_file(), name
 assert spider_code.count('WebView') == 1 and 'WebView.setDataDirectorySuffix' in spider_code
 assert not any('WebView' in p.read_text() for p in root.glob('app/src/main/java/**/*.kt')
                if p.resolve() not in {browser_backend.resolve(), spider_runtime.resolve()})
