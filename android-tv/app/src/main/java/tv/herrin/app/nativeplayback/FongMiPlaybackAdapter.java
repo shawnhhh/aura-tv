@@ -48,9 +48,13 @@ public final class FongMiPlaybackAdapter {
             @NonNull Context context, @NonNull String mediaId,
             @NonNull String resolvedUrl, @NonNull Map<String, String> headers,
             @Nullable String mimeType) {
+        // Reject an unresolved parser instruction before allocating a decoder.
+        // Local file fixtures belong only to the existing test-capable Compose
+        // factory, not to the remote Spider IPC entry.
+        String verifiedUrl = requireResolvedMediaUrl(resolvedUrl);
         FongMiExoMediaSession session = FongMiExoMediaSession.create(context, headers);
         try {
-            session.prepare(mediaId, resolvedUrl, mimeType);
+            session.prepare(mediaId, verifiedUrl, mimeType);
             return session;
         } catch (RuntimeException failure) {
             session.close();
