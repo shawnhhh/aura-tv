@@ -48,7 +48,12 @@ class M476SpiderHlsRealFrameTest {
             val url = SpiderProxyPlayback.rebaseUrl(
                 "proxy://", "approved", proxy) ?: error("Static HLS route not authorized")
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
-                HerrinRemoteMediaProbe().probe(PlaybackMedia(url,
+                HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                    val uri = runCatching { java.net.URI(candidate) }.getOrNull()
+                    uri?.scheme == "http" && uri.host == "127.0.0.1" &&
+                        uri.port == proxy.port && uri.path == "/proxy" &&
+                        uri.rawQuery?.split('&')?.any { it == "session=${proxy.token}" } == true
+                }).probe(PlaybackMedia(url,
                     declaredMime = PlaybackFormatRetry.HLS)))
             ActivityScenario.launch<PlaybackTestActivity>(
                 Intent(inst.targetContext, PlaybackTestActivity::class.java)
