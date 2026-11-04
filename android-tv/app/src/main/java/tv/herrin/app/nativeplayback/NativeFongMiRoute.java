@@ -107,7 +107,9 @@ public final class NativeFongMiRoute {
         // A URL aimed at our CURRENT port must carry the real session, never
         // a forged or stale one. Legacy aliases cannot assert a session.
         if (currentPort && !proxy.sessionToken().equals(priorToken)) return null;
-        if (legacy && priorToken != null) return null;
+        // An upstream fixed-port alias carries no Herrin capability. Never
+        // exchange a token presented by another local server for our token.
+        if (!currentPort && priorToken != null) return null;
         // Site-free FongMi routes are the already authorized JAR's static
         // Proxy.proxy callback. They never execute arbitrary scripts.
         if (routeSite == null && !proxy.hasStaticHandler()) return null;
