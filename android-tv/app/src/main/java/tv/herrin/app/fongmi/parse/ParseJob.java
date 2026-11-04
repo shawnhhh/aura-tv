@@ -111,7 +111,12 @@ public class ParseJob implements ParseCallback {
     private void execute(Result result) {
         FutureTask<?> task = new FutureTask<>(() -> parseResult(result), null);
         timeout = host.scheduler().schedule(() -> {
-            if (task.cancel(true)) {
+            // A parser may have returned from parseResult after dispatching an
+            // asynchronous WebView/HTTP callback. In that case FutureTask is
+            // already complete but the playback result is still pending.
+            // The deadline belongs to the entire ParseJob, not just the worker.
+            if (!done.get()) {
+                task.cancel(true);
                 host.onFailure(new java.util.concurrent.TimeoutException("Parse deadline"));
                 onParseError();
             }
