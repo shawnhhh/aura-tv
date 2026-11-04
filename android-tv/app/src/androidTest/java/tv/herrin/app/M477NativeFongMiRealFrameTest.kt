@@ -52,7 +52,9 @@ class M477NativeFongMiRealFrameTest {
                 NativeFongMiRoute.probe(mediaUrl, "approved"))
             val media = PlaybackMedia(mediaUrl)
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
-                HerrinRemoteMediaProbe().probe(media))
+                HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                    tv.herrin.app.nativeplayback.FongMiSessionAuthorization.isApproved(candidate, "approved")
+                }).probe(media))
             ActivityScenario.launch<PlaybackTestActivity>(
                 Intent(inst.targetContext, PlaybackTestActivity::class.java)
                     .putExtra("fixture", mediaUrl)
