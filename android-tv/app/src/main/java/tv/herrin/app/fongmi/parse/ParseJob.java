@@ -65,7 +65,7 @@ public class ParseJob implements ParseCallback {
 
     private final AtomicBoolean done = new AtomicBoolean();
     private final Set<Call> calls = ConcurrentHashMap.newKeySet();
-    private final List<AutoCloseable> webViews;
+    private final java.util.concurrent.ConcurrentLinkedQueue<AutoCloseable> webViews;
     private final Host host;
     private ScheduledFuture<?> timeout;
     private ExecutorService executor;
@@ -79,7 +79,7 @@ public class ParseJob implements ParseCallback {
         this.host = host;
         this.executor = Executors.newSingleThreadExecutor();
         this.infinite = Executors.newCachedThreadPool();
-        this.webViews = new ArrayList<>();
+        this.webViews = new java.util.concurrent.ConcurrentLinkedQueue<>();
         this.callback = callback;
     }
 
@@ -238,8 +238,15 @@ public class ParseJob implements ParseCallback {
             try {
                 AutoCloseable view = host.startWeb(key, from, headers, url, click, callback, !url.contains("player/?url="));
                 // A host may complete synchronously before returning its handle.
+                if (view == null) throw new IllegalStateException("WebView host returned no handle");
                 if (done.get()) try { view.close(); } catch (Exception ignored) {}
-                else webViews.add(view);
+                else {
+                    webViews.add(view);
+                    // stop() may have drained the queue between the done check
+                    // and insertion. Reclaim the late handle exactly once.
+                    if (done.get() && webViews.remove(view))
+                        try { view.close(); } catch (Exception ignored) {}
+                }
             } catch (RuntimeException failure) {
                 // WebView startup is dispatched on the UI thread. Without
                 // notifying ParseJob, a synchronous host failure strands the
@@ -296,7 +303,8 @@ public class ParseJob implements ParseCallback {
         if (infinite != null) infinite.shutdownNow();
         infinite = null;
         executor = null;
-        for (AutoCloseable webView : webViews) try { webView.close(); } catch (Exception ignored) {}
-        webViews.clear();
+        AutoCloseable webView;
+        while ((webView = webViews.poll()) != null)
+            try { webView.close(); } catch (Exception ignored) {}
     }
 }
