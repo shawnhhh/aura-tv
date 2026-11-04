@@ -2,6 +2,7 @@ package tv.herrin.app
 
 import org.json.JSONArray
 import org.json.JSONObject
+import tv.herrin.app.nativeplayback.NativeFongMiRoute
 import java.net.URI
 import java.util.Locale
 
@@ -66,7 +67,7 @@ internal object FongMiPlaybackRouter {
         }
 
         val filePath = URI(sourceUrl).path.orEmpty().lowercase(Locale.ROOT)
-        val isMedia = SpiderProxyPlayback.isCatVodProxy(sourceUrl) ||
+        val isMedia = NativeFongMiRoute.isNativeProxy(sourceUrl) ||
             PlaybackFormatRetry.declaredMime(response.optString("format")) != null
         val isWebPage = filePath.endsWith(".html") || filePath.endsWith(".htm")
         val needsParser = response.optInt("parse", 0) != 0 || response.optInt("jx", 0) != 0
