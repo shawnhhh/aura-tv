@@ -235,10 +235,18 @@ public class ParseJob implements ParseCallback {
         }
         host.post(() -> {
             if (done.get()) return;
-            AutoCloseable view = host.startWeb(key, from, headers, url, click, callback, !url.contains("player/?url="));
-            // A host may complete synchronously before returning its handle.
-            if (done.get()) try { view.close(); } catch (Exception ignored) {}
-            else webViews.add(view);
+            try {
+                AutoCloseable view = host.startWeb(key, from, headers, url, click, callback, !url.contains("player/?url="));
+                // A host may complete synchronously before returning its handle.
+                if (done.get()) try { view.close(); } catch (Exception ignored) {}
+                else webViews.add(view);
+            } catch (RuntimeException failure) {
+                // WebView startup is dispatched on the UI thread. Without
+                // notifying ParseJob, a synchronous host failure strands the
+                // parser until its deadline and may crash the main process.
+                host.onFailure(failure);
+                if (!done.get()) callback.onParseError();
+            }
         });
     }
 
