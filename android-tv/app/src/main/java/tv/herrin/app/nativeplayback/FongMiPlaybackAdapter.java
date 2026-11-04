@@ -23,6 +23,26 @@ public final class FongMiPlaybackAdapter {
     private FongMiPlaybackAdapter() {}
 
     /**
+     * Main-process entry for a Spider result already resolved by the isolated
+     * authorized Spider worker and ParseJob. The worker owns the native proxy;
+     * the main process must never create a second proxy or re-run the JAR.
+     */
+    @NonNull
+    public static FongMiExoMediaSession prepareMedia(
+            @NonNull Context context, @NonNull String mediaId,
+            @NonNull String resolvedUrl, @NonNull Map<String, String> headers,
+            @Nullable String mimeType) {
+        FongMiExoMediaSession session = FongMiExoMediaSession.create(context, headers);
+        try {
+            session.prepare(mediaId, resolvedUrl, mimeType);
+            return session;
+        } catch (RuntimeException failure) {
+            session.close();
+            throw failure;
+        }
+    }
+
+    /**
      * Normalize only the authorized FongMi proxy alias, then hand actual media
      * bytes to Exo. A parser instruction is not a playable URL.
      */
