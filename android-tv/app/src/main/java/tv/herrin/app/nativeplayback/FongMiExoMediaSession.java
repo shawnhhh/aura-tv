@@ -86,6 +86,30 @@ public final class FongMiExoMediaSession implements AutoCloseable {
         player.prepare();
     }
 
+    /** Attach the actual video decoder output to Herrin's existing player surface. */
+    public void setVideoSurface(@Nullable android.view.Surface surface) {
+        ensureActive();
+        if (surface == null) player.clearVideoSurface();
+        else player.setVideoSurface(surface);
+    }
+
+    /** TV remote play/pause commands act on the same Exo instance that decodes media. */
+    public void play() {
+        ensureActive();
+        player.play();
+    }
+
+    public void pause() {
+        ensureActive();
+        player.pause();
+    }
+
+    public void seekTo(long positionMs) {
+        ensureActive();
+        if (positionMs < 0) throw new IllegalArgumentException("Negative seek position");
+        player.seekTo(positionMs);
+    }
+
     private void ensureActive() {
         if (released) throw new IllegalStateException("Media session released");
     }
