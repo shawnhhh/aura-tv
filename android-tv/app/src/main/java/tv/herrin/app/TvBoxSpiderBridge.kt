@@ -579,7 +579,12 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val spider = active ?: error("站点 Spider 尚未加载")
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
-            val raw = spider.playerContent(selected.title, selected.uri, activeVipFlags)
+            // CatVod Spider.playerContent is synchronous and may block in network
+            // or plugin code. Keep it interruptible without wrapping the later
+            // suspending ParseJob in runBlocking (which breaks cancellation).
+            val raw = runInterruptible(Dispatchers.IO) {
+                spider.playerContent(selected.title, selected.uri, activeVipFlags)
+            }
             val siteKey = activeSiteKey.orEmpty()
             val localProxy = activeNativeProxy
                 ?: return@attemptPlayback PlaybackResult.Unavailable(
