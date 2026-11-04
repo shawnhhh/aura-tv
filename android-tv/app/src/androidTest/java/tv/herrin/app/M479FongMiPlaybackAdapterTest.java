@@ -37,6 +37,26 @@ public final class M479FongMiPlaybackAdapterTest {
         }
     }
 
+    @Test public void selectedQualityVariantReachesSameExoMediaItem() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", path -> null, null)) {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                String response = "{\\"jx\\":0,\\"url\\":{\\"position\\":1,\\"values\\":["
+                    + "{\\"n\\":\\"4K\\",\\"v\\":\\"https://example.org/4k.mp4\\"},"
+                    + "{\\"n\\":\\"1080p\\",\\"v\\":\\"https://example.org/1080.mp4\\"}]}}";
+                try (FongMiExoMediaSession session = FongMiPlaybackAdapter.prepareResolved(
+                        context, "episode/quality", response, "approved", proxy)) {
+                    assertEquals("https://example.org/1080.mp4",
+                        session.player().getCurrentMediaItem().localConfiguration.uri.toString());
+                } catch (Exception e) { throw new AssertionError(e); }
+                assertThrows(IllegalArgumentException.class, () ->
+                    FongMiPlaybackAdapter.prepareResolved(context, "episode",
+                        "{\\"url\\":{\\"position\\":9,\\"values\\":[{\\"v\\":\\"https://example.org/a.mp4\\"}]}}",
+                        "approved", proxy));
+            });
+        }
+    }
+
     @Test public void unresolvedParseAndForeignSiteNeverReachPlayer() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", path -> null, null)) {
