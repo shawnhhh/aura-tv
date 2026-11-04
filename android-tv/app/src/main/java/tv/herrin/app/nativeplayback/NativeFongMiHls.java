@@ -20,8 +20,10 @@ public final class NativeFongMiHls {
         if (playlist == null || playlist.length() > MAX_MANIFEST_BYTES) return null;
         String header = playlist.startsWith("\uFEFF") ? playlist.substring(1) : playlist;
         if (!header.stripLeading().startsWith("#EXTM3U")) return null;
-        String[] lines = playlist.split("\n", -1);
-        StringBuilder result = new StringBuilder(playlist.length() + 128);
+        // Emit a canonical UTF-8 HLS header. A decoded U+FEFF BOM can make
+        // Media3's HlsPlaylistParser reject otherwise valid Spider playlists.
+        String[] lines = header.split("\n", -1);
+        StringBuilder result = new StringBuilder(header.length() + 128);
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             String plain = line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;

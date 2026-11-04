@@ -76,6 +76,8 @@ public final class NativeFongMiHlsTest {
             String rewritten = new String(
                 manifestRequest.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             manifestRequest.disconnect();
+            assertTrue("Media3 HLS parser needs a canonical #EXTM3U first line",
+                rewritten.startsWith("#EXTM3U"));
             assertFalse("BOM/generic-MIME HLS must not retain TVBox's stale 9978 port",
                 rewritten.contains(":9978/"));
             assertTrue("Segments must use this approved Spider session",
