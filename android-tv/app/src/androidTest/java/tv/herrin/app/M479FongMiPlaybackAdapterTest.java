@@ -2,6 +2,7 @@ package tv.herrin.app;
 
 import static org.junit.Assert.*;
 import android.content.Context;
+import androidx.media3.common.util.UnstableApi;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.util.Map;
@@ -12,6 +13,7 @@ import tv.herrin.app.nativeplayback.FongMiExoMediaSession;
 import tv.herrin.app.nativeplayback.NativeFongMiProxy;
 
 /** Verifies authorized playerContent -> native proxy -> actual Media3 item. */
+@UnstableApi
 @RunWith(AndroidJUnit4.class)
 public final class M479FongMiPlaybackAdapterTest {
     @Test public void resolvedProxyRouteReachesExoWithoutLegacyProxy() throws Exception {
