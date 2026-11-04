@@ -553,8 +553,28 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         }
     }
 
+    /**
+     * ParseJob and WebView resolution are suspending operations. Never nest
+     * runBlocking inside the Spider worker's interruptible thread: cancellation
+     * must reach ParseJob.stop() and browser teardown when a line is switched.
+     */
+    private suspend fun <T> attemptPlayback(block: suspend () -> T): SpiderResult<T> = try {
+        withTimeoutOrNull(150_000L) {
+            SpiderResult.Ready(withContext(Dispatchers.IO) { block() })
+        } ?: run {
+            close()
+            SpiderResult.Failure("Spider 播放解析超时，请重新应用站点")
+        }
+    } catch (cancel: CancellationException) {
+        throw cancel
+    } catch (exception: Exception) {
+        SpiderResult.Failure("Spider ${SpiderFailureDetails.message(exception)}")
+    } catch (error: LinkageError) {
+        SpiderResult.Failure("Spider ${SpiderFailureDetails.message(error)}")
+    }
+
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
-        val attemptResult = attempt {
+        val attemptResult = attemptPlayback {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
@@ -569,8 +589,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val nativeContent = NativeFongMiRoute.playerContent(raw, siteKey, localProxy)
                 ?: return@attempt PlaybackResult.Unavailable(
                     "FongMi 原生代理拒绝了跨站点或过期的线路（NATIVE_PROXY_ROUTE_REJECTED）")
-            val resolved = kotlinx.coroutines.runBlocking {
-                FongMiParsePlayback.resolve(
+            val resolved = FongMiParsePlayback.resolve(
                     context = context,
                     playerContent = nativeContent,
                     flag = selected.title,
@@ -585,7 +604,6 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     normalizeMedia = { url ->
                         NativeFongMiRoute.url(url, siteKey, localProxy)
                     })
-            }
             val healthy = when (resolved) {
                 is PlaybackResult.Ready -> {
                     val primary = NativeFongMiRoute.url(resolved.media.uri, siteKey, localProxy)
