@@ -16,6 +16,15 @@ import tv.herrin.app.nativeplayback.NativeFongMiProxy;
 @UnstableApi
 @RunWith(AndroidJUnit4.class)
 public final class M479FongMiPlaybackAdapterTest {
+    @Test public void sharedPlayerBoundaryRejectsUnresolvedSchemes() {
+        assertEquals("https://example.org/movie.m3u8",
+            FongMiPlaybackAdapter.requireResolvedMediaUrl("https://example.org/movie.m3u8"));
+        assertThrows(IllegalArgumentException.class, () ->
+            FongMiPlaybackAdapter.requireResolvedMediaUrl("javascript:alert(1)"));
+        assertThrows(IllegalArgumentException.class, () ->
+            FongMiPlaybackAdapter.requireResolvedMediaUrl("file:///sdcard/private.mp4"));
+    }
+
     @Test public void isolatedWorkerResolvedMediaReachesMainProcessExo() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
