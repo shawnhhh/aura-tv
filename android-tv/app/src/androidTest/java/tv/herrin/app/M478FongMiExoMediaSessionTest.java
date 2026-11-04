@@ -47,6 +47,22 @@ public final class M478FongMiExoMediaSessionTest {
         });
     }
 
+    @Test public void remoteCommandsControlSameRealExoInstanceAndRejectInvalidSeek() {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            try (FongMiExoMediaSession session = FongMiExoMediaSession.create(context, Map.of())) {
+                session.prepare("episode", "http://127.0.0.1:1/clip.mp4", null);
+                session.setVideoSurface(null);
+                session.play();
+                assertTrue(session.player().getPlayWhenReady());
+                session.pause();
+                assertFalse(session.player().getPlayWhenReady());
+                assertThrows(IllegalArgumentException.class, () -> session.seekTo(-1));
+                session.seekTo(0);
+            }
+        });
+    }
+
     @Test public void closeIsIdempotentAndPreventsReuse() {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
@@ -54,6 +70,8 @@ public final class M478FongMiExoMediaSessionTest {
             session.close();
             session.close();
             assertThrows(IllegalStateException.class, session::player);
+            assertThrows(IllegalStateException.class, session::play);
+            assertThrows(IllegalStateException.class, () -> session.setVideoSurface(null));
         });
     }
 }
