@@ -27,7 +27,9 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Offline structural checks
-        run: python3 scripts/check_static.py
+        run: |
+          python3 scripts/check_static.py
+          python3 -m unittest discover -s scripts -p 'test_check_playback_boundary.py' -v
       - name: Native integration boundary regression (offline)
         run: python3 -m unittest discover -s ../scripts/m467 -p 'test_verify_native_kit.py' -v
       - name: Native candidate build script syntax (offline)

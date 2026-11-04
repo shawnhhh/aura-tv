@@ -1,5 +1,8 @@
 # P0 原生播放核心：现有入口与待替换依赖矩阵
 
+历史快照：当前生产状态以 [2026-11-04 兼容核对](../../p0/compatibility-matrix.md)
+为准。下文“旧代理仍在生产”的描述已过时，不应据此重复执行迁移。
+
 基线：Herrin PR #80 commit `5d777026b09ea9f06684c033aebba02b97ca1c2a`；
 上游 FongMi/TV `fongmi@305dff233cde512e2c83f71529b7c3ecfd61fefc`。
 

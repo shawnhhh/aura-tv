@@ -1,5 +1,11 @@
 # Original FongMi/TV playback source staged for Herrin P0
 
+Status update (2026-11-04): the staging-time migration statements below are
+historical. The legacy proxy has since moved to test-only source sets; production
+uses an authorized native proxy and a host-adapted ParseJob. PlayerManager and
+the full custom Media3 dependency graph remain unintegrated. See the current
+[production compatibility audit](../../../docs/p0/compatibility-matrix.md).
+
 Original source: https://github.com/FongMi/TV
 Upstream branch: `fongmi`; pinned revision `305dff233cde512e2c83f71529b7c3ecfd61fefc`.
 License: GPL-3.0; preserve upstream copyrights and required notices.
