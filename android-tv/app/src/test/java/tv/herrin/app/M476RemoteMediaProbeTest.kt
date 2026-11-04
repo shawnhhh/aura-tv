@@ -14,6 +14,21 @@ class M476RemoteMediaProbeTest {
     private fun probe(authorized: Boolean = true) = HerrinRemoteMediaProbe(
         authorizeLocal = { authorized })
 
+    @Test fun defaultLocalProbeIsDeniedWithoutExplicitApprovedSpiderSession() = runBlocking {
+        val sends = java.util.concurrent.atomic.AtomicInteger()
+        tv.herrin.app.nativeplayback.NativeFongMiProxy("approved", { _ ->
+            sends.incrementAndGet()
+            arrayOf(200, "video/mp4",
+                java.io.ByteArrayInputStream(byteArrayOf(0, 0, 0, 24, 1, 2, 3, 4)))
+        }, null).use { native ->
+            assertEquals("Unscoped media probes must never trust a localhost token alone",
+                HerrinRemoteMediaProbe.Result.UNAUTHORIZED_LOCAL,
+                HerrinRemoteMediaProbe().probe(PlaybackMedia(native.siteUrl())))
+            assertEquals("Unscoped probe must never access the Spider byte callback",
+                0, sends.get())
+        }
+    }
+
     @Test fun actuallyReadsVideoBytesAndPreservesOnlyCurrentSourceAuth() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(206)
