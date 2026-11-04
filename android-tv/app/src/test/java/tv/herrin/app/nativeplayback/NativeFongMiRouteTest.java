@@ -46,6 +46,13 @@ public final class NativeFongMiRouteTest {
             assertNull(NativeFongMiRoute.url(
                 proxy.baseUrl().replace(proxy.sessionToken(), "stale") +
                     "&do=jar&siteKey=approved", "approved", proxy));
+            // A foreign or stale capability must never be laundered into the active session.
+            assertNull(NativeFongMiRoute.url(
+                "http://127.0.0.1:9978/proxy?session=forged&do=jar&siteKey=approved",
+                "approved", proxy));
+            assertNull(NativeFongMiRoute.url(
+                "http://127.0.0.1:9978/proxy?session=" + proxy.sessionToken()
+                    + "&do=jar&siteKey=approved", "approved", proxy));
             assertNull(NativeFongMiRoute.url(
                 "proxy://do=parse", "approved", proxy));
             assertNull(NativeFongMiRoute.url(
