@@ -582,12 +582,12 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val raw = spider.playerContent(selected.title, selected.uri, activeVipFlags)
             val siteKey = activeSiteKey.orEmpty()
             val localProxy = activeNativeProxy
-                ?: return@attempt PlaybackResult.Unavailable(
+                ?: return@attemptPlayback PlaybackResult.Unavailable(
                     "FongMi 原生 Spider 代理未启动（NATIVE_PROXY_NOT_RUNNING）")
             // Pass the original CatVod proxy operation to the selected site's
             // authorized Java Spider. No old do= whitelist or second loopback.
             val nativeContent = NativeFongMiRoute.playerContent(raw, siteKey, localProxy)
-                ?: return@attempt PlaybackResult.Unavailable(
+                ?: return@attemptPlayback PlaybackResult.Unavailable(
                     "FongMi 原生代理拒绝了跨站点或过期的线路（NATIVE_PROXY_ROUTE_REJECTED）")
             val resolved = FongMiParsePlayback.resolve(
                     context = context,
