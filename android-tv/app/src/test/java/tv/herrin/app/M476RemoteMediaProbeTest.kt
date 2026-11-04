@@ -5,6 +5,10 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
+import tv.herrin.app.nativeplayback.FongMiSessionAuthorization
+import tv.herrin.app.nativeplayback.NativeFongMiProxy
+import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicInteger
 
 class M476RemoteMediaProbeTest {
     private fun probe(authorized: Boolean = true) = HerrinRemoteMediaProbe(
@@ -123,6 +127,42 @@ class M476RemoteMediaProbeTest {
             val media = PlaybackMedia(server.url("/film.mp4").toString())
             assertEquals(HerrinRemoteMediaProbe.Result.LOGIN_OR_TEXT, probe().probe(media))
             assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun approvedFongMiSpiderStreamQualifiesForGlobalSourceLookupWithoutLegacyGate() = runBlocking {
+        val byteReads = AtomicInteger()
+        NativeFongMiProxy("approved", { params ->
+            assertEquals("approved", params["siteKey"])
+            assertEquals("jar", params["do"])
+            byteReads.incrementAndGet()
+            arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(0, 0, 0, 24, 1, 2, 3, 4)))
+        }, null).use { nativeProxy ->
+            val url = nativeProxy.siteUrl()
+            assertTrue(FongMiSessionAuthorization.isApproved(url, "approved"))
+            val globalSelectorProbe = HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                FongMiSessionAuthorization.isApproved(candidate, "approved")
+            })
+            assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
+                globalSelectorProbe.probe(PlaybackMedia(url)))
+            assertEquals(1, byteReads.get())
+
+            val wrongSiteProbe = HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                FongMiSessionAuthorization.isApproved(candidate, "other-site")
+            })
+            assertEquals(HerrinRemoteMediaProbe.Result.UNAUTHORIZED_LOCAL,
+                wrongSiteProbe.probe(PlaybackMedia(url)))
+            val noActiveSpiderProbe = HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                FongMiSessionAuthorization.isApproved(candidate, null)
+            })
+            assertEquals(HerrinRemoteMediaProbe.Result.UNAUTHORIZED_LOCAL,
+                noActiveSpiderProbe.probe(PlaybackMedia(url)))
+            assertFalse(FongMiSessionAuthorization.isApproved(
+                url.replace(nativeProxy.sessionToken(), "stale"), "approved"))
+            assertFalse(FongMiSessionAuthorization.isApproved(
+                "http://127.0.0.1:" + nativeProxy.port() + "/unrelated?session=" +
+                    nativeProxy.sessionToken(), "approved"))
+            assertEquals("No source data leaks to unauthorized candidates", 1, byteReads.get())
         }
     }
 

@@ -82,6 +82,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import tv.herrin.app.nativeplayback.FongMiSessionAuthorization
 
 /** Only one branded wordmark fade; no fixed multi-second launch choreography. */
 internal object LaunchMotion {
@@ -1124,7 +1125,13 @@ private fun Herrin() {
             val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
             val remotes = adapters.associateBy { it.id }
             val reachability = HerrinPersonalMediaProbe()
-            val remoteReachability = HerrinRemoteMediaProbe()
+            // Only the existing user-approved Spider session may supply a local
+            // FongMi media URL. The native proxy authenticates the session and
+            // site on a real HTTP health request; unapproved localhost stays blocked.
+            val approvedPlaybackSiteKey = approvedSpiderSite?.key
+            val remoteReachability = HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                FongMiSessionAuthorization.isApproved(candidate, approvedPlaybackSiteKey)
+            })
             val verifiedRemoteLines = mutableMapOf<String, Pair<Int, String>>()
             val resolved = HerrinVerifiedSourceResolver(
                 adapters.filterNot { it.id in tmdbFallbackIndex.rejected(targetId) }
