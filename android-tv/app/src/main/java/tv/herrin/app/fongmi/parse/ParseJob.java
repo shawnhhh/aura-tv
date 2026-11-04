@@ -88,9 +88,16 @@ public class ParseJob implements ParseCallback {
     }
 
     public ParseJob start(Result result, boolean useParse) {
-        setParse(result, useParse);
-        execute(result);
-        return this;
+        // Configuration and executor scheduling can fail synchronously before
+        // any parser callback is installed. Do not leak the two worker pools.
+        try {
+            setParse(result, useParse);
+            execute(result);
+            return this;
+        } catch (RuntimeException | Error failure) {
+            stop();
+            throw failure;
+        }
     }
 
     private void setParse(Result result, boolean useParse) {
