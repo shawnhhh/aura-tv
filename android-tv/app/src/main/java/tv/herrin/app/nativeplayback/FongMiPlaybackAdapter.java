@@ -66,6 +66,7 @@ public final class FongMiPlaybackAdapter {
             throw new IllegalArgumentException("Expected a resolved media URL");
         Map<String, String> headers = new HashMap<>();
         JSONObject jsonHeaders = parsed.optJSONObject("header");
+        if (jsonHeaders == null) jsonHeaders = parsed.optJSONObject("headers");
         if (jsonHeaders != null) {
             Iterator<String> keys = jsonHeaders.keys();
             while (keys.hasNext()) {
