@@ -160,6 +160,7 @@ internal object FongMiParsePlayback {
                             cont.resume(if (normalized == null) PlaybackResult.Unavailable("PARSE_INVALID_RESULT_URL：解析器未提供有效媒体地址")
                             else PlaybackResult.Ready(PlaybackMedia(uri = normalized,
                                 headers = safeHeaders(headers, parserUrl, normalized),
+                                subtitles = SpiderVodCodec.subtitles(root, allowHttp),
                                 allowHttpRedirects = allowHttp,
                                 declaredMime = PlaybackFormatRetry.declaredMime(root.optString("format")))))
                         }

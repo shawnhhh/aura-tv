@@ -21,6 +21,9 @@ public final class NativeFongMiProxyTest {
                 new ByteArrayInputStream(new byte[]{1,2,3,4}),
                 Map.of("Accept-Ranges", "bytes", "Content-Length", "999")};
         }, null)) {
+            AtomicInteger diagnosticStatus = new AtomicInteger();
+            java.util.concurrent.atomic.AtomicBoolean diagnosticRange = new java.util.concurrent.atomic.AtomicBoolean();
+            proxy.setDiagnostic((status, range) -> { diagnosticStatus.set(status); diagnosticRange.set(range); });
             assertTrue(proxy.port() > 0);
             HttpURLConnection http = connection(proxy.siteUrl());
             http.setRequestProperty("Range", "bytes=0-3");
@@ -28,7 +31,23 @@ public final class NativeFongMiProxyTest {
             assertArrayEquals(new byte[]{1,2,3,4}, http.getInputStream().readAllBytes());
             assertEquals("bytes", http.getHeaderField("Accept-Ranges"));
             assertEquals(1, calls.get());
+            assertEquals(206, diagnosticStatus.get());
+            assertTrue(diagnosticRange.get());
             http.disconnect();
+        }
+    }
+
+    @Test public void diagnosticsAreBoundedAndCannotChangeHttpResponses() throws Exception {
+        AtomicInteger reports = new AtomicInteger();
+        try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", params ->
+                new Object[]{200, "video/mp4", new ByteArrayInputStream(new byte[]{5})}, null)) {
+            proxy.setDiagnostic((status, range) -> {
+                reports.incrementAndGet();
+                throw new IllegalStateException("original diagnostic fixture");
+            });
+            for (int i = 0; i < 18; i++) assertEquals(200, responseCode(proxy.siteUrl()));
+            assertEquals(16, reports.get());
+            assertEquals(403, responseCode(proxy.baseUrl() + "&siteKey=other&do=jar"));
         }
     }
 

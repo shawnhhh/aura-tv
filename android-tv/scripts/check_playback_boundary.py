@@ -42,8 +42,9 @@ def verify():
     assert creators == ["FongMiExoPlayerFactory.kt"], f"Competing Exo creation paths: {creators}"
     panel = without_comments((source / "main/java/tv/herrin/app/AuthorizedPlaybackPanel.kt").read_text())
     assert "HerrinPlaybackAdapter(" in panel
-    assert not re.search(r"\bplayer\s*\.\s*(?:setMediaItem|prepare|release)\s*\(", panel), \
+    assert not re.search(r"\bplayer\s*\.\s*(?:setMediaItem|prepare|release|setPlaybackSpeed)\s*\(", panel), \
         "Player preparation/release bypasses the sole production manager"
+    assert "PlaybackTransport.cycle(player" not in panel, "Track choices bypass manager restoration"
     print("PASS: no legacy playback implementation/reference in production source sets")
     print("PASS: one Exo builder, production adapter owns preparation and release")
 

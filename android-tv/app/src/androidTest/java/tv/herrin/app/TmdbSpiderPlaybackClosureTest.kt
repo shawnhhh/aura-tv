@@ -49,6 +49,7 @@ class TmdbSpiderPlaybackClosureTest {
                     }
                     decoded
                 }
+                assertTrue(HerrinPlaybackDiagnosticJournal.export().contains("FIRST_FRAME"))
             }
             routes.clear()
             assertNull(routes.sourceFilm(display.id))

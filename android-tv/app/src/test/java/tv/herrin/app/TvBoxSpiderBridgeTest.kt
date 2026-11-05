@@ -95,22 +95,23 @@ class TvBoxSpiderBridgeTest {
         assertFalse(media.headers.containsKey("Bad Header"))
     }
 
-    @Test fun `player supports CatVod quality pairs and WebVTT sidecar subtitles`() {
+    @Test fun `player supports CatVod quality pairs and VTT SRT sidecars without local paths`() {
         val result = SpiderVodCodec.player("""{
             "parse":0,
             "url":["不支持","javascript:alert(1)","高清","https://media.example.org/hi.m3u8"],
             "subs":[
               {"url":"https://media.example.org/zh.vtt","name":"简体中文","lang":"zh-CN","format":"text/vtt"},
-              {"url":"https://media.example.org/sub.srt","name":"不支持格式","lang":"en","format":"application/x-subrip"},
+              {"url":"https://media.example.org/sub.srt","name":"English","lang":"en","format":"application/x-subrip"},
               {"url":"file:///private.vtt","name":"本地不可用","lang":"en","format":"text/vtt"}
             ]
         }""", false)
         assertTrue(result is PlaybackResult.Ready)
         val media = (result as PlaybackResult.Ready).media
         assertEquals("https://media.example.org/hi.m3u8", media.uri)
-        assertEquals(1, media.subtitles.size)
-        assertEquals("zh-cn", media.subtitles.single().language)
-        assertEquals("简体中文", media.subtitles.single().title)
+        assertEquals(2, media.subtitles.size)
+        assertEquals("zh-cn", media.subtitles[0].language)
+        assertEquals("简体中文", media.subtitles[0].title)
+        assertEquals("application/x-subrip", media.subtitles[1].mimeType)
         val acrossProcess = SpiderIpc.readPlayback(SpiderIpc.playback(media), false)
         assertEquals(media, (acrossProcess as PlaybackResult.Ready).media)
     }

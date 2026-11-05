@@ -201,7 +201,8 @@ internal object SpiderIpc {
             media.subtitles.take(6).forEach { subtitle ->
                 put(JSONObject().put("lang", subtitle.language)
                     .put("name", subtitle.title).put("url", subtitle.uri)
-                    .put("format", "text/vtt"))
+                    .put("format", subtitle.mimeType ?: FongMiSubtitleFormats.supportedMime(subtitle.uri, null))
+                    .put("flag", FongMiSubtitleFormats.selectionFlag(subtitle.rawFlag)))
             }
         })
 
@@ -223,11 +224,12 @@ internal object SpiderIpc {
             val track = subs.optJSONObject(index) ?: return@mapNotNull null
             val trackUrl = TvBoxUrl.normalize(track.optString("url"), allowHttp)
                 ?: return@mapNotNull null
-            if (!trackUrl.substringBefore('?').lowercase().endsWith(".vtt") &&
-                track.optString("format") != "text/vtt") return@mapNotNull null
+            val format = FongMiSubtitleFormats.supportedMime(trackUrl, track.optString("format"))
+                ?: return@mapNotNull null
             val lang = track.optString("lang").trim().lowercase()
             if (!lang.matches(Regex("[a-z]{2,3}(-[a-z0-9]{2,8})*"))) return@mapNotNull null
-            AuthorizedSubtitle(lang, track.optString("name").take(64), trackUrl)
+            AuthorizedSubtitle(lang, track.optString("name").take(64), trackUrl,
+                FongMiSubtitleFormats.selectionFlag(track.optInt("flag")), format)
         }
         val alternatives = response.optJSONArray("alternates") ?: JSONArray()
         val urls = (0 until minOf(alternatives.length(), 7)).mapNotNull { index ->

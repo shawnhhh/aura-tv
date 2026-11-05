@@ -10,4 +10,16 @@ import com.fongmi.android.tv.player.track.TrackUtil
 
 internal object FongMiSubtitleFormats {
     fun mimeType(path: String?): String = TrackUtil.getSubtitleMimeType(path)
+
+    /** Only real published Media3 subtitle decoders; URL validation stays at the source boundary. */
+    fun supportedMime(url: String, declared: String?): String? {
+        val mime = declared.orEmpty().trim().lowercase(java.util.Locale.ROOT)
+        if (mime in setOf("text/vtt", "application/x-subrip", "text/x-ssa", "application/ttml+xml")) return mime
+        if (mime.isNotEmpty() && mime != "application/octet-stream") return null
+        val path = url.substringBefore('?').substringBefore('#').lowercase(java.util.Locale.ROOT)
+        if (listOf(".vtt", ".srt", ".ass", ".ssa", ".ttml", ".xml", ".dfxp").none(path::endsWith)) return null
+        return mimeType(path)
+    }
+
+    fun selectionFlag(raw: Int): Int = raw and 7 // Media3 DEFAULT | FORCED | AUTOSELECT only.
 }

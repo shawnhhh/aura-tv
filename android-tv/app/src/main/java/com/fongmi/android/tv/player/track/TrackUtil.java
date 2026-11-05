@@ -2,6 +2,8 @@
  * Source: FongMi/TV fongmi@5e191aaced194e5cac5668cc91908ecb65336222
  * Original author: FongMi. GPL-3.0; see android-tv/LICENSE-GPL-3.0.md.
  * Imported 2026-11-01. See docs/m467/player-engine.md for host adaptation notes.
+ * HERRIN 2026-11-05: restore primary audio by language/label after manifest ID
+ * changes; exclude unsupported tracks. Fixed PlayerManager target: 305dff233cde.
  */
 package com.fongmi.android.tv.player.track;
 
@@ -115,6 +117,7 @@ public class TrackUtil {
         for (Tracks.Group trackGroup : tracks.getGroups()) {
             if (trackGroup.getType() != track.getType()) continue;
             for (int i = 0; i < trackGroup.length; i++) {
+                if (!trackGroup.isTrackSupported(i)) { ordinal++; continue; }
                 Format format = trackGroup.getTrackFormat(i);
                 TrackInfo candidate = new TrackInfo(trackGroup, i);
                 if (track.getFormat() != null && track.getFormat().equals(describeFormat(format))) {
@@ -122,7 +125,7 @@ public class TrackUtil {
                     if (exactMatch == null) exactMatch = candidate;
                 }
                 if (ordinal == track.getOrdinal()) ordinalMatch = candidate;
-                if (track.getType() == C.TRACK_TYPE_TEXT) {
+                if (track.getType() == C.TRACK_TYPE_TEXT || track.getType() == C.TRACK_TYPE_AUDIO) {
                     int score = getMatchScore(track, format);
                     int distance = Math.abs(ordinal - track.getOrdinal());
                     if (score > bestScore || (score == bestScore && score > 0 && distance < bestDistance)) {

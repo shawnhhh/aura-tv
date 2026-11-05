@@ -11,6 +11,26 @@ import org.junit.runner.RunWith
 /** Real Android WebView + direct upstream ParseJob, using only local authorized fixtures. */
 @RunWith(AndroidJUnit4::class)
 class M467ParseJobInstrumentedTest {
+    @Test fun jsonParseKeepsOriginalApprovedSubtitleMimeAndFlags() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"url":"${server.url("/original.mp4")}"}"""))
+            val parser = TvBoxPlaybackParser("original-json", 1, server.url("/json?url=").toString())
+            val resolved = runBlocking { FongMiParsePlayback.resolve(context,
+                """{"parse":1,"playUrl":"parse:original-json","url":"https://watch.test/item","subs":[
+                  {"url":"https://original.invalid/sub.srt","lang":"en","flag":2},
+                  {"url":"https://original.invalid/sub.ass","lang":"zh"}
+                ]}""", "vip", emptyList(), true, playbackParsers = listOf(parser)) }
+            assertTrue("Actual JSON ParseJob must return media", resolved is PlaybackResult.Ready)
+            val subs = (resolved as PlaybackResult.Ready).media.subtitles
+            assertEquals(listOf("application/x-subrip", "text/x-ssa"), subs.map { it.mimeType })
+            assertEquals(2, subs[0].rawFlag)
+            assertEquals(0, subs[1].rawFlag)
+        }
+    }
+
     @Test fun browserRecognizesExtensionlessHttpMediaAndRejectsFakeMp4Html() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         MockWebServer().use { server ->

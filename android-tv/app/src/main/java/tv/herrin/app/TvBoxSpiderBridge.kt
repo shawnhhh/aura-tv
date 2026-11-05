@@ -121,23 +121,7 @@ internal object SpiderVodCodec {
         // the player result supplies no explicit headers. Avoid key-by-key
         // merging: it could accidentally forward stale authentication values.
         val headers = responseHeaders.ifEmpty { siteHeaders }
-        val tracks = data.optJSONArray("subs") ?: JSONArray()
-        val subtitles = (0 until minOf(tracks.length(), 6)).mapNotNull { index ->
-            val track = tracks.optJSONObject(index) ?: return@mapNotNull null
-            val rawUrl = track.optString("url")
-            val subtitleUrl = TvBoxUrl.normalize(rawUrl, allowHttp) ?: return@mapNotNull null
-            // This Media3 panel currently configures WebVTT only. Do not pass
-            // SRT/ASS tracks to a VTT decoder and report them as working.
-            val format = track.optString("format").lowercase()
-            if (format.isNotBlank() && format != "text/vtt" &&
-                format != "application/octet-stream") return@mapNotNull null
-            if (!subtitleUrl.substringBefore('?').lowercase().endsWith(".vtt") && format != "text/vtt")
-                return@mapNotNull null
-            val lang = track.optString("lang").trim().lowercase().ifBlank { "und" }
-            if (!lang.matches(Regex("[a-z]{2,3}(-[a-z0-9]{2,8})*"))) return@mapNotNull null
-            val name = track.optString("name").trim().take(64).ifBlank { "字幕 ${index + 1}" }
-            AuthorizedSubtitle(lang, name, subtitleUrl)
-        }
+        val subtitles = subtitles(data, allowHttp)
         // These URLs are explicitly supplied by this approved player's result.
         // If no origin-specific headers are required, a dead 404/410 primary
         // must not prevent Media3 trying the next authorized backup address.
@@ -148,6 +132,22 @@ internal object SpiderVodCodec {
             declaredMime = declaredMime,
             safeNotFoundFallback = safeNotFoundFallback,
             danmakuSources = DanmakuProtocol.decodeSources(data.opt("danmaku"))))
+    }
+
+    /** Shared by direct playerContent and ParseJob success; parsing must not discard subtitles. */
+    fun subtitles(data: JSONObject, allowHttp: Boolean): List<AuthorizedSubtitle> {
+        val tracks = data.optJSONArray("subs") ?: return emptyList()
+        return (0 until minOf(tracks.length(), 6)).mapNotNull { index ->
+            val track = tracks.optJSONObject(index) ?: return@mapNotNull null
+            val subtitleUrl = TvBoxUrl.normalize(track.optString("url"), allowHttp) ?: return@mapNotNull null
+            val format = FongMiSubtitleFormats.supportedMime(subtitleUrl, track.optString("format"))
+                ?: return@mapNotNull null
+            val lang = track.optString("lang").trim().lowercase().ifBlank { "und" }
+            if (!lang.matches(Regex("[a-z]{2,3}(-[a-z0-9]{2,8})*"))) return@mapNotNull null
+            val name = track.optString("name").trim().take(64).ifBlank { "字幕 ${index + 1}" }
+            AuthorizedSubtitle(lang, name, subtitleUrl,
+                FongMiSubtitleFormats.selectionFlag(track.optInt("flag")), format)
+        }
     }
 
     /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */
@@ -423,6 +423,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
 
     private fun installProxy(ticket: Long, proxy: NativeFongMiProxy) = synchronized(lifecycle) {
         checkOpen(ticket)
+        proxy.setDiagnostic { status, range ->
+            HerrinPlaybackDiagnosticJournal.record("PROXY", "HTTP_RESPONSE", "STATUS=$status")
+            if (range) HerrinPlaybackDiagnosticJournal.record("PROXY", "RANGE_REQUEST")
+        }
         initializingProxy = proxy
         CatVodProxy.set(proxy.port(), proxy.sessionToken())
     }
@@ -676,6 +680,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // or plugin code. Keep it interruptible without wrapping the later
             // suspending ParseJob in runBlocking (which breaks cancellation).
             val raw = runInterruptible(Dispatchers.IO) {
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_STARTED")
                 spider.playerContent(selected.title, selected.uri, activeVipFlags)
             }
             val siteKey = activeSiteKey.orEmpty()

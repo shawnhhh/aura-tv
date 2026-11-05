@@ -39,7 +39,8 @@ object MediaItemFactory {
         require(uri.scheme?.lowercase() in setOf("https", "http", "file")) { "Unresolved media URI" }
         if (uri.scheme != "file") require(uri.host != null && uri.userInfo == null) { "Invalid media URI" }
         val extras = Bundle().apply { media.headers.forEach { (key, value) -> putString(key, value) } }
-        val flags = FongMiPlaybackItemSupport.subtitleSelectionFlags(media.subtitles.map { it.language })
+        val flags = FongMiPlaybackItemSupport.subtitleSelectionFlags(media.subtitles.map { it.language },
+            rawFlags = media.subtitles.map { it.rawFlag })
         return MediaItem.Builder().setUri(uri).setMediaId(spec.key)
             .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).setExtras(extras).build())
             .setMediaMetadata(spec.metadata).setMimeType(spec.format)
@@ -49,7 +50,8 @@ object MediaItemFactory {
                 MediaItem.SubtitleConfiguration.Builder(subUri)
                     .setId("external:" + UUID.nameUUIDFromBytes(sub.uri.toByteArray(StandardCharsets.UTF_8)))
                     .setLabel(sub.title).setLanguage(sub.language)
-                    .setMimeType(FongMiSubtitleFormats.mimeType(subUri.path))
+                    .setMimeType(FongMiSubtitleFormats.supportedMime(sub.uri, sub.mimeType)
+                        ?: throw IllegalArgumentException("Unsupported subtitle format"))
                     .setSelectionFlags(flags[index]).build()
             }).build()
     }

@@ -16,6 +16,7 @@ class HerrinPlaybackAdapter(context: Context, media: PlaybackMedia,
         private val mediaId: String = media.mediaId ?: java.util.UUID.randomUUID().toString()) : AutoCloseable {
     val media = media.copy(headers = media.headers.toMap(), subtitles = media.subtitles.toList())
     val manager = PlayerManager(FongMiExoPlayerFactory.create(context, this.media))
+        .apply { onDiagnostic = { event, detail -> HerrinPlaybackDiagnosticJournal.record("MEDIA3", event, detail) } }
     val player get() = manager.player
     fun item(uri: String = media.uri, mime: String? = media.declaredMime): MediaItem =
         MediaItemFactory.from(PlaySpec(mediaId, media, uri, mime))

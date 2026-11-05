@@ -81,4 +81,15 @@ class M467FongMiTrackRestoreTest {
         assertEquals(TrackUtil.describeFormat(group.getFormat(1)), chosen.format)
         assertNull(TrackUtil.fromSelection(host.tracks, TrackSelectionOverride(group, listOf(0, 1)), Track.ROLE_PRIMARY))
     }
+
+    @Test fun audioLanguageRestoresAfterManifestIdsAndOrdinalsChange() {
+        fun audio(id: String, lang: String) = Format.Builder().setId(id).setLanguage(lang)
+            .setSampleMimeType("audio/mp4a-latm").build()
+        val saved = TrackUtil.createTrack(C.TRACK_TYPE_AUDIO, "en", audio("old-en", "en"), 0)
+            .apply { isSelected = true }
+        val rebuilt = host(audio("new-zh", "zh"), audio("new-en", "en"))
+        assertEquals(listOf(1), TrackUtil.findSelection(rebuilt.player, saved)!!.trackIndices)
+        assertNull("A different language must not be restored by ordinal",
+            TrackUtil.findSelection(host(audio("only-zh", "zh")).player, saved))
+    }
 }

@@ -29,3 +29,21 @@ opaque URI。凭据在 Binder 保留，详情/播放在 client 和 worker 检查
   因此本批是实际 HTTP 播放核心接管，不宣称完整定制 fork 的所有功能已移植或 P0 完成。
 
 最终以本提交串行 CI 的 MP4/HLS/TS 出帧、音轨和遥控器全量结果为准；TCL 未实测。
+
+## 2026-11-05：控制、轨道恢复和字幕接线
+
+- 对照固定上游 PlayerManager 的 setSpeed/startSpeedPress/endSpeedPress、setRepeatOne、
+  replay/resetTrack/restoreTrackSelection：统一 manager 接管 UI 的倍速、音轨、字幕和相对
+  seek；接入发布版 Exo 的跳过静音与单集循环，不另建引擎。临时倍速重复按下保留原速度。
+- 轨道选择按当前媒体 key 保存在 manager 内存；重试/manifest 更新按格式、语言和标签
+  恢复，缺失时等待，换 key 和 close 清除；不跨来源持久化凭据或轨道 ID。
+- Spider playerContent、Binder、MediaItemFactory 接通 SRT/ASS/SSA/TTML/VTT 的 MIME 和
+  Sub.rawFlag；explicit DEFAULT/FORCED/AUTOSELECT 优先于语言默认。既有 scheme/授权
+  校验不变。ASS/SSA 只由发布版 Media3 解码文字，不宣称 libass 排版/特效。
+- 安全诊断仅传固定事件、HTTP 状态码及布尔值；不传 URL、mediaId、Header 或异常消息。
+- 固定 TV 提交 app/build.gradle 通过 fileTree(app/libs/*.aar) 引入本地库；实际该目录
+  仅 hook-release.aar、tvbus-release.aar，没有匹配的 MPV/custom Media3 AAR。上游
+  PlayerEngineFactory 还直接需要 androidx.media3.mpvplayer.media.MpvDrmSupport 和
+  exoplayer.hls.CmgConfiguration；发布版 1.9.4 不提供这些 ABI。当前没有验证匹配的
+  Java/JNI/Surface/ARM native kit，因此未接 MPV/ISO、双字幕、音频/字幕偏移或特效。
+  不把旧 native candidate、普通 Exo 或空壳类型当成这些实现。

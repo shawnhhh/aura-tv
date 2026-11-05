@@ -1,9 +1,9 @@
 /*
  * FongMi/TV player/media/MediaItemFactory.java and player/exo/ExoUtil.java
- * upstream fongmi@5e191aaced194e5cac5668cc91908ecb65336222.
+ * upstream fongmi@305dff233cde512e2c83f71529b7c3ecfd61fefc. Original author FongMi.
  * GPL-3.0-only; see android-tv/LICENSE-GPL-3.0.md.
- * Host adaptation: PlaybackMedia does not expose Sub.rawFlag, so only the
- * language-preference/default-index branch is applicable. Never invent flags.
+ * Host adaptation: explicit Sub.rawFlag travels through the approved Spider IPC;
+ * language defaults apply only when the source did not specify flags.
  */
 package tv.herrin.app
 
@@ -19,19 +19,22 @@ internal object FongMiPlaybackItemSupport {
     private val preferredText = listOf("zh", "zho", "chi")
 
     /**
-     * FongMi MediaItemFactory.SubtitleFlags.create/get without explicit flags:
+     * FongMi MediaItemFactory.SubtitleFlags.create/get:
      * - a single subtitle is default
      * - multiple tracks prefer the user's preferred language
      * - otherwise the first is default
      *
-     * PlaybackMedia carries no Sub.rawFlag: explicit upstream flags remain
-     * unsupported, and must not be represented as an exact source port.
+     * An explicit flag wins; other tracks then use AUTOSELECT, as upstream.
      */
     fun subtitleSelectionFlags(
         languages: List<String?>,
-        preferredLanguages: List<String> = preferredText
+        preferredLanguages: List<String> = preferredText,
+        rawFlags: List<Int> = List(languages.size) { 0 }
     ): List<Int> {
+        require(rawFlags.size == languages.size)
         if (languages.isEmpty()) return emptyList()
+        val flags = rawFlags.map(FongMiSubtitleFormats::selectionFlag)
+        if (flags.any { it != 0 }) return flags.map { if (it == 0) C.SELECTION_FLAG_AUTOSELECT else it }
         val preferred = preferredLanguages.map { normalizeLanguage(it) }
             .filter { it.isNotBlank() }.distinct()
         var bestIndex = 0

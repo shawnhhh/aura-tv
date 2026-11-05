@@ -428,7 +428,7 @@ private fun AuthorizedPlaybackSession(
     fun applyRemoteSeek(deltaMs: Long) {
         // Reflect the actual committed target immediately in the seek bar.
         // Player timeline updates can otherwise lag the remote by one second.
-        shownPosition = PlaybackTransport.seekBy(player, deltaMs)
+        shownPosition = playback.manager.seekBy(deltaMs)
         if (!isLive) controlsVisible = true
         controlsInteractionEpoch++
     }
@@ -697,17 +697,17 @@ private fun AuthorizedPlaybackSession(
                     modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
                 if (advancedControlsVisible) {
                     Button(onClick = {
-                        player.setPlaybackSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
+                        playback.manager.setSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
                         uiEpoch++
                     }, modifier = Modifier.testTag("transport-speed")) {
                         Text("倍速: ${player.playbackParameters.speed}×")
                     }
                     Button(
-                        onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
+                        onClick = { if (playback.manager.cycleTrack(C.TRACK_TYPE_AUDIO)) uiEpoch++ },
                         enabled = audios.size > 1, modifier = Modifier.testTag("transport-audio")
                     ) { Text("音轨: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)) }
                     Button(
-                        onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
+                        onClick = { if (playback.manager.cycleTrack(C.TRACK_TYPE_TEXT)) uiEpoch++ },
                         enabled = captions.isNotEmpty(), modifier = Modifier.testTag("transport-subtitle")
                     ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
                 }
@@ -744,6 +744,18 @@ private fun AuthorizedPlaybackSession(
                         controlsInteractionEpoch++
                     }, modifier = Modifier.testTag("transport-viewport-mode")) {
                         Text("画面：" + viewportMode.label)
+                    }
+                    if (!isLive) Button(onClick = {
+                        playback.manager.setRepeatOne(player.repeatMode != Player.REPEAT_MODE_ONE)
+                        uiEpoch++
+                    }, modifier = Modifier.testTag("transport-repeat")) {
+                        Text("单集循环：" + if (player.repeatMode == Player.REPEAT_MODE_ONE) "开" else "关")
+                    }
+                    Button(onClick = {
+                        playback.manager.setSkipSilenceEnabled(!player.skipSilenceEnabled)
+                        uiEpoch++
+                    }, modifier = Modifier.testTag("transport-skip-silence")) {
+                        Text("跳过静音：" + if (player.skipSilenceEnabled) "开" else "关")
                     }
                     if (testDiagnostics) {
                         Button(onClick = { showVerification = !showVerification

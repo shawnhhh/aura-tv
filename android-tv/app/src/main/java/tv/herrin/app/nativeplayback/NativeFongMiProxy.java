@@ -91,7 +91,23 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             URLEncoder.encode(siteKey, StandardCharsets.UTF_8);
     }
 
+    public interface Diagnostic { void httpResponse(int status, boolean range); }
+    private volatile Diagnostic diagnostic;
+    private final java.util.concurrent.atomic.AtomicInteger diagnosticBudget = new java.util.concurrent.atomic.AtomicInteger(16);
+    public void setDiagnostic(Diagnostic diagnostic) { this.diagnostic = diagnostic; }
+
     @Override public Response serve(IHTTPSession session) {
+        Response response = dispatch(session);
+        Diagnostic sink = diagnostic;
+        if (sink != null && diagnosticBudget.getAndDecrement() > 0) {
+            // The callback cannot access request URLs, headers, cookies or plugin exceptions.
+            try { sink.httpResponse(response.getStatus().getRequestStatus(), session.getHeaders().containsKey("range")); }
+            catch (RuntimeException ignored) { /* Diagnostics cannot alter the media response. */ }
+        }
+        return response;
+    }
+
+    private Response dispatch(IHTTPSession session) {
         if (session.getMethod() != Method.GET && session.getMethod() != Method.HEAD) {
             return error(Response.Status.METHOD_NOT_ALLOWED);
         }
@@ -259,5 +275,5 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         @Override public int getRequestStatus() { return code; }
         @Override public String getDescription() { return code + " Proxy Status"; }
     }
-    @Override public void close() { stop(); }
+    @Override public void close() { diagnostic = null; stop(); }
 }

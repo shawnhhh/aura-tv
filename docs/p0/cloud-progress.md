@@ -1,5 +1,29 @@
 # P0 Cloud 断点
 
+## 当前：设备交付、统一控制与字幕集成（2026-11-05）
+
+- 恢复基线/远端/PR HEAD `68f9fcb6ceac4b46f01927e7fca981d0fa165d55`，工作区干净，
+  PR #80 Draft；CI 42008276480 success，不重跑旧 SHA 的验证。
+- 已下载该 run 的 artifact 13406356779，实际 CI APK 为 tv.herrin.app / 63 / 0.4.59-alpha，
+  SHA256 `d03a1fd39c1252f2acc4f075e61ac726bbef9c165e5f1d84bb42b0afdc615202`。
+  与本地 APK 字节不同，分别标识，交付回执 /workspace/artifacts/delivery-68f9fcb.json。
+- 本批真实代码：PlayerManager 接管倍速/临时倍速/相对 seek/音轨/字幕，接通单集循环、
+  跳过静音、replay；音轨/字幕选择按媒体 key 保存，重试和 manifest 改变后恢复，
+  换 key/close 清理；音轨 ID/顺序改变按语言标签匹配，不用错误 ordinal 替代。
+- SpiderVodCodec→Binder→MediaItemFactory 接通 SRT/ASS/SSA/TTML/VTT MIME 与 Sub.rawFlag，
+  ParseJob 宿主成功回调保留原授权字幕；没有修改已通过的 ParseJob 取消/超时实现。
+- 播放初始化/首帧/音轨/释放诊断只输出固定事件与数值；原生 Proxy 最多16次/实例的
+  HTTP状态/Range诊断，不传URL/凭据/异常消息。安装和日志见 tcl-http-validation.md。
+- 版本64 / 0.4.60-alpha；本批定向/静态/最终557 JVM（零失败/错误/跳过）、
+  lint（0错误/30警告）及Debug/测试APK构建均通过。提交后必须核对该 HEAD 的
+  Debug→Emulator；最终 SHA、APK真实校验值与CI结论保存在 /workspace/artifacts/ 回执。
+- 固定 TV app/libs 实际仅 hook/tvbus AAR；当前没有匹配定制Media3/MPV/ISO的Java+JNI
+  依赖包，不创建stub、不改普通Exo冒充。双字幕/音画偏移/libass特效仍未提供。
+  未运行外部插件；无TCL/真实第三方授权片源验收，不宣称P0完成。
+- 无官方准确额度百分比/恢复时间接口、无不足提示；不承诺后台自醒。单代理/单工作树。
+- 下一操作：统一验证成功后提交/push本批，检查准确HEAD串行CI并下载新APK核验包名、
+  版本及SHA256；失败先修真实原因。成功后下一能力为匹配定制Media3/native依赖接入。
+
 ## 当前：真实 HTTP 闭环、同集自动恢复与交付（2026-11-05）
 
 - 基线 `b87a8a2cc8942ea686bd6779ffcab37c48ea9db7`，CI 41996515815 success（547 JVM/187 TV）。

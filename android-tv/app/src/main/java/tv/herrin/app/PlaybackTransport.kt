@@ -3,6 +3,7 @@ package tv.herrin.app
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.fongmi.android.tv.player.track.TrackUtil
+import com.fongmi.android.tv.bean.Track
 
 /** Focusable Android TV controls call these operations; never infer a stream URL. */
 object PlaybackTransport {
@@ -50,7 +51,7 @@ object PlaybackTransport {
         }
     }
 
-    fun cycle(player: Player, trackType: Int): Boolean {
+    fun cycle(player: Player, trackType: Int, select: ((Track) -> Boolean)? = null): Boolean {
         if (!player.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)) return false
         val choices = options(player, trackType)
         if (choices.isEmpty()) return false
@@ -58,6 +59,7 @@ object PlaybackTransport {
         val current = choices.indexOfFirst { it.selected }
         val next = current + 1
         if (trackType == C.TRACK_TYPE_TEXT && next >= choices.size) {
+            if (select != null) return select(Track(trackType, "", "").apply { isSelected = false })
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
@@ -73,6 +75,7 @@ object PlaybackTransport {
             .filter { it.type == trackType }.sumOf { it.length } + choice.trackIndex
         val track = TrackUtil.createTrack(trackType, choice.label, format, ordinal)
             .apply { isSelected = true }
+        if (select != null) return select(track)
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(trackType, false).build()
         return TrackUtil.setTrackSelection(player, track)
