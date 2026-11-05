@@ -3,11 +3,32 @@ package tv.herrin.app
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import tv.herrin.app.nativeplayback.NativeFongMiRoute
 
 /** Uses a nonexistent JAR, so no downloaded plugin code is executed in CI. */
 class SpiderRemoteProcessTest {
+    @Test fun androidMainThreadProbeFailureIsNotADeadProxy() = runBlocking {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        val bridge = TvBoxSpiderBridge(inst.targetContext)
+        try {
+            val url = (bridge.probeRemoteProxyForInstrumentation() as SpiderResult.Ready).value
+            inst.runOnMainSync {
+                val previous = android.os.StrictMode.getThreadPolicy()
+                try {
+                    android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder()
+                        .detectNetwork().penaltyDeathOnNetwork().build())
+                    val health = NativeFongMiRoute.probe(url, "ci-proxy")
+                    assertEquals(NativeFongMiRoute.Health.IO_MAIN_THREAD, health)
+                    assertTrue(!FongMiPlaybackRecovery.canRebuildProxy(health.name))
+                } finally { android.os.StrictMode.setThreadPolicy(previous) }
+            }
+            assertEquals("The same listener is healthy off Main", NativeFongMiRoute.Health.READY,
+                NativeFongMiRoute.probe(url, "ci-proxy"))
+        } finally { bridge.close() }
+    }
+
     @Test fun invalidSpiderFailureReturnsFromRemoteServiceWithoutKillingUi() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val client = TvBoxSpiderBridge(context)

@@ -683,6 +683,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_STARTED")
                 spider.playerContent(selected.title, selected.uri, activeVipFlags)
             }
+            HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_RECEIVED", "EMPTY=${if (raw.isNullOrBlank()) 1 else 0}")
             val siteKey = activeSiteKey.orEmpty()
             val localProxy = activeNativeProxy
                 ?: return@attemptPlayback PlaybackResult.Unavailable(

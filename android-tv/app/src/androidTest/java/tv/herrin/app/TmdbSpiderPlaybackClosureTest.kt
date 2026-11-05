@@ -1,12 +1,18 @@
 package tv.herrin.app
 
 import android.content.Intent
+import android.content.Context
+import android.app.ActivityManager
+import android.os.Process
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -27,7 +33,8 @@ class TmdbSpiderPlaybackClosureTest {
         val site = TvBoxSite("Original source", true, key = "tmdb-original", spiderApi = "csp_Fixture")
         val config = TvBoxConfig.Single(listOf(site), emptyList(), true,
             spiderJar = "https://example.invalid/original.jar;md5;$md5")
-        val worker = TvBoxSpiderBridge(inst.targetContext)
+        val context = SpiderRuntimeCompatIpcTest.DeathRecordingContext(inst.targetContext)
+        val worker = TvBoxSpiderBridge(context)
         try {
             val listed = (worker.browse(site, config) as SpiderResult.Ready).value.single()
             val raw = (worker.details(listed) as SpiderResult.Ready).value
@@ -36,20 +43,38 @@ class TmdbSpiderPlaybackClosureTest {
             assertTrue("Old display Film cannot authorize playerContent",
                 worker.play(display, 1, "spider-0", true) is PlaybackResult.Unavailable)
             val routes = HerrinTmdbPlaybackRouteStore().apply { spider(display.id, site.key, raw) }
-            val resolved = worker.play(routes.sourceFilm(display.id)!!, 1, "spider-0", true) as PlaybackResult.Ready
-            val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
-                .putExtra("fixture", resolved.media.uri)
-            ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
-                compose.waitUntil(30_000) {
-                    var decoded = false
-                    scenario.onActivity { activity ->
-                        decoded = (activity.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3 &&
-                            (activity.player.audioDecoderCounters?.renderedOutputBufferCount ?: 0) > 0 &&
-                            PlaybackTransport.options(activity.player, C.TRACK_TYPE_AUDIO).isNotEmpty()
-                    }
-                    decoded
+            var oldUri: String? = null
+            for (attempt in 0..1) {
+                if (attempt == 1) {
+                    val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                    val process = manager.runningAppProcesses.single { it.processName == "${context.packageName}:spider" }
+                    assertNotEquals(Process.myPid(), process.pid)
+                    Process.killProcess(process.pid)
+                    withTimeout(10_000) { context.disconnected.await() }
                 }
-                assertTrue(HerrinPlaybackDiagnosticJournal.export().contains("FIRST_FRAME"))
+                // Production Compose LaunchedEffect resumes on Main after Binder.
+                // The old test's instrumentation-thread call hid main-thread /health I/O.
+                val resolved = withContext(Dispatchers.Main.immediate) {
+                    worker.play(routes.sourceFilm(display.id)!!, 1, "spider-0", true)
+                }
+                assertTrue("Main-thread caller must reach media without a probe-induced rebuild", resolved is PlaybackResult.Ready)
+                resolved as PlaybackResult.Ready
+                if (oldUri != null) assertNotEquals("Restored process must issue a fresh capability", oldUri, resolved.media.uri)
+                oldUri = resolved.media.uri
+                val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
+                    .putExtra("fixture", resolved.media.uri)
+                ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
+                    compose.waitUntil(30_000) {
+                        var decoded = false
+                        scenario.onActivity { activity ->
+                            decoded = (activity.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3 &&
+                                (activity.player.audioDecoderCounters?.renderedOutputBufferCount ?: 0) > 0 &&
+                                PlaybackTransport.options(activity.player, C.TRACK_TYPE_AUDIO).isNotEmpty()
+                        }
+                        decoded
+                    }
+                    assertTrue(HerrinPlaybackDiagnosticJournal.export().contains("FIRST_FRAME"))
+                }
             }
             routes.clear()
             assertNull(routes.sourceFilm(display.id))

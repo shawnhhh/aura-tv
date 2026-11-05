@@ -36,7 +36,8 @@ public final class NativeFongMiRoute {
     public enum Health {
         READY, NOT_PROXY, INVALID_SESSION, INVALID_PORT,
         HTTP_403, HTTP_404, HTTP_5XX, HTTP_OTHER,
-        CONNECT_REFUSED, TIMEOUT, IO_FAILURE
+        CONNECT_REFUSED, TIMEOUT, IO_MAIN_THREAD, IO_CONNECT, IO_SOCKET,
+        IO_POLICY, IO_TLS, IO_STREAM, IO_UNKNOWN, IO_FAILURE
     }
 
     /** A bounded real HTTP probe of this exact active loopback session. */
@@ -67,15 +68,34 @@ public final class NativeFongMiRoute {
             if (status == 404) return Health.HTTP_404;
             if (status >= 500 && status <= 599) return Health.HTTP_5XX;
             return Health.HTTP_OTHER;
-        } catch (java.net.ConnectException failure) {
-            return Health.CONNECT_REFUSED;
-        } catch (java.net.SocketTimeoutException failure) {
-            return Health.TIMEOUT;
         } catch (Exception failure) {
-            return Health.IO_FAILURE;
+            return healthFailure(failure);
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    /** Fixed codes only: never expose exception messages, private URLs or credentials. */
+    public static Health healthFailure(Throwable failure) {
+        java.util.List<Throwable> causes = new java.util.ArrayList<>();
+        for (Throwable next = failure; next != null && causes.size() < 12; next = next.getCause()) causes.add(next);
+        for (Throwable next : causes) {
+            if (next.getClass().getName().equals("android.os.NetworkOnMainThreadException")) return Health.IO_MAIN_THREAD;
+            if (next instanceof SecurityException) return Health.IO_POLICY;
+            if (next instanceof javax.net.ssl.SSLException || next instanceof java.security.cert.CertificateException) return Health.IO_TLS;
+            // Android cleartext denial is UnknownServiceException. Inspect only
+            // its fixed platform marker; never retain or return the message.
+            if (next instanceof java.net.UnknownServiceException &&
+                String.valueOf(next.getMessage()).toLowerCase(java.util.Locale.ROOT).contains("cleartext")) return Health.IO_POLICY;
+        }
+        for (Throwable next : causes) {
+            if (next instanceof java.net.SocketTimeoutException) return Health.TIMEOUT;
+            if (next instanceof java.net.ConnectException) return Health.CONNECT_REFUSED;
+            if (next instanceof java.net.UnknownHostException || next instanceof java.net.NoRouteToHostException) return Health.IO_CONNECT;
+            if (next instanceof java.net.SocketException) return Health.IO_SOCKET;
+        }
+        for (Throwable next : causes) if (next instanceof java.io.IOException) return Health.IO_STREAM;
+        return Health.IO_UNKNOWN;
     }
 
     /** Returns null for an invalid or foreign proxy. Ordinary external media

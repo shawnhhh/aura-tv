@@ -6,6 +6,28 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public final class NativeFongMiRouteTest {
+    @Test public void probeErrorsUseFiniteCodesAndKeepWrappedPolicyDistinct() {
+        assertEquals(NativeFongMiRoute.Health.IO_POLICY, NativeFongMiRoute.healthFailure(
+            new java.io.IOException("private-url", new SecurityException("Authorization=private"))));
+        assertEquals(NativeFongMiRoute.Health.IO_TLS, NativeFongMiRoute.healthFailure(new javax.net.ssl.SSLException("private")));
+        assertEquals(NativeFongMiRoute.Health.IO_SOCKET, NativeFongMiRoute.healthFailure(new java.net.SocketException("private")));
+        assertEquals(NativeFongMiRoute.Health.IO_CONNECT, NativeFongMiRoute.healthFailure(new java.net.NoRouteToHostException("private")));
+        assertEquals(NativeFongMiRoute.Health.CONNECT_REFUSED, NativeFongMiRoute.healthFailure(new java.net.ConnectException("private")));
+        assertEquals(NativeFongMiRoute.Health.TIMEOUT, NativeFongMiRoute.healthFailure(new java.net.SocketTimeoutException("private")));
+        assertEquals(NativeFongMiRoute.Health.IO_STREAM, NativeFongMiRoute.healthFailure(new java.io.EOFException("private")));
+        assertEquals(NativeFongMiRoute.Health.IO_UNKNOWN, NativeFongMiRoute.healthFailure(new IllegalStateException("private")));
+        assertEquals(NativeFongMiRoute.Health.IO_POLICY, NativeFongMiRoute.healthFailure(
+            new java.net.UnknownServiceException("CLEARTEXT communication to private-url not permitted by network security policy")));
+    }
+
+    @Test public void healthyListenerDoesNotProveMediaCallbackSuccess() throws Exception {
+        try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", p -> null, null)) {
+            assertEquals(NativeFongMiRoute.Health.READY, NativeFongMiRoute.probe(proxy.siteUrl(), "approved"));
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new java.net.URI(proxy.siteUrl()).toURL().openConnection();
+            try { assertEquals(502, connection.getResponseCode()); }
+            finally { connection.disconnect(); }
+        }
+    }
     @Test public void onlyIssuedSameJarStaticCapabilitiesMaySurviveSiteRotation() throws Exception {
         String oldUrl;
         java.util.List<NativeFongMiProxy.StaticOrigin> origins;

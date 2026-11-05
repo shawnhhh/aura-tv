@@ -80,7 +80,7 @@ class SpiderRuntimeCompatIpcTest {
         } finally { client.close() }
     }
 
-    private class DeathRecordingContext(base: Context) : ContextWrapper(base) {
+    internal class DeathRecordingContext(base: Context) : ContextWrapper(base) {
         val disconnected = CompletableDeferred<Unit>()
         private val registrations = mutableMapOf<ServiceConnection, ServiceConnection>()
         override fun getApplicationContext(): Context = this

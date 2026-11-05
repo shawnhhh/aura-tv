@@ -755,21 +755,29 @@ internal class TvBoxSpiderBridge(context: Context) {
                 val authorizedSiteKey = runCatching {
                     lastBrowse?.let { SpiderIpc.readSite(JSONObject(it).getJSONObject("site")).key }
                 }.getOrNull().orEmpty()
+                if (ready is PlaybackResult.Ready)
+                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_RETURNED")
                 if (ready is PlaybackResult.Ready &&
                     NativeFongMiRoute.isNativeProxy(ready.media.uri)) {
-                    val health = NativeFongMiRoute.probe(ready.media.uri, authorizedSiteKey)
+                    val source = lastBrowse
+                    val responseGeneration = generation
+                    val health = probePlayback(ready.media.uri, authorizedSiteKey, invocation)
+                        ?: return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消健康检查结果")
                     if (health != NativeFongMiRoute.Health.READY &&
                         !FongMiPlaybackRecovery.canRebuildProxy(health.name)) {
-                        PlaybackResult.Unavailable("本机 Spider 代理拒绝当前会话（PROXY_${health.name}）")
+                        PlaybackResult.Unavailable("本机 Spider 代理健康检查失败（PROXY_${health.name}）")
                     } else if (health != NativeFongMiRoute.Health.READY) {
                         // The remote process can die between returning playerContent
                         // and the Media3 connection. Explicitly invalidate its
                         // bound session and retry at most once from the last
                         // previously approved source, never an arbitrary URL.
-                        val rememberedSource = lastBrowse
-                        withContext(Dispatchers.Main.immediate) {
-                            invalidate("Spider 播放代理连接失效")
+                        val rememberedSource = source
+                        val retired = withContext(Dispatchers.Main.immediate) {
+                            if (!sourceSession.isCurrent(invocation) || generation != responseGeneration ||
+                                lastBrowse != rememberedSource) false
+                            else { invalidate("Spider 播放代理连接失效"); true }
                         }
+                        if (!retired) return PlaybackResult.Unavailable("Spider 会话已变化，已取消代理重建")
                         delay(400L)
                         if (rememberedSource == null || lastBrowse != rememberedSource)
                             return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消恢复")
@@ -781,7 +789,8 @@ internal class TvBoxSpiderBridge(context: Context) {
                                 val fixed = SpiderIpc.readPlayback(retried.value, allowHttp)
                                 if (fixed is PlaybackResult.Ready &&
                                     NativeFongMiRoute.isNativeProxy(fixed.media.uri)) {
-                                    val retriedHealth = NativeFongMiRoute.probe(fixed.media.uri, authorizedSiteKey)
+                                    val retriedHealth = probePlayback(fixed.media.uri, authorizedSiteKey, invocation)
+                                        ?: return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消恢复结果")
                                     if (retriedHealth != NativeFongMiRoute.Health.READY)
                                         PlaybackResult.Unavailable(
                                             "本机 Spider 播放代理无法启动（PROXY_${retriedHealth.name}），请重新应用影视站点")
@@ -797,6 +806,18 @@ internal class TvBoxSpiderBridge(context: Context) {
                 PlaybackResult.Unavailable("Spider 播放信息无效：" + SpiderFailureDetails.message(error))
             }
         }
+    }
+
+    private suspend fun probePlayback(uri: String, site: String, invocation: Long): NativeFongMiRoute.Health? {
+        val transport = generation
+        if (!sourceSession.isCurrent(invocation)) return null
+        HerrinPlaybackDiagnosticJournal.record("PROXY", "HEALTH_STARTED")
+        // Binder resumes on the caller's dispatcher. Compose calls from Main;
+        // localhost HTTP is still network I/O and must never run there.
+        val health = withContext(Dispatchers.IO) { NativeFongMiRoute.probe(uri, site) }
+        if (!sourceSession.isCurrent(invocation) || generation != transport) return null
+        HerrinPlaybackDiagnosticJournal.record("PROXY", "HEALTH_${health.name}")
+        return health
     }
 
     fun isApprovedSourceFilm(film: Film): Boolean = ownsFilm(film, sourceSession.snapshot())

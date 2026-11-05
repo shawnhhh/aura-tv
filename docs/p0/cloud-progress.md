@@ -1,5 +1,23 @@
 # P0 Cloud 断点
 
+## 当前：TCL 64 无法播放 / 主线程健康探测修复（2026-11-05）
+
+- 基线/远端 819f77ce37d8236cde82556e649e7bf8aef5d98f，PR #80 Draft，CI42018767532
+  success（557 JVM/193 TV）。用户真机报告 SOURCE_PROXY_IO_FAILURE，不能继承模拟器成功。
+- 确认生产 Main LaunchedEffect→bridge.play→同步 /health HTTP，在 Binder 返回后仍在Main。
+  NetworkOnMainThreadException 被吞成 IO_FAILURE 并误重建；此前端到端从测试线程调用漏检。
+  真机原始异常尚无日志，不能断言所有 TCL IO_FAILURE 都是同一类别。
+- 65 / 0.4.61-alpha：两次探测切IO，返回和重建前校验来源epoch/generation；有限安全异常码
+  MAIN_THREAD/CONNECT/SOCKET/POLICY/TLS/STREAM/UNKNOWN；策略/TLS/编程问题不重建或自动换源。
+  UI 标明健康检查失败，worker 记录 playerContent已返回/是否为空，client记录健康结果。
+- 定向JVM/设备测试编译已过；新增正常监听+Main I/O失败、Main发起原创DEX→真实出帧/音频、
+  杀掉隔离进程后合法恢复与新token、健康成功但媒体502。上游逐链路差异见 tcl-proxy-health.md。
+- 本地集中验证已通过：561 JVM零失败/错误/跳过、lint 0错误/30警告、Debug和测试APK；
+  提交后只触发该HEAD一次串行Debug→Emulator，
+  读实际结果并下载65 APK核验后交付。最终回执 /workspace/artifacts/ci-<SHA前7位>.json。
+- 不改首页/TMDB展示/来源顺序、不扩授权、不执行第三方插件、不合并、不开发MPV/ISO。
+  无准确额度/恢复时间接口，无限额提示；TCL原片源出帧/声音仍需安装本次APK复测。
+
 ## 当前：设备交付、统一控制与字幕集成（2026-11-05）
 
 - 恢复基线/远端/PR HEAD `68f9fcb6ceac4b46f01927e7fca981d0fa165d55`，工作区干净，
