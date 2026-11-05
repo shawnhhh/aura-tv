@@ -1,5 +1,33 @@
 # P0 Cloud 断点（当前）
 
+## 2026-11-05 最新恢复结果（覆盖下方历史阻塞）
+
+- 恢复起点 HEAD：`b75e1f947dcfeb933ab332a19c73bdb883b757f4`；提交前远端未变化，
+  PR #80 保持 Draft。当前实现为本断点所在提交，最终 SHA 用 `git rev-parse HEAD` 核对。
+- **JitPack 构建阻塞已解除**：没有网络配置写入口，仍保留原网络策略；根据用户本轮
+  授权改用官方 Sardine v0.9 固定提交的全部 90 份原始 Java 源码编译，保留许可证、
+  API、Simple XML/OkHttp 依赖和 ProGuard 规则，不删 NAS/云盘功能。
+- 实质代码：app/source set 接入、去除 JitPack 仓库要求、官方源码及完整 blob 校验、
+  两项真实 HTTP/XML 依赖回归。来源和法律/宿主差异见 vendor/sardine-android/README.herrin.md。
+- 补齐完整 Temurin JDK 17.0.21+9；原环境 OpenJDK 21 缺少 jlink，不能用于 AGP
+  Java 编译。下载 SHA-256、CA/代理和复现命令见 cloud-build.md。
+- 首轮完整测试揭示既有 ParseJobDeadlineTest 的关闭断言竞态：回调先释放测试线程，
+  finally 随后清理。增加关闭事件 latch，保留超时、错误次数和恰好关闭一次的断言；
+  未延长生产期限、删除测试或改旧播放器。定向 5 项测试通过后才重跑完整验证。
+- 最新本地验证：`:app:testDebugUnitTest :app:lintDebug :app:assembleDebug`
+  **BUILD SUCCESSFUL**；JUnit XML 为 **532 项、0 失败、0 错误、0 跳过**。
+  静态检查通过（43 份 FongMi + 90 份 Sardine 原版源码）；APK 中许可证和 Sardine
+  DEX 实现均已确认，已生成 Debug APK。记录见 validation/2026-11-05-source-build-success.log。
+- 原 jlink 失败、首轮 1 项竞态失败日志均保留在 validation/，不得当作跳过测试。
+- 阶段 A 的本地构建验证恢复，下一条串行操作：检查新生产 ParseJob 的宿主最终回调
+  被拒绝时的清理契约，先建立回归、再修复及验证；不增加旧代理 do 白名单。
+- CI：起点 b75e1f9 的 workflow runs 为空，PR mergeable=false；本地成功不能写成
+  当前 HEAD 的 GitHub Actions/TV Emulator 成功。TCL 未实测，P0 未完成。
+- 本轮额度接口仍不可用、没有不足提示；不虚构百分比/恢复时间。接下来仅继续一个
+  小型 ParseJob 宿主契约任务，完成后保存断点；不安排后台自动唤醒。
+
+以下为历史记录，不再要求先放行 jitpack.io。
+
 更新时间：2026-11-05 UTC。Codex Cloud、单代理串行；未使用 Superpowers。
 
 ## HEAD / 并发 / PR

@@ -22,6 +22,7 @@ public class ParseJobDeadlineTest {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch failed = new CountDownLatch(1);
+        CountDownLatch closed = new CountDownLatch(1);
         AtomicInteger closes = new AtomicInteger();
         AtomicInteger failures = new AtomicInteger();
         try {
@@ -40,7 +41,10 @@ public class ParseJobDeadlineTest {
                 public void post(Runnable task) { task.run(); }
                 public AutoCloseable startWeb(String key, String from, Map<String, String> headers, String url, String click, ParseCallback callback, boolean detect) {
                     started.countDown();
-                    return closes::incrementAndGet;
+                    return () -> {
+                        closes.incrementAndGet();
+                        closed.countDown();
+                    };
                 }
                 public void onFailure(Throwable cause) { failures.incrementAndGet(); }
             };
@@ -51,6 +55,9 @@ public class ParseJobDeadlineTest {
             job.start(Result.fromObject("{\"url\":\"https://video.example/1\"}"), false);
             assertTrue("WebView must launch", started.await(2, TimeUnit.SECONDS));
             assertTrue("timeout must fire after worker returns", failed.await(3, TimeUnit.SECONDS));
+            // ParseJob delivers the callback before its finally block closes
+            // the WebView. Await that distinct event instead of racing it.
+            assertTrue("timed-out WebView must close", closed.await(2, TimeUnit.SECONDS));
             assertEquals(1, failures.get());
             assertEquals(1, closes.get());
         } finally {

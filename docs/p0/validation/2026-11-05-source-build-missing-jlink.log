@@ -1,0 +1,61 @@
+Picked up JAVA_TOOL_OPTIONS: -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Djava.util.prefs.userRoot=/workspace/.cache/aura-android/prefs
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugResValues
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:processDebugMainManifest
+> Task :app:mergeDebugResources
+> Task :app:processDebugManifest
+> Task :app:packageDebugResources
+> Task :app:processDebugManifestForPackage
+> Task :app:javaPreCompileDebug
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:generateDebugAndroidTestResValues
+> Task :app:parseDebugLocalResources
+> Task :app:extractProguardFiles
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:processDebugResources
+> Task :app:l8DexDesugarLibDebug
+> Task :app:desugarDebugFileDependencies
+> Task :app:checkDebugDuplicateClasses
+> Task :app:compileDebugKotlin
+> Task :app:mergeExtDexDebug
+
+> Task :app:compileDebugKotlin
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/CmsOneTapPlaybackEffect.kt:55:31 Condition is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/DeviceMediaCapabilitiesAndroid.kt:21:59 'val supportedHdrTypes: IntArray!' is deprecated. Deprecated in Java.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:3985:41 Check for instance is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:3986:41 Check for instance is always 'false'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxSpiderBridge.kt:482:49 Unchecked cast of 'kotlin.Any!' to 'kotlin.Array<kotlin.Any?>'.
+
+> Task :app:compileDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Could not resolve all files for configuration ':app:androidJdkImage'.
+   > Failed to transform core-for-system-modules.jar to match attributes {artifactType=_internal_android_jdk_image, org.gradle.libraryelements=jar, org.gradle.usage=java-runtime}.
+      > Execution failed for JdkImageTransform: /workspace/.cache/aura-android/sdk/platforms/android-35/core-for-system-modules.jar.
+         > jlink executable /usr/lib/jvm/java-21-openjdk-amd64/bin/jlink does not exist.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 5m 39s
+26 actionable tasks: 26 executed

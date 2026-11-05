@@ -55,3 +55,6 @@ verify()
 
 from check_playback_boundary import verify as verify_playback_boundary
 verify_playback_boundary()
+
+from verify_sardine_vendor import verify as verify_sardine_vendor
+verify_sardine_vendor()
