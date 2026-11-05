@@ -1,5 +1,39 @@
 # P0 Cloud 断点
 
+## 当前：Loader 来源意图与晚到回调子契约（2026-11-05）
+
+- 恢复及提交前核实的 HEAD：`2cef56b629b86952ce7abddf2bcf5042ce5cc096`。
+  PR #80 Draft、未合并，远端无外部更新，工作区起点干净。基线串行 CI 41957142681 success，
+  536 JVM / 179 TV，0 失败/错误/跳过；回执已补入 validation/2026-11-05-ci-2cef56b.json。
+- 已逐项读取固定 FongMi 305dff2 的 BaseLoader/JarLoader/SpiderLoader 与当前
+  TvBoxSpiderWorker、bridge、JarCache、授权和 IPC 路径。详见 [Loader 核查](loader-lifecycle-audit.md)。
+- 本轮只修复一个实际缺口：初次 BROWSE 无条件写 lastBrowse，关闭后晚到成功可重新发布
+  失效来源；关闭前排队的应用请求也可在关闭后绑定/发送，重新触发加载。
+- 实质修改：SpiderSourceSession 原子 epoch/发布/撤销；bridge 在首次挂起前捕获意图，
+  Mutex 等待后、绑定前后、发送及结果发布检查同一意图；transport generation 独立保留。
+  close 立即撤销来源，再执行主线程解绑；不阻止已批准来源的正常运输重建，旧请求不能
+  自动取得新 epoch。没有改已验收 UI、Sardine、ParseJob 修复、默认 Super 或旧 do= 路径。
+- 回归先红后绿：5 项原创来源状态 JVM 测试中原先 2 项失败（晚到发布、撤销前排队）。
+  修复后 Loader/现有兼容定向测试通过。新增两项真实 bridge + 原创 Binder fixture 设备
+  回归，分别控制第一次主线程派发前、Binder success 后的关闭窗口；断言拒绝、无重绑/重放、
+  新显式站点成功、重复 close 只解绑一次。fixture 不加载插件，新类加入 TV 必跑门禁。
+- 本地按顺序完成：定向 → 静态（含 4 项完整套件报告器回归）→ JVM 全量 → lint →
+  Debug APK / instrumentation APK 编译，均 success。JVM **541 项、0 失败/错误/跳过**。
+  最后仅为设备 fixture 的失败清理完善 dispatcher 释放后，重跑 lint 和 APK 编译通过；
+  生产/JVM 输入未再变化。原本体取消/资源/JSON ABI 回归仍保留，没有删测或跳过。
+- 证据：validation/2026-11-05-loader-{session-red,targeted,static,jvm,lint,debug}.log。
+  所有源码修改、GPL 说明和此断点随同一实现提交保存；最终 SHA 用 git rev-parse HEAD 核对。
+- push 后下一条操作：按新 HEAD 查询 P0 Serial Verification，等 Debug success 后再检查
+  Emulator；核实 2 个新设备用例和完整媒体门禁。不能继承 2cef56b 的远端成功。
+  最终 CI/产物回执保存在云端 artifacts 的 SHA 专属 JSON，恢复时也应重新查询远端结果。
+- 下一项尚未闭合：先用原创 DEX fixture 延迟 init 复现 worker.close 后的 active/loader/
+  临时 proxy 晚到发布，再补与上游 checkOpen 等价的 worker 生命周期边界。之后核查 Film
+  详情/playerContent 的完整来源归属；本轮未宣称 Loader/阶段 B 全部完成，不进入 C/D。
+- 额度官方接口仍不可用、无不足提示；不虚构数值，不承诺后台唤醒。本轮按一个边界明确的
+  Loader 子契约执行，后续只在验证完成且额度可用时推进。TCL 未实测，P0 未完成。
+
+以下是此前任务的历史断点，恢复操作以上方最新条目为准。
+
 ## 当前：CI 恢复通过，阶段 B 的 Config 子契约验证（2026-11-05）
 
 - 当前提交前 HEAD：`f11be020832766e5ba51536b8bb5b72cc5d6febc`；恢复起点 58ca263。
