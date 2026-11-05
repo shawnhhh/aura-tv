@@ -495,6 +495,9 @@ private fun Herrin() {
     // The global CMS/Spider route alone is not safe to reuse on Back/return.
     val tmdbPlaybackRoutes = remember { HerrinTmdbPlaybackRouteStore() }
     val tmdbFallbackIndex = remember { HerrinTmdbFallbackIndex() }
+    val automaticPlayback = remember { HerrinAutomaticPlayback() }
+    var automaticSearch by remember { mutableStateOf<HerrinAutomaticPlayback.Search?>(null) }
+    var automaticResume by remember { mutableStateOf<HerrinAutomaticPlayback.Resume?>(null) }
     // Explicit retry scans the NEXT bounded batch rather than repeating
     // the same 6 dead plugin sites forever.
     val tmdbSpiderBatchOffsets = remember { mutableStateMapOf<String, Int>() }
@@ -564,6 +567,7 @@ private fun Herrin() {
     var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
     var playerRetryEpoch by remember { mutableIntStateOf(0) }
     var spiderResolved by remember { mutableStateOf<PlaybackResult?>(null) }
+    var spiderResolvedFor by remember { mutableStateOf<HerrinAutomaticPlayback.Attempt?>(null) }
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
     var cmsDetailStatus by remember { mutableStateOf("") }
@@ -839,6 +843,9 @@ private fun Herrin() {
         tmdbPersonalPlayback.clear()
         tmdbPlaybackRoutes.clear()
         tmdbFallbackIndex.clear()
+        automaticPlayback.clear()
+        automaticSearch = null
+        automaticResume = null
         tmdbSpiderBatchOffsets.clear()
         tmdbLookupEpoch++
     }
@@ -1057,7 +1064,8 @@ private fun Herrin() {
     // the scraped poster/title as an executable source or auto-plays a video.
     LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle,
         tvBoxWarehouses, personalSourceConfigEpoch, tmdbLookupEpoch) {
-        if (screen != "detail" || !filmId.startsWith("tmdb-") ||
+        val recoveryRequest = automaticSearch?.takeIf { it.film == filmId && screen == "player" }
+        if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
             tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true) return@LaunchedEffect
         val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
             ?: return@LaunchedEffect
@@ -1066,7 +1074,8 @@ private fun Herrin() {
         val searchIdentity = HerrinFilmIdentity(
             tmdbKey.second, tmdbKey.first,
             listOf(tmdbFilm.title, tmdbFilm.subtitle).filter(String::isNotBlank),
-            tmdbFilm.year.toIntOrNull()
+            tmdbFilm.year.toIntOrNull(), season = recoveryRequest?.coordinate?.season,
+            episode = recoveryRequest?.coordinate?.episode
         )
         tmdbSourceStatus = "正在检索 NAS／云盘及已授权的多个影视点…"
         HerrinPlaybackDiagnosticJournal.record("LOOKUP", "TMDB_SEARCH_STARTED")
@@ -1141,13 +1150,14 @@ private fun Herrin() {
                     personals[offer.sourceId]?.playback(offer)
                         ?: PlaybackResult.Unavailable("该个人媒体来源未授权")
                 },
+                coordinate = recoveryRequest?.coordinate,
                 verifyPersonal = { media -> reachability.canRead(media) },
                 verifyRemote = { offer, detailed ->
                     // A working episode-list or playerContent URL alone is NOT
                     // proof of playable video. Try the selected title's lines,
                     // bounded to six, and inspect actual media response bytes.
                     val verifiedLine = HerrinPlayableSourceSelector.find(
-                        detailed,
+                        detailed, coordinate = recoveryRequest?.coordinate,
                         resolve = { number, lineId ->
                             when (val adapter = remotes[offer.sourceId]) {
                                 is HerrinTvBoxSpiderSource ->
@@ -1203,6 +1213,7 @@ private fun Herrin() {
                             "spider:" + site.key !in tmdbFallbackIndex.rejected(targetId)
                     },
                     offset = spiderPageOffset,
+                    maxWallClockMs = if (recoveryRequest != null) 30_000L else 240_000L,
                     // Playback first: stop on the first media-byte-verified
                     // source rather than waiting for a hypothetical 4K claim.
                     stopAtFirstPlayable = true,
@@ -1231,7 +1242,7 @@ private fun Herrin() {
                             pick(detailed) != null
                         override suspend fun pick(detailed: Film): Pair<Int, String>? =
                             HerrinPlayableSourceSelector.find(
-                                detailed,
+                                detailed, coordinate = recoveryRequest?.coordinate,
                                 resolve = { number, lineId ->
                                     spiderBridge.play(detailed, number, lineId, tvBoxAllowHttp)
                                 },
@@ -1278,7 +1289,7 @@ private fun Herrin() {
             val detail = batchMatch.detailed
             tmdbFallbackIndex.select(targetId, "spider:" + batchMatch.site.key)
             tmdbPersonalPlayback.remove(targetId)
-            tmdbPlaybackRoutes.spider(targetId, batchMatch.site.key)
+            tmdbPlaybackRoutes.spider(targetId, batchMatch.site.key, detail)
             activeCmsSite = null
             spiderActive = true
             tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
@@ -1287,12 +1298,17 @@ private fun Herrin() {
                 episodes = maxOf(1, detail.playbackEpisodes.size))
             episode = batchMatch.episode
             line = batchMatch.line
+            recoveryRequest?.let {
+                automaticResume = HerrinAutomaticPlayback.Resume(targetId, episode, line, it.position)
+                automaticSearch = null
+            }
             tmdbSourceStatus = "已从 ${batchScan.checked} 个授权影视点中匹配并验证可播放线路：${batchMatch.site.name}；标称清晰度 ${if (batchMatch.claim >= 2160) "4K" else if (batchMatch.claim > 0) "${batchMatch.claim}p" else "未知"}，非实际解码画质"
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "SPIDER_VERIFIED")
             return@LaunchedEffect
         }
         val found = lookup.options.firstOrNull()
         if (found == null) {
+            automaticSearch = null
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "NO_VERIFIED_MEDIA")
             tmdbSourceStatus = if (batchScan != null && batchScan.nextOffset == 0)
                 "已自动检索全部 ${batchScan.eligible} 个授权 Spider 影视点，仍未找到通过播放地址验证的线路；请检查源的解析或代理兼容情况"
@@ -1329,7 +1345,7 @@ private fun Herrin() {
                     return@LaunchedEffect
                 }
                 tmdbPersonalPlayback.remove(targetId)
-                tmdbPlaybackRoutes.spider(targetId, adapter.site.key)
+                tmdbPlaybackRoutes.spider(targetId, adapter.site.key, detailed)
                 activeCmsSite = null
                 spiderActive = true
                 tmdbResolved[targetId] = (tmdbResolved[targetId] ?: tmdbFilm).copy(
@@ -1360,13 +1376,16 @@ private fun Herrin() {
         }
         // The poster was opened before the network supplied its real episodes.
         // Select a real first line rather than leaving "演示线路 A" in state.
-        (if (found.tier == HerrinSourceTier.TVBOX) verified.verifiedLine
-            else null
-            ?: HerrinPlaybackEntry.firstPlayable(tmdbResolved[targetId]))
+        (verified.verifiedLine ?: HerrinPlaybackEntry.firstPlayable(tmdbResolved[targetId]))
             ?.let { (number, id) ->
                 episode = number
                 line = id
+                recoveryRequest?.let {
+                    automaticResume = HerrinAutomaticPlayback.Resume(targetId, number, id, it.position)
+                    automaticSearch = null
+                }
             }
+
     }
     LaunchedEffect(screen, filmId, metadataToken, imdbRatingsEpoch) {
         if (screen != "detail" || !filmId.startsWith("tmdb-") ||
@@ -1646,17 +1665,25 @@ private fun Herrin() {
         }
     }
     // One finite budget for the explicit selection; URL refreshes do not reset it.
-    val playbackRecovery = remember(catalogScope, film.id, episode, line, screen) {
+    val playbackRecovery = remember(catalogScope, film.id, episode, line, screen,
+        tmdbFallbackIndex.selected(film.id) ?: activeCmsSite?.key ?: spiderBridge.approvedActiveSiteKey()) {
         FongMiPlaybackRecovery.Session()
     }
-    LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch) {
+    LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch, automaticSearch) {
         spiderResolved = null
-        if (spiderActive && screen == "player") {
-            var playableFilm = film
+        spiderResolvedFor = HerrinAutomaticPlayback.Attempt(film.id, episode, line, playerRetryEpoch,
+            tmdbFallbackIndex.selected(film.id) ?: catalogScope)
+        if (spiderActive && screen == "player" && automaticSearch == null) {
+            val sourceFilm = if (film.id.startsWith("tmdb-")) tmdbPlaybackRoutes.sourceFilm(film.id) else film
+            if (sourceFilm == null) {
+                spiderResolved = PlaybackResult.Unavailable("影片来源已失效，请重新查找片源")
+                return@LaunchedEffect
+            }
+            var playableFilm = sourceFilm
             // Load missing episode metadata IN the full-screen loading surface.
             // Do not bounce a film-card click to a technical Spider detail page.
-            if (film.playbackEpisodes.isEmpty() && film.spiderVodId != null) {
-                when (val detailed = spiderBridge.details(film)) {
+            if (sourceFilm.playbackEpisodes.isEmpty() && sourceFilm.spiderVodId != null) {
+                when (val detailed = spiderBridge.details(sourceFilm)) {
                     is SpiderResult.Ready -> {
                         playableFilm = detailed.value
                         providerFilms = providerFilms?.map {
@@ -1721,6 +1748,13 @@ private fun Herrin() {
                         "$failedStatus；系统原因：$reason"
                 }
             }
+        }
+    }
+    LaunchedEffect(screen, film.id) {
+        if (screen != "player" || automaticSearch?.film?.let { it != film.id } == true) {
+            automaticSearch = null
+            automaticResume = null
+            automaticPlayback.clear()
         }
     }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
@@ -3012,6 +3046,45 @@ private fun Herrin() {
                             screen = "detail"
                         }
                     }) else null
+                val recoveryAttempt = HerrinAutomaticPlayback.Attempt(film.id, episode, line, playerRetryEpoch,
+                    tmdbFallbackIndex.selected(film.id) ?: catalogScope)
+                val recoveryConfigEpoch = personalSourceConfigEpoch
+                val recoveryTvBox = tvBoxSingle
+                val recoverPlayback: (FongMiPlaybackRecovery.Failure, Long) -> Boolean = recover@{ failure, position ->
+                    if (screen != "player" || automaticSearch != null || filmId != recoveryAttempt.film ||
+                        episode != recoveryAttempt.episode || line != recoveryAttempt.line ||
+                        playerRetryEpoch != recoveryAttempt.retry || personalSourceConfigEpoch != recoveryConfigEpoch ||
+                        tvBoxSingle != recoveryTvBox ||
+                        (tmdbFallbackIndex.selected(film.id) ?: catalogScope) != recoveryAttempt.source) return@recover false
+                    val selectedSource = tmdbFallbackIndex.selected(film.id) ?: catalogScope
+                    val raw = tmdbPlaybackRoutes.sourceFilm(film.id) ?: film
+                    if (spiderActive && !spiderBridge.isApprovedSourceFilm(raw)) return@recover false
+                    val coordinate = HerrinPlaybackCoordinate.from(film, episode, line) ?: return@recover false
+                    when (val next = automaticPlayback.next(
+                        HerrinAutomaticPlayback.Key(catalogScope, film.id, coordinate), selectedSource,
+                        film, episode, line, tryOtherTmdbSource != null, failure)) {
+                        is HerrinAutomaticPlayback.Next.Line -> {
+                            automaticResume = HerrinAutomaticPlayback.Resume(film.id, episode, next.id, position)
+                            line = next.id
+                            HerrinPlaybackDiagnosticJournal.record("RECOVERY", "NEXT_AUTHORIZED_LINE")
+                            true
+                        }
+                        HerrinAutomaticPlayback.Next.Source -> {
+                            if (!tmdbFallbackIndex.failSelected(film.id)) return@recover false
+                            automaticSearch = HerrinAutomaticPlayback.Search(film.id, coordinate, position)
+                            tmdbPersonalPlayback.remove(film.id)
+                            tmdbPlaybackRoutes.forget(film.id)
+                            tmdbResolved[film.id]?.let { old -> tmdbResolved[film.id] = old.copy(
+                                playbackEpisodes = emptyList(), cmsVodId = null, spiderVodId = null) }
+                            activeCmsSite = null
+                            spiderActive = false
+                            tmdbLookupEpoch++
+                            HerrinPlaybackDiagnosticJournal.record("RECOVERY", "NEXT_AUTHORIZED_SOURCE")
+                            true
+                        }
+                        null -> false
+                    }
+                }
                 val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
                 val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
                 val cmsLine = if (screen == "player" && activeCmsSite != null &&
@@ -3034,10 +3107,12 @@ private fun Herrin() {
                     CmsBrowserPlayback(cmsLine.uri, cmsBrowserParser, tvBoxAllowHttp, playerRetryEpoch)
                 else null
                 val cmsParseWaiting = (cmsJsonParser != null || cmsBrowserParser != null) && parsedCms == null
-                val personalMedia = if (screen == "player")
+                val currentSpiderResult = spiderResolved.takeIf { spiderResolvedFor == recoveryAttempt }
+                val personalMedia = if (screen == "player" && film.playbackEpisodes.any { ep ->
+                    ep.number == episode && ep.lines.any { it.id == line } })
                     tmdbPersonalPlayback[film.id]?.get(line) else null
                 val licensed = if (personalMedia != null) PlaybackResult.Ready(personalMedia)
-                    else if (spiderActive && screen == "player") spiderResolved
+                    else if (spiderActive && screen == "player") currentSpiderResult
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
                             if (cmsJsonParser != null || cmsBrowserParser != null) parsedCms
@@ -3045,13 +3120,23 @@ private fun Herrin() {
                                 activeCmsSite?.headers.orEmpty())
                         } else LicensedPlaybackResolver.resolve(film, episode, line)
                     } else null
+                val sourceFailure = licensed as? PlaybackResult.Unavailable
+                LaunchedEffect(screen, recoveryAttempt, sourceFailure?.reason, automaticSearch) {
+                    if (screen == "player" && automaticSearch == null && sourceFailure != null) {
+                        val position = automaticResume?.takeIf { it.film == film.id &&
+                            it.episode == episode && it.line == line }?.position
+                            ?: watchHistory.load(catalogScope, film.id, episode, line)?.positionMs ?: 0L
+                        recoverPlayback(HerrinAutomaticPlayback.resolutionFailure(sourceFailure.reason), position)
+                    }
+                }
                 val licensedMedia = (licensed as? PlaybackResult.Ready)?.media
                 // The independent testing URL must not start playing while a
                 // selected CMS film is still resolving its real licensed source.
                 val testMedia = if (screen == "player" && !spiderActive &&
                     !film.id.startsWith("tmdb-") &&
                     activeCmsSite == null) AuthorizedUrls.https(prefs.testMediaUrl) else null
-                val chosenMedia = licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
+                val chosenMedia = if (automaticSearch != null) null
+                    else licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
                     val historyLine = if (licensedMedia != null) line else "independent-test"
                     // Snapshot the selected episode. A disposed player's final callback
@@ -3063,12 +3148,20 @@ private fun Herrin() {
                     key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
+                        onPlayer = {
+                            if (automaticResume?.let { it.film == film.id &&
+                                it.episode == historyEpisode && it.line == historyLine } == true)
+                                automaticResume = null
+                        },
                         recoverySession = playbackRecovery,
-                        startPositionMs = previous?.positionMs ?: 0L,
+                        startPositionMs = automaticResume?.takeIf { it.film == film.id &&
+                            it.episode == historyEpisode && it.line == historyLine }?.position
+                            ?: previous?.positionMs ?: 0L,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
                         onRefreshSource = if (spiderActive || cmsJsonParser != null || cmsBrowserParser != null) ({ playerRetryEpoch++ }) else null,
                         onTryOtherSource = tryOtherTmdbSource,
+                        onSourceExhausted = recoverPlayback,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
                             watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
@@ -3090,13 +3183,17 @@ private fun Herrin() {
                                         saved.positionMs, saved.durationMs)
                                 }
                             }
+                            automaticPlayback.clear()
+                            automaticResume = null
+                            tmdbFallbackIndex.clearRejected(film.id)
                             episode = selectedEpisode
                             line = selectedLine
                             playbackPicker = null
                         }, onDismiss = { playbackPicker = null })
                 } else if (screen == "player") {
-                    val playbackUnavailable = spiderResolved is PlaybackResult.Unavailable ||
-                        (!spiderActive && !cmsWaiting && !cmsParseWaiting)
+                    val playbackUnavailable = automaticSearch == null &&
+                        (currentSpiderResult is PlaybackResult.Unavailable ||
+                        (!spiderActive && !cmsWaiting && !cmsParseWaiting))
                     val offlineDemonstration = !sourceConfigured && !spiderActive &&
                         film.playbackEpisodes.isEmpty()
                     PlayerStartupSurface(
@@ -3107,7 +3204,7 @@ private fun Herrin() {
                         reducedMotion = reduceMotion,
                         failureHint = (parsedCms as? PlaybackResult.Unavailable)
                                 ?.reason?.let(PlayerStartupHints::forSpiderFailure)
-                            ?: (spiderResolved as? PlaybackResult.Unavailable)
+                            ?: (currentSpiderResult as? PlaybackResult.Unavailable)
                                 ?.reason?.let(PlayerStartupHints::forSpiderFailure)
                             ?: (licensed as? PlaybackResult.Unavailable)
                                 ?.reason?.let(PlayerStartupHints::forSpiderFailure),
@@ -3118,9 +3215,9 @@ private fun Herrin() {
                                 PlaybackErrorReport.source(
                                     if (cmsJsonParser != null) "JSON" else "BROWSER",
                                     parsedCms.reason)
-                            spiderResolved is PlaybackResult.Unavailable ->
+                            currentSpiderResult is PlaybackResult.Unavailable ->
                                 PlaybackErrorReport.source("SPIDER",
-                                    (spiderResolved as PlaybackResult.Unavailable).reason)
+                                    currentSpiderResult.reason)
                             licensed is PlaybackResult.Unavailable ->
                                 PlaybackErrorReport.source("CMS", licensed.reason)
                             cmsFailed -> PlaybackErrorReport.source("CMS", "CMS 详情读取失败")

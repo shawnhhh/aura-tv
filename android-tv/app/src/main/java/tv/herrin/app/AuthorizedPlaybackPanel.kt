@@ -78,6 +78,7 @@ fun AuthorizedPlaybackPanel(
     /** Re-run the source's playerContent; differs from replaying a stale signed URL. */
     onRefreshSource: (() -> Unit)? = null,
     onTryOtherSource: (() -> Unit)? = null,
+    onSourceExhausted: ((FongMiPlaybackRecovery.Failure, Long) -> Boolean)? = null,
     onBack: () -> Unit,
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
     testDiagnostics: Boolean = false,
@@ -90,7 +91,7 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onBack,
+            onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onSourceExhausted, onBack,
             testDiagnostics, recoverySession)
     }
 }
@@ -110,6 +111,7 @@ private fun AuthorizedPlaybackSession(
     onEpisodeSelection: (() -> Unit)?,
     onRefreshSource: (() -> Unit)?,
     onTryOtherSource: (() -> Unit)?,
+    onSourceExhausted: ((FongMiPlaybackRecovery.Failure, Long) -> Boolean)?,
     onBack: () -> Unit,
     testDiagnostics: Boolean,
     recoverySession: FongMiPlaybackRecovery.Session
@@ -152,6 +154,7 @@ private fun AuthorizedPlaybackSession(
     val recoveryScope = rememberCoroutineScope()
     var pendingRecovery by remember { mutableStateOf<Job?>(null) }
     val latestRefreshSource by rememberUpdatedState(onRefreshSource)
+    val latestSourceExhausted by rememberUpdatedState(onSourceExhausted)
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media, isLive) {
@@ -281,7 +284,13 @@ private fun AuthorizedPlaybackSession(
                         playback.start(next.uri, next.mime,
                             if (!isLive && recoveryPositionMs > 0L) recoveryPositionMs else C.TIME_UNSET)
                     } else {
-                        errorMessage = diagnostic
+                        val position = currentPosition.coerceAtLeast(0L)
+                        latestProgressCallback(position,
+                            duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L, false)
+                        if (!isLive && latestSourceExhausted?.invoke(failure, position) == true) {
+                            playback.manager.stop()
+                            errorMessage = null
+                        } else errorMessage = diagnostic
                     }
                 }
             }

@@ -797,6 +797,8 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
     }
 
+    fun isApprovedSourceFilm(film: Film): Boolean = ownsFilm(film, sourceSession.snapshot())
+
     private fun ownsFilm(film: Film, invocation: Long): Boolean = runCatching {
         val secret = sourceSession.filmSecret(invocation) ?: return false
         val source = JSONObject(lastBrowse ?: return false)

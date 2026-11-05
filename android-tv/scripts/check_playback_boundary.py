@@ -28,9 +28,24 @@ def violations(source_root):
 
 
 def verify():
-    found = violations(Path(__file__).resolve().parents[1] / "app/src")
+    source = Path(__file__).resolve().parents[1] / "app/src"
+    found = violations(source)
     assert not found, f"Legacy playback in production source sets: {found}"
+    creators = []
+    for path in source.rglob("*"):
+        if path.suffix not in {".kt", ".java"} or path.relative_to(source).parts[0] in {
+            "test", "androidTest", "liveAndroidTest"
+        }:
+            continue
+        if re.search(r"\bExoPlayer\s*\.\s*Builder\s*\(", without_comments(path.read_text())):
+            creators.append(path.name)
+    assert creators == ["FongMiExoPlayerFactory.kt"], f"Competing Exo creation paths: {creators}"
+    panel = without_comments((source / "main/java/tv/herrin/app/AuthorizedPlaybackPanel.kt").read_text())
+    assert "HerrinPlaybackAdapter(" in panel
+    assert not re.search(r"\bplayer\s*\.\s*(?:setMediaItem|prepare|release)\s*\(", panel), \
+        "Player preparation/release bypasses the sole production manager"
     print("PASS: no legacy playback implementation/reference in production source sets")
+    print("PASS: one Exo builder, production adapter owns preparation and release")
 
 
 if __name__ == "__main__":

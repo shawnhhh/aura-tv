@@ -31,6 +31,7 @@ internal class HerrinTmdbFallbackIndex {
         current.remove(filmId)
         rejected.remove(filmId)
     }
+    @Synchronized fun clearRejected(filmId: String) { rejected.remove(filmId) }
 
     @Synchronized fun clear() {
         current.clear()

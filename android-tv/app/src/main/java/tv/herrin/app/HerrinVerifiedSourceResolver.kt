@@ -36,6 +36,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
         verifyRemote: suspend (HerrinSourceMovie, Film) -> Boolean = { _, _ -> true },
         selectRemote: suspend (HerrinSourceMovie, Film) -> Pair<Int, String>? =
             { _, film -> HerrinPlaybackEntry.firstPlayable(film) },
+        coordinate: HerrinPlaybackCoordinate? = null,
         remoteDetails: suspend (HerrinSourceMovie) -> Film?
     ): HerrinVerifiedSource {
         var personalPlaylist: HerrinPersonalPlaylist? = null
@@ -82,9 +83,13 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                         readyByOffer[candidate]?.let { PlaybackResult.Ready(it) }
                             ?: PlaybackResult.Unavailable("个人片源已失效")
                     }
-                    if (built.episodes.isEmpty()) emptyList()
+                    val chosen = built.episodes.firstNotNullOfOrNull { ep ->
+                        ep.lines.firstOrNull { coordinate?.accepts(ep, it) != false }?.let { ep.number to it.id }
+                    }
+                    if (chosen == null) emptyList()
                     else {
                         personalPlaylist = built
+                        verifiedLine = chosen
                         accepted.map { it.first }
                     }
                 }

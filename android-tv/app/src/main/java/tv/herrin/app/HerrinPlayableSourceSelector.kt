@@ -28,10 +28,11 @@ internal object HerrinPlayableSourceSelector {
         film: Film,
         resolve: suspend (Int, String) -> PlaybackResult,
         verifyMedia: suspend (PlaybackMedia) -> Boolean,
-        limit: Int = 6
+        limit: Int = 6,
+        coordinate: HerrinPlaybackCoordinate? = null
     ): Selected? {
         val attempts = film.playbackEpisodes.flatMapIndexed { index, episode ->
-            episode.lines.filter { it.uri.isNotBlank() }.map { line ->
+            episode.lines.filter { it.uri.isNotBlank() && coordinate?.accepts(episode, it) != false }.map { line ->
                 Triple(index, episode, line)
             }
         }.sortedWith(compareBy<Triple<Int, PlaybackEpisode, PlaybackLine>> { it.first }
