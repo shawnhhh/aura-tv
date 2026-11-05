@@ -1,0 +1,31 @@
+{
+  "repository": "shawnhhh/aura-tv",
+  "sha": "f11be020832766e5ba51536b8bb5b72cc5d6febc",
+  "run_id": 41953150985,
+  "url": "https://github.com/shawnhhh/aura-tv/actions/runs/41953150985",
+  "conclusion": "success",
+  "debug": {
+    "job_id": 127001601327,
+    "jvm_tests": 533,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "completed_at": "2026-11-05T02:15:21Z"
+  },
+  "emulator": {
+    "job_id": 127004340079,
+    "tests": 179,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "full_suite_gate": "accepted",
+    "started_at": "2026-11-05T02:15:23Z"
+  },
+  "order_verified": true,
+  "artifacts": {
+    "apk": 13381782792,
+    "jvm_reports": 13381318919,
+    "emulator_evidence": 13382363690
+  },
+  "physical_TCL_tested": false
+}

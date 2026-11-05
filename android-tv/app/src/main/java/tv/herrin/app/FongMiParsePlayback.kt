@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import tv.herrin.app.fongmi.parse.Parse
+import tv.herrin.app.fongmi.parse.ParseCatalog
 import tv.herrin.app.fongmi.parse.ParseCallback
 import tv.herrin.app.fongmi.parse.ParseJob
 import tv.herrin.app.fongmi.parse.ParseUiDispatcher
@@ -80,6 +81,7 @@ internal object FongMiParsePlayback {
         val parsers = (playbackParsers + jsonParsers.filter { legacy ->
             playbackParsers.none { it.name == legacy.name }
         }.map { TvBoxPlaybackParser(it.name, 1, it.prefix, it.flags, it.headers) }).map(::configuration)
+        val catalog = ParseCatalog(parsers)
         // Result.isUseParse + PlayerManager's parse entry. An explicit playUrl
         // retains legacy Spider directives while all parsing runs through ParseJob.
         val useParse = result.jx == 1 || (result.playUrl.isEmpty() && vipFlags.contains(flag))
@@ -95,14 +97,10 @@ internal object FongMiParsePlayback {
                     var selected: Parse? = null
                     val cause = java.util.concurrent.atomic.AtomicReference<String>()
                     val host = object : ParseJob.Host {
-                        override fun getParse(): Parse = (parsers.firstOrNull() ?: Parse.get(0, "")).also { selected = it }
-                        override fun getParse(name: String): Parse = (parsers.firstOrNull { it.name == name }
-                            ?: Parse.get(0, "")).also { selected = it }
-                        override fun getParses(): List<Parse> = parsers
-                        override fun getParses(type: Int, flag: String): List<Parse> {
-                            val items = parsers.filter { it.type == type }
-                            return items.filter { it.ext.flag.contains(flag) }.ifEmpty { items }
-                        }
+                        override fun getParse(): Parse = catalog.getParse().also { selected = it }
+                        override fun getParse(name: String): Parse = catalog.getParse(name).also { selected = it }
+                        override fun getParses(): List<Parse> = catalog.parses
+                        override fun getParses(type: Int, flag: String): List<Parse> = catalog.getParses(type, flag)
                         override fun getSiteClick(key: String): String = siteClick
                         override fun onFailure(error: Throwable) {
                             val rootCause = generateSequence(error) { it.cause }.take(12).last()

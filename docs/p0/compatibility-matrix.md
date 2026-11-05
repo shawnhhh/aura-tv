@@ -4,6 +4,14 @@
 固定上游：FongMi/TV `305dff233cde512e2c83f71529b7c3ecfd61fefc`，GPL-3.0。
 本记录更新旧兼容矩阵的现状，不是另起开发计划，也不表示 B/C/D 已验收。
 
+2026-11-05 更新：`f11be020832766e5ba51536b8bb5b72cc5d6febc` 的串行 CI
+[41953150985](https://github.com/shawnhhh/aura-tv/actions/runs/41953150985) 已通过：
+Debug 533 项 JVM、TV Emulator 179 项，均无失败/跳过；对应 APK 和证据已上传。
+随后进入阶段 B 的 [ParseJob 方法核对及 Config 默认选择子契约](parsejob-method-audit.md)。
+下表为最初审计快照，不应再把“没有最新 CI”或 vendor 全未编译的历史描述当作当前阻塞。
+Sardine 已单独接入源码编译；FongMi vendor 原版仍不整体参与编译。完整 B/C/D 和 TCL
+验收仍未完成，最新结果以 cloud-progress.md 对应提交与实际运行记录为准。
+
 ## 七个环节的实际状态
 
 下表生产文件均相对于 `android-tv/app/src/main/java/`；原版源码相对于
