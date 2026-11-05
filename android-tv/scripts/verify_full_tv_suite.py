@@ -29,6 +29,7 @@ REQUIRED_CLASSES = (
     "SpiderRemoteProcessTest",
     "SpiderLoaderLifecycleTest",
     "SpiderWorkerLifecycleTest",
+    "FongMiPlayerManagerIntegrationTest",
     "M467JarPlaybackEndToEndTest",
     "M467ParseJobInstrumentedTest",
     "M467PlaybackRecoveryTest",

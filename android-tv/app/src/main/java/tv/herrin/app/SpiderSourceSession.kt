@@ -8,11 +8,13 @@ package tv.herrin.app
 /** Tickets fence host work; they do not grant permission to execute a plugin. */
 internal class SpiderSourceSession {
     private var epoch = 0L
+    private var filmSecret = java.util.UUID.randomUUID().toString()
     @Volatile private var applied: String? = null
 
     @Synchronized fun snapshot(): Long = epoch
     fun descriptor(): String? = applied
     @Synchronized fun isCurrent(ticket: Long): Boolean = ticket == epoch
+    @Synchronized fun filmSecret(ticket: Long): String? = filmSecret.takeIf { ticket == epoch }
 
     @Synchronized fun beginBrowse(expected: Long): Long? {
         if (expected != epoch) return null
@@ -29,6 +31,7 @@ internal class SpiderSourceSession {
 
     @Synchronized fun revoke() {
         epoch++
+        filmSecret = java.util.UUID.randomUUID().toString()
         applied = null
     }
 }

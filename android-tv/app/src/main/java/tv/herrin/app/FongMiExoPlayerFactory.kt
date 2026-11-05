@@ -11,7 +11,6 @@ package tv.herrin.app
 import android.content.Context
 import tv.herrin.app.nativeplayback.FongMiPlaybackAdapter
 import android.net.Uri
-import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -23,8 +22,6 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import com.fongmi.android.tv.player.exo.ExoMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import java.nio.charset.StandardCharsets
-import java.util.UUID
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal object FongMiExoPlayerFactory {
@@ -102,21 +99,7 @@ internal object FongMiExoPlayerFactory {
     }
 
     fun mediaItem(media: PlaybackMedia, uri: String = media.uri,
-                  mimeOverride: String? = media.declaredMime): MediaItem {
-        val headers = Bundle().apply { media.headers.forEach { (name, value) -> putString(name, value) } }
-        val subtitleFlags = FongMiPlaybackItemSupport.subtitleSelectionFlags(media.subtitles.map { it.language })
-        return MediaItem.Builder().setUri(uri)
-            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(Uri.parse(uri))
-                .setExtras(headers).build())
-            .setMimeType(mimeOverride)
-            .setSubtitleConfigurations(media.subtitles.mapIndexed { index, subtitle ->
-                val subtitleUri = Uri.parse(subtitle.uri)
-                MediaItem.SubtitleConfiguration.Builder(subtitleUri)
-                    .setId("external:" + UUID.nameUUIDFromBytes(subtitle.uri.toByteArray(StandardCharsets.UTF_8)))
-                    .setMimeType(FongMiSubtitleFormats.mimeType(subtitleUri.path))
-                    .setLanguage(subtitle.language).setLabel(subtitle.title)
-                    .setSelectionFlags(subtitleFlags[index])
-                    .build()
-            }).build()
-    }
+                  mimeOverride: String? = media.declaredMime): MediaItem =
+        com.fongmi.android.tv.player.media.MediaItemFactory.from(
+            com.fongmi.android.tv.player.media.PlaySpec(media.mediaId ?: "resolved", media, uri, mimeOverride))
 }

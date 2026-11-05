@@ -131,7 +131,8 @@ internal object SpiderIpc {
         for (ep in film.playbackEpisodes.take(300)) {
             val lines = JSONArray()
             ep.lines.take(12).forEach { line ->
-                lines.put(JSONObject().put("id", line.id).put("title", line.title).put("uri", line.uri))
+                lines.put(JSONObject().put("id", line.id).put("title", line.title).put("uri", line.uri)
+                    .put("proof", line.spiderProof?.value))
             }
             val encoded = JSONObject().put("number", ep.number).put("title", ep.title).put("lines", lines)
             val length = encoded.toString().length
@@ -148,6 +149,9 @@ internal object SpiderIpc {
             .put("artworkUrl", film.artworkUrl ?: "")
             .put("backdropUrl", film.backdropUrl ?: "").put("episodes", film.episodes)
             .put("vodId", film.spiderVodId ?: "").put("playback", episodes)
+            .put("origin", film.spiderOrigin?.let {
+                JSONObject().put("site", it.site).put("runtime", it.runtime).put("proof", it.proof)
+            })
     }
 
     fun readFilm(obj: JSONObject): Film {
@@ -157,7 +161,8 @@ internal object SpiderIpc {
             val linesArray = ep.optJSONArray("lines") ?: JSONArray()
             val lines = (0 until minOf(linesArray.length(), 12)).mapNotNull { i ->
                 val line = linesArray.optJSONObject(i) ?: return@mapNotNull null
-                PlaybackLine(line.optString("id"), line.optString("title"), line.optString("uri"))
+                PlaybackLine(line.optString("id"), line.optString("title"), line.optString("uri"),
+                    spiderProof = line.optString("proof").takeIf { it.length == 64 }?.let(::SpiderRouteProof))
             }
             PlaybackEpisode(ep.optInt("number", 1), ep.optString("title"), lines)
         }
@@ -170,7 +175,11 @@ internal object SpiderIpc {
             artworkUrl = obj.optString("artworkUrl").takeIf { it.isNotBlank() },
             backdropUrl = obj.optString("backdropUrl").takeIf { it.isNotBlank() },
             playbackEpisodes = episodes,
-            spiderVodId = obj.optString("vodId").takeIf { it.isNotBlank() })
+            spiderVodId = obj.optString("vodId").takeIf { it.isNotBlank() },
+            spiderOrigin = obj.optJSONObject("origin")?.let {
+                SpiderFilmOrigin(it.optString("site").take(128), it.optString("runtime").take(64),
+                    it.optString("proof").take(64))
+            })
     }
 
     fun error(message: String): JSONObject = JSONObject()
@@ -178,6 +187,7 @@ internal object SpiderIpc {
 
     fun playback(media: PlaybackMedia): JSONObject = JSONObject().put("ok", true)
         .put("uri", media.uri)
+        .put("mediaId", media.mediaId)
         .put("alternates", JSONArray(media.alternateUris.take(7)))
         .put("allowHttpRedirects", media.allowHttpRedirects)
         // Without this field, a working header-free VOD backup loses its
@@ -226,6 +236,7 @@ internal object SpiderIpc {
         return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
             response.optBoolean("allowHttpRedirects") && allowHttp,
             declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime")),
+            mediaId = response.optString("mediaId").takeIf { it.isNotBlank() && it.length <= 256 },
             // Re-validate in the receiving process. A malicious/forged IPC
             // flag cannot enable cross-origin fallback for authenticated
             // media or invent an absent provider-supplied backup.
@@ -297,7 +308,9 @@ class TvBoxSpiderService : Service() {
                                         request.optJSONArray("jsonParsers")),
                                     playbackParsers = SpiderIpc.readPlaybackParsers(
                                         request.optJSONArray("playbackParsers")))
-                                when (val result = worker.browse(site, warehouse)) {
+                                val secret = request.getString("originSecret")
+                                require(secret.matches(Regex("[a-f0-9-]{36}"))) { "Spider 授权会话无效" }
+                                when (val result = worker.browse(site, warehouse, secret)) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("films", JSONArray().apply {
                                             result.value.take(80).forEach { put(SpiderIpc.film(it)) }
@@ -675,6 +688,8 @@ internal class TvBoxSpiderBridge(context: Context) {
         val invocation = sourceSession.snapshot()
         withContext(Dispatchers.Main.immediate) { SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge) }
         val payload = JSONObject().put("site", SpiderIpc.site(site))
+            .put("originSecret", sourceSession.filmSecret(invocation)
+                ?: return SpiderResult.Failure("Spider 会话已变化"))
             .put("defaultJar", config.spiderJar ?: "")
             .put("vipFlags", JSONArray(config.vipFlags.take(32)))
             .put("jsonParsers", SpiderIpc.jsonParsers(config.jsonParsers))
@@ -713,6 +728,7 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     suspend fun details(film: Film): SpiderResult<Film> {
         val invocation = sourceSession.snapshot()
+        if (!ownsFilm(film, invocation)) return SpiderResult.Failure("Spider 影片来源已失效，请重新查找片源")
         return when (val response = request(SpiderIpc.DETAILS,
             JSONObject().put("film", SpiderIpc.film(film)), invocation)) {
             is SpiderResult.Failure -> response
@@ -726,22 +742,12 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
         val invocation = sourceSession.snapshot()
+        if (!ownsFilm(film, invocation))
+            return PlaybackResult.Unavailable("Spider 影片或选集来源已失效，请重新查找片源")
         val payload = JSONObject().put("film", SpiderIpc.film(film))
             .put("episode", episode).put("line", line).put("allowHttp", allowHttp)
         return when (val response = request(SpiderIpc.PLAY, payload, invocation)) {
-            is SpiderResult.Failure -> {
-                // The source has ALREADY supplied a direct HTTP(S) media URL.
-                // If the Java Spider crashed resolving it again, try that exact
-                // URL; never infer a URL from an opaque episode identifier.
-                val appliedSite = if (SpiderDirectPlayback.eligibleFailure(response.message)) {
-                    runCatching {
-                        lastBrowse?.let { SpiderIpc.readSite(JSONObject(it).getJSONObject("site")) }
-                    }.getOrNull()
-                } else null
-                appliedSite?.let {
-                    SpiderDirectPlayback.resolve(film, episode, line, it, allowHttp)
-                } ?: PlaybackResult.Unavailable(response.message)
-            }
+            is SpiderResult.Failure -> PlaybackResult.Unavailable(response.message)
             is SpiderResult.Ready -> try {
                 val ready = SpiderIpc.readPlayback(response.value, allowHttp)
                 val authorizedSiteKey = runCatching {
@@ -790,6 +796,14 @@ internal class TvBoxSpiderBridge(context: Context) {
             }
         }
     }
+
+    private fun ownsFilm(film: Film, invocation: Long): Boolean = runCatching {
+        val secret = sourceSession.filmSecret(invocation) ?: return false
+        val source = JSONObject(lastBrowse ?: return false)
+        val site = SpiderIpc.readSite(source.getJSONObject("site"))
+        val jar = site.jar ?: source.optString("defaultJar")
+        SpiderFilmAuthority(site.key, SpiderRuntimeCompat.sessionKey(jar, site), secret).accepts(film)
+    }.getOrDefault(false)
 
     /**
      * Close before a subsequent play can reuse the bound service. Android may

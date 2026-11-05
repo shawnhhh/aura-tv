@@ -6,6 +6,27 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public final class NativeFongMiRouteTest {
+    @Test public void onlyIssuedSameJarStaticCapabilitiesMaySurviveSiteRotation() throws Exception {
+        String oldUrl;
+        java.util.List<NativeFongMiProxy.StaticOrigin> origins;
+        try (NativeFongMiProxy previous = new NativeFongMiProxy("first", p -> null, p -> null)) {
+            oldUrl = previous.baseUrl() + "&do=original-fixture";
+            origins = previous.staticOrigins();
+        }
+        try (NativeFongMiProxy current = new NativeFongMiProxy("second", p -> null, p -> null)) {
+            assertNull(NativeFongMiRoute.url(oldUrl, "second", current));
+            current.inheritStaticOrigins(origins);
+            String rebound = NativeFongMiRoute.url(oldUrl, "second", current);
+            assertNotNull(rebound);
+            assertTrue(rebound.startsWith(current.baseUrl()));
+            assertTrue(rebound.contains("do=original-fixture"));
+            assertNull(NativeFongMiRoute.url(oldUrl + "&siteKey=first", "second", current));
+            assertNull(NativeFongMiRoute.url(oldUrl.replace("session=", "session=forged"), "second", current));
+        }
+        try (NativeFongMiProxy differentGrant = new NativeFongMiProxy("second", p -> null, p -> null)) {
+            assertNull(NativeFongMiRoute.url(oldUrl, "second", differentGrant));
+        }
+    }
     @Test public void healthProbeChecksActualSessionIncludingStaticJarRoutes() throws Exception {
         try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", p -> null, p -> null)) {
             assertEquals(NativeFongMiRoute.Health.READY,

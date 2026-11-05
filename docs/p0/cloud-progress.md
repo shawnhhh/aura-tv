@@ -1,5 +1,22 @@
 # P0 Cloud 断点
 
+## 当前：快速集成 B+C 生产接线（2026-11-05）
+
+- 模式已按用户新指令切换：连续集成、阶段性提交、一次串行 CI；不再逐小项全测和停止。
+- 已核实基线 `ca038f80cdcd96618744fabcbd17d05fda402938`，CI 41982527946 success，PR #80 Draft。
+- 本批生产代码：Film/线路 HMAC 来源归属及 IPC；按 JAR+批准会话复用 ClassLoader；
+  Config→Spider→playerContent 带同一批准凭据；同 JAR 的 Init 缓存静态代理地址受控重绑定。
+- 已接唯一生产播放器：AuthorizedPlaybackPanel → HerrinPlaybackAdapter → PlayerManager
+  → MediaItemFactory → 现有真实 ExoMediaSourceFactory/Media3；准备、重试、换线、关闭已接管。
+  旧 Java 媒体会话委托同一核心，移除第二处 Exo Builder；Spider 故障直链回退移入 test。
+- 首页/TMDB UI、NAS→云盘→TVBox 顺序未改；未重做已验收生命周期，未执行外部插件。
+- 集成编译/定向回归通过；统一静态检查、13 项检查器回归、546 项 JVM 全量（无失败/错误/跳过）、
+  lint、Debug/测试 APK 均 success。只阶段性 push 一次，再检查该 SHA 的 Debug→Emulator。
+- 实际移植范围及依赖差异见 player-core-integration.md；不把未提供的定制 Media3/MPV
+  用 stub 替代。TCL/外部已授权真实源仍未实测，P0 未完成。
+- 无可靠额度接口或恢复时间；无不足提示，不虚构百分比，不承诺定时自醒。断点保持简短。
+
+
 ## 当前：Worker 关闭后晚到 init 的生产修复（2026-11-05）
 
 - 实现前 HEAD：`c38cc7c84bacd5e230338ac9e89257702614025b`；恢复基线 45e64c1 的

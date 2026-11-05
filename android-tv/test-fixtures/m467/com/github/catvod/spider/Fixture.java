@@ -29,6 +29,8 @@ public final class Fixture extends Spider {
         return "{\"list\":[{\"vod_id\":\"fixture\",\"vod_play_from\":\"Synthetic\",\"vod_play_url\":\"Instance$instance#Static$static\"}]}";
     }
     @Override public String playerContent(String flag, String id, List<String> vipFlags) {
+        if (id.equals("static")) return "{\"parse\":0,\"format\":\"mp4\",\"url\":\"" +
+            Init.proxyUrl + (Init.proxyUrl.contains("?") ? "&" : "?") + "do=jar&part=video\"}";
         return "{\"parse\":0,\"format\":\"mp4\",\"url\":\"proxy://do=jar&part=video" +
             (id.equals("static") ? "" : "&siteKey=" + siteKey) + "\"}";
     }

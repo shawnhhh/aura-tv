@@ -22,7 +22,8 @@ data class Film(val id: String, val title: String, val subtitle: String, val cat
                 val runtimeMinutes: Int? = null, val people: List<FilmPerson> = emptyList(),
                 val tmdbTvId: Int? = null,
                 val imdbId: String? = null, val imdbRating: Double? = null,
-                val imdbVotes: Int? = null)
+                val imdbVotes: Int? = null,
+                val spiderOrigin: SpiderFilmOrigin? = null)
 class DemoCatalog : CatalogSource {
     override fun titles() = listOf(
         Film("orbit", "最后的轨道", "THE LAST ORBIT", "电影", "2026", "在寂静的远方，一位航行者寻找回家的信号。原创虚构故事，合成影像仅用于界面演示。", R.drawable.photofilm_orbit),
@@ -43,7 +44,8 @@ data class PlaybackMedia(val uri: String, val headers: Map<String, String> = emp
                          val declaredMime: String? = null,
                          val danmakuSources: List<DanmakuSource> = emptyList(),
                          /** Set only after verifying every alternate has identical auth and origin. */
-                         val safeNotFoundFallback: Boolean = false)
+                         val safeNotFoundFallback: Boolean = false,
+                         val mediaId: String? = null)
 sealed interface PlaybackResult {
     data class Ready(val media: PlaybackMedia) : PlaybackResult
     data class Unavailable(val reason: String) : PlaybackResult

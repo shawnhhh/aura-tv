@@ -389,6 +389,12 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private val lifecycle = Any()
     private var epoch = 0L
     private var initializingProxy: NativeFongMiProxy? = null
+    private var activeAuthority: SpiderFilmAuthority? = null
+    private var activeGrant: String? = null
+    private var localOriginSecret = java.util.UUID.randomUUID().toString()
+    private data class JarRuntime(val jar: String, val secret: String, val loader: DexClassLoader,
+        val staticOrigins: List<NativeFongMiProxy.StaticOrigin>)
+    private var jarRuntime: JarRuntime? = null
     private var active: Spider? = null
     private var activeKey: String? = null
     private var activeSiteKey: String? = null
@@ -463,15 +469,16 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         SpiderResult.Failure("Spider ${SpiderFailureDetails.message(error)}")
     }
 
-    suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> {
+    suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single,
+            originSecret: String = localOriginSecret): SpiderResult<List<Film>> {
         // Capture before dispatching to IO: a queued old browse cannot reopen
         // the worker after close. A fresh explicit browse receives a new epoch.
         val invocation = synchronized(lifecycle) { epoch }
-        return attempt { browseInSession(invocation, site, config) }
+        return attempt { browseInSession(invocation, site, config, originSecret) }
     }
 
     private fun browseInSession(invocation: Long, site: TvBoxSite,
-            config: TvBoxConfig.Single): List<Film> {
+            config: TvBoxConfig.Single, originSecret: String): List<Film> {
         val spiderApi = site.spiderApi
         val scriptApi = site.scriptApi
         if (spiderApi == null && scriptApi == null) error("站点没有可执行的 CatVod API")
@@ -480,7 +487,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         val key = SpiderRuntimeCompat.sessionKey(jar.orEmpty(), site)
         val (ticket, reused, retired) = synchronized(lifecycle) {
             checkOpen(invocation)
-            if (key == activeKey && active != null) Triple(epoch, active, null)
+            if (scriptApi != null || jarRuntime?.jar != jar || jarRuntime?.secret != originSecret)
+                jarRuntime = null
+            if (key == activeKey && activeGrant == originSecret && active != null) Triple(epoch, active, null)
             else {
                 val previous = detachLocked()
                 Triple(epoch, null, previous)
@@ -534,7 +543,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val nativeFolder = SpiderRuntimeCompat.nativeDirectory(context, file)
                 ?: native?.parentFile
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.LOADER)
-            val loader = DexClassLoader(file.absolutePath, file.parentFile!!.absolutePath,
+            val cached = synchronized(lifecycle) { checkOpen(ticket); jarRuntime }
+            val loader = cached?.loader ?: DexClassLoader(file.absolutePath, file.parentFile!!.absolutePath,
                 nativeFolder?.absolutePath ?: file.parentFile!!.absolutePath,
                 RuntimeModule.getSpiderClassLoader())
             // FongMi's server exists before JAR Init.init(Context). Bootstrap
@@ -552,9 +562,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 created.get()?.proxy(params)
             }, staticCallback)
             try {
+                if (cached != null && localProxy.hasStaticHandler())
+                    localProxy.inheritStaticOrigins(cached.staticOrigins)
                 installProxy(ticket, localProxy)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.INITIALIZER)
-                val initFailure = runCatching {
+                val initFailure = if (cached != null) null else runCatching {
                     val initializer = loader.loadClass("com.github.catvod.spider.Init")
                     initializer.getMethod("init", Context::class.java).invoke(null, context)
                 }.exceptionOrNull()
@@ -562,6 +574,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     initialize { throw cause }
                 } }
                 checkOpen(ticket)
+                synchronized(lifecycle) {
+                    checkOpen(ticket)
+                    jarRuntime = JarRuntime(jar, originSecret, loader, localProxy.staticOrigins())
+                }
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
                 val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi!!.removePrefix("csp_")}")
                 val spiderInstance = initialize {
@@ -593,6 +609,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             activePlaybackParsers = config.playbackParsers.take(24)
             activeSiteHeaders = site.headers
             activeSiteClick = site.click
+            activeAuthority = SpiderFilmAuthority(site.key, key, originSecret)
+            activeGrant = originSecret
         }
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
         val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
@@ -600,7 +618,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         }
         checkOpen(ticket)
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
-        return films
+        return synchronized(lifecycle) { checkOpen(ticket); activeAuthority!!.let { owner -> films.map(owner::sign) } }
     }
 
     /** Search only an active, explicitly user-approved Spider site. */
@@ -611,14 +629,17 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         require(site.key.isNotBlank() && site.key == activeSiteKey) {
             "拒绝在未应用的 Spider 站点自动检索"
         }
-        SpiderVodCodec.listing(spider.searchContent(keyword, false), site)
+        val owner = activeAuthority ?: error("Spider 来源授权已失效")
+        SpiderVodCodec.listing(spider.searchContent(keyword, false), site).map(owner::sign)
     }
 
     suspend fun details(film: Film): SpiderResult<Film> = attempt {
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DETAILS)
         val spider = active ?: error("站点 Spider 尚未加载")
+        val owner = activeAuthority ?: error("Spider 来源授权已失效")
+        owner.requireFilm(film)
         val vodId = film.spiderVodId ?: error("该影片不属于 Spider 站点")
-        SpiderVodCodec.detail(spider.detailContent(listOf(vodId)), film).also {
+        owner.sign(SpiderVodCodec.detail(spider.detailContent(listOf(vodId)), film)).also {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
         }
     }
@@ -647,6 +668,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         val attemptResult = attemptPlayback {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
+            (activeAuthority ?: error("Spider 来源授权已失效")).requireFilm(film)
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
             // CatVod Spider.playerContent is synchronous and may block in network
@@ -695,7 +717,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 is PlaybackResult.Unavailable -> resolved
             }
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
-            healthy
+            if (healthy is PlaybackResult.Ready) healthy.copy(media = healthy.media.copy(
+                mediaId = "spider/" + java.util.UUID.nameUUIDFromBytes(
+                    (activeKey + "\u0000" + film.id + "\u0000" + episode + "\u0000" + line)
+                        .toByteArray(Charsets.UTF_8)))) else healthy
         }
         return when (attemptResult) {
             is SpiderResult.Ready -> attemptResult.value
@@ -710,7 +735,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
      */
     fun releasePlayback() = close()
 
-    fun close() = synchronized(lifecycle) { detachLocked() }.release()
+    fun close() = synchronized(lifecycle) {
+        jarRuntime = null
+        localOriginSecret = java.util.UUID.randomUUID().toString()
+        detachLocked()
+    }.release()
 
     /** Detach atomically; never hold the lifecycle monitor across plugin code. */
     private fun detachLocked(): RetiredResources {
@@ -721,6 +750,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         activeNativeProxy = null
         CatVodProxy.set(-1, "")
         active = null
+        activeAuthority = null
+        activeGrant = null
         activeKey = null
         activeSiteKey = null
         activeVipFlags = emptyList()

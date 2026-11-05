@@ -1,122 +1,67 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * FongMi/TV 305dff233cde512e2c83f71529b7c3ecfd61fefc. Original author: FongMi.
+ * HERRIN 2026-11-05: compatibility API delegates to the sole production
+ * HerrinPlaybackAdapter/PlayerManager. No independent Exo builder or data stack.
+ */
 package tv.herrin.app.nativeplayback;
 
 import android.content.Context;
-import android.net.Uri;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.media3.common.MediaItem;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DefaultDataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import com.fongmi.android.tv.player.media.MediaItemFactory;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import tv.herrin.app.HerrinPlaybackAdapter;
 
-/**
- * Android Media3 host bridge for FongMi playback results.
- *
- * The pinned FongMi/TV PlayerManager and MediaItemFactory depend on a custom
- * Media3 fork (DiscMenuController, IsoUri, setAdblock, etc.) and cannot be
- * source-compiled against Herrin's stock Media3 1.9.4. This host bridge
- * supplies real ExoPlayer media creation without pretending to be that fork.
- * It must be called only after the authorized loader/parse/proxy stage.
- *
- * FongMi/TV fongmi@305dff233cde512e2c83f71529b7c3ecfd61fefc,
- * GPL-3.0; this integration code is part of Herrin's GPL-3.0 playback work.
- */
 @UnstableApi
 public final class FongMiExoMediaSession implements AutoCloseable {
-    private final ExoPlayer player;
+    private final Context context;
+    private final Map<String, String> headers;
+    private HerrinPlaybackAdapter adapter;
     private boolean released;
 
-    private FongMiExoMediaSession(ExoPlayer player) {
-        this.player = player;
+    private FongMiExoMediaSession(Context context, Map<String, String> headers) {
+        this.context = context.getApplicationContext();
+        MediaItemFactory.validateHeaders(headers);
+        this.headers = Collections.unmodifiableMap(new HashMap<>(headers));
     }
-
-    /** Build a real ExoPlayer with HTTP headers applied to media segment requests. */
-    @NonNull
-    public static FongMiExoMediaSession create(
+    @NonNull public static FongMiExoMediaSession create(
             @NonNull Context context, @NonNull Map<String, String> headers) {
-        Map<String, String> safeHeaders = new HashMap<>();
-        for (Map.Entry<String, String> header : headers.entrySet()) {
-            if (header.getKey() == null || header.getValue() == null ||
-                    header.getKey().contains("\r") || header.getKey().contains("\n") ||
-                    header.getValue().contains("\r") || header.getValue().contains("\n")) {
-                throw new IllegalArgumentException("Invalid media request header");
-            }
-            safeHeaders.put(header.getKey(), header.getValue());
-        }
-        DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
-                .setAllowCrossProtocolRedirects(true)
-                .setDefaultRequestProperties(Collections.unmodifiableMap(safeHeaders));
-        DefaultDataSource.Factory data = new DefaultDataSource.Factory(
-                context.getApplicationContext(), http);
-        ExoPlayer player = new ExoPlayer.Builder(context.getApplicationContext())
-                .setMediaSourceFactory(new DefaultMediaSourceFactory(data))
-                .build();
-        return new FongMiExoMediaSession(player);
+        return new FongMiExoMediaSession(context, headers);
     }
-
-    @NonNull
-    public ExoPlayer player() {
+    @NonNull public ExoPlayer player() {
         ensureActive();
-        return player;
+        if (adapter == null) throw new IllegalStateException("Media not prepared");
+        return adapter.getPlayer();
     }
-
-    /**
-     * Prepare actual media bytes for ExoPlayer. No URL probing or parser
-     * reimplementation occurs here: source authorization happens upstream.
-     */
-    public void prepare(@NonNull String mediaId, @NonNull String url,
-                        @Nullable String mimeType) {
+    public void prepare(@NonNull String mediaId, @NonNull String url, @Nullable String mime) {
         ensureActive();
-        // This native host accepts only the authorized remote-media contract.
-        // The Compose test-fixture player handles local files separately.
-        Uri uri = Uri.parse(FongMiPlaybackAdapter.requireResolvedMediaUrl(url));
-        if (mediaId.isBlank()) {
-            throw new IllegalArgumentException("Expected nonempty media ID");
-        }
-        MediaItem.Builder item = new MediaItem.Builder()
-                .setMediaId(mediaId)
-                .setUri(uri);
-        if (mimeType != null && !mimeType.isBlank()) item.setMimeType(mimeType);
-        player.setMediaItem(item.build());
-        player.prepare();
+        if (mediaId.isBlank()) throw new IllegalArgumentException("Expected nonempty media ID");
+        if (adapter == null) adapter = HerrinPlaybackAdapter.createRemote(context, mediaId, url, headers, mime);
+        adapter.prepareRemote(mediaId, url, mime);
     }
-
-    /** Attach the actual video decoder output to Herrin's existing player surface. */
     public void setVideoSurface(@Nullable android.view.Surface surface) {
-        ensureActive();
-        if (surface == null) player.clearVideoSurface();
-        else player.setVideoSurface(surface);
+        if (surface == null) player().clearVideoSurface();
+        else player().setVideoSurface(surface);
     }
-
-    /** TV remote play/pause commands act on the same Exo instance that decodes media. */
-    public void play() {
-        ensureActive();
-        player.play();
-    }
-
-    public void pause() {
-        ensureActive();
-        player.pause();
-    }
-
+    public void play() { ensurePrepared(); adapter.play(); }
+    public void pause() { ensurePrepared(); adapter.pause(); }
     public void seekTo(long positionMs) {
-        ensureActive();
+        ensurePrepared();
         if (positionMs < 0) throw new IllegalArgumentException("Negative seek position");
-        player.seekTo(positionMs);
+        adapter.seekTo(positionMs);
     }
-
     private void ensureActive() {
         if (released) throw new IllegalStateException("Media session released");
     }
-
+    private void ensurePrepared() { player(); }
     @Override public void close() {
         if (released) return;
         released = true;
-        player.release();
+        if (adapter != null) adapter.close();
+        adapter = null;
     }
 }

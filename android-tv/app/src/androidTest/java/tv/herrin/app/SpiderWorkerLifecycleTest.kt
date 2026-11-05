@@ -22,6 +22,42 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Real original DEX/Init/Spider + production worker, with explicit latch ordering. */
 class SpiderWorkerLifecycleTest {
+    @Test fun approvedJarSharesItsLoaderAcrossSitesButNeverTheirFilmAuthority() = runBlocking {
+        Fixture("unused").use { fixture ->
+            val worker = TvBoxSpiderWorker(fixture.context)
+            try {
+                val first = worker.browse(fixture.site, fixture.config) as SpiderResult.Ready
+                val film = (worker.details(first.value.single()) as SpiderResult.Ready).value
+                val loader = field(worker, "activeDexLoader")
+                val other = fixture.site.copy(key = "second-approved-site")
+                val otherCatalog = worker.browse(other, fixture.config) as SpiderResult.Ready
+                assertSame("JarLoader caches by approved JAR, not site", loader, field(worker, "activeDexLoader"))
+                assertEquals("Init runs once per authorized JAR", 1, fixture.count("bootstraps"))
+                assertEquals("Sites still own distinct initialized Spiders", 2, fixture.count("inits"))
+                assertTrue(worker.details(film) is SpiderResult.Failure)
+                assertTrue(worker.play(film, 1, "spider-0", true) is PlaybackResult.Unavailable)
+                val otherFilm = (worker.details(otherCatalog.value.single()) as SpiderResult.Ready).value
+                val staticMedia = worker.play(otherFilm, 2, "spider-0", true) as PlaybackResult.Ready
+                val http = java.net.URL(staticMedia.media.uri).openConnection() as java.net.HttpURLConnection
+                try {
+                    http.connectTimeout = 3_000; http.readTimeout = 3_000
+                    assertEquals("Cached Init URL must reach current JAR static handler", 200, http.responseCode)
+                    assertEquals("en", http.getHeaderField("Content-Language"))
+                    assertArrayEquals(InstrumentationRegistry.getInstrumentation().context.assets
+                        .open("synthetic.mp4").use { it.readBytes() }, http.inputStream.use { it.readBytes() })
+                } finally { http.disconnect() }
+                assertTrue(worker.browse(fixture.site, fixture.config) is SpiderResult.Ready)
+                assertTrue(worker.details(SpiderIpc.readFilm(SpiderIpc.film(film))) is SpiderResult.Ready)
+                val forged = film.copy(playbackEpisodes = listOf(film.playbackEpisodes.first().copy(
+                    lines = listOf(film.playbackEpisodes.first().lines.first().copy(uri = "other-film")))))
+                assertTrue(worker.play(forged, 1, "spider-0", true) is PlaybackResult.Unavailable)
+                worker.close()
+                assertTrue(worker.browse(fixture.site, fixture.config) is SpiderResult.Ready)
+                assertNotSame(loader, field(worker, "activeDexLoader"))
+                assertTrue("Old approval cannot survive revocation", worker.details(film) is SpiderResult.Failure)
+            } finally { worker.close() }
+        }
+    }
     @Test fun closedWorkerRejectsLateSpiderInitAndFreshApplyGetsNewResources() = runBlocking {
         Fixture("init").use { fixture ->
             val worker = TvBoxSpiderWorker(fixture.context)
@@ -173,7 +209,7 @@ class SpiderWorkerLifecycleTest {
     private class Fixture(private val stage: String) : AutoCloseable {
         private val inst = InstrumentationRegistry.getInstrumentation()
         val state = ConcurrentHashMap<String, Any>().apply {
-            for (key in listOf("inits", "destroys", "homes", "searches")) put(key, AtomicInteger())
+            for (key in listOf("inits", "destroys", "homes", "searches", "bootstraps")) put(key, AtomicInteger())
             put("$stage.entered", CountDownLatch(1))
             put("$stage.proceed", CountDownLatch(1))
         }

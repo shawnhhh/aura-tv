@@ -2,7 +2,7 @@
 from pathlib import Path
 import re
 
-LEGACY = ("SpiderProxyPlayback", "SpiderLoopbackProxy", "HerrinSpiderHlsProxyRewrite")
+LEGACY = ("SpiderProxyPlayback", "SpiderLoopbackProxy", "HerrinSpiderHlsProxyRewrite", "SpiderDirectPlayback")
 
 
 def without_comments(code):

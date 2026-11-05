@@ -34,6 +34,37 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
     private final String token;
     private final SpiderCallback siteProxy;
     private final SpiderCallback staticJarProxy;
+    private volatile java.util.List<StaticOrigin> inheritedStaticOrigins = java.util.List.of();
+
+    /** In-memory capabilities issued by this exact approved JAR/grant, never URLs from config. */
+    public static final class StaticOrigin {
+        private final int port;
+        private final String token;
+        private StaticOrigin(int port, String token) { this.port = port; this.token = token; }
+        @Override public String toString() { return "StaticOrigin([redacted])"; }
+    }
+
+    public void inheritStaticOrigins(java.util.List<StaticOrigin> origins) {
+        if (staticJarProxy == null) throw new IllegalStateException("Static JAR handler required");
+        inheritedStaticOrigins = java.util.List.copyOf(origins);
+    }
+
+    public java.util.List<StaticOrigin> staticOrigins() {
+        if (staticJarProxy == null) return java.util.List.of();
+        java.util.List<StaticOrigin> result = new java.util.ArrayList<>(inheritedStaticOrigins);
+        result.add(new StaticOrigin(port(), token));
+        return java.util.List.copyOf(result);
+    }
+
+    boolean ownsRetiredStaticOrigin(int port, String supplied) {
+        if (staticJarProxy == null || supplied == null) return false;
+        for (StaticOrigin origin : inheritedStaticOrigins) {
+            if (origin.port == port && MessageDigest.isEqual(
+                    origin.token.getBytes(StandardCharsets.US_ASCII),
+                    supplied.getBytes(StandardCharsets.US_ASCII))) return true;
+        }
+        return false;
+    }
 
     public NativeFongMiProxy(String siteKey, SpiderCallback siteProxy,
                              SpiderCallback staticJarProxy) throws IOException {
