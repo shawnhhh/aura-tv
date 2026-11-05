@@ -668,7 +668,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         val attemptResult = attemptPlayback {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
-            (activeAuthority ?: error("Spider 来源授权已失效")).requireFilm(film)
+            val owner = activeAuthority ?: error("Spider 来源授权已失效")
+            owner.requireFilm(film)
             val selected = film.playbackEpisodes.firstOrNull { it.number == episode }
                 ?.lines?.firstOrNull { it.id == line } ?: error("未找到 Spider 播放线路")
             // CatVod Spider.playerContent is synchronous and may block in network
@@ -718,9 +719,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             }
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
             if (healthy is PlaybackResult.Ready) healthy.copy(media = healthy.media.copy(
-                mediaId = "spider/" + java.util.UUID.nameUUIDFromBytes(
-                    (activeKey + "\u0000" + film.id + "\u0000" + episode + "\u0000" + line)
-                        .toByteArray(Charsets.UTF_8)))) else healthy
+                mediaId = owner.mediaId(film, episode, line))) else healthy
         }
         return when (attemptResult) {
             is SpiderResult.Ready -> attemptResult.value

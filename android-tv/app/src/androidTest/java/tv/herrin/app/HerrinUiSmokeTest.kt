@@ -93,6 +93,16 @@ class HerrinUiSmokeTest {
     private fun advancedSettings() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The route callback precedes attachment/focus of the settings tree.
+        // Query the collection while it is absent: fetchOne's diagnostic tree
+        // printer can otherwise read lazy semantics on the instrumentation
+        // thread during the layout transition (SnapshotStateObserver failure).
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("settings-list").fetchSemanticsNodes().size == 1 &&
+                compose.onAllNodes(hasTestTag("screen-first") and isFocused())
+                    .fetchSemanticsNodes().size == 1
+        }
+        compose.waitForIdle()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
         compose.onNodeWithTag("settings-advanced").performClick()
         compose.waitForIdle()

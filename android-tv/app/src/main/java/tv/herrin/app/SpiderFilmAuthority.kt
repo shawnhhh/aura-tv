@@ -36,6 +36,11 @@ internal class SpiderFilmAuthority(private val site: String, private val runtime
         "Spider 影片、选集或授权来源已变化，请重新查找片源"
     }
 
+    fun mediaId(film: Film, episode: Int, lineId: String): String {
+        val line = film.playbackEpisodes.first { it.number == episode }.lines.first { it.id == lineId }
+        return "spider/" + proof(film, episode, line)
+    }
+
     private fun equal(a: String, b: String) = MessageDigest.isEqual(
         a.toByteArray(Charsets.US_ASCII), b.toByteArray(Charsets.US_ASCII))
 

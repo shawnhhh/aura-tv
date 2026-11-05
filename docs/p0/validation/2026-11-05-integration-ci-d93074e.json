@@ -1,0 +1,61 @@
+{
+  "head": "d93074e1ae182513f4f5303227b7807c7f35a3d8",
+  "run_id": 41992326073,
+  "debug": "success",
+  "jvm": {
+    "tests": 546,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "tv": {
+    "tests": 187,
+    "failures": [
+      {
+        "class": "tv.herrin.app.HerrinUiSmokeTest",
+        "test": "settingsOfferExplicitSourceBackupImportAndSafeDeleteFlow",
+        "status": "failed",
+        "failure": "java.lang.IllegalArgumentException: Detected multithreaded access to SnapshotStateObserver: previousThreadId=2), currentThread={id=315, name=Instr: androidx.test.runner.AndroidJUnitRunner}. Note that observation on multiple threads in layout/draw is not supported. Make sure your measure/layout/draw for each Owner (AndroidComposeView) is executed on the same thread.\nat androidx.compose.runtime.PreconditionsKt.throwIllegalArgumentException(Preconditions.kt:26)\nat androidx.compose.runtime.snapshots.SnapshotStateObserver.observeReads(SnapshotStateObserver.kt:708)\nat androidx.compose.ui.node.OwnerSnapshotObserver.observeReads$ui_release(OwnerSnapshotObserver.kt:133)\nat androidx.compose.ui.node.OwnerSnapshotObserver.observeSemanticsReads$ui_release(OwnerSnapshotObserver.kt:121)\nat androidx.compose.ui.node.LayoutNode.getCollapsedSemantics$ui_release(LayoutNode.kt:433)\nat androidx.compose.ui.semantics.SemanticsNodeKt.SemanticsNode(SemanticsNode.kt:49)\nat androidx.compose.ui.semantics.SemanticsNode.fillOneLayerOfSemanticsWrappers(SemanticsNode.kt:278)\nat androidx.compose.ui.semantics.SemanticsNode.unmergedChildren$ui_release(SemanticsNode.kt:257)\nat androidx.compose.ui.semantics.SemanticsNode.getChildren$ui_release(SemanticsNode.kt:338)\nat androidx.compose.ui.semantics.SemanticsNode.getChildren$ui_release$default(SemanticsNode.kt:322)\nat androidx.compose.ui.semantics.SemanticsNode.getChildren(SemanticsNode.kt:295)\nat androidx.compose.ui.test.OutputKt.printToStringInner(Output.kt:180)\nat androidx.compose.ui.test.OutputKt.printToString(Output.kt:138)\nat androidx.compose.ui.test.OutputKt.printToString$default(Output.kt:136)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:189)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)\nat androidx.compose.ui.test.ActionsKt.scrollToMatchingDescendantOrReturnScrollable(Actions.kt:285)\nat androidx.compose.ui.test.ActionsKt.performScrollToNode(Actions.kt:258)\nat tv.herrin.app.HerrinUiSmokeTest.advancedSettings(HerrinUiSmokeTest.kt:96)\nat tv.herrin.app.HerrinUiSmokeTest.settingsOfferExplicitSourceBackupImportAndSafeDeleteFlow(HerrinUiSmokeTest.kt:821)\n"
+      }
+    ]
+  },
+  "new_cases": [
+    {
+      "class": "tv.herrin.app.FongMiPlayerManagerIntegrationTest",
+      "test": "productionAdapterOwnsMediaIdentityHeadersControlsAndRelease",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "closeDuringJarBootstrapCannotConstructOrPublishASpider",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "cancelledInitIgnoringInterruptionCannotSurviveClose",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "approvedJarSharesItsLoaderAcrossSitesButNeverTheirFilmAuthority",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "retiredInitCannotReplaceOrClearANewerAuthorizedSite",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "closedWorkerRejectsLateSpiderInitAndFreshApplyGetsNewResources",
+      "status": "passed",
+      "failure": null
+    }
+  ],
+  "physical_TCL_tested": false
+}

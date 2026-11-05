@@ -10,8 +10,12 @@
   → MediaItemFactory → 现有真实 ExoMediaSourceFactory/Media3；准备、重试、换线、关闭已接管。
   旧 Java 媒体会话委托同一核心，移除第二处 Exo Builder；Spider 故障直链回退移入 test。
 - 首页/TMDB UI、NAS→云盘→TVBox 顺序未改；未重做已验收生命周期，未执行外部插件。
-- 集成编译/定向回归通过；统一静态检查、13 项检查器回归、546 项 JVM 全量（无失败/错误/跳过）、
-  lint、Debug/测试 APK 均 success。只阶段性 push 一次，再检查该 SHA 的 Debug→Emulator。
+- 阶段提交 `d93074e1ae182513f4f5303227b7807c7f35a3d8` 已推送：Debug success；
+  CI 41992326073 的 TV 187 项中 186 通过，仅设置备份测试的滚动查询触发 SnapshotStateObserver
+  跨线程异常。新增 Loader/播放器及媒体用例全通过。详见 validation/2026-11-05-integration-ci-d93074e.json。
+- 后续修复测试先等列表/返回焦点的实际语义状态，不改 UI/不跳过；播放器 ID 改用绑定完整
+  VOD/选集/线路的摘要，消除旧 hashCode 依赖。定向、静态、547 JVM（无失败/错误/跳过）、
+  lint、Debug/测试 APK 均通过；提交后核对最终 SHA 串行 CI，不能把前一 SHA 当完整成功。
 - 实际移植范围及依赖差异见 player-core-integration.md；不把未提供的定制 Media3/MPV
   用 stub 替代。TCL/外部已授权真实源仍未实测，P0 未完成。
 - 无可靠额度接口或恢复时间；无不足提示，不虚构百分比，不承诺定时自醒。断点保持简短。

@@ -45,4 +45,11 @@ class SpiderFilmAuthorityTest {
         assertNotEquals(secret, session.filmSecret(session.snapshot()))
         assertNull(session.filmSecret(browse))
     }
+    @Test fun playerIdentityUsesFullVodIdEvenWhenOldFilmHashesCollide() {
+        assertEquals("Aa".hashCode(), "BB".hashCode())
+        val a = owner.sign(film.copy(id = "same-legacy-hash", spiderVodId = "Aa"))
+        val b = owner.sign(film.copy(id = "same-legacy-hash", spiderVodId = "BB"))
+        assertNotEquals(owner.mediaId(a, 1, "main"), owner.mediaId(b, 1, "main"))
+        assertNotEquals(owner.mediaId(a, 1, "main"), owner.mediaId(a, 2, "main"))
+    }
 }
