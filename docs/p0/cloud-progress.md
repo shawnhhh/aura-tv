@@ -1,5 +1,22 @@
 # P0 Cloud 断点
 
+## 当前：恢复 P0 串行 CI（2026-11-05）
+
+- 开始时及提交前远端 HEAD：`58ca2639e88207c4a7ac85e74a07fbb50a0fd700`，工作区干净，PR #80 Draft。
+- 先尝试 `gh workflow run android-debug.yml --ref codex/m471-tmdb-personal-to-tvbox-playback-20261102 --repo shawnhhh/aura-tv`；
+  在读取 workflows API 时 Forbidden，未触发运行。可用连接器无 dispatch 写工具，不反复尝试同一失败请求。
+- 最小备用实现：两个现有工作流增加 workflow_call；新增 p0-playback.yml 复用它们，
+  Emulator 必须 needs: debug，默认成功条件；P0 PR 的旧独立 jobs 不执行，防止同一 push 并发重复。
+  P0 父工作流以分支为 concurrency group，cancel-in-progress=false。保留所有原测试和证据上传步骤。
+- YAML/串行依赖检查、官方 actionlint 1.7.12 检查均通过，git diff --check 通过。
+- 本断点与 CI 配置一同提交。push 后只查询该提交 SHA 的实际 push 工作流，先确认 Debug success，
+  再观察 Emulator；第一阶段未取得完整成功前，不进入阶段 B，不重复 Sardine/ParseJob 旧修复。
+- 下一条操作：读取 actions/runs?head_sha=<本提交SHA>，逐项检查 jobs 的结论和实际日志。
+  fetch_commit_workflow_runs 专用工具过滤 pull_request，不能用其空结果判断 push 工作流未启动。
+- 额度工具仍无准确接口；采用短任务，不虚构百分比或后台续跑。TCL 未验收，P0 未完成。
+
+下方是此前已验证的实现记录；当前操作以上方 CI 断点为准。
+
 更新时间：2026-11-05 UTC。Codex Cloud，单代理串行；未使用 Superpowers。
 
 ## HEAD、分支与并发

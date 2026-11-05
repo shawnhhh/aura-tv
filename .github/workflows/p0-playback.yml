@@ -1,0 +1,21 @@
+name: HERRIN P0 Serial Verification
+on:
+  push:
+    branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102']
+    paths:
+      - 'android-tv/**'
+      - '.github/workflows/android-debug.yml'
+      - '.github/workflows/android-emulator.yml'
+      - '.github/workflows/p0-playback.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p0-playback-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  debug:
+    uses: ./.github/workflows/android-debug.yml
+  emulator:
+    needs: debug
+    uses: ./.github/workflows/android-emulator.yml
