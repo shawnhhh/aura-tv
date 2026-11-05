@@ -1,4 +1,77 @@
-# P0 Cloud 断点
+# P0 Cloud 断点（当前）
+
+更新时间：2026-11-05 UTC。Codex Cloud、单代理串行；未使用 Superpowers。
+
+## HEAD / 并发 / PR
+
+- 本轮开始远端 HEAD、当前已验证的代码 HEAD：`51fc0f282bc02bd05295444b4612769ad8f7187e`。
+- 最近完成开发提交：`cf27546ce627d7cbadaa456f3cf1bbfbb054a1e8`；最近断点提交：`51fc0f2`。
+- 本轮仅增加构建恢复文档、实际失败日志和本断点；随后文档提交的最终 HEAD 用
+  `git rev-parse HEAD` 核对，不把该文档提交写成已通过编译的代码 SHA。
+- 分支仍为 `codex/m471-tmdb-personal-to-tvbox-playback-20261102`；PR #80 Draft、未合并。
+- 恢复前工作区干净，只有一个 worktree；开始 fetch 与提交前 ls-remote 均为 `51fc0f2`，
+  未发现外部提交。不覆盖并发工作，不合并 main 或其他 PR。
+
+## 当前阶段与本轮小任务
+
+阶段 A 的兼容核对已完成；当前只恢复云端 SDK 和现有代码的构建验证。
+**SDK 缺失已解除，验证被新的 JitPack 网络阻塞挡住；没有推进 B/C/D。**
+
+实际安装并核实：官方 SDK command-line tools 23.0.0、API 35 revision 2、
+Build Tools 35.0.0、Platform Tools 37.0.1；AGP 自动另装 Build Tools 34.0.0。
+官方 command-line tools ZIP 通过仓库 XML 中的 SHA-1 校验后才使用。
+Gradle wrapper 8.9 可运行；SDK、Gradle 和用户目录均为云端可写缓存。
+未执行外部第三方 Spider JAR/JS/Python，未修改生产播放代码或 UI。
+
+可重现的安装来源、缓存路径和命令见 [cloud-build.md](cloud-build.md)。
+环境重建可能清空缓存，恢复时应检查实际文件，不重新执行已完成的源码兼容核对。
+
+## 本轮验证与 CI
+
+在 `51fc0f2` 上执行：
+
+`./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain --max-workers=2`
+
+- SDK 定位、AGP 配置通过，自动安装 Build Tools 34.0.0 成功。
+- `:app:checkDebugAarMetadata` **失败**，退出 1；总耗时 3m27s。
+- `com.github.thegrizzlylabs:sardine-android:0.9` 请求
+  `https://jitpack.io/com/github/thegrizzlylabs/sardine-android/0.9/sardine-android-0.9.pom`
+  返回 HTTP **403 Forbidden**。
+- 独立 curl CONNECT 同样被代理返回 403；官方环境状态显示网络策略 enforced、
+  observations_current=true，但 effective_allowed_hosts 无 jitpack.io。
+- 未开始执行项目编译、单元测试和 lint，未生成 APK。Gradle 的
+  `checkKotlinGradlePluginConfigurationErrors SKIPPED` 是工具自身空检查，不是跳过播放测试；
+  没有禁用任何项目任务、测试或依赖。
+- 本轮未重跑上一轮已通过且未变更的静态检查/检查器测试。`git diff --check` 通过。
+- 开始时当前 HEAD 的 Actions runs 为空，PR 仍 mergeable=false；最新代码的 CI 成功
+  仍缺失，不能引用 `ebd67b32` 的旧成功记录替代。
+- 实际命令输出：[2026-11-05-cloud-build.log](validation/2026-11-05-cloud-build.log)。
+- 无 Android TV Emulator 或 TCL T7L Ultra 新验收；P0 未完成。
+
+## 当前阻塞 / 下一条明确操作
+
+**先在当前云端环境配置界面，为网络白名单增加 jitpack.io。**
+保留现有规则、代理与 CA。可用工具没有网络配置修改入口；不通过其他镜像、
+直连或删除依赖绕过策略。该变更须经平台环境配置流程生效。
+
+放行后先读取本断点和远端 HEAD/PR/CI，检查并发修改、SDK/cache 是否仍在。
+再用 cloud-build.md 的环境变量运行同一测试/lint/assemble 命令，优先修复实际失败，
+尤其 ParseJob 启动/期限回归；不要重复 SDK 安装（缓存仍存在时），不要跳到 C/D。
+完整播放器仍有既有定制 Media3/固定版本 ParseJob 差异缺口，详见兼容矩阵。
+
+## 额度 / 续跑
+
+本轮开始与结束检查可用官方工具：无额度百分比、剩余限额或恢复时间查询接口，
+未收到额度不足提示，不虚构数值。按用户规则只执行一个 SDK/构建恢复小任务，
+当前因真实网络阻塞暂停。未设置定时自动化，也不承诺后台自动恢复。
+网络配置更新后等待用户或外部任务再次调用。
+
+---
+
+以下为上一轮历史记录，恢复操作以上方“下一条明确操作”为准；
+历史 SDK 缺失描述已被本轮安装结果取代。
+
+# 2026-11-04 历史断点
 
 更新时间：2026-11-04 UTC。仅 Codex Cloud，单代理严格串行；未使用 Superpowers。
 
