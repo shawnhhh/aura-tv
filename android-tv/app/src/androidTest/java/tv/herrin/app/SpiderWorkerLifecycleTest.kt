@@ -78,6 +78,9 @@ class SpiderWorkerLifecycleTest {
                 val retiredLoader = fixture.state["init.instance"]!!.javaClass.classLoader
                 val retiredPort = Proxy.getPort()
                 worker.close()
+                // Check before creating a new listener: the OS may legitimately
+                // assign the same ephemeral port to the fresh proxy.
+                assertFalse(listening(retiredPort))
                 fixture.disableGateForNewInstances()
                 val fresh = fixture.site.copy(key = "new-authorized-site")
                 assertTrue(worker.browse(fresh, fixture.config) is SpiderResult.Ready)
@@ -91,7 +94,6 @@ class SpiderWorkerLifecycleTest {
                     field(worker, "activeDexLoader"))
                 assertEquals("Retired cleanup cannot clear new proxy", currentPort, Proxy.getPort())
                 assertTrue(listening(currentPort))
-                assertFalse(listening(retiredPort))
                 assertEquals(1, fixture.count("destroys"))
                 assertTrue(worker.search(fresh, "fixture") is SpiderResult.Ready)
                 assertTrue(worker.search(fixture.site, "fixture") is SpiderResult.Failure)

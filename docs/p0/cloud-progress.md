@@ -1,5 +1,39 @@
 # P0 Cloud 断点
 
+## 当前：Worker 关闭后晚到 init 的生产修复（2026-11-05）
+
+- 实现前 HEAD：`c38cc7c84bacd5e230338ac9e89257702614025b`；恢复基线 45e64c1 的
+  Debug/Emulator 已全通过（541 JVM / 181 TV）。PR #80 保持 Draft，无合并、无其他工作树。
+- c38cc7c 是先提交的真实 DEX 复现：串行 CI
+  [41979149789](https://github.com/shawnhhh/aura-tv/actions/runs/41979149789) Debug success，
+  TV 185 项中仅新增四项失败、0 错误/跳过；原 181 项通过。四条生产失败是关闭后 bootstrap
+  仍成功、取消后 active 残留、旧 init 成功覆盖新站点、关闭后 init 仍返回 Ready。没有 fixture
+  超时或装载失败。见 validation/2026-11-05-worker-dex-red.json，不删除这些测试求绿。
+- 实质修改 TvBoxSpiderWorker：在派发前捕获资源 epoch；保留同有效 sessionKey 复用；
+  原子分离/失效、初始化代理归属、bootstrap/init/publish/config/home 检查；close 先清状态，
+  再在 monitor 外清 proxy/Spider/HTTP/runtime。晚到实例不能发布 active/loader/proxy；旧
+  清理不能清新会话 CatVodProxy。重复 close 不重复 destroy，ClassLoader 移除宿主引用，
+  没有虚构 DEX 卸载 API。与固定上游 checkOpen/cacheSpider 对照见 loader-lifecycle-audit.md。
+- 未重做来源意图撤销、ParseJob、默认 Super、Sardine 或 CI 恢复。worker 资源 epoch 独立
+  于 bridge source/transport；原批准描述控制合法重建，未放宽 mayRun、HTTPS/MD5/DEX
+  校验或外部运行时授权。没有改首页/TMDB UI，没有旧 do= 补丁，保留 GPL/原作者修改记录。
+- 四项原创 DEX 设备回归使用 CountDownLatch 精确关卡，无 Thread.sleep 或时间竞争；
+  覆盖 bootstrap/init/取消/旧任务返回新站点、引用/端口释放、重复关闭、重新应用及复用。
+  旧端口断言在新 listener 创建前执行，避免操作系统合法端口复用误报。未执行第三方插件。
+- 本地按顺序定向 → 静态（含门禁检查器4项）→ JVM全量 → lint → Debug/测试APK 编译通过：
+  **541 JVM、0 失败/错误/跳过**，lint 0 error。最后仅设备断言顺序调整后补跑 lint/APK 编译。
+  证据：validation/2026-11-05-worker-{targeted,static,jvm,lint,debug}.log。
+- 此断点随生产代码提交；完整最终 SHA 用 git rev-parse HEAD 核对。本机没有 Emulator/KVM，
+  实际 DEX 绿灯必须等修复 SHA 的 P0 Serial Verification：先 Debug success，再 Emulator
+  的四个新用例/完整媒体音轨遥控器门禁。不能继承旧提交 success 或把 JVM 当设备验收。
+  SHA 专属最终 CI/产物回执保存在 /workspace/artifacts/ci-<SHA前7位>.json 和 manifest。
+- 下一条操作：push 后按最新 SHA 查询 actions/runs，读真实结论；失败优先修复。通过后
+  下一小任务为 **B1 Film 详情与 playerContent 的完整来源归属**，再按 B2/B3/B4/B5 顺序。
+  此修复仅对应已复现的 worker 晚到 init 契约，不宣称 Loader/阶段 B/P0 全部完成。
+- 官方准确额度接口不可用、无不足提示；只按有边界小任务推进，不虚构额度或恢复时间。
+  未配置后台定时续跑，不承诺会自行唤醒。TCL T7L Ultra 未实测。
+
+
 ## 当前：Worker 晚到 init 确定性复现（2026-11-05，修复前）
 
 - 恢复 HEAD：`45e64c1e6ef4135af2a4738bdcd9f5562bfe083a`，工作区干净、PR #80 Draft。

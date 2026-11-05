@@ -381,8 +381,14 @@ internal class SpiderInitializationFailure(cause: Throwable) :
  * 5e191aaced194e5cac5668cc91908ecb65336222; HERRIN process/session adapters.
  * Modified 2026-11-01: Init error propagation, server-before-bootstrap ordering,
  * static dispatch, and ParseJob connection. Attribution: docs/m467/spider-proxy.md.
+ * Modified 2026-11-05: pinned 305dff233cde512e2c83f71529b7c3ecfd61fefc
+ * SpiderLoader.checkOpen/cacheSpider semantics for late worker initialization.
+ * Worker epochs own resources, independently of the facade's source approval.
  */
 internal class TvBoxSpiderWorker(private val context: Context) {
+    private val lifecycle = Any()
+    private var epoch = 0L
+    private var initializingProxy: NativeFongMiProxy? = null
     private var active: Spider? = null
     private var activeKey: String? = null
     private var activeSiteKey: String? = null
@@ -395,6 +401,50 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeSiteClick: String = ""
     private var activeHttpHost: SpiderHttpSessionHost? = null
     private var activeNativeProxy: NativeFongMiProxy? = null
+
+    private data class RetiredResources(val spider: Spider?, val http: SpiderHttpSessionHost?,
+            val runtime: FongMiScriptRuntimes?, val proxies: List<NativeFongMiProxy>) {
+        fun release() = SpiderRuntimeCompat.cleanup(
+            proxies.map { proxy -> { proxy.close() } } + listOf(
+                { SpiderRuntimeCompat.dispose(spider) }, { runtime?.close(); Unit },
+                { http?.clear(); Unit }))
+    }
+
+    private fun checkOpen(ticket: Long) = synchronized(lifecycle) {
+        check(ticket == epoch) { "Spider 会话已关闭，请重新应用站点" }
+        if (Thread.currentThread().isInterrupted) throw CancellationException("Spider 操作已取消")
+    }
+
+    private fun installProxy(ticket: Long, proxy: NativeFongMiProxy) = synchronized(lifecycle) {
+        checkOpen(ticket)
+        initializingProxy = proxy
+        CatVodProxy.set(proxy.port(), proxy.sessionToken())
+    }
+
+    private fun publish(ticket: Long, spider: Spider, key: String, site: TvBoxSite,
+            http: SpiderHttpSessionHost, proxy: NativeFongMiProxy,
+            loader: DexClassLoader? = null, runtime: FongMiScriptRuntimes? = null) = synchronized(lifecycle) {
+        checkOpen(ticket)
+        active = spider
+        activeKey = key
+        activeSiteKey = site.key
+        activeHttpHost = http
+        activeNativeProxy = proxy
+        activeDexLoader = loader
+        activeScriptRuntime = runtime
+        initializingProxy = null
+    }
+
+    /** A late factory owns its locals, never a newer session's global bridge. */
+    private fun discardProxy(proxy: NativeFongMiProxy) {
+        synchronized(lifecycle) {
+            if (initializingProxy === proxy) {
+                initializingProxy = null
+                CatVodProxy.set(-1, "")
+            }
+        }
+        proxy.close()
+    }
 
     private suspend fun <T> attempt(block: () -> T): SpiderResult<T> = try {
         withTimeoutOrNull(150_000) {
@@ -413,15 +463,32 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         SpiderResult.Failure("Spider ${SpiderFailureDetails.message(error)}")
     }
 
-    suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = attempt {
+    suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> {
+        // Capture before dispatching to IO: a queued old browse cannot reopen
+        // the worker after close. A fresh explicit browse receives a new epoch.
+        val invocation = synchronized(lifecycle) { epoch }
+        return attempt { browseInSession(invocation, site, config) }
+    }
+
+    private fun browseInSession(invocation: Long, site: TvBoxSite,
+            config: TvBoxConfig.Single): List<Film> {
         val spiderApi = site.spiderApi
         val scriptApi = site.scriptApi
         if (spiderApi == null && scriptApi == null) error("站点没有可执行的 CatVod API")
         val jar = site.jar ?: config.spiderJar
         if (spiderApi != null && jar == null) error("配置没有 Spider JAR")
         val key = SpiderRuntimeCompat.sessionKey(jar.orEmpty(), site)
-        val spider = if (key == activeKey && active != null) active!! else {
-            close()
+        val (ticket, reused, retired) = synchronized(lifecycle) {
+            checkOpen(invocation)
+            if (key == activeKey && active != null) Triple(epoch, active, null)
+            else {
+                val previous = detachLocked()
+                Triple(epoch, null, previous)
+            }
+        }
+        retired?.release()
+        checkOpen(ticket)
+        val spider = reused ?: run {
             if (scriptApi != null) {
                 Runtime.set(context.applicationContext)
                 Runtime.setActivity { null }
@@ -432,17 +499,15 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     val localProxy = NativeFongMiProxy(site.key, { params ->
                         synchronized(created) { created.proxy(params) }
                     }, null)
-                    CatVodProxy.set(localProxy.port(), localProxy.sessionToken())
                     try {
+                        installProxy(ticket, localProxy)
+                        checkOpen(ticket)
                         initialize { created.init(context, site.extension) }
-                        created.also {
-                            active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = host
-                            activeNativeProxy = localProxy; activeScriptRuntime = runtime
-                        }
+                        publish(ticket, created, key, site, host, localProxy, runtime = runtime)
+                        created
                     } catch (error: Throwable) {
-                        localProxy.close()
-                        CatVodProxy.set(-1, "")
-                        SpiderRuntimeCompat.dispose(created)
+                        SpiderRuntimeCompat.cleanup(listOf(
+                            { discardProxy(localProxy) }, { SpiderRuntimeCompat.dispose(created) }))
                         throw error
                     }
                 } catch (error: Throwable) {
@@ -453,6 +518,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             } else {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.DOWNLOAD)
             val file = SpiderJarCache.obtain(context, jar!!)
+            checkOpen(ticket)
             // One ephemeral cookie jar per active site; never shared across source changes.
             val httpHost = SpiderHttpSessionHost()
             Runtime.set(context.applicationContext)
@@ -485,8 +551,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val localProxy = NativeFongMiProxy(site.key, { params ->
                 created.get()?.proxy(params)
             }, staticCallback)
-            CatVodProxy.set(localProxy.port(), localProxy.sessionToken())
             try {
+                installProxy(ticket, localProxy)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.INITIALIZER)
                 val initFailure = runCatching {
                     val initializer = loader.loadClass("com.github.catvod.spider.Init")
@@ -495,6 +561,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 initFailure?.let { SpiderInitPolicy.blocking(it)?.let { cause ->
                     initialize { throw cause }
                 } }
+                checkOpen(ticket)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.CONSTRUCT)
                 val spiderClass = loader.loadClass("com.github.catvod.spider.${spiderApi!!.removePrefix("csp_")}")
                 val spiderInstance = initialize {
@@ -505,14 +572,13 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                 spiderInstance.net = Net(httpHost, site.key)
                 spiderInstance.local = Local(site.key)
                 SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.SPIDER_INIT)
+                checkOpen(ticket)
                 initialize { spiderInstance.init(context, site.extension) }
-                spiderInstance.also { active = it; activeKey = key; activeSiteKey = site.key; activeHttpHost = httpHost
-                    activeNativeProxy = localProxy; activeDexLoader = loader }
+                publish(ticket, spiderInstance, key, site, httpHost, localProxy, loader = loader)
+                spiderInstance
             } catch (error: Throwable) {
-                localProxy.close()
-                CatVodProxy.set(-1, "")
-                SpiderRuntimeCompat.dispose(created.get())
-                httpHost.clear()
+                SpiderRuntimeCompat.cleanup(listOf({ discardProxy(localProxy) },
+                    { SpiderRuntimeCompat.dispose(created.get()) }, { httpHost.clear() }))
                 throw error
             }
             }
@@ -520,17 +586,21 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         // FongMi sends the root config's global VIP flags to playerContent.
         // Passing emptyList() prevented some plugins from generating the same
         // playable result as TVBox for an otherwise identical episode ID.
-        activeVipFlags = config.vipFlags.take(32)
-        activeJsonParsers = config.jsonParsers.take(16)
-        activePlaybackParsers = config.playbackParsers.take(24)
-        activeSiteHeaders = site.headers
-        activeSiteClick = site.click
+        synchronized(lifecycle) {
+            checkOpen(ticket)
+            activeVipFlags = config.vipFlags.take(32)
+            activeJsonParsers = config.jsonParsers.take(16)
+            activePlaybackParsers = config.playbackParsers.take(24)
+            activeSiteHeaders = site.headers
+            activeSiteClick = site.click
+        }
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
         val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
             spider.categoryContent(id, "1", false, hashMapOf())
         }
+        checkOpen(ticket)
         SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.READY)
-        films
+        return films
     }
 
     /** Search only an active, explicitly user-approved Spider site. */
@@ -640,11 +710,16 @@ internal class TvBoxSpiderWorker(private val context: Context) {
      */
     fun releasePlayback() = close()
 
-    fun close() {
-        activeNativeProxy?.close()
+    fun close() = synchronized(lifecycle) { detachLocked() }.release()
+
+    /** Detach atomically; never hold the lifecycle monitor across plugin code. */
+    private fun detachLocked(): RetiredResources {
+        epoch++
+        val retired = RetiredResources(active, activeHttpHost, activeScriptRuntime,
+            listOfNotNull(activeNativeProxy, initializingProxy).distinct())
+        initializingProxy = null
         activeNativeProxy = null
         CatVodProxy.set(-1, "")
-        SpiderRuntimeCompat.dispose(active)
         active = null
         activeKey = null
         activeSiteKey = null
@@ -652,12 +727,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         activeJsonParsers = emptyList()
         activePlaybackParsers = emptyList()
         activeDexLoader = null
-        activeScriptRuntime?.close()
         activeScriptRuntime = null
         activeSiteHeaders = emptyMap()
         activeSiteClick = ""
-        activeHttpHost?.clear()
         activeHttpHost = null
+        return retired
     }
 
     private fun proxyErrorStatus(error: Throwable): Int =
