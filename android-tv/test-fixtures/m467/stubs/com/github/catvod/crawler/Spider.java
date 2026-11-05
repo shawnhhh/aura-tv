@@ -6,6 +6,8 @@ import java.util.Map;
 public abstract class Spider {
     public String siteKey;
     public void init(Context context, String extend) throws Exception {}
+    public void destroy() {}
+    public String searchContent(String keyword, boolean quick) throws Exception { return ""; }
     public String homeContent(boolean filter) throws Exception { return ""; }
     public String detailContent(List<String> ids) throws Exception { return ""; }
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception { return ""; }

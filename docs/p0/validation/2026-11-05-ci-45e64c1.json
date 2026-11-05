@@ -1,0 +1,112 @@
+{
+  "repository": "shawnhhh/aura-tv",
+  "head": "45e64c1e6ef4135af2a4738bdcd9f5562bfe083a",
+  "run_id": 41963240319,
+  "url": "https://github.com/shawnhhh/aura-tv/actions/runs/41963240319",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 127034256050,
+      "name": "debug / debug",
+      "started_at": "2026-11-05T03:42:19Z",
+      "completed_at": "2026-11-05T03:47:25Z",
+      "conclusion": "success"
+    },
+    {
+      "id": 127035913645,
+      "name": "emulator / emulator",
+      "started_at": "2026-11-05T03:47:27Z",
+      "completed_at": "2026-11-05T04:02:42Z",
+      "conclusion": "success"
+    }
+  ],
+  "debug_before_emulator": true,
+  "jvm": {
+    "tests": 541,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "tv": {
+    "tests": 181,
+    "failures": 0,
+    "skipped": 0
+  },
+  "new_cases": [
+    {
+      "class": "tv.herrin.app.SpiderLoaderLifecycleTest",
+      "test": "deliveredBrowseCannotReauthorizeAfterCloseAndFreshApplyStillWorks",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLoaderLifecycleTest",
+      "test": "browseQueuedBeforeItsFirstMainDispatchCannotLoadAfterRevocation",
+      "status": "passed",
+      "failure": null
+    }
+  ],
+  "fatal_exception_present": false,
+  "artifacts": [
+    {
+      "id": 13387000698,
+      "name": "HERRIN-debug-apk",
+      "size_in_bytes": 23406596,
+      "url": "https://api.github.com/repos/shawnhhh/aura-tv/actions/artifacts/13387000698",
+      "archive_download_url": "https://api.github.com/repos/shawnhhh/aura-tv/actions/artifacts/13387000698/zip",
+      "expired": false,
+      "created_at": "2026-11-05T03:47:20Z",
+      "expires_at": "2026-11-19T03:47:18Z",
+      "updated_at": "2026-11-05T03:47:20Z",
+      "digest": "sha256:95286bc539215c28417b908f0baf9a0b61f1f8d8c133d9908459d780429ef05d",
+      "workflow_run": {
+        "id": 41963240319,
+        "repository_id": 1428076964,
+        "head_repository_id": 1428076964,
+        "head_branch": "codex/m471-tmdb-personal-to-tvbox-playback-20261102",
+        "head_sha": "45e64c1e6ef4135af2a4738bdcd9f5562bfe083a"
+      }
+    },
+    {
+      "id": 13386950717,
+      "name": "HERRIN-test-reports",
+      "size_in_bytes": 194536,
+      "url": "https://api.github.com/repos/shawnhhh/aura-tv/actions/artifacts/13386950717",
+      "archive_download_url": "https://api.github.com/repos/shawnhhh/aura-tv/actions/artifacts/13386950717/zip",
+      "expired": false,
+      "created_at": "2026-11-05T03:47:21Z",
+      "expires_at": "2027-02-03T03:42:17Z",
+      "updated_at": "2026-11-05T03:47:21Z",
+      "digest": "sha256:771e477b04ebd889d9bc9572589e4566ab4acd490ea42c1a97e1793cf9f67862",
+      "workflow_run": {
+        "id": 41963240319,
+        "repository_id": 1428076964,
+        "head_repository_id": 1428076964,
+        "head_branch": "codex/m471-tmdb-personal-to-tvbox-playback-20261102",
+        "head_sha": "45e64c1e6ef4135af2a4738bdcd9f5562bfe083a"
+      }
+    },
+    {
+      "id": 13386444990,
+      "name": "HERRIN-emulator-evidence",
+      "size_in_bytes": 73808259,
+      "url": "https://api.github.com/repos/shawnhhh/aura-tv/actions/artifacts/13386444990",
+      "archive_download_url": "https://api.github.com/repos/shawnhhh/aura-tv/actions/artifacts/13386444990/zip",
+      "expired": false,
+      "created_at": "2026-11-05T04:02:39Z",
+      "expires_at": "2026-11-19T04:02:36Z",
+      "updated_at": "2026-11-05T04:02:39Z",
+      "digest": "sha256:572f484d74303d0a9b7e50db1b06729a9619246b8042ae9bbfc44ac294adfd98",
+      "workflow_run": {
+        "id": 41963240319,
+        "repository_id": 1428076964,
+        "head_repository_id": 1428076964,
+        "head_branch": "codex/m471-tmdb-personal-to-tvbox-playback-20261102",
+        "head_sha": "45e64c1e6ef4135af2a4738bdcd9f5562bfe083a"
+      }
+    }
+  ],
+  "physical_TCL_tested": false,
+  "next_task": "Worker close versus delayed init publication and temporary resources; reproduce with original DEX fixture first."
+}

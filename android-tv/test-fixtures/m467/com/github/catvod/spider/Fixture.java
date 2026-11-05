@@ -7,11 +7,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 public final class Fixture extends Spider {
+    private Map<String, Object> lifecycle;
     @Override public void init(Context context, String extend) {
         if (!Init.initialized) throw new IllegalStateException("JAR Init was not invoked");
+        lifecycle = LifecycleGate.state(context);
+        LifecycleGate.count(lifecycle, "inits");
+        LifecycleGate.pause(lifecycle, "init", this);
+    }
+    @Override public void destroy() {
+        LifecycleGate.count(lifecycle, "destroys");
     }
     @Override public String homeContent(boolean filter) {
+        LifecycleGate.count(lifecycle, "homes");
         return "{\"list\":[{\"vod_id\":\"fixture\",\"vod_name\":\"Original synthetic fixture\"}]}";
+    }
+    @Override public String searchContent(String keyword, boolean quick) {
+        LifecycleGate.count(lifecycle, "searches");
+        return homeContent(false);
     }
     @Override public String detailContent(List<String> ids) {
         return "{\"list\":[{\"vod_id\":\"fixture\",\"vod_play_from\":\"Synthetic\",\"vod_play_url\":\"Instance$instance#Static$static\"}]}";

@@ -1,5 +1,26 @@
 # P0 Cloud 断点
 
+## 当前：Worker 晚到 init 确定性复现（2026-11-05，修复前）
+
+- 恢复 HEAD：`45e64c1e6ef4135af2a4738bdcd9f5562bfe083a`，工作区干净、PR #80 Draft。
+  此提交串行 CI [41963240319](https://github.com/shawnhhh/aura-tv/actions/runs/41963240319)
+  已全 success：541 JVM / 181 TV，0 失败/错误/跳过；Debug 03:47:25Z 完成后 Emulator
+  03:47:27Z 开始。两项来源撤销 Binder 用例真实通过。回执在 validation/2026-11-05-ci-45e64c1.json。
+- 继续同一 Loader 专项，未重复来源意图修复。实际 worker 的 JAR Init/Spider.init 返回后
+  仍无关闭检查，直接写 active/loader/proxy；固定 SpiderLoader.checkOpen/cacheSpider 则检查关闭并退休晚到实例。
+- 已加仓库原创 DEX fixture 的 bootstrap/init CountDownLatch 关卡和计数；没有外部插件、
+  Thread.sleep 或竞态轮询。新增四项实际 worker 设备回归：关闭后晚到 init、bootstrap
+  结束禁止继续构造、忽略中断的取消、旧 init 返回不能覆盖新授权站点/清新代理。
+  还检查只销毁一次、清空 loader/HTTP/实例引用、代理端口关闭、合法重新应用和同会话复用。
+- 生产代码尚未修改。当前云端无 Emulator 或 /dev/kvm，真实 DEX 红灯只能在现有 GitHub
+  串行 Emulator 执行；本提交是可复现回归检查点，不声称修复或设备测试通过。
+  本地定向/静态/JVM 全量(541)/lint/Debug 与测试 APK 编译通过，详见 worker-red-*.log。
+- 下一条操作：push 此复现提交，查询该 SHA 的串行 CI，Debug 成功后读 Emulator 的四项
+  失败证据；确认是生产生命周期失败后，只修该缺口，再完整顺序验证及提交。不得删测求绿。
+- 官方准确额度接口不可用，未收到不足提示；本轮只完成 worker 生命周期小任务。不虚构
+  百分比或恢复时间，不承诺自动后台唤醒。阶段 B/P0 均未完成，TCL 未实测。
+
+
 ## 当前：Loader 来源意图与晚到回调子契约（2026-11-05）
 
 - 恢复及提交前核实的 HEAD：`2cef56b629b86952ce7abddf2bcf5042ce5cc096`。

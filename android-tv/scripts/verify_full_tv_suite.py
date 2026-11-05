@@ -28,6 +28,7 @@ REQUIRED_CLASSES = (
     "SpiderLocalProxyPlaybackTest",
     "SpiderRemoteProcessTest",
     "SpiderLoaderLifecycleTest",
+    "SpiderWorkerLifecycleTest",
     "M467JarPlaybackEndToEndTest",
     "M467ParseJobInstrumentedTest",
     "M467PlaybackRecoveryTest",
