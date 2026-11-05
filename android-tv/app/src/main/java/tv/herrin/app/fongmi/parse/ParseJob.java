@@ -5,6 +5,8 @@
  * HERRIN modifications 2026-11-01: inject host services instead of App,
  * VodConfig, BaseLoader and ParseWebView globals; retain scheduling, parser
  * dispatch, latch, first-success and cancellation control flow.
+ * HERRIN modifications 2026-11-05: release resources if the injected UI host
+ * rejects final result dispatch after the parser has completed.
  */
 package tv.herrin.app.fongmi.parse;
 
@@ -301,7 +303,14 @@ public class ParseJob implements ParseCallback {
 
     private void complete(Consumer<ParseCallback> result) {
         if (!done.compareAndSet(false, true)) return;
-        host.post(() -> deliverResult(result));
+        try {
+            host.post(() -> deliverResult(result));
+        } catch (RuntimeException | Error failure) {
+            // No queued deliverResult means its finally block cannot clean up.
+            // Preserve the dispatch failure; never invoke UI callbacks here.
+            stop();
+            throw failure;
+        }
     }
 
     private void deliverResult(Consumer<ParseCallback> result) {

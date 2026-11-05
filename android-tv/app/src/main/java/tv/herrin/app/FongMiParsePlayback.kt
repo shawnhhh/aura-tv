@@ -16,6 +16,7 @@ import org.json.JSONObject
 import tv.herrin.app.fongmi.parse.Parse
 import tv.herrin.app.fongmi.parse.ParseCallback
 import tv.herrin.app.fongmi.parse.ParseJob
+import tv.herrin.app.fongmi.parse.ParseUiDispatcher
 import tv.herrin.app.fongmi.parse.Result
 import java.net.URI
 import java.util.LinkedHashMap
@@ -134,7 +135,9 @@ internal object FongMiParsePlayback {
                             FongMiJarPlayback.invoke(loader, 3, key, name, flag, null, jxs, url)
                         override fun convertUrl(url: String): String = normalizeMedia?.invoke(url) ?: url
                         override fun webSupported() = true
-                        override fun post(task: Runnable) { main.post(task) }
+                        override fun post(task: Runnable) {
+                            ParseUiDispatcher.post({ main.post(it) }, task)
+                        }
                         override fun startWeb(key: String, from: String, headers: Map<String, String>,
                             url: String, click: String, callback: ParseCallback, detect: Boolean): AutoCloseable {
                             val task = browserScope.launch {
