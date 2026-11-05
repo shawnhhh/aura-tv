@@ -45,13 +45,13 @@ object MediaItemFactory {
             .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).setExtras(extras).build())
             .setMediaMetadata(spec.metadata).setMimeType(spec.format)
             .setImageDurationMs(15_000)
-            .setSubtitleConfigurations(media.subtitles.mapIndexed { index, sub ->
+            .setSubtitleConfigurations(media.subtitles.mapIndexedNotNull { index, sub ->
                 val subUri = Uri.parse(sub.uri)
                 MediaItem.SubtitleConfiguration.Builder(subUri)
                     .setId("external:" + UUID.nameUUIDFromBytes(sub.uri.toByteArray(StandardCharsets.UTF_8)))
                     .setLabel(sub.title).setLanguage(sub.language)
                     .setMimeType(FongMiSubtitleFormats.supportedMime(sub.uri, sub.mimeType)
-                        ?: throw IllegalArgumentException("Unsupported subtitle format"))
+                        ?: return@mapIndexedNotNull null)
                     .setSelectionFlags(flags[index]).build()
             }).build()
     }

@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 /** Debug-only host. Local test media is never accepted by production settings. */
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
+    var nextEpisodeRequests = 0
     var lineSelections = 0
     var episodeSelections = 0
     var otherSourceSelections = 0
@@ -62,6 +63,7 @@ class PlaybackTestActivity : ComponentActivity() {
                     val sessionUri = media.uri
                     AuthorizedPlaybackPanel(
                         media = media,
+                        onNextEpisode = if (intent.getBooleanExtra("continuousFixture", false)) ({ nextEpisodeRequests++ }) else null,
                         onPlaybackProgress = { position, duration, finished ->
                             progressEvents.add(ProgressEvent(sessionUri, position, duration, finished))
                         },
@@ -98,7 +100,7 @@ class PlaybackTestActivity : ComponentActivity() {
                         },
                         // Diagnostics are available solely in this isolated
                         // debug/test fixture, never in the real HERRIN player.
-                        testDiagnostics = true
+                        testDiagnostics = !intent.getBooleanExtra("consumerControls", false)
                     )
                 } else Text("Playback released")
             }

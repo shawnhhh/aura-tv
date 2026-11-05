@@ -35,6 +35,8 @@ class PlayerManager(val player: ExoPlayer) : AutoCloseable {
     var lastError: PlaybackException? = null; private set
     var onTimeout: ((PlaybackException) -> Unit)? = null
     var onDiagnostic: ((String, String) -> Unit)? = null
+    var onTrackPreference: ((Track) -> Unit)? = null
+    fun restorePreferredTracks(values: List<Track>) { check(!released); values.forEach { selectedTracks[it.type] = it } }
     private val selectedTracks = mutableMapOf<Int, Track>()
     private var restoringTracks = false
     private var speedBeforePress: Float? = null
@@ -153,6 +155,7 @@ class PlayerManager(val player: ExoPlayer) : AutoCloseable {
             ordinal = track.ordinal; isSelected = track.isSelected
         }
         restoreTrackSelection()
+        onTrackPreference?.invoke(selectedTracks.getValue(track.type))
         return true
     }
     fun resetTrack() { check(!released); selectedTracks.clear(); TrackUtil.reset(player) }
@@ -183,6 +186,7 @@ class PlayerManager(val player: ExoPlayer) : AutoCloseable {
         onDiagnostic?.invoke("PLAYBACK_RELEASED", "")
         onDiagnostic = null
         selectedTracks.clear()
+        onTrackPreference = null
         player.removeListener(listener)
         player.stop()
         player.release()

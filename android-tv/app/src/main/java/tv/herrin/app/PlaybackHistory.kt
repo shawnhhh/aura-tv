@@ -10,6 +10,8 @@ data class WatchPosition(val positionMs: Long, val durationMs: Long, val updated
 
 /** Stores only playback offsets. Never stores stream URLs, access tokens or provider credentials. */
 class PlaybackHistory(context: Context) {
+    private val activeWrites = mutableMapOf<String, Long>()
+    private var generation = 0L
     private val prefs = context.getSharedPreferences("herrin-watch-history", Context.MODE_PRIVATE)
 
     private fun key(scope: String, filmId: String, episode: Int, lineId: String): String {
@@ -17,6 +19,23 @@ class PlaybackHistory(context: Context) {
         return MessageDigest.getInstance("SHA-256").digest(plain.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
     }
+
+    @Synchronized fun begin(scope: String, film: String, episode: Int, line: String): Long {
+        val token = key(scope, film, episode, line)
+        val ticket = ++generation
+        activeWrites.clear() // The single production player retires all outgoing writers.
+        activeWrites[token] = ticket
+        return ticket
+    }
+    @Synchronized fun updateSession(ticket: Long, scope: String, film: String, episode: Int,
+        line: String, position: Long, duration: Long, ended: Boolean) {
+        val token = key(scope, film, episode, line)
+        if (activeWrites[token] != ticket) return
+        update(scope, film, episode, line, position, duration, ended)
+        if (ended) activeWrites.remove(token)
+    }
+    fun isWatched(scope: String, film: String, episode: Int, line: String): Boolean =
+        prefs.getBoolean(key(scope, film, episode, line) + ":watched", false)
 
     fun load(scope: String, filmId: String, episode: Int, lineId: String): WatchPosition? {
         val token = key(scope, filmId, episode, lineId)
@@ -36,10 +55,11 @@ class PlaybackHistory(context: Context) {
         if (scope.isBlank() || filmId.isBlank() || lineId.isBlank() || episode !in 1..300) return
         val token = key(scope, filmId, episode, lineId)
         val completed = ended || durationMs > 0L && positionMs >= durationMs - 3_000L
-        if (completed) { clear(scope, filmId, episode, lineId); return }
+        if (completed) { clear(scope, filmId, episode, lineId); prefs.edit().putBoolean("${token}:watched", true).apply(); return }
         if (durationMs < 10_000L || durationMs > 48L * 60L * 60_000L ||
             positionMs < 3_000L || positionMs >= durationMs) return
         prefs.edit()
+            .putBoolean("${token}:watched", false)
             .putLong("${token}:position", positionMs)
             .putLong("${token}:duration", durationMs)
             .putLong("${token}:updated", System.currentTimeMillis())

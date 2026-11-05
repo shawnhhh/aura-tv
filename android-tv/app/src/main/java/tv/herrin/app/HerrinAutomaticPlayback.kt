@@ -41,9 +41,9 @@ internal class HerrinAutomaticPlayback {
 
     companion object {
         fun resolutionFailure(reason: String): FongMiPlaybackRecovery.Failure {
-            if (listOf("PROXY_IO_POLICY", "PROXY_IO_TLS", "PROXY_IO_MAIN_THREAD", "PROXY_IO_UNKNOWN", "PROXY_IO_FAILURE")
+            if (listOf("PROXY_IO_POLICY", "PROXY_IO_TLS", "PROXY_IO_MAIN_THREAD", "PROXY_IO_UNKNOWN", "PROXY_IO_FAILURE", "PROXY_HTTP_403", "PROXY_INVALID_SESSION", "PROXY_INVALID_PORT")
                     .any(reason::contains)) return FongMiPlaybackRecovery.Failure(FongMiPlaybackRecovery.Kind.NETWORK_POLICY)
-            val denied = Regex("(?i)HTTP\\s*[:=]?\\s*(401|403|429)\\b").containsMatchIn(reason) ||
+            val denied = Regex("(?i)HTTP[_\\s]*[:=]?\\s*(401|403|429)\\b").containsMatchIn(reason) ||
                 listOf("未授权", "未批准", "安全校验", "MD5", "证书", "会话已", "来源已失效")
                     .any { reason.contains(it, ignoreCase = true) }
             return FongMiPlaybackRecovery.Failure(if (denied)

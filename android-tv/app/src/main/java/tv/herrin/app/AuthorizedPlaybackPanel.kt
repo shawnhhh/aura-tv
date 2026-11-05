@@ -75,6 +75,8 @@ fun AuthorizedPlaybackPanel(
     focusRestoreEpoch: Int = 0,
     onLineSelection: (() -> Unit)? = null,
     onEpisodeSelection: (() -> Unit)? = null,
+    onNextEpisode: (() -> Unit)? = null,
+    onPreviousEpisode: (() -> Unit)? = null,
     /** Re-run the source's playerContent; differs from replaying a stale signed URL. */
     onRefreshSource: (() -> Unit)? = null,
     onTryOtherSource: (() -> Unit)? = null,
@@ -92,7 +94,7 @@ fun AuthorizedPlaybackPanel(
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
             onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onSourceExhausted, onBack,
-            testDiagnostics, recoverySession)
+            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode)
     }
 }
 
@@ -114,7 +116,9 @@ private fun AuthorizedPlaybackSession(
     onSourceExhausted: ((FongMiPlaybackRecovery.Failure, Long) -> Boolean)?,
     onBack: () -> Unit,
     testDiagnostics: Boolean,
-    recoverySession: FongMiPlaybackRecovery.Session
+    recoverySession: FongMiPlaybackRecovery.Session,
+    onNextEpisode: (() -> Unit)?,
+    onPreviousEpisode: (() -> Unit)?
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -164,7 +168,7 @@ private fun AuthorizedPlaybackSession(
     }
     val candidates = retries.candidates
     val journey = remember(media) { PlaybackJourneyTrace() }
-    val playback = remember(media, context, lifecycle) { HerrinPlaybackAdapter(context, media) }
+    val playback = remember(media, context, lifecycle) { HerrinPlaybackAdapter(context, media, persistTrackPreferences = !testDiagnostics) }
     val player = remember(playback) {
         journey.begin(0, candidates.size, android.os.SystemClock.elapsedRealtime())
         playback.player.apply {
@@ -303,6 +307,15 @@ private fun AuthorizedPlaybackSession(
         latestProgressCallback(player.currentPosition.coerceAtLeast(0L), duration,
             player.playbackState == Player.STATE_ENDED)
     }
+    val latestNextEpisode by rememberUpdatedState(onNextEpisode)
+    var endHandled by remember(player) { mutableStateOf(false) }
+    LaunchedEffect(player, playbackState) {
+        if (playbackState == Player.STATE_ENDED && !endHandled) {
+            endHandled = true
+            reportProgress()
+            if (!isLive) latestNextEpisode?.invoke()
+        }
+    }
     fun retryPlayback() {
         pendingRecovery?.cancel()
         recoverySession.userRetry()
@@ -421,6 +434,12 @@ private fun AuthorizedPlaybackSession(
     // created by an outgoing or abandoned composition.
     SideEffect { onPlayer(player) }
     fun requestBack(source: String) {
+        if (!testDiagnostics && controlsVisible && !isLive) {
+            controlsVisible = false
+            advancedControlsVisible = false
+            playerRootFocus.requestFocus()
+            return
+        }
         android.util.Log.i("HerrinPlayerBack",
             "source=$source focus=${context.javaClass.simpleName} released=${player.isReleased}")
         onBack()
@@ -439,6 +458,12 @@ private fun AuthorizedPlaybackSession(
         .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
+        if (key.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT || key.keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                if (key.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) onNextEpisode?.invoke() else onPreviousEpisode?.invoke()
+            }
+            return@onPreviewKeyEvent true
+        }
         // A held key may generate dozens of native repeat events. Avoid
         // invalidating the whole overlay on every ignored/coalesced repeat.
         if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0)
@@ -519,7 +544,7 @@ private fun AuthorizedPlaybackSession(
                     if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
                         event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
                         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                            PlaybackTransport.seekBy(player,
+                            playback.manager.seekBy(
                                 if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 10_000L else -10_000L)
                         }
                         return true
@@ -717,6 +742,14 @@ private fun AuthorizedPlaybackSession(
                 }, modifier = Modifier.focusRequester(moreControl)
                     .testTag("transport-more")) {
                     Text(if (advancedControlsVisible) "收起" else "更多")
+                }
+            }
+            if (advancedControlsVisible && (onNextEpisode != null || onPreviousEpisode != null)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { onPreviousEpisode?.invoke() }, enabled = onPreviousEpisode != null,
+                        modifier = Modifier.testTag("transport-previous-episode")) { Text("上一集") }
+                    Button(onClick = { onNextEpisode?.invoke() }, enabled = onNextEpisode != null,
+                        modifier = Modifier.testTag("transport-next-episode")) { Text("下一集") }
                 }
             }
             if (advancedControlsVisible && (onLineSelection != null || onEpisodeSelection != null)) {

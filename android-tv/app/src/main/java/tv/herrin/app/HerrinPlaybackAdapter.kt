@@ -13,10 +13,18 @@ import com.fongmi.android.tv.player.media.PlaySpec
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class HerrinPlaybackAdapter(context: Context, media: PlaybackMedia,
-        private val mediaId: String = media.mediaId ?: java.util.UUID.randomUUID().toString()) : AutoCloseable {
+        private val mediaId: String = media.mediaId ?: java.util.UUID.randomUUID().toString(),
+        persistTrackPreferences: Boolean = true) : AutoCloseable {
     val media = media.copy(headers = media.headers.toMap(), subtitles = media.subtitles.toList())
+    private val trackPreferences = PlaybackTrackPreferences(context)
     val manager = PlayerManager(FongMiExoPlayerFactory.create(context, this.media))
-        .apply { onDiagnostic = { event, detail -> HerrinPlaybackDiagnosticJournal.record("MEDIA3", event, detail) } }
+        .apply {
+            if (persistTrackPreferences) {
+                restorePreferredTracks(trackPreferences.load())
+                onTrackPreference = trackPreferences::save
+            }
+            onDiagnostic = { event, detail -> HerrinPlaybackDiagnosticJournal.record("MEDIA3", event, detail) }
+        }
     val player get() = manager.player
     fun item(uri: String = media.uri, mime: String? = media.declaredMime): MediaItem =
         MediaItemFactory.from(PlaySpec(mediaId, media, uri, mime))

@@ -3142,12 +3142,26 @@ private fun Herrin() {
                     // Snapshot the selected episode. A disposed player's final callback
                     // must not read the mutable episode after the user chooses the next one.
                     val historyEpisode = episode
-                    val previous = watchHistory.load(catalogScope, film.id, historyEpisode, historyLine)
+                    val historyScope = catalogScope
+                    val previous = remember(historyScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
+                        watchHistory.load(historyScope, film.id, historyEpisode, historyLine)
+                    }
+                    fun changeEpisode(delta: Int) {
+                        if (screen != "player" || episode != historyEpisode || line != historyLine) return
+                        val next = SeasonPlayback.adjacent(film, historyEpisode, historyLine, delta) ?: return
+                        automaticPlayback.clear()
+                        automaticResume = null
+                        episode = next.episode
+                        line = next.line
+                    }
                     // Re-resolving playerContent must reconstruct the player even
                     // when a provider returns the same URI and headers again.
                     key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
+                    val historyTicket = remember(chosenMedia) { watchHistory.begin(historyScope, film.id, historyEpisode, historyLine) }
                     AuthorizedPlaybackPanel(
                         media = chosenMedia,
+                        onNextEpisode = if (SeasonPlayback.adjacent(film, historyEpisode, historyLine, 1) != null) ({ changeEpisode(1) }) else null,
+                        onPreviousEpisode = if (SeasonPlayback.adjacent(film, historyEpisode, historyLine, -1) != null) ({ changeEpisode(-1) }) else null,
                         onPlayer = {
                             if (automaticResume?.let { it.film == film.id &&
                                 it.episode == historyEpisode && it.line == historyLine } == true)
@@ -3164,7 +3178,7 @@ private fun Herrin() {
                         onSourceExhausted = recoverPlayback,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
-                            watchHistory.update(catalogScope, film.id, historyEpisode, historyLine,
+                            watchHistory.updateSession(historyTicket, historyScope, film.id, historyEpisode, historyLine,
                                 position, duration, finished)
                         },
                         onBack = {

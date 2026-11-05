@@ -30,6 +30,7 @@ REQUIRED_CLASSES = (
     "SpiderLoaderLifecycleTest",
     "SpiderWorkerLifecycleTest",
     "FongMiPlayerManagerIntegrationTest",
+    "PlaybackExperiencePersistenceTest",
     "M467FongMiTrackRestoreTest",
     "TmdbSpiderPlaybackClosureTest",
     "M467JarPlaybackEndToEndTest",

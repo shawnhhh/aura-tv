@@ -15,6 +15,17 @@ import java.util.concurrent.TimeUnit
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class FongMiPlayerManagerIntegrationTest {
+    private var savedPreferences: Map<String, *> = emptyMap<String, Any>()
+    @org.junit.Before fun isolatePreferences() {
+        val prefs = InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("herrin-track-preferences", 0)
+        savedPreferences = prefs.all
+        prefs.edit().clear().commit()
+    }
+    @org.junit.After fun restorePreferences() {
+        val e = InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("herrin-track-preferences", 0).edit().clear()
+        savedPreferences.forEach { (k,v) -> when(v) { is String -> e.putString(k,v); is Boolean -> e.putBoolean(k,v) } }
+        e.commit()
+    }
     @Test fun mediaItemUsesExplicitSubtitleMimeAndSourceFlags() {
         val inst = InstrumentationRegistry.getInstrumentation()
         inst.runOnMainSync {
