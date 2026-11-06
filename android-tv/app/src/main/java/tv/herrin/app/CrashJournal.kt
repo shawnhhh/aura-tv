@@ -12,15 +12,19 @@ internal object SafeCrashSummary {
         repeat(4) {
             val cause = current ?: return@repeat
             if (!seen.add(cause)) { current = null; return@repeat }
-            out.append("type=").append(identifier(cause.javaClass.name)).append('\n')
+            out.append("type=").append(safeClass(cause.javaClass.name)).append('\n')
             cause.stackTrace.take(20).forEach { frame ->
-                out.append(" at ").append(identifier(frame.className)).append('.')
-                    .append(identifier(frame.methodName)).append(':').append(frame.lineNumber).append('\n')
+                val owner = safeClass(frame.className)
+                out.append(" at ").append(owner).append('.')
+                    .append(if (owner == "external") "frame" else identifier(frame.methodName))
+                    .append(':').append(frame.lineNumber).append('\n')
             }
             current = cause.cause
         }
         return out.take(10000).toString()
     }
+    private fun safeClass(value: String): String = if (listOf("tv.herrin.","android.","androidx.","java.","javax.",
+        "kotlin.","kotlinx.","okhttp3.","okio.","com.fongmi.","com.github.catvod.").any(value::startsWith)) identifier(value) else "external"
     private fun identifier(value: String) = value.takeIf {
         it.length <= 180 && it.all { c -> c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in "_.$<>-" }
     } ?: "redacted"

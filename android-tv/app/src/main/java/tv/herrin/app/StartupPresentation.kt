@@ -28,6 +28,7 @@ internal fun StartupHost(home: @Composable (StartupPresentation) -> Unit) {
         state.preferences = withContext(Dispatchers.IO) {
             CrashJournal.loadPrevious(context)
             // Keystore migration/decryption must not occupy the first input frame.
+            context.getSharedPreferences("herrin-watch-history", 0).all
             Preferences(context).apply { tmdbReadToken }
         }
         while (true) { withContext(Dispatchers.IO) { CrashJournal.sampleMemory(); CrashJournal.checkpoint(context) }; delay(5000) }

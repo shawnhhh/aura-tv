@@ -9,7 +9,12 @@ class P0MetadataStabilityTest {
         metadataSource="TMDB",cmsVodId=id,playbackEpisodes=listOf(PlaybackEpisode(1,"1",listOf(PlaybackLine("a","A","https://media.invalid/$id.mp4")))))
     @Test fun successfulSeriesMatchingCannotDuplicateRecentLazyKeysOrLoseSourceEpisodes() {
         for (count in listOf(20,100,250)) {
-            val source = (1..count).map { film("source-$it", "原创剧 第${it}季") }
+            val original = (1..count).map { film("source-$it", "原创剧 第${it}季").copy(category="未知",tmdbTvId=null,metadataSource=null) }
+            val before = ShowCatalog.build(original,"fixture")
+            assertEquals(count,original.map { before.groupFor(it.id)?.key ?: it.id }.toSet().size)
+            val source = original.map { FilmMetadataEnrichment.apply(it,EnrichedArtwork(null,null,
+                category="剧集",tmdbTvId=99,displayTitle="原创剧")) }
+            assertEquals(original.map { it.playbackEpisodes },source.map { it.playbackEpisodes })
             val groups = ShowCatalog.build(source,"fixture")
             // Reproduces the old contract violation: raw IDs differ while UI group keys repeat.
             val oldKeys = source.map { groups.groupFor(it.id)?.key ?: it.id }

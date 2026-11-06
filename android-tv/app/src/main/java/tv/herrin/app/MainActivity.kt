@@ -2548,14 +2548,16 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 // History is recomputed on returning from playback or when the
                 // source/catalog changes, not on every D-pad/animation frame.
-                val watched = remember(isSearch, category, filtered, showCatalog,
-                    watchHistory, catalogScope, screen) {
-                    if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
-                        showCatalog.watchProgress(shown) { source, entry, option ->
-                            watchHistory.load(catalogScope, source.id, entry.number, option.id)
-                        }?.let { shown to it.updatedAtMs }
-                    }.sortedByDescending { it.second }.map { it.first }
-                    else emptyList()
+                var watched by remember { mutableStateOf<List<Film>>(emptyList()) }
+                LaunchedEffect(isSearch, category, filtered, showCatalog, catalogScope, screen) {
+                    watched = withContext(Dispatchers.Default) {
+                        if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
+                            showCatalog.watchProgress(shown) { source, entry, option ->
+                                watchHistory.load(catalogScope, source.id, entry.number, option.id)
+                            }?.let { shown to it.updatedAtMs }
+                        }.sortedByDescending { it.second }.map { it.first }
+                        else emptyList()
+                    }
                 }
                 val railFilms = if (!isSearch && category == "首页" && sourceConfigured) showCatalog.recentRail(recentIndexFilms, watched) else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
