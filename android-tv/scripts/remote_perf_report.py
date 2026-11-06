@@ -125,7 +125,7 @@ def render_markdown(performance: dict) -> list[str]:
                   "| ---: | ---: | ---: | ---: | ---: |",
                   f"| {dense.get('events', '未采集')} | "
                   f"{dense.get('focus_success', '未采集')} | "
-                  f"{dense.get('key_to_focus_p50_ms', '未采集')} / {dense.get('key_to_focus_p95_ms', '未采集')} / {dense.get('key_to_focus_p99_ms', '未采集')}ms | "
+                  f"{dense.get('key_to_focus_p50_ms', '未采集')}ms / {dense.get('key_to_focus_p95_ms', '未采集')}ms / {dense.get('key_to_focus_p99_ms', '未采集')}ms | "
                   f"{dense.get('end_to_idle_p95_ms', '未采集')}ms | "
                   f"{dense.get('frame_p95_ms', '未采集')}ms |",
                   "", "此测试仅选中用户配置的模拟 CMS 站点；不会执行其他 11 个 Spider 站点。"]

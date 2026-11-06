@@ -441,6 +441,7 @@ private fun Herrin() {
     var epgRefresh by remember { mutableIntStateOf(0) }
     var liveClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var liveRefresh by remember { mutableIntStateOf(0) }
+    val extraLiveCache = remember { mutableMapOf<String, List<LiveChannel>>() }
     val liveFavoriteScope = if (prefs.livePlaylistUrl.isNotBlank()) prefs.livePlaylistUrl else "tvbox-selected-live"
     LaunchedEffect(epgRefresh) {
         val endpoint = prefs.liveEpgUrl
@@ -458,9 +459,17 @@ private fun Herrin() {
                     else "${loaded.reason}；保留上次读取的节目单"
             }
         }
+        for (entry in AdditionalServiceConfigs(context).enabled("live")) {
+            if (entry.epg.isNotBlank()) {
+                val result = epgRepo.load(entry.epg)
+                if (result is LiveEpgResult.Ready) epgProgrammes = (epgProgrammes + result.programmes).distinct()
+            }
+        }
     }
     LaunchedEffect(liveRefresh) {
         val endpoint = prefs.livePlaylistUrl
+        val previousExtraUrls = extraLiveCache.values.flatten().mapTo(hashSetOf()) { it.url }
+        liveChannels = liveChannels.filterNot { it.url in previousExtraUrls }
         // Direct M3U always has priority. TVBox is a per-channel backup,
         // never allowed to silently shadow a working user-supplied playlist.
         // A cached TVBox playlist is not authorization to activate it.
@@ -487,6 +496,17 @@ private fun Herrin() {
                     else "${loaded.reason}；保留上次频道列表"
                 }
             }
+        }
+        val extra = AdditionalServiceConfigs(context).enabled("live")
+        extraLiveCache.keys.retainAll(extra.map { it.id }.toSet())
+        for (entry in extra) {
+            val result = liveRepo.load(entry.url)
+            if (result is LivePlaylistResult.Ready) extraLiveCache[entry.id] = result.channels
+        }
+        val additional = extraLiveCache.values.flatten()
+        if (additional.isNotEmpty()) {
+            liveChannels = HerrinLivePriority.combine(liveChannels, additional)
+            liveStatus += "；附加直播源 ${extra.size} 个"
         }
     }
     var personalSourceConfigEpoch by remember { mutableIntStateOf(0) }
@@ -838,7 +858,8 @@ private fun Herrin() {
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
     var catalogRefresh by remember { mutableIntStateOf(0) }
     val tmdbPrimary = prefs.tmdbReadToken.isNotBlank()
-    val sourceConfigured = tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbHomeFilms.isNotEmpty() ||
+    val extraNasConfigured = remember(personalSourceConfigEpoch) { AdditionalServiceConfigs(context).enabled("nas").isNotEmpty() }
+    val sourceConfigured = extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbHomeFilms.isNotEmpty() ||
         prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
     var recentIndexEpoch by remember { mutableIntStateOf(0) }
     var recentIndexFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
@@ -1117,7 +1138,8 @@ private fun Herrin() {
         val trustedSpiderJar = prefs.tvBoxTrustedSpiderJarSpec
         val approvedRoot = prefs.tvBoxWarehouseUrl
         val spiderPageOffset = tmdbSpiderBatchOffsets[targetId] ?: 0
-        val importedWarehouses = tvBoxWarehouses.take(3)
+        val importedWarehouses = (tvBoxWarehouses + AdditionalServiceConfigs(context).enabled("sources")
+            .map { TvBoxWarehouse(it.name, it.url) }).distinctBy { it.url }.take(10)
         // Spider is a privileged plugin: only an existing user-applied session
         // may be searched. Never start a new Spider while browsing TMDB.
         val activeSpiderKey = spiderBridge.approvedActiveSiteKey()
@@ -1143,6 +1165,9 @@ private fun Herrin() {
                     if (kind == "NAS") HerrinSourceType.NAS else HerrinSourceType.CLOUD,
                     insecure.toBoolean()
                 )
+                runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
+            }
+            AdditionalServiceConfigs(context).nasAccounts().forEach { account ->
                 runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
             }
             val directSites = mutableListOf<TvBoxSite>()
@@ -4573,9 +4598,12 @@ private fun Herrin() {
             when (module) {
                 "tmdb" -> { prefs.invalidateTokenCache(); metadataToken = prefs.tmdbReadToken; tmdbProbeEpoch++ }
                 "sources" -> {
+                    personalSourceConfigEpoch++
                     configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-                    tvBoxRequest = prefs.tvBoxWarehouseUrl to true
-                    tvBoxLoadEpoch++
+                    if (prefs.tvBoxWarehouseUrl.isNotBlank()) {
+                        tvBoxRequest = prefs.tvBoxWarehouseUrl to true
+                        tvBoxLoadEpoch++
+                    }
                 }
                 "live" -> { liveRefresh++; epgRefresh++ }
                 "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }

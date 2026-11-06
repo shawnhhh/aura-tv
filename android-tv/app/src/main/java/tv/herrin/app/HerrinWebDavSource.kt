@@ -62,6 +62,17 @@ internal class HerrinWebDavSource(
 
     private data class DavEntry(val address: String, val isCollection: Boolean)
 
+    suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
+        runInterruptible {
+            val xml = "<d:propfind xmlns:d=\"DAV:\"><d:prop><d:resourcetype/></d:prop></d:propfind>"
+            val request = Request.Builder().url(root.toString()).header("Depth", "0")
+                .method("PROPFIND", xml.toRequestBody("application/xml".toMediaType()))
+                .apply { if (account.username.isNotBlank()) header("Authorization", Credentials.basic(account.username, account.password)) }
+                .build()
+            client.newCall(request).execute().use { it.code == 207 }
+        }
+    }
+
     override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> =
         withContext(Dispatchers.IO) {
             val folders = ArrayDeque<Pair<String, Int>>()

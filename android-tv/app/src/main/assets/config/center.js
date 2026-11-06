@@ -16,10 +16,27 @@ document.querySelector('#pair').onclick=async()=>{
  status.textContent='已配对，四个模块共用会话；闲置 30 分钟后关闭';
  }catch(e){status.textContent=e.message;}finally{polling=false;}
 };
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('form').forEach(f=>f.hidden=f.id!==b.dataset.tab);});
-document.querySelectorAll('form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{await call('/'+f.id,Object.fromEntries(new FormData(f)));f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
+let module='tmdb';
+async function refreshEntries(){
+ const additional=document.querySelector('#additional');additional.hidden=module==='tmdb';if(additional.hidden)return;
+ document.querySelector('#entry-edit').hidden=false;
+ document.querySelector('#extra-epg').hidden=module!=='live';document.querySelector('#extra-login').hidden=module!=='nas';document.querySelector('#batch').hidden=module!=='sources';
+ const r=await call('/entries',{module});const list=document.querySelector('#entries');list.replaceChildren();
+ r.entries.forEach(entry=>{const row=document.createElement('p');const name=document.createElement('span');name.textContent=entry.name+' · '+(entry.enabled?'启用':'停用');row.append(name);
+ const button=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await action();}catch(e){status.textContent=e.message;}};row.append(b);};
+ button('编辑',()=>{const f=document.querySelector('#entry-edit');for(const key of ['id','name','url','epg'])f.elements[key].value=entry[key]||'';f.elements.enabled.checked=entry.enabled;f.elements.password.value='';});
+ button(entry.enabled?'停用':'启用',async()=>{await call('/entries/save',{...entry,module,enabled:!entry.enabled});await refreshEntries();});
+ button('删除',async()=>{await call('/entries/delete',{module,id:entry.id});await refreshEntries();});
+ if(module==='nas')button('测试',async()=>{status.textContent=(await call('/nas/test',{id:entry.id})).result;});list.append(row);});
+}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('form').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();}catch(e){status.textContent=e.message;}});
+document.querySelectorAll('form:not(#entry-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{await call('/'+f.id,Object.fromEntries(new FormData(f)));f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
 document.querySelector('#test').onclick=async()=>{try{status.textContent=(await call('/tmdb/test')).result;}catch(e){status.textContent=e.message;}};
 document.querySelector('#end').onclick=async()=>{try{await call('/end');}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束，请在电视重新开启';}};
 // Editing a long form is activity; refresh only while the user is actively editing.
 let lastActivity=Date.now();document.oninput=()=>{lastActivity=Date.now();};
 setInterval(()=>{if(session&&Date.now()-lastActivity<60000)call('/status').catch(()=>{});},45000);
+
+document.querySelector('#entry-edit').onsubmit=async e=>{e.preventDefault();const f=e.target;const data=Object.fromEntries(new FormData(f));data.module=module;data.enabled=f.elements.enabled.checked;if(data.id&&!data.password)delete data.password;try{await call('/entries/save',data);f.reset();await refreshEntries();status.textContent='已保存并通知电视';}catch(e){status.textContent=e.message;}};
+document.querySelector('#new-entry').onclick=()=>document.querySelector('#entry-edit').reset();
+document.querySelector('#batch-save').onclick=async()=>{try{await call('/entries/batch',{urls:document.querySelector('#batch-urls').value});await refreshEntries();status.textContent='批量地址已保存并去重';}catch(e){status.textContent=e.message;}};

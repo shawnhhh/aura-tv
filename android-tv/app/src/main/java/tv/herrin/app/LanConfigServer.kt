@@ -58,7 +58,30 @@ internal class LanConfigServer(
             if (!pairing.authorized(session.headers["x-herrin-session"].orEmpty()))
                 return response(Response.Status.FORBIDDEN, "{}")
             val prefs = Preferences(context)
+            val extra = AdditionalServiceConfigs(context)
+            if (session.uri in setOf("/entries", "/entries/save", "/entries/delete")) {
+                val module = input.getString("module")
+                require(module in setOf("sources", "live", "nas"))
+                if (session.uri == "/entries/save") extra.save(module, input)
+                if (session.uri == "/entries/delete") extra.remove(module, input.getString("id"))
+                if (session.uri != "/entries") applied(module)
+                return response(Response.Status.OK, JSONObject().put("entries", extra.publicList(module)).toString())
+            }
             val output = when (session.uri) {
+                "/entries/batch" -> { extra.batchSources(input.getString("urls")); applied("sources"); JSONObject().put("ok", true) }
+                "/nas/test" -> {
+                    val id = input.optString("id")
+                    val account = if (id.isBlank()) {
+                        val login = HerrinPersonalCredentialStore(context, "nas").load()
+                        HerrinWebDavAccount("NAS", prefs.nasWebDavUrl, login.first, login.second)
+                    } else {
+                        val entry = extra.list("nas").first { it.id == id }
+                        val login = HerrinPersonalCredentialStore(context, "config-$id").load()
+                        HerrinWebDavAccount(entry.name, entry.url, login.first, login.second)
+                    }
+                    val connected = kotlinx.coroutines.runBlocking { HerrinWebDavSource(account).testConnection() }
+                    JSONObject().put("result", if (connected) "WebDAV 已连接" else "连接失败")
+                }
                 "/end" -> { pairing.close(); JSONObject().put("ok", true) }
                 "/status" -> JSONObject().put("endpoint", TmdbEndpoints.current)
                     .put("tokenConfigured", prefs.tmdbReadToken.isNotBlank())
