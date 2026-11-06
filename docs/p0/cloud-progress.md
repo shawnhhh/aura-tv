@@ -11,6 +11,8 @@
 - 修复后8项定向通过；新增完整250条原创缓存（含可产生相同分组key的两条电影），首/中/尾方向键及Top250↔动漫回归；保留全部播放测试。未修改原图质量、播放核心、来源优先级或授权。
 - 图片路径追加实际证据：已核查当前AndroidX animation 1.7.6 AAR字节码，Crossfade仅在currentState==targetState时清理旧状态，连续打断会累积旧内容。字节码记录/workspace/.cache/aura-android/p0-68-crossfade-bytecode.txt。
 - Hero改用最多当前/上一张两层的原图过渡，同一层换角色不重启图片任务，淘汰旧层即取消其加载；原图URL、解码目标、缓存容量及180ms淡化不降级。添加可控动画时钟的旧机制对照/两层上限/减少动态回归，不主动制造OOM。
+- 首轮68提交72b3ffd91031af72c0eebfe68d68f77916087b35，CI42168145238 Debug成功；205 TV中204过，仅MediaDecoderTest暂停时钟断言失败，Top250与Hero新回归全部通过、无主进程FATAL。真实报告/workspace/artifacts/ci-72b3ffd.json，未判绿/交付。
+- 排查：独立PlaybackTestActivity不加载Top/Hero，生产pause链路未变；原测试将应用线程playWhenReady掩码当成内部线程已处理。补PlayerMessage回到应用Looper的确认及两连续窗口总漂移<100ms，保持最终250ms采样/100ms容差及所有播放/释放断言；增加纯数字样本日志，未改生产暂停。
 - 574项JVM已通过，静态安全/固定上游通过；新Hero及设备测试编译通过。设备回归尚待CI，不把框架保留风险当作已证实的TCL OOM。
 - 版本0.4.64-alpha（68），本地574 JVM、lint、Debug/测试APK通过，最终设备测试代码重新编译通过。下一步：提交、push单次串行Debug→Emulator，下载并核验该SHA的真实APK。
 - 不能把这两处可复现缺口直接宣布为TCL全部闪退根因；图片OOM等需OS退出分类/堆栈证明。准确Codex额度/恢复时间不可查询，不虚构；无自动唤醒承诺。

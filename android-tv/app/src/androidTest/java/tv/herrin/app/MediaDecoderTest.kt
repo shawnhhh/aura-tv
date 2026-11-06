@@ -85,12 +85,23 @@ class MediaDecoderTest {
                     scenario.onActivity { paused = !it.player.playWhenReady }
                     paused
                 }
-                // Decoder/audio clocks may finish one outstanding timestamp update after
-                // playWhenReady becomes false. Require two successive stable windows,
-                // rather than assuming the first asynchronous pause callback is settled.
+                // playWhenReady is masked on the application thread before the internal
+                // playback thread acknowledges pause. A no-op PlayerMessage crosses the
+                // playback queue and returns to the application looper before sampling.
+                // This does not pause/seek again or change any player state.
+                lateinit var pauseAcknowledged: androidx.media3.exoplayer.PlayerMessage
+                scenario.onActivity {
+                    pauseAcknowledged = it.player.createMessage { _, _ -> }
+                        .setLooper(it.player.applicationLooper).send()
+                }
+                assertTrue("Playback thread must acknowledge the remote pause",
+                    pauseAcknowledged.blockUntilDelivered(5_000L))
+                // Require two successive windows with <100ms TOTAL drift. A single
+                // quiet window can precede a delayed audio timestamp reconciliation.
                 await("Remote pause must settle the media clock") {
                     var first = 0L
                     var second = 0L
+                    var third = 0L
                     var paused = false
                     scenario.onActivity {
                         paused = !it.player.playWhenReady
@@ -98,15 +109,22 @@ class MediaDecoderTest {
                     }
                     Thread.sleep(220)
                     scenario.onActivity { second = it.player.currentPosition }
-                    paused && kotlin.math.abs(second - first) < 100L
+                    Thread.sleep(220)
+                    scenario.onActivity {
+                        third = it.player.currentPosition
+                        paused = paused && !it.player.playWhenReady && !it.player.isPlaying
+                    }
+                    android.util.Log.i("HerrinDecoder", "pause cycle=$cycle first=$first second=$second third=$third paused=$paused")
+                    paused && kotlin.math.abs(second - first) < 100L && kotlin.math.abs(third - first) < 100L
                 }
                 var pausedAt = 0L
                 scenario.onActivity { pausedAt = it.player.currentPosition }
                 Thread.sleep(250)
                 scenario.onActivity {
                     assertFalse("Playback must still be paused", it.player.playWhenReady)
-                    assertTrue("Paused media clock advanced after settling",
-                        kotlin.math.abs(it.player.currentPosition - pausedAt) < 100L)
+                    val sampled = it.player.currentPosition
+                    assertTrue("Paused media clock advanced after settling: cycle=$cycle before=$pausedAt after=$sampled state=${it.player.playbackState}",
+                        kotlin.math.abs(sampled - pausedAt) < 100L)
                 }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PLAY)
                 await("Remote play must update playWhenReady") {
