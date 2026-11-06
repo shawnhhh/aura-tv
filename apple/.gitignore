@@ -1,0 +1,5 @@
+# Generated locally by XcodeGen
+HerrinApple.xcodeproj/
+DerivedData/
+*.xcuserstate
+.DS_Store
