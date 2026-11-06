@@ -3,7 +3,7 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <!-- The native starting window renders the complete HERRIN wordmark immediately. -->
+        <!-- Begin on black; the Compose wordmark owns the complete reveal, without an OS logo flash. -->
         <item name="android:windowBackground">@drawable/launch_backdrop</item>
         <item name="android:colorAccent">#FFFFFF</item>
     </style>
