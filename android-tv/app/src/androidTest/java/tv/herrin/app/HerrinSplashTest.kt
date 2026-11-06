@@ -94,4 +94,15 @@ class HerrinSplashTest {
         compose.mainClock.advanceTimeBy(700)
         compose.runOnIdle { assertTrue(finished) }
     }
+    @Test fun reducedMotionStillExitsWhenHomeBecomesReadyLater() {
+        var ready by mutableStateOf(false)
+        var released = false
+        compose.setContent {
+            MaterialTheme { SplashExitCurtain(true, false, onReady = { released = true },
+                onFinished = {}, homeReady = ready) }
+        }
+        compose.runOnIdle { assertFalse(released); ready = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue(released) }
+    }
 }

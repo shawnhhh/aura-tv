@@ -4721,7 +4721,10 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit,
                                homeReady: Boolean = true) {
     val opacity = remember { Animatable(1f) }
-    val ready by rememberUpdatedState(homeReady)
+    var revealed by remember { mutableStateOf(false) }
+    LaunchedEffect(revealed, homeReady) {
+        if (revealed && homeReady) onReady()
+    }
     LaunchedEffect(exiting, reduced) {
         if (exiting) {
             if (reduced) opacity.snapTo(0f)
@@ -4732,9 +4735,7 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
     }
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
         .testTag("splash-curtain")) {
-        Splash(reduced) {
-            if (ready) onReady()
-        }
+        Splash(reduced) { revealed = true }
     }
 }
 
