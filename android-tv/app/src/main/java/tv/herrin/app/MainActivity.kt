@@ -1611,12 +1611,12 @@ private fun Herrin() {
     val facetResultState = rememberLazyListState()
     // M4.25: only the active, already-loaded catalog is grouped. This is a
     // display projection; Film.id and the licensed playback paths stay intact.
-    val projection by produceState(
-        initialValue = ShowCatalog.build(emptyList(), catalogScope) to emptyList<Film>(),
-        key1 = catalogScope, key2 = films
-    ) {
+    var projection by remember(catalogScope) {
+        mutableStateOf(ShowCatalog.build(emptyList(), catalogScope) to emptyList<Film>())
+    }
+    LaunchedEffect(catalogScope, films) {
         // Cancellation prevents an obsolete catalog from publishing after a fast source change.
-        value = withContext(Dispatchers.Default) {
+        projection = withContext(Dispatchers.Default) {
             val grouped = ShowCatalog.build(films, catalogScope)
             grouped to grouped.collapse(films)
         }
