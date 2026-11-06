@@ -547,8 +547,8 @@ internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
 
     private fun requestOnce(url: String, readAccessToken: String): String? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 6000
-            readTimeout = 8000
+            connectTimeout = 3000
+            readTimeout = 5000
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Authorization", "Bearer $readAccessToken")

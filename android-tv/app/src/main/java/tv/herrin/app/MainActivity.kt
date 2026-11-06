@@ -123,6 +123,13 @@ internal object RemoteTrace {
 }
 
 class MainActivity : ComponentActivity() {
+    private var frameDiagnostics: UiFrameDiagnostics? = null
+    internal fun frameSummary(): String = frameDiagnostics?.summary() ?: "渲染指标未采集"
+    override fun onDestroy() {
+        frameDiagnostics?.close()
+        frameDiagnostics = null
+        super.onDestroy()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         StartupTiming.start()
         super.onCreate(savedInstanceState)
@@ -140,6 +147,10 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         preferSmoothTvUi()
+        frameDiagnostics = UiFrameDiagnostics(window) {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.refreshRate
+        }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF080B10), contentColor = MaterialTheme.colorScheme.onBackground) { Herrin() }
@@ -871,7 +882,7 @@ private fun Herrin() {
             profileStore.list().size, prefs.livePlaylistUrl.isNotBlank()) +
             "\n系统模式：${supported.joinToString()}\n窗口请求：${activity.window.attributes.preferredRefreshRate}Hz" +
             "\nTMDB API：${TmdbEndpoints.current}（图片 CDN 独立）" +
-            MainExitDiagnostics.recent(context)
+            "\n" + (activity as? MainActivity)?.frameSummary().orEmpty() + MainExitDiagnostics.recent(context)
     }
     LaunchedEffect(catalogRefresh) {
         // Once a TVBox URL has been applied, the legacy/demo catalog must not

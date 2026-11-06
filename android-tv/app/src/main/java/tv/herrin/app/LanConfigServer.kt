@@ -14,7 +14,7 @@ internal class LanConfigServer(
     private val applied: (String) -> Unit
 ) : NanoHTTPD(host, 0) {
     val pairing = ConfigPairingSession()
-    private val certificate = HeldCertificate.Builder().commonName("HERRIN local configuration")
+    internal val certificate = HeldCertificate.Builder().commonName("HERRIN local configuration")
         .addSubjectAlternativeName(host).build()
     val fingerprint: String = MessageDigest.getInstance("SHA-256").digest(certificate.certificate.encoded)
         .joinToString(":") { "%02X".format(it) }
