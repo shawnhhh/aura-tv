@@ -19,6 +19,8 @@ internal object TvFocusRoutes {
         current: String, down: Boolean, movieAction: String,
         splitToken: Boolean = false
     ): String? = when (current) {
+        "phone-config-main" -> if (down) "tvbox-warehouse-url" else "screen-first"
+        "tmdb-phone-config" -> if (down) "tvbox-live-direct-url" else "compact-tmdb-token"
         "screen-first" -> if (down) "tvbox-warehouse-url" else null
         "tvbox-warehouse-url" -> if (down) "tvbox-warehouse-load" else "screen-first"
         "tvbox-warehouse-load", "settings-source-sites" ->
@@ -66,12 +68,12 @@ internal object TvFocusRoutes {
             (if (failedStatus) 1 else 0) +
             (if (noMatchesStatus) 1 else 0)
         return when (id) {
-            "screen-first" -> 0
+            "screen-first", "phone-config-main" -> 0
             "tvbox-warehouse-url" -> 3
             "tvbox-warehouse-load", "settings-source-sites" -> 4
             "compact-tmdb-split-toggle", "compact-tmdb-token",
             "compact-tmdb-part-1", "compact-tmdb-part-2", "compact-tmdb-part-3" -> tmdbForm
-            "compact-tmdb-save", "compact-tmdb-rescan" -> tmdbAction
+            "compact-tmdb-save", "compact-tmdb-rescan", "tmdb-phone-config" -> tmdbAction
             "tvbox-live-direct-url" -> liveHeading + 1
             "tvbox-live-direct-load" -> liveHeading + 2
             "settings-home" -> liveHeading + 3

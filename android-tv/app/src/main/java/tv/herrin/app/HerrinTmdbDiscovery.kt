@@ -163,7 +163,7 @@ internal class HerrinTmdbDiscovery(
         val url = base + "/" + type + "/" + id +
             "?language=zh-CN&append_to_response=credits,external_ids"
         val json = fetcher.load(url, token) ?: return@withContext film
-        val obj = JSONObject(json)
+        val obj = try { JSONObject(json) } catch (_: org.json.JSONException) { return@withContext film }
         if (obj.optInt("id") != id) return@withContext film
         val credits = TmdbCreditsParser.parse(json, type)
         val imdbId = obj.optJSONObject("external_ids")?.optString("imdb_id")

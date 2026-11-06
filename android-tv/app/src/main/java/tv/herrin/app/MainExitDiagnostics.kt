@@ -12,7 +12,14 @@ internal object MainExitDiagnostics {
         return try {
             val last = manager.getHistoricalProcessExitReasons(context.packageName,0,8)
                 .filter { it.processName == context.packageName }.maxByOrNull { it.timestamp } ?: return ""
-            "\nAPP_EXIT_REASON=${last.reason} PSS_KB=${last.pss} RSS_KB=${last.rss}"
+            "\nAPP_EXIT_REASON=${last.reason}(${when (last.reason) {
+                android.app.ApplicationExitInfo.REASON_CRASH -> "JAVA_CRASH"
+                android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "NATIVE_CRASH"
+                android.app.ApplicationExitInfo.REASON_ANR -> "ANR"
+                android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+                android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+                else -> "OTHER"
+            }}) PSS_KB=${last.pss} RSS_KB=${last.rss}"
         } catch (_: SecurityException) { "\nAPP_EXIT_UNAVAILABLE" }
     }
 }

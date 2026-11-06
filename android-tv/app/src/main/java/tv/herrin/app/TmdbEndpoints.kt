@@ -26,6 +26,7 @@ internal class TmdbEndpointRouter(private val clock: () -> Long = { System.nanoT
         try {
             return request(selected + suffix)
         } catch (error: IOException) {
+            if (error is ArtworkAuthenticationFailure || error is ArtworkRateLimitFailure) throw error
             if (Thread.currentThread().isInterrupted || error is InterruptedIOException &&
                 error !is java.net.SocketTimeoutException) throw error
             if (error is ArtworkHttpStatusFailure && error.status !in setOf(500, 502, 503, 504)) throw error

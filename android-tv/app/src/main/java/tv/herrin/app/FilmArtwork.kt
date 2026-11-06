@@ -191,6 +191,10 @@ class AuthorizedPosterCache(
     companion object {
         // Bound decoded bitmaps (not just compressed JPEG bytes) across LazyRow
         // disposal/recreation. Memory is capped, adapted to device heap size.
+        private val active = java.util.concurrent.atomic.AtomicInteger()
+        internal val activeTasks: Int get() = active.get()
+        internal val memoryBytes: Int get() = memory.size()
+        fun trimDecodedMemory() { memory.evictAll() } // Never recycle a bitmap still held by Compose.
         private val memory = object : LruCache<String, MemoryEntry>(
             (Runtime.getRuntime().maxMemory() / 12L)
                 .coerceIn(8L * 1024 * 1024, 32L * 1024 * 1024).toInt()) {
@@ -210,10 +214,17 @@ class AuthorizedPosterCache(
 
     fun load(raw: String, allowHttp: Boolean = false, hero: Boolean = false,
              cancelled: () -> Boolean = { false }, allowNetwork: Boolean = true): Bitmap? = try {
-        loadChecked(raw, allowHttp, hero, cancelled, allowNetwork)
+        active.incrementAndGet()
+        try { loadChecked(raw, allowHttp, hero, cancelled, allowNetwork) } finally { active.decrementAndGet() }
     } catch (_: java.io.IOException) { null }
       catch (_: SecurityException) { null }
       catch (_: InterruptedException) { Thread.currentThread().interrupt(); null }
+      catch (_: OutOfMemoryError) {
+          // One failed optional image must not kill browsing; no immediate retry storm or quality downgrade.
+          memory.evictAll()
+          CrashJournal.stage("IMAGE_OOM")
+          null
+      }
 
     private fun loadChecked(raw: String, allowHttp: Boolean = false, hero: Boolean = false,
              cancelled: () -> Boolean = { false }, allowNetwork: Boolean = true): Bitmap? {

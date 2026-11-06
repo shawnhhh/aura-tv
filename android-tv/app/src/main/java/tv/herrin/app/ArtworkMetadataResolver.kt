@@ -523,8 +523,8 @@ internal class ArtworkMetadataResolver(
     }
 }
 
-internal class ArtworkAuthenticationFailure(val status: Int = 401) : Exception()
-internal class ArtworkRateLimitFailure : Exception()
+internal class ArtworkAuthenticationFailure(val status: Int = 401) : java.io.IOException()
+internal class ArtworkRateLimitFailure : java.io.IOException()
 internal class ArtworkHttpStatusFailure(val status: Int) : java.io.IOException()
 
 internal object NetworkArtworkFetcher : ArtworkJsonFetcher {

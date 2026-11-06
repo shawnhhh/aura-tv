@@ -95,18 +95,28 @@ internal object LaunchMotion {
 /** Elapsed uptime from Activity launch to first interactive home.
  * Measure cold starts on TCL separately; Compose timing excludes process spawn. */
 internal object StartupTiming {
-    private var startedAt: Long = 0
-    @Volatile var lastComposeReadyMs: Long = -1
-        private set
+    private var startedAt = 0L
+    @Volatile var lastComposeReadyMs = -1L; private set
+    @Volatile private var first = -1L
+    @Volatile private var visible = -1L
+    @Volatile private var complete = -1L
+    @Volatile private var processToActivity = -1L
     fun start() {
-        startedAt = SystemClock.elapsedRealtime()
-        lastComposeReadyMs = -1
+        startedAt = SystemClock.uptimeMillis()
+        processToActivity = startedAt - android.os.Process.getStartUptimeMillis()
+        first = -1; visible = -1; complete = -1; lastComposeReadyMs = -1
     }
+    fun firstDraw() { if (first < 0) first = SystemClock.uptimeMillis() - startedAt }
+    fun wordmarkVisible() { if (visible < 0) visible = SystemClock.uptimeMillis() - startedAt }
+    fun wordmarkComplete() { if (complete < 0) complete = SystemClock.uptimeMillis() - startedAt }
     fun finish() {
-        if (startedAt <= 0 || lastComposeReadyMs >= 0) return
-        lastComposeReadyMs = SystemClock.elapsedRealtime() - startedAt
-        Log.i("HerrinStartup", "activity_to_home_ms=$lastComposeReadyMs")
+        if (lastComposeReadyMs >= 0) return
+        lastComposeReadyMs = SystemClock.uptimeMillis() - startedAt
+        Log.i("HerrinStartup", summary())
     }
+    fun summary() = "process_to_activity_ms=$processToActivity activity_to_first_draw_ms=$first " +
+        "first_draw_to_wordmark_ms=${if (first >= 0 && visible >= 0) visible-first else -1} " +
+        "wordmark_complete_ms=$complete activity_to_home_ms=$lastComposeReadyMs"
 }
 
 /** Enabled explicitly by adb setprop log.tag.HerrinRemote DEBUG in diagnostics. */
@@ -138,6 +148,8 @@ class MainActivity : ComponentActivity() {
         val originalCallback = window.callback
         window.callback = object : android.view.Window.Callback by originalCallback {
             override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+                if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK &&
+                    event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount > 0) return true
                 if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount >= 0)
                     RemoteFocusLatencyProbe.keyDown(event.keyCode)
                 RemoteTrace.event { "ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}" }
@@ -147,14 +159,14 @@ class MainActivity : ComponentActivity() {
             }
         }
         enableEdgeToEdge()
-        preferSmoothTvUi()
+        // Display policy is applied by the home scene after the first branded frame.
         frameDiagnostics = UiFrameDiagnostics(window) {
             @Suppress("DEPRECATION")
             windowManager.defaultDisplay.refreshRate
         }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(Modifier.fillMaxSize(), color = Color(0xFF080B10), contentColor = MaterialTheme.colorScheme.onBackground) { Herrin() }
+                Surface(Modifier.fillMaxSize(), color = Color.Black, contentColor = MaterialTheme.colorScheme.onBackground) { StartupHost { state -> Herrin(state) } }
                 SpiderAuthorizationHost()
             }
         }
@@ -377,7 +389,7 @@ private fun FacetRail(
 
 @Composable
 @OptIn(ExperimentalComposeUiApi::class)
-private fun Herrin() {
+private fun Herrin(startup: StartupPresentation) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val view = LocalView.current
@@ -389,6 +401,8 @@ private fun Herrin() {
     val prefs = remember { Preferences(context) }
     val uiScope = rememberCoroutineScope()
     var lanConfigOpen by remember { mutableStateOf(false) }
+    var exitConfirmation by remember { mutableStateOf(false) }
+    var lastExitDismissedAt by remember { mutableLongStateOf(0L) }
     val personalImdbRatings = remember(context) { HerrinImdbRatings(context) }
     var imdbRatingsEpoch by remember { mutableIntStateOf(0) }
     var imdbImportStatus by remember { mutableStateOf("IMDb 数据需用户自行导入；不随开源 APK 分发") }
@@ -905,7 +919,7 @@ private fun Herrin() {
             profileStore.list().size, prefs.livePlaylistUrl.isNotBlank()) +
             "\n系统模式：${supported.joinToString()}\n窗口请求：${activity.window.attributes.preferredRefreshRate}Hz" +
             "\nTMDB API：${TmdbEndpoints.current}（图片 CDN 独立）" +
-            "\n" + (activity as? MainActivity)?.frameSummary().orEmpty() + MainExitDiagnostics.recent(context)
+            "\n" + (activity as? MainActivity)?.frameSummary().orEmpty() + MainExitDiagnostics.recent(context) + "\n" + CrashJournal.previous
     }
     LaunchedEffect(catalogRefresh) {
         // Once a TVBox URL has been applied, the legacy/demo catalog must not
@@ -1023,7 +1037,7 @@ private fun Herrin() {
     // result modifies display fields in-place and never alters episode links,
     // favorites IDs or history keys.
     val metadataResolver = remember(context, catalogScope) {
-        ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"), catalogScope = catalogScope)
+        ArtworkMetadataResolver(java.io.File(context.cacheDir, "tmdb-artwork"), fetcher = MetadataFetchers.current, catalogScope = catalogScope)
     }
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
@@ -1037,9 +1051,10 @@ private fun Herrin() {
         tmdbConnectivity = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
             else TmdbProbeState.CHECKING
         tmdbProbeMessage = tmdbConnectivity.text
+        CrashJournal.stage("PROBE")
         val report = if (metadataToken.isBlank())
             TmdbProbeReport(TmdbProbeState.NOT_CONFIGURED)
-        else withContext(Dispatchers.IO) { TmdbConnectivityProbe.checkDetailed(metadataToken) }
+        else withContext(Dispatchers.IO) { TmdbConnectivityProbe.checkDetailed(metadataToken, MetadataFetchers.current) }
         tmdbConnectivity = report.state
         tmdbProbeMessage = report.text
         if (report.state == TmdbProbeState.CONNECTED) {
@@ -1048,7 +1063,7 @@ private fun Herrin() {
             metadataRescanEpoch++
         }
     }
-    val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
+    val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
     LaunchedEffect(metadataToken) {
         tmdbHomeFilms = emptyList()
         tmdbTop250Films = emptyList()
@@ -1065,6 +1080,7 @@ private fun Herrin() {
         tmdbDiscoveryStatus = "正在加载 TMDB 热播影片与类型推荐…"
         val keys = listOf("trending-movies", "trending-tv", "new-movies",
             "on-air-tv", "top250", "sci-fi", "action", "mystery", "animation", "variety", "documentary")
+        CrashJournal.stage("DISCOVERY")
         val loaded = mutableListOf<Film>()
         for (key in keys) {
             val section = tmdbDiscovery.sections.first { it.key == key }
@@ -1495,6 +1511,7 @@ private fun Herrin() {
         facetYear = null; facetCategory = null; facetRating = null
     }
     LaunchedEffect(catalogScope, catalogIdentity, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
+        CrashJournal.stage("SCRAPE")
         val eligible = providerFilms.orEmpty().take(ArtworkScrapePolicy.STARTUP_LIMIT)
         metadataScanTotal = eligible.size
         metadataScanDone = eligible.count { it.metadataSource == "TMDB" }
@@ -1531,6 +1548,7 @@ private fun Herrin() {
                 artwork?.let { id to it }
             }.toMap()
             withContext(Dispatchers.Main.immediate) {
+                CrashJournal.stage("PUBLISH")
                 if (found.isNotEmpty()) {
                     providerFilms = providerFilms?.map { current ->
                         val artwork = found[current.id]
@@ -1583,10 +1601,11 @@ private fun Herrin() {
     val reduceMotion = reduced || systemReduced
     // A genuinely new Activity launch should replay the HERRIN slide;
     // restoring old saved-instance-state must not skip the startup curtain.
-    var splash by remember { mutableStateOf(true) }
+    val splash = startup.showing
     // Keep the finished H mark above the first home frames while it dissolves;
     // removing it before the hero is drawn causes a visible black flash.
     var splashExiting by remember { mutableStateOf(false) }
+    SideEffect { if (splashExiting) startup.exiting = true }
     val homeVisible = true // Compose offline/cached home behind the curtain from the first frame.
     val sceneReveal = remember { Animatable(0f) }
     var hasEnteredHome by remember { mutableStateOf(false) }
@@ -2264,7 +2283,9 @@ private fun Herrin() {
                 screen = "browse"
             }
             "sites" -> { settingsTvBoxOnly = true; focusId = "settings"; screen = "settings" }
-            else -> { category = "首页"; focusId = "nav-首页" }
+            else -> {
+                if (SystemClock.uptimeMillis() - lastExitDismissedAt >= 300) exitConfirmation = true
+            }
         }
     }
     fun finishLiveSearchInput() {
@@ -2275,12 +2296,22 @@ private fun Herrin() {
     BackHandler(true) {
         when {
             splash -> splashExiting = true
-            screen == "browse" && category == "直播" &&
-                liveSearchExpanded && liveSearchEditorFocused -> finishLiveSearchInput()
+            lanConfigOpen -> lanConfigOpen = false
+            exitConfirmation -> { exitConfirmation = false; lastExitDismissedAt = SystemClock.uptimeMillis() }
+            screen == "browse" && category == "直播" && liveSearchExpanded -> {
+                if (liveSearchEditorFocused) finishLiveSearchInput()
+                else { liveSearchExpanded = false; liveSearchQuery = "" }
+            }
+            screen == "search" && searchInputFocused -> {
+                keyboard?.hide(); view.clearFocus(); searchInputFocused = false
+                focusId = "search"
+                uiScope.launch { withFrameNanos { }; runCatching { requester("search").requestFocus() } }
+            }
             else -> back()
         }
     }
     LaunchedEffect(screen, splash, category) {
+        CrashJournal.location(screen, category)
         RemoteTrace.event { "ROUTE screen=$screen category=$category focusId=$focusId" }
         if (!splash) {
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
@@ -2523,7 +2554,7 @@ private fun Herrin() {
                     }.sortedByDescending { it.second }.map { it.first }
                     else emptyList()
                 }
-                val railFilms = if (!isSearch && category == "首页" && sourceConfigured) (recentIndexFilms + watched).distinctBy(Film::id) else filtered
+                val railFilms = if (!isSearch && category == "首页" && sourceConfigured) showCatalog.recentRail(recentIndexFilms, watched) else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
                 val recommendedFilms = if (!isSearch && category == "首页") { if (sourceConfigured) BrowseHeroSelection.candidates("首页", collapsedCatalog, tmdbTop250Films) else collapsedCatalog.asReversed() } else emptyList()
                 val recommendationPrefix = if (railFilms.isEmpty()) "card-" else "recommend-"
@@ -3677,6 +3708,9 @@ private fun Herrin() {
                                         tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
+                                TvButton("扫码输入 Token", Modifier.testTag("tmdb-phone-config")
+                                    .focusRequester(requester("tmdb-phone-config")), reduceMotion,
+                                    onFocus = { focusId = "tmdb-phone-config" }) { lanConfigOpen = true }
                                 TvButton("重新刮削",
                                     modifier = Modifier.testTag("compact-tmdb-rescan")
                                         .focusRequester(requester("compact-tmdb-rescan")),
@@ -4589,8 +4623,13 @@ private fun Herrin() {
                     }, state = settingsListState,
                     contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
                     verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
-                    item { TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
-                        reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() } }
+                    item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
+                            reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() }
+                        if (screen == "settings") TvButton("手机扫码配置", Modifier.testTag("phone-config-main")
+                            .focusRequester(requester("phone-config-main")), reduceMotion,
+                            onFocus = { focusId = "phone-config-main" }) { lanConfigOpen = true }
+                    } }
                     if (screen == "settings") renderSettingsItems()
                     else renderDetailItems()
                 }
@@ -4607,6 +4646,16 @@ private fun Herrin() {
                     metadataCorrection = null
                 }, onDismiss = { metadataCorrection = null })
         }
+        if (exitConfirmation) ExitConfirmation(onCancel = {
+            exitConfirmation = false
+            lastExitDismissedAt = SystemClock.uptimeMillis()
+            val previousFocus = focusId
+            uiScope.launch { withFrameNanos { }; runCatching { requester(previousFocus).requestFocus() } }
+        }, onExit = {
+            exitConfirmation = false
+            lanConfigOpen = false
+            (context as? android.app.Activity)?.finish()
+        })
         if (lanConfigOpen) LanConfigDialog(onDismiss = { lanConfigOpen = false }) { module ->
             when (module) {
                 "tmdb" -> { prefs.invalidateTokenCache(); metadataToken = prefs.tmdbReadToken; tmdbProbeEpoch++ }
@@ -4623,10 +4672,9 @@ private fun Herrin() {
                 "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }
             }
         }
-        if (splash) {
-            SplashExitCurtain(reduceMotion, splashExiting,
-                onReady = { splashExiting = true }, onFinished = { splash = false },
-                homeReady = projection.second.isNotEmpty() || films.isEmpty())
+        SideEffect {
+            startup.reduced = reduceMotion
+            startup.homeReady = projection.second.isNotEmpty() || films.isEmpty()
         }
     }
 }
@@ -4657,7 +4705,6 @@ internal fun SeasonBrowser(
         if (index >= 0) rowState.scrollToItem(index)
     }
     val uiScope = rememberCoroutineScope()
-    var lanConfigOpen by remember { mutableStateOf(false) }
     val focusers = remember { mutableMapOf<String, FocusRequester>() }
     fun focusAt(key: String): FocusRequester = focusers.getOrPut(key) { FocusRequester() }
     Column(Modifier.fillMaxWidth().testTag("season-browser"),
@@ -4726,7 +4773,7 @@ internal fun SeasonBrowser(
 @Composable
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit,
-                               homeReady: Boolean = true) {
+                               homeReady: Boolean = true, onVisible: () -> Unit = {}) {
     val opacity = remember { Animatable(1f) }
     var revealed by remember { mutableStateOf(false) }
     LaunchedEffect(revealed, homeReady) {
@@ -4742,7 +4789,7 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
     }
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
         .testTag("splash-curtain")) {
-        Splash(reduced) { revealed = true }
+        HerrinWordmarkSplash(reduced, done = { revealed = true }, onVisible = onVisible)
     }
 }
 

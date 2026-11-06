@@ -26,13 +26,15 @@ internal object WordmarkMotion {
 
 /** VSync clock. Draw state stays in this small layer, never recomposes the home per frame. */
 @Composable
-internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit) {
+internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}) {
     val focus = remember { FocusRequester() }
     val onDone by rememberUpdatedState(done)
+    val visible by rememberUpdatedState(onVisible)
+    val firstVisible = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val elapsed = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(reduced) {
         runCatching { focus.requestFocus() }
-        if (reduced) { onDone(); return@LaunchedEffect }
+        if (reduced) { visible(); onDone(); return@LaunchedEffect }
         val start = withFrameNanos { it }
         while (true) {
             withFrameNanos { elapsed.floatValue = (it - start) / 1_000_000f }
@@ -54,6 +56,11 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit) {
                     drawContent()
                     val time = if (reduced) WordmarkMotion.REVEAL_MS else elapsed.floatValue
                     val progress = WordmarkMotion.reveal(time)
+                    if (progress >= 0.08f && firstVisible.compareAndSet(false, true)) {
+                        StartupTiming.wordmarkVisible()
+                        visible()
+                    }
+                    if (progress >= 1f) StartupTiming.wordmarkComplete()
                     if (progress < 1f) {
                         // Symmetric soft alpha wave, fixed glyph geometry and crisp edges.
                         val edge = progress * 1.35f

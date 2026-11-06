@@ -11,7 +11,7 @@
         <package android:name="com.fongmi.runtime.mpv" />
     </queries>
     <!-- Cleartext is needed by explicitly user-enabled TVBox CMS/Spider and loopback playback; version-1 licensed catalogs remain HTTPS-only. -->
-    <application android:label="Herrin" android:icon="@mipmap/ic_launcher" android:banner="@drawable/tv_banner" android:theme="@style/Theme.Herrin" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true">
+    <application android:name=".HerrinApplication" android:label="Herrin" android:icon="@mipmap/ic_launcher" android:banner="@drawable/tv_banner" android:theme="@style/Theme.Herrin" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true">
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
