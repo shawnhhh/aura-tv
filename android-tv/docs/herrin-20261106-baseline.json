@@ -1,0 +1,48 @@
+{
+  "sha": "f02fc8dd46319d39afc85a0cd9b39b5e1852ead9",
+  "run": 42171348629,
+  "device": "Android TV API 30 x86 / tv_1080p",
+  "physical_TCL_tested": false,
+  "remote_performance": {
+    "dense_catalog": {
+      "events": 16,
+      "focus_success": 16,
+      "frames_total": 35,
+      "key_to_focus_p50_ms": 2.57087,
+      "key_to_focus_p95_ms": 8.16,
+      "end_to_idle_p95_ms": 292,
+      "frame_p95_ms": 197
+    },
+    "horizontal": {
+      "events": 40,
+      "focus_success": 40,
+      "key_to_focus_p50_ms": 3.36,
+      "key_to_focus_p95_ms": 33.06,
+      "end_to_idle_p95_ms": 212,
+      "frame_p95_ms": 169.95,
+      "frames_total": 78,
+      "frames_over_16_67ms": 78,
+      "frames_over_33_33ms": 78,
+      "long_frame_pct": 100
+    },
+    "vertical": {
+      "events": 32,
+      "focus_success": 32,
+      "key_to_focus_p50_ms": 2.96,
+      "key_to_focus_p95_ms": 8.44,
+      "end_to_idle_p95_ms": 209
+    },
+    "burst": {
+      "events": 20,
+      "last_focus_correct": 1,
+      "burst_to_final_focus_ms": 895
+    },
+    "frame_baseline": {
+      "redraw_frames": 24,
+      "navigation_frames": 47,
+      "redraw_p95_ms": 157.39,
+      "navigation_p95_ms": 179.55,
+      "navigation_to_redraw_ratio": 1.14
+    }
+  }
+}

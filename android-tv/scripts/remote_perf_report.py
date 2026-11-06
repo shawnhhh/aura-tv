@@ -6,7 +6,7 @@ exported into the metric JSON or CI acceptance table.
 import re
 
 _ALLOWED_FLOATS = (
-    "key_to_focus_p50_ms", "key_to_focus_p95_ms", "end_to_idle_p95_ms",
+    "key_to_focus_p50_ms", "key_to_focus_p95_ms", "key_to_focus_p99_ms", "end_to_idle_p95_ms",
     "frame_p95_ms", "long_frame_pct",
 )
 _ALLOWED_INTS = (
@@ -33,7 +33,7 @@ def parse_remote_performance(logcat: str) -> dict:
             for key in ("focus_success", "frames_total"):
                 if key in fields and fields[key] != "unavailable":
                     result[key] = int(fields[key])
-            for key in ("key_to_focus_p50_ms", "key_to_focus_p95_ms", "end_to_idle_p95_ms",
+            for key in ("key_to_focus_p50_ms", "key_to_focus_p95_ms", "key_to_focus_p99_ms", "end_to_idle_p95_ms",
                         "frame_p95_ms"):
                 if key in fields and fields[key] != "unavailable":
                     result[key] = float(fields[key])
@@ -84,7 +84,7 @@ def render_markdown(performance: dict) -> list[str]:
         "不是遥控器硬件到屏幕像素的光子延迟。"
         "end_to_idle 包含测试框架同步等待；非直接输入延迟。",
         "",
-        "| 方向 | 次数 | 焦点成功 | 焦点回调 P95 | 到 Compose 空闲 P95 | 帧 P95 | 60Hz 超预算帧占比 |",
+        "| 方向 | 次数 | 焦点成功 | 焦点回调 P50 / P95 / P99 | 到 Compose 空闲 P95 | 帧 P95 | 60Hz 超预算帧占比 |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for direction, name in (("vertical", "上下"), ("horizontal", "左右")):
@@ -121,7 +121,7 @@ def render_markdown(performance: dict) -> list[str]:
     dense = performance.get("dense_catalog")
     if dense:
         lines += ["", "## 单仓 12 站点／60 部影片密集列表实测", "",
-                  "| 按键次数 | 焦点成功 | 焦点回调 P95 | 到 Compose 空闲 P95 | 合成帧 P95 |",
+                  "| 按键次数 | 焦点成功 | 焦点回调 P50 / P95 / P99 | 到 Compose 空闲 P95 | 合成帧 P95 |",
                   "| ---: | ---: | ---: | ---: | ---: |",
                   f"| {dense.get('events', '未采集')} | "
                   f"{dense.get('focus_success', '未采集')} | "
