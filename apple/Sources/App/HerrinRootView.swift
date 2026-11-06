@@ -167,20 +167,48 @@ struct HerrinCatalogView: View {
     }
 }
 
+/// Shares aspect ratio and fallback rules across catalogue cards and details.
+struct HerrinArtworkView: View {
+    let title: TMDBTitle
+    let orientation: HerrinArtworkOrientation
+    var detail = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            AsyncImage(url: title.artworkURL(for: orientation, detail: detail)) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable()
+                        .aspectRatio(contentMode: title.usesOppositeOrientationImage(for: orientation) ? .fit : .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                case .failure:
+                    placeholder(systemName: "photo")
+                case .empty:
+                    placeholder(systemName: "film")
+                @unknown default:
+                    placeholder(systemName: "film")
+                }
+            }
+        }
+        .aspectRatio(orientation.aspectRatio, contentMode: .fit)
+        .background(Color.white.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func placeholder(systemName: String) -> some View {
+        Rectangle().fill(Color.white.opacity(0.08))
+            .overlay { Image(systemName: systemName).foregroundStyle(.secondary) }
+    }
+}
+
 struct HerrinPosterCard: View {
     let title: TMDBTitle
+    private var orientation: HerrinArtworkOrientation { .current }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: title.posterURL) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Rectangle().fill(.white.opacity(0.08))
-                    .overlay { Image(systemName: "film").foregroundStyle(.secondary) }
-            }
-            .aspectRatio(2 / 3, contentMode: .fit)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            HerrinArtworkView(title: title, orientation: orientation)
             Text(title.displayName)
                 .font(.callout.weight(.medium))
                 .lineLimit(2)
@@ -195,33 +223,42 @@ struct HerrinPosterCard: View {
 
 struct HerrinTitleDetailView: View {
     let title: TMDBTitle
+    private var orientation: HerrinArtworkOrientation { .current }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top, spacing: 24) {
-                    AsyncImage(url: title.posterURL) { image in
-                        image.resizable().scaledToFit()
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.white.opacity(0.1))
+                if orientation == .landscape {
+                    // iPad and Mac: prominent 16:9 artwork with information below it.
+                    HerrinArtworkView(title: title, orientation: .landscape, detail: true)
+                        .frame(maxWidth: 980)
+                    titleInformation
+                } else {
+                    // iPhone: portrait poster, without stretching it into a landscape frame.
+                    HStack(alignment: .top, spacing: 20) {
+                        HerrinArtworkView(title: title, orientation: .portrait, detail: true)
+                            .frame(width: 130)
+                        titleInformation
+                        Spacer(minLength: 0)
                     }
-                    .frame(width: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(title.displayName).font(.largeTitle.bold())
-                        if let year = title.year { Text(year).foregroundStyle(.secondary) }
-                        Text(title.overview?.isEmpty == false ? (title.overview ?? "") : "暂无简介")
-                            .font(.body)
-                    }
-                    Spacer(minLength: 0)
                 }
                 Text("M0：本页面仅展示 TMDB 元数据，尚未接入播放。")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             .padding(24)
+            .frame(maxWidth: 1000, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .background(Color.black)
         .navigationTitle(title.displayName)
+    }
+
+    private var titleInformation: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title.displayName).font(.title.bold())
+            if let year = title.year { Text(year).foregroundStyle(.secondary) }
+            Text(title.overview?.isEmpty == false ? (title.overview ?? "") : "暂无简介")
+                .font(.body)
+        }
     }
 }
