@@ -35,6 +35,7 @@ internal class AdditionalServiceConfigs(private val context: Context) {
         val url = checkedAddress(input.getString("url"))
         val epg = input.optString("epg").takeIf { it.isNotBlank() }?.let(::checkedAddress).orEmpty()
         require(current.none { it.id != id && it.url == url })
+        if (module == "sources") require(url != Preferences(context).tvBoxWarehouseUrl)
         require(existing != null || current.size < 10)
         if (module == "nas" && input.has("password")) {
             require(HerrinPersonalCredentialStore(context, "config-$id")
@@ -56,7 +57,8 @@ internal class AdditionalServiceConfigs(private val context: Context) {
             .map(::checkedAddress).distinct().toList()
         require(addresses.isNotEmpty())
         val current = list("sources")
-        val added = addresses.filter { url -> current.none { it.url == url } }
+        val primary = Preferences(context).tvBoxWarehouseUrl
+        val added = addresses.filter { url -> url != primary && current.none { it.url == url } }
             .mapIndexed { index, url -> Entry(UUID.randomUUID().toString(), "影视源 ${current.size + index + 1}", url, "", true) }
         require(current.size + added.size <= 10)
         check(prefs.edit().putString("services_sources", JSONArray().apply { (current + added).forEach { put(json(it)) } }.toString()).commit())

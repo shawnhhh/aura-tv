@@ -31,7 +31,7 @@ fs.mkdirSync(evidence,{recursive:true});
  await page.locator('#tmdb [name=token]').fill('A'.repeat(120));await page.locator('#tmdb button').first().click();await page.waitForTimeout(100);
  assert.strictEqual(await page.locator('#tmdb [name=token]').inputValue(),'');
  await page.locator('[data-tab=nas]').click();
- await page.locator('#nas [name=url]').fill('https://nas.example/dav/');await page.locator('#nas [name=username]').fill('test');await page.locator('#nas [name=password]').fill('mock-only-password');await page.locator('#nas button').click();
+ await page.locator('#nas [name=url]').fill('https://nas.example/dav/');await page.locator('#nas [name=username]').fill('test');await page.locator('#nas [name=password]').fill('mock-only-password');await page.locator('#nas button').first().click();await page.locator('#nas-test').click();
  await page.locator('#entry-edit [name=name]').fill('Second NAS');await page.locator('#entry-edit [name=url]').fill('https://nas-two.example/dav/');await page.locator('#entry-edit [name=password]').fill('mock-password');await page.locator('#entry-edit button').first().click();
  await page.locator('[data-tab=sources]').click();await page.locator('#batch-urls').fill('https://one.example/config\nhttps://two.example/config');await page.locator('#batch-save').click();await page.waitForTimeout(100);
  assert(requests.some(r=>r.path==='/entries/save'&&r.body.module==='nas'));
