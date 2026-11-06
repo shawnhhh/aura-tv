@@ -3628,8 +3628,9 @@ private fun Herrin() {
                                     reduced = reduceMotion,
                                     onFocus = { focusId = "compact-tmdb-save"; keyboard?.hide() }) {
                                     val value = candidateTmdbToken()
-                                    if (value != null) {
-                                        prefs.tmdbReadToken = value
+                                    if (value != null) uiScope.launch {
+                                        val saved = withContext(Dispatchers.IO) { runCatching { prefs.tmdbReadToken = value }.isSuccess }
+                                        if (!saved) { tmdbSettingsStatus = "安全存储不可用，令牌未保存"; return@launch }
                                         metadataResolver.clearAuthCooldown(value)
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
@@ -4108,8 +4109,9 @@ private fun Herrin() {
                             TvButton("保存 TMDB Token", modifier = Modifier.testTag("tmdb-token-save"),
                                 reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
                                 val value = candidateTmdbToken()
-                                if (value != null) {
-                                    prefs.tmdbReadToken = value
+                                if (value != null) uiScope.launch {
+                                    val saved = withContext(Dispatchers.IO) { runCatching { prefs.tmdbReadToken = value }.isSuccess }
+                                    if (!saved) { tmdbSettingsStatus = "安全存储不可用，令牌未保存"; return@launch }
                                     metadataResolver.clearAuthCooldown(value)
                                     // Saving the SAME token must still retry old negative results;
                                     // match the compact-settings action and never require relaunch.
@@ -4127,11 +4129,14 @@ private fun Herrin() {
                             }
                             TvButton("停用高清刮削", modifier = Modifier.testTag("tmdb-token-clear"),
                                 reduced = reduceMotion) {
-                                prefs.tmdbReadToken = ""
+                                uiScope.launch {
+                                val saved = withContext(Dispatchers.IO) { runCatching { prefs.tmdbReadToken = "" }.isSuccess }
+                                if (!saved) { tmdbSettingsStatus = "安全存储不可用，未更改设置"; return@launch }
                                 metadataToken = ""
                                 providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                 clearTmdbInput()
                                 tmdbSettingsStatus = "已停用 TMDB 网络匹配，改用源内海报"
+                                }
                             }
                         } }
                         item { Text(tmdbSettingsStatus, color = Color(0xFFCDD8E6)) }

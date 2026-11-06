@@ -29,13 +29,15 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit)
     var message by remember { mutableStateOf("正在开启临时 HTTPS 服务…") }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     LaunchedEffect(Unit) {
+        var created: LanConfigServer? = null
+        try {
         val started = withContext(Dispatchers.IO) {
             runCatching {
                 val host = NetworkInterface.getNetworkInterfaces().toList().asSequence()
                     .filter { it.isUp && !it.isLoopback }.flatMap { it.inetAddresses.toList().asSequence() }
                     .first { it is java.net.Inet4Address && it.isSiteLocalAddress }.hostAddress!!
                 LanConfigServer(context, host) { module -> main.post { callback(module) } }
-                    .apply { start(5000, true) }
+                    .also { created = it }.apply { start(5000, true) }
             }.getOrNull()
         }
         if (started == null) { message = "无法开启局域网服务，请使用遥控器手动配置"; return@LaunchedEffect }
@@ -51,6 +53,7 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit)
             delay(500)
         }
         started.end(); message = "会话已结束，请重新开启"; bitmap = null; pending = false
+        } finally { created?.end() }
     }
     DisposableEffect(Unit) { onDispose { server?.end() } }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("手机扫码配置") },
