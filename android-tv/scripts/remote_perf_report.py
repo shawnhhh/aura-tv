@@ -7,10 +7,10 @@ import re
 
 _ALLOWED_FLOATS = (
     "key_to_focus_p50_ms", "key_to_focus_p95_ms", "key_to_focus_p99_ms", "end_to_idle_p95_ms",
-    "frame_p95_ms", "long_frame_pct",
+    "frame_p95_ms", "long_frame_pct", "key_to_draw_p50_ms", "key_to_draw_p95_ms", "key_to_draw_p99_ms",
 )
 _ALLOWED_INTS = (
-    "focus_success", "frames_total",
+    "focus_success", "frames_total", "focus_draw_samples",
     "frames_over_16_67ms", "frames_over_33_33ms",
 )
 _PAIR = re.compile(r"([a-zA-Z0-9_.]+)=([0-9.]+|unavailable)")

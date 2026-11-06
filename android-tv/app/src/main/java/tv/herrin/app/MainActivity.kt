@@ -47,6 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.*
@@ -5005,6 +5006,10 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
                 RemoteFocusLatencyProbe.posterFocused(film.id)
                 onFocus()
             }
+        }
+        .drawWithContent {
+            drawContent()
+            if (focused) RemoteFocusLatencyProbe.posterDrawn(film.id)
         }
         .border(if (focused) 2.dp else 1.dp, stroke, shape)
         .clip(shape).background(Color(0xFF101821))
