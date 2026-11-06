@@ -16,6 +16,7 @@ internal class StartupPresentation {
     var homeReady by mutableStateOf(false)
     var prepareHome by mutableStateOf(false)
     var reduced by mutableStateOf(false)
+    var preferences by mutableStateOf<Preferences?>(null)
 }
 
 /** Paint branding before constructing the large home composition and its repositories. */
@@ -24,15 +25,15 @@ internal fun StartupHost(home: @Composable (StartupPresentation) -> Unit) {
     val state = remember { StartupPresentation() }
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
+        state.preferences = withContext(Dispatchers.IO) {
             CrashJournal.loadPrevious(context)
-            // Prewarm the existing preferences before the home accesses them.
-            context.getSharedPreferences("herrin", 0).all
+            // Keystore migration/decryption must not occupy the first input frame.
+            Preferences(context).apply { tmdbReadToken }
         }
         while (true) { withContext(Dispatchers.IO) { CrashJournal.sampleMemory(); CrashJournal.checkpoint(context) }; delay(5000) }
     }
     Box(Modifier.fillMaxSize().drawWithContent { drawContent(); StartupTiming.firstDraw() }) {
-        if (state.prepareHome) home(state)
+        if (state.prepareHome && state.preferences != null) home(state)
         if (state.showing) SplashExitCurtain(state.reduced, state.exiting,
             onReady = { state.exiting = true },
             onFinished = { state.showing = false }, homeReady = state.homeReady,

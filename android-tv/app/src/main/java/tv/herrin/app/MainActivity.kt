@@ -398,7 +398,7 @@ private fun Herrin(startup: StartupPresentation) {
     var configInputFocused by remember { mutableStateOf(false) }
     var liveSearchEditorFocused by remember { mutableStateOf(false) }
     var pendingLiveSearchFocus by remember { mutableStateOf(false) }
-    val prefs = remember { Preferences(context) }
+    val prefs = remember(startup.preferences) { requireNotNull(startup.preferences) }
     val uiScope = rememberCoroutineScope()
     var lanConfigOpen by remember { mutableStateOf(false) }
     var exitConfirmation by remember { mutableStateOf(false) }
@@ -1065,6 +1065,7 @@ private fun Herrin(startup: StartupPresentation) {
     }
     val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
     LaunchedEffect(metadataToken) {
+        CrashJournal.stage("CACHE")
         tmdbHomeFilms = emptyList()
         tmdbTop250Films = emptyList()
         if (metadataToken.isNotBlank()) {
@@ -1475,6 +1476,7 @@ private fun Herrin(startup: StartupPresentation) {
             return@LaunchedEffect
         val filmToEnrich = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
             ?: return@LaunchedEffect
+        CrashJournal.stage("DETAIL")
         val detailed = try { tmdbDiscovery.detail(filmToEnrich, metadataToken) }
             catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
             catch (_: java.io.IOException) { null }

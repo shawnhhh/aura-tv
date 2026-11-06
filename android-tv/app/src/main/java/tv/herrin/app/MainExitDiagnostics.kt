@@ -12,7 +12,7 @@ internal object MainExitDiagnostics {
         return try {
             val last = manager.getHistoricalProcessExitReasons(context.packageName,0,8)
                 .filter { it.processName == context.packageName }.maxByOrNull { it.timestamp } ?: return ""
-            "\nAPP_EXIT_REASON=${last.reason}(${when (last.reason) {
+            "\nAPP_EXIT_TIME=${last.timestamp} APP_EXIT_REASON=${last.reason}(${when (last.reason) {
                 android.app.ApplicationExitInfo.REASON_CRASH -> "JAVA_CRASH"
                 android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "NATIVE_CRASH"
                 android.app.ApplicationExitInfo.REASON_ANR -> "ANR"
