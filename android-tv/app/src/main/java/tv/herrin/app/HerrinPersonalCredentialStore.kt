@@ -47,7 +47,8 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
         val encoded = prefs.getString(slot, "").orEmpty()
         if (encoded.isBlank()) return@runCatching "" to ""
         val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-        require(bytes.size in 28..2400)
+        // Username/password limits are characters; UTF-8 may use four bytes each.
+        require(bytes.size in 28..10000)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(),
             GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
