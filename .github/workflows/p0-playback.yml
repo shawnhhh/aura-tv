@@ -12,7 +12,7 @@ permissions:
   contents: read
 concurrency:
   group: p0-playback-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' }}
 jobs:
   debug:
     uses: ./.github/workflows/android-debug.yml
