@@ -34,4 +34,10 @@ class DisplayRefreshTest {
         }
         assertNull(preferredUiRefreshRate(current, listOf(UiDisplayMode(3840, 2160, Float.NaN))))
     }
+    @Test fun playbackYieldsToSourceFrameMatching() {
+        val current = UiDisplayMode(3840, 2160, 60f)
+        val modes = listOf(current, UiDisplayMode(3840, 2160, 144f))
+        assertEquals(144f, preferredUiRefreshRate(current, modes)!!, 0.01f)
+        assertNull(preferredUiRefreshRate(current, modes, playback = true))
+    }
 }

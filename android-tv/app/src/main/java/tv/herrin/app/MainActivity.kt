@@ -950,6 +950,12 @@ private fun Herrin() {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    val playbackScene = screen == "player" || screen == "live-player"
+    LaunchedEffect(playbackScene) {
+        val activity = context as? ComponentActivity ?: return@LaunchedEffect
+        // Only scene boundaries change hints; episode/line changes never toggle the display mode.
+        if (playbackScene) activity.releaseUiRefreshPreference() else activity.preferSmoothTvUi()
+    }
     // Media rekeys (refresh, episode and line) keep their active source. Only
     // leaving the player releases its Spider resources and next play rehydrates.
     DisposableEffect(screen == "player", spiderActive) {

@@ -6,7 +6,8 @@ import android.util.Log
 internal data class UiDisplayMode(val width: Int, val height: Int, val hz: Float)
 
 /** Prefer high refresh only at the current output resolution; never drop 4K to get 120 Hz. */
-internal fun preferredUiRefreshRate(current: UiDisplayMode, supported: List<UiDisplayMode>): Float? =
+internal fun preferredUiRefreshRate(current: UiDisplayMode, supported: List<UiDisplayMode>, playback: Boolean = false): Float? =
+    if (playback) null else
     supported.asSequence()
         .filter { it.width == current.width && it.height == current.height }
         .map { it.hz }
@@ -35,4 +36,15 @@ internal fun Activity.preferSmoothTvUi() {
     }
     Log.i("HerrinDisplay", "output=${current.width}x${current.height}@${current.hz}Hz " +
         "uiPreference=${preference ?: "system"} supported=${supported.joinToString()}")
+}
+
+/** Yield window hints on a scene boundary so the video surface/core owns frame matching. */
+internal fun Activity.releaseUiRefreshPreference() {
+    val params = window.attributes
+    if (params.preferredRefreshRate != 0f || params.preferredDisplayModeId != 0) {
+        params.preferredRefreshRate = 0f
+        params.preferredDisplayModeId = 0
+        window.attributes = params
+        Log.i("HerrinDisplay", "scene=playback uiPreference=system; video frame matching owns cadence")
+    }
 }
