@@ -4656,7 +4656,7 @@ private fun Herrin(startup: StartupPresentation) {
             lanConfigOpen = false
             (context as? android.app.Activity)?.finish()
         })
-        if (lanConfigOpen) LanConfigDialog(onDismiss = { lanConfigOpen = false }) { module ->
+        if (lanConfigOpen) LanConfigDialog(onDismiss = { lanConfigOpen = false }, onApplied = { module ->
             when (module) {
                 "tmdb" -> { prefs.invalidateTokenCache(); metadataToken = prefs.tmdbReadToken; tmdbProbeEpoch++ }
                 "sources" -> {
@@ -4671,7 +4671,7 @@ private fun Herrin(startup: StartupPresentation) {
                 "live" -> { liveRefresh++; epgRefresh++ }
                 "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }
             }
-        }
+        })
         SideEffect {
             startup.reduced = reduceMotion
             startup.homeReady = projection.second.isNotEmpty() || films.isEmpty()

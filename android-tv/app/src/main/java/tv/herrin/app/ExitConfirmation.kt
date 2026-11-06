@@ -42,6 +42,7 @@ internal fun ExitConfirmation(onCancel: () -> Unit, onExit: () -> Unit) {
         LaunchedEffect(Unit) { withFrameNanos { }; cancel.requestFocus() }
     }
 }
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun ExitAction(label: String, tag: String, requester: FocusRequester, neighbor: FocusRequester, click: () -> Unit) {
     var focused by remember { mutableStateOf(false) }

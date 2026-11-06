@@ -19,7 +19,7 @@ internal object SafeCrashSummary {
             }
             current = cause.cause
         }
-        return out.take(10000)
+        return out.take(10000).toString()
     }
     private fun identifier(value: String) = value.takeIf {
         it.length <= 180 && it.all { c -> c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in "_.$<>-" }

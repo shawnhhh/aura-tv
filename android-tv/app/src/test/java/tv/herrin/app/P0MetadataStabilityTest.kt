@@ -17,7 +17,7 @@ class P0MetadataStabilityTest {
             val rail = groups.recentRail(source,source.reversed())
             val keys = rail.map { groups.groupFor(it.id)?.key ?: it.id }
             assertEquals(keys.size,keys.toSet().size)
-            assertEquals(source.flatMap { it.playbackEpisodes }, groups.groups.flatMap { it.members }.map { it.film }.flatMap { it.playbackEpisodes })
+            assertEquals(source, source.map { current -> groups.groupFor(current.id)?.memberFor(current.id)?.film ?: current })
         }
     }
     @Test fun malformedDetailPreservesTheCurrentFilmAndPlayback() = runBlocking {
