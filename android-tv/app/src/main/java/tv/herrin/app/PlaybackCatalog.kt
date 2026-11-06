@@ -6,9 +6,11 @@ import org.json.JSONObject
  * Explicit per-title playback metadata from a catalog that the user configured and is
  * authorized to use. HERRIN never guesses episode URLs or extracts them from websites.
  */
-data class AuthorizedSubtitle(val language: String, val title: String, val uri: String)
+data class AuthorizedSubtitle(val language: String, val title: String, val uri: String,
+    val rawFlag: Int = 0, val mimeType: String? = null)
 data class PlaybackLine(val id: String, val title: String, val uri: String,
-                        val subtitles: List<AuthorizedSubtitle> = emptyList())
+                        val subtitles: List<AuthorizedSubtitle> = emptyList(),
+                        val spiderProof: SpiderRouteProof? = null)
 data class PlaybackEpisode(val number: Int, val title: String, val lines: List<PlaybackLine>)
 
 object PlaybackCatalogJson {

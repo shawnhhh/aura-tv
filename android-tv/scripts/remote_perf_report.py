@@ -6,7 +6,7 @@ exported into the metric JSON or CI acceptance table.
 import re
 
 _ALLOWED_FLOATS = (
-    "key_to_focus_p95_ms", "end_to_idle_p95_ms",
+    "key_to_focus_p50_ms", "key_to_focus_p95_ms", "end_to_idle_p95_ms",
     "frame_p95_ms", "long_frame_pct",
 )
 _ALLOWED_INTS = (
@@ -33,7 +33,7 @@ def parse_remote_performance(logcat: str) -> dict:
             for key in ("focus_success", "frames_total"):
                 if key in fields and fields[key] != "unavailable":
                     result[key] = int(fields[key])
-            for key in ("key_to_focus_p95_ms", "end_to_idle_p95_ms",
+            for key in ("key_to_focus_p50_ms", "key_to_focus_p95_ms", "end_to_idle_p95_ms",
                         "frame_p95_ms"):
                 if key in fields and fields[key] != "unavailable":
                     result[key] = float(fields[key])

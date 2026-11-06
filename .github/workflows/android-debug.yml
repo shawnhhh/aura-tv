@@ -6,6 +6,7 @@ on:
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-debug.yml']
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 concurrency:
@@ -13,6 +14,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   debug:
+    # P0 pushes use the serial caller, including when its PR becomes mergeable.
+    if: github.event_name != 'pull_request' || github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,7 +30,9 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Offline structural checks
-        run: python3 scripts/check_static.py
+        run: |
+          python3 scripts/check_static.py
+          python3 -m unittest discover -s scripts -p 'test_check_playback_boundary.py' -v
       - name: Native integration boundary regression (offline)
         run: python3 -m unittest discover -s ../scripts/m467 -p 'test_verify_native_kit.py' -v
       - name: Native candidate build script syntax (offline)

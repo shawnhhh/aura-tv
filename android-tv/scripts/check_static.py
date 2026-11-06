@@ -1,5 +1,6 @@
 """Offline structural checks; does not substitute for compilation or remote testing."""
 from pathlib import Path
+from check_playback_boundary import without_comments
 import hashlib
 import re
 import zipfile
@@ -31,7 +32,29 @@ assert 'addJavascriptInterface' not in browser_code and 'handler.proceed()' not 
 assert 'allowFileAccess = false' in browser_code and 'allowContentAccess = false' in browser_code
 spider_runtime = root / 'app/src/main/java/tv/herrin/app/TvBoxSpiderRemote.kt'
 spider_code = spider_runtime.read_text()
+# A real :spider debug socket must exercise the SAME native proxy as playback.
+# Never reintroduce the legacy SpiderLoopbackProxy for any live Binder operation.
+assert 'SpiderLoopbackProxy' not in spider_code
+assert 'NativeFongMiProxy' in spider_code
+# The historical Spider/loopback implementation remains available ONLY to
+# legacy tests. Shipping it in the production APK reintroduces two engines.
+legacy = ('SpiderProxyPlayback.kt', 'SpiderLoopbackProxy.kt',
+          'HerrinSpiderHlsProxyRewrite.kt')
+for name in legacy:
+    assert not (root / 'app/src/main/java/tv/herrin/app' / name).exists(), name
+    assert (root / 'app/src/test/java/tv/herrin/app' / name).is_file(), name
+    assert (root / 'app/src/androidTest/java/tv/herrin/app' / name).is_file(), name
 assert spider_code.count('WebView') == 1 and 'WebView.setDataDirectorySuffix' in spider_code
-assert not any('WebView' in p.read_text() for p in root.glob('app/src/main/java/**/*.kt')
+assert not any('WebView' in without_comments(p.read_text()) for p in root.glob('app/src/main/java/**/*.kt')
                if p.resolve() not in {browser_backend.resolve(), spider_runtime.resolve()})
 print('PASS: XML, TV manifest, official wrapper integrity, Gradle files, native-only source')
+
+# Verify GPL upstream staging as part of every debug CI run.
+from verify_fongmi_vendor import verify
+verify()
+
+from check_playback_boundary import verify as verify_playback_boundary
+verify_playback_boundary()
+
+from verify_sardine_vendor import verify as verify_sardine_vendor
+verify_sardine_vendor()

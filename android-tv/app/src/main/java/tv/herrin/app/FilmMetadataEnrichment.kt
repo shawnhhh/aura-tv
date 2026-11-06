@@ -59,6 +59,7 @@ internal object FilmMetadataEnrichment {
             episodes = details.episodes,
             playbackEpisodes = details.playbackEpisodes,
             spiderVodId = current.spiderVodId ?: details.spiderVodId,
+            spiderOrigin = details.spiderOrigin,
             cmsVodId = current.cmsVodId ?: details.cmsVodId
         )
     }

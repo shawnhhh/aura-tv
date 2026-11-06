@@ -1,0 +1,63 @@
+{
+  "repository": "shawnhhh/aura-tv",
+  "commit": "2cef56b629b86952ce7abddf2bcf5042ce5cc096",
+  "run_id": 41957142681,
+  "url": "https://github.com/shawnhhh/aura-tv/actions/runs/41957142681",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 127014655030,
+      "name": "debug / debug",
+      "conclusion": "success",
+      "started_at": "2026-11-05T02:44:26Z",
+      "completed_at": "2026-11-05T02:51:48Z"
+    },
+    {
+      "id": 127017152268,
+      "name": "emulator / emulator",
+      "conclusion": "success",
+      "started_at": "2026-11-05T02:51:50Z",
+      "completed_at": "2026-11-05T03:04:03Z"
+    }
+  ],
+  "serial_order_verified": true,
+  "jvm": {
+    "tests": 536,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "android_tv": {
+    "tests": 179,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "full_suite_gate": "accepted"
+  },
+  "artifacts": [
+    {
+      "id": 13384407700,
+      "name": "HERRIN-emulator-evidence",
+      "sha": "2cef56b629b86952ce7abddf2bcf5042ce5cc096",
+      "expired": false,
+      "digest": "sha256:1f03b9c90578029cd0ad16d7e6ea4f0d7f02a6e853b3189cf3ed58e506597d1c"
+    },
+    {
+      "id": 13383923187,
+      "name": "HERRIN-test-reports",
+      "sha": "2cef56b629b86952ce7abddf2bcf5042ce5cc096",
+      "expired": false,
+      "digest": "sha256:47ea1f554089cccdc5883e8e6c2d3fda18533d9dbfc15e5a65ea67f50f64cd9e"
+    },
+    {
+      "id": 13383533801,
+      "name": "HERRIN-debug-apk",
+      "sha": "2cef56b629b86952ce7abddf2bcf5042ce5cc096",
+      "expired": false,
+      "digest": "sha256:5e1ac14995a916debffabafb0e95742a374c0f1a6c531b2b1239e9af44fc3db9"
+    }
+  ],
+  "physical_TCL_tested": false,
+  "scope": "CI recovery and Config default/named/flag contract subtask; full phase B/C/D remain incomplete",
+  "next_task": "Review authorized current ClassLoader lifecycle against pinned BaseLoader/JarLoader; preserve completed repairs."
+}

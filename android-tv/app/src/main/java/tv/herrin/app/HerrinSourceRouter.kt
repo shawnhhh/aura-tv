@@ -2,7 +2,9 @@ package tv.herrin.app
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
@@ -59,9 +61,9 @@ internal data class HerrinFilmLookupResult(
 )
 
 /**
- * Priority is strict: NAS/cloud first. TVBox is queried only when no identity
- * match exists in personal sources. Within a tier prefer verified media metadata
- * later during actual playback; source title claims are merely a tie breaker.
+ * Strict source priority: NAS -> cloud WebDAV -> TVBox CMS/approved Spider.
+ * A cloud "4K" filename cannot outrank a verified NAS 1080p resource.
+ * Within a source tier, quality labels only break ties between matches.
  */
 internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
     /**
@@ -75,28 +77,55 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
     ): HerrinFilmLookupResult {
         val errors = linkedMapOf<String, String>()
         val searched = mutableListOf<String>()
-        for (tier in listOf(HerrinSourceTier.PERSONAL, HerrinSourceTier.TVBOX)) {
+        val sourceStages = listOf(
+            listOf(HerrinSourceType.NAS),
+            listOf(HerrinSourceType.CLOUD),
+            listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER)
+        )
+        for (stage in sourceStages) {
+            val tier = if (stage.first() == HerrinSourceType.TVBOX_CMS)
+                HerrinSourceTier.TVBOX else HerrinSourceTier.PERSONAL
             val results = mutableListOf<HerrinSourceMovie>()
-            for (source in sources.filter { source ->
-                if (tier == HerrinSourceTier.PERSONAL)
-                    source.type == HerrinSourceType.NAS || source.type == HerrinSourceType.CLOUD
-                else source.type in setOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER)
-            }.distinctBy { it.id }.take(16)) {
-                searched.add(source.id)
-                try {
+            val stageSources = sources.filter { it.type in stage }.distinctBy { it.id }.take(16)
+            suspend fun fetch(source: HerrinFilmSource): Pair<List<HerrinSourceMovie>, String?> {
+                return try {
                     val matches = withTimeoutOrNull(6_000L) { source.search(identity) }
-                    if (matches == null) {
-                        errors[source.id] = "搜索超时"
-                        continue
-                    }
-                    results += matches.take(80).filter {
+                        ?: return emptyList<HerrinSourceMovie>() to "搜索超时"
+                    matches.take(80).filter {
                         it.sourceId == source.id && it.sourceType == source.type &&
                             HerrinFilmIdentityMatch.matches(identity, it)
-                    }
+                    } to null
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (error: Exception) {
-                    errors[source.id] = "来源检索失败"
+                } catch (_: Exception) {
+                    emptyList<HerrinSourceMovie>() to "来源检索失败"
+                }
+            }
+            // CMS is passive HTTP and safe to query in four-way bounded
+            // fan-out. Previously 10 x 6-second timeouts could block TMDB
+            // details for a full minute before Spider search even began.
+            // An active Spider uses one mutable JAR worker; never run its
+            // operations concurrently with another Spider site.
+            val groups: List<List<HerrinFilmSource>> =
+                if (tier == HerrinSourceTier.TVBOX)
+                    stageSources.filter { it.type == HerrinSourceType.TVBOX_CMS }.chunked(4) +
+                        stageSources.filter {
+                            it.type == HerrinSourceType.TVBOX_SPIDER
+                        }.map { listOf(it) }
+                else stageSources.map { listOf(it) }
+            for (group in groups) {
+                val shouldParallelize = tier == HerrinSourceTier.TVBOX &&
+                    group.all { it.type == HerrinSourceType.TVBOX_CMS }
+                val fetched = if (shouldParallelize) coroutineScope {
+                    group.map { source ->
+                        async(Dispatchers.IO) { fetch(source) }
+                    }.awaitAll()
+                } else group.map { fetch(it) }
+                for ((i, source) in group.withIndex()) {
+                    searched += source.id
+                    val (offers, failure) = fetched[i]
+                    results += offers
+                    if (failure != null) errors[source.id] = failure
                 }
             }
             if (results.isNotEmpty()) {

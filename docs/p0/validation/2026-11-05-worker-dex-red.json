@@ -1,0 +1,45 @@
+{
+  "head": "c38cc7c84bacd5e230338ac9e89257702614025b",
+  "run_id": 41979149789,
+  "url": "https://github.com/shawnhhh/aura-tv/actions/runs/41979149789",
+  "debug": "success",
+  "jvm": {
+    "tests": 541,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "tv": {
+    "tests": 185,
+    "failures": 4,
+    "skipped": 0
+  },
+  "new_cases": [
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "closeDuringJarBootstrapCannotConstructOrPublishASpider",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Closed bootstrap must not succeed\nat org.junit.Assert.fail(Assert.java:89)\nat org.junit.Assert.assertTrue(Assert.java:42)\nat tv.herrin.app.SpiderWorkerLifecycleTest$closeDuringJarBootstrapCannotConstructOrPublishASpider$1.invokeSuspend(SpiderWorkerLifecycleTest.kt:117)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)\nat kotlinx.coroutines.internal.ScopeCoroutine.afterResume(Scopes.kt:32)\nat kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:102)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:46)\nat kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)\nat kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)\nat kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:85)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:59)\nat kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:38)\nat kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)\nat tv.herrin.app.SpiderWorkerLifecycleTest.closeDuringJarBootstrapCannotConstructOrPublishASpider(SpiderWorkerLifecycleTest.kt:107)\n"
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "cancelledInitIgnoringInterruptionCannotSurviveClose",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Worker retained active after close expected null, but was:<com.github.catvod.spider.Fixture@6b4fd82>\nat org.junit.Assert.fail(Assert.java:89)\nat org.junit.Assert.failNotNull(Assert.java:756)\nat org.junit.Assert.assertNull(Assert.java:738)\nat tv.herrin.app.SpiderWorkerLifecycleTest.assertReleased(SpiderWorkerLifecycleTest.kt:160)\nat tv.herrin.app.SpiderWorkerLifecycleTest.access$assertReleased(SpiderWorkerLifecycleTest.kt:24)\nat tv.herrin.app.SpiderWorkerLifecycleTest$cancelledInitIgnoringInterruptionCannotSurviveClose$1.invokeSuspend(SpiderWorkerLifecycleTest.kt:144)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)\nat kotlinx.coroutines.internal.ScopeCoroutine.afterResume(Scopes.kt:32)\nat kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:102)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:46)\nat kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)\nat kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)\nat kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:85)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:59)\nat kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:38)\nat kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)\nat tv.herrin.app.SpiderWorkerLifecycleTest.cancelledInitIgnoringInterruptionCannotSurviveClose(SpiderWorkerLifecycleTest.kt:132)\n"
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "retiredInitCannotReplaceOrClearANewerAuthorizedSite",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Retired init must fail\nat org.junit.Assert.fail(Assert.java:89)\nat org.junit.Assert.assertTrue(Assert.java:42)\nat tv.herrin.app.SpiderWorkerLifecycleTest$retiredInitCannotReplaceOrClearANewerAuthorizedSite$1.invokeSuspend(SpiderWorkerLifecycleTest.kt:88)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)\nat kotlinx.coroutines.internal.ScopeCoroutine.afterResume(Scopes.kt:32)\nat kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:102)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:46)\nat kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)\nat kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)\nat kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:85)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:59)\nat kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:38)\nat kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)\nat tv.herrin.app.SpiderWorkerLifecycleTest.retiredInitCannotReplaceOrClearANewerAuthorizedSite(SpiderWorkerLifecycleTest.kt:72)\n"
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "closedWorkerRejectsLateSpiderInitAndFreshApplyGetsNewResources",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Late init must be rejected: Ready(value=[Film(id=spider-168991aa-cdb9fa09-0, title=Original synthetic fixture, subtitle=, category=电影, year=, synopsis=, artwork=2131231007, episodes=1, artworkUrl=null, playbackEpisodes=[], spiderVodId=fixture, backdropUrl=null, cmsVodId=null, genres=[], ratingValue=null, ratingProvider=null, metadataSource=null, originalDisplay=null, actors=[], directors=[], regions=[], releaseDate=null, runtimeMinutes=null, people=[], tmdbTvId=null, imdbId=null, imdbRating=null, imdbVotes=null)])\nat org.junit.Assert.fail(Assert.java:89)\nat org.junit.Assert.assertTrue(Assert.java:42)\nat tv.herrin.app.SpiderWorkerLifecycleTest$closedWorkerRejectsLateSpiderInitAndFreshApplyGetsNewResources$1.invokeSuspend(SpiderWorkerLifecycleTest.kt:39)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)\nat kotlinx.coroutines.internal.ScopeCoroutine.afterResume(Scopes.kt:32)\nat kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:102)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:46)\nat kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)\nat kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)\nat kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:85)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:59)\nat kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:38)\nat kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)\nat tv.herrin.app.SpiderWorkerLifecycleTest.closedWorkerRejectsLateSpiderInitAndFreshApplyGetsNewResources(SpiderWorkerLifecycleTest.kt:25)\n"
+    }
+  ],
+  "fatal_exception_present": false,
+  "physical_TCL_tested": false
+}

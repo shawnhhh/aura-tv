@@ -1,6 +1,8 @@
 package tv.herrin.app
 
 import com.github.catvod.Runtime as CatVodRuntime
+import tv.herrin.app.nativeplayback.NativeFongMiRoute
+import tv.herrin.app.nativeplayback.NativeFongMiProxy
 
 import android.app.ActivityManager
 import android.app.Service
@@ -129,7 +131,8 @@ internal object SpiderIpc {
         for (ep in film.playbackEpisodes.take(300)) {
             val lines = JSONArray()
             ep.lines.take(12).forEach { line ->
-                lines.put(JSONObject().put("id", line.id).put("title", line.title).put("uri", line.uri))
+                lines.put(JSONObject().put("id", line.id).put("title", line.title).put("uri", line.uri)
+                    .put("proof", line.spiderProof?.value))
             }
             val encoded = JSONObject().put("number", ep.number).put("title", ep.title).put("lines", lines)
             val length = encoded.toString().length
@@ -146,6 +149,9 @@ internal object SpiderIpc {
             .put("artworkUrl", film.artworkUrl ?: "")
             .put("backdropUrl", film.backdropUrl ?: "").put("episodes", film.episodes)
             .put("vodId", film.spiderVodId ?: "").put("playback", episodes)
+            .put("origin", film.spiderOrigin?.let {
+                JSONObject().put("site", it.site).put("runtime", it.runtime).put("proof", it.proof)
+            })
     }
 
     fun readFilm(obj: JSONObject): Film {
@@ -155,7 +161,8 @@ internal object SpiderIpc {
             val linesArray = ep.optJSONArray("lines") ?: JSONArray()
             val lines = (0 until minOf(linesArray.length(), 12)).mapNotNull { i ->
                 val line = linesArray.optJSONObject(i) ?: return@mapNotNull null
-                PlaybackLine(line.optString("id"), line.optString("title"), line.optString("uri"))
+                PlaybackLine(line.optString("id"), line.optString("title"), line.optString("uri"),
+                    spiderProof = line.optString("proof").takeIf { it.length == 64 }?.let(::SpiderRouteProof))
             }
             PlaybackEpisode(ep.optInt("number", 1), ep.optString("title"), lines)
         }
@@ -168,7 +175,11 @@ internal object SpiderIpc {
             artworkUrl = obj.optString("artworkUrl").takeIf { it.isNotBlank() },
             backdropUrl = obj.optString("backdropUrl").takeIf { it.isNotBlank() },
             playbackEpisodes = episodes,
-            spiderVodId = obj.optString("vodId").takeIf { it.isNotBlank() })
+            spiderVodId = obj.optString("vodId").takeIf { it.isNotBlank() },
+            spiderOrigin = obj.optJSONObject("origin")?.let {
+                SpiderFilmOrigin(it.optString("site").take(128), it.optString("runtime").take(64),
+                    it.optString("proof").take(64))
+            })
     }
 
     fun error(message: String): JSONObject = JSONObject()
@@ -176,8 +187,13 @@ internal object SpiderIpc {
 
     fun playback(media: PlaybackMedia): JSONObject = JSONObject().put("ok", true)
         .put("uri", media.uri)
+        .put("mediaId", media.mediaId)
         .put("alternates", JSONArray(media.alternateUris.take(7)))
         .put("allowHttpRedirects", media.allowHttpRedirects)
+        // Without this field, a working header-free VOD backup loses its
+        // HTTP 404/410 failover permission between :spider and the player.
+        .put("safeNotFoundFallback", media.safeNotFoundFallback &&
+            media.alternateUris.isNotEmpty() && media.headers.isEmpty())
         .put("declaredMime", media.declaredMime ?: "")
         .put("danmaku", DanmakuProtocol.encodeSources(media.danmakuSources))
         .put("headers", JSONObject(media.headers))
@@ -185,7 +201,8 @@ internal object SpiderIpc {
             media.subtitles.take(6).forEach { subtitle ->
                 put(JSONObject().put("lang", subtitle.language)
                     .put("name", subtitle.title).put("url", subtitle.uri)
-                    .put("format", "text/vtt"))
+                    .put("format", subtitle.mimeType ?: FongMiSubtitleFormats.supportedMime(subtitle.uri, null))
+                    .put("flag", FongMiSubtitleFormats.selectionFlag(subtitle.rawFlag)))
             }
         })
 
@@ -207,11 +224,12 @@ internal object SpiderIpc {
             val track = subs.optJSONObject(index) ?: return@mapNotNull null
             val trackUrl = TvBoxUrl.normalize(track.optString("url"), allowHttp)
                 ?: return@mapNotNull null
-            if (!trackUrl.substringBefore('?').lowercase().endsWith(".vtt") &&
-                track.optString("format") != "text/vtt") return@mapNotNull null
+            val format = FongMiSubtitleFormats.supportedMime(trackUrl, track.optString("format"))
+                ?: return@mapNotNull null
             val lang = track.optString("lang").trim().lowercase()
             if (!lang.matches(Regex("[a-z]{2,3}(-[a-z0-9]{2,8})*"))) return@mapNotNull null
-            AuthorizedSubtitle(lang, track.optString("name").take(64), trackUrl)
+            AuthorizedSubtitle(lang, track.optString("name").take(64), trackUrl,
+                FongMiSubtitleFormats.selectionFlag(track.optInt("flag")), format)
         }
         val alternatives = response.optJSONArray("alternates") ?: JSONArray()
         val urls = (0 until minOf(alternatives.length(), 7)).mapNotNull { index ->
@@ -220,6 +238,12 @@ internal object SpiderIpc {
         return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
             response.optBoolean("allowHttpRedirects") && allowHttp,
             declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime")),
+            mediaId = response.optString("mediaId").takeIf { it.isNotBlank() && it.length <= 256 },
+            // Re-validate in the receiving process. A malicious/forged IPC
+            // flag cannot enable cross-origin fallback for authenticated
+            // media or invent an absent provider-supplied backup.
+            safeNotFoundFallback = response.optBoolean("safeNotFoundFallback", false) &&
+                headers.isEmpty() && urls.isNotEmpty(),
             danmakuSources = DanmakuProtocol.decodeSources(response.opt("danmaku"))))
     }
 }
@@ -235,7 +259,7 @@ class TvBoxSpiderService : Service() {
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
     private val worker by lazy { TvBoxSpiderWorker(applicationContext) }
     // Debug-only smoke fixture, never registered as a user-configurable source.
-    private var proxySelfTest: SpiderLoopbackProxy? = null
+    private var proxySelfTest: NativeFongMiProxy? = null
     @Volatile private var authCaller: Pair<Messenger, Int>? = null
     private val authorization = SpiderAuthorizationSession { dialogId, payload ->
         authCaller?.let { (caller, operationId) ->
@@ -286,7 +310,9 @@ class TvBoxSpiderService : Service() {
                                         request.optJSONArray("jsonParsers")),
                                     playbackParsers = SpiderIpc.readPlaybackParsers(
                                         request.optJSONArray("playbackParsers")))
-                                when (val result = worker.browse(site, warehouse)) {
+                                val secret = request.getString("originSecret")
+                                require(secret.matches(Regex("[a-f0-9-]{36}"))) { "Spider 授权会话无效" }
+                                when (val result = worker.browse(site, warehouse, secret)) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("films", JSONArray().apply {
                                             result.value.take(80).forEach { put(SpiderIpc.film(it)) }
@@ -323,12 +349,12 @@ class TvBoxSpiderService : Service() {
                                     android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                                     "Proxy smoke endpoint disabled in production"
                                 }
-                                val active = proxySelfTest ?: SpiderLoopbackProxy("ci-proxy") {
+                                val active = proxySelfTest ?: NativeFongMiProxy("ci-proxy", { _ ->
                                     arrayOf(200, "video/mp4",
                                         java.io.ByteArrayInputStream(byteArrayOf(8, 9, 10)))
-                                }.also { proxySelfTest = it }
+                                }, null).also { proxySelfTest = it }
                                 JSONObject().put("ok", true)
-                                    .put("uri", active.url + "&part=probe")
+                                    .put("uri", active.siteUrl() + "&part=probe")
                             }
                             SpiderIpc.PLAY -> {
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
@@ -419,7 +445,11 @@ class TvBoxSpiderService : Service() {
     }
 }
 
-/** Main-process facade: a plugin crash becomes a failure, not a TV UI crash. */
+/** Main-process facade: a plugin crash becomes a failure, not a TV UI crash.
+ * HERRIN 2026-11-05: source-intent epochs extend the pinned FongMi
+ * 305dff233cde512e2c83f71529b7c3ecfd61fefc closed-loader publication contract
+ * across Binder suspension, explicit revocation and source switching.
+ */
 internal class TvBoxSpiderBridge(context: Context) {
     private val app = context.applicationContext
     private val pending = mutableMapOf<Int, CompletableDeferred<String>>()
@@ -433,7 +463,8 @@ internal class TvBoxSpiderBridge(context: Context) {
     private var cleanupJob: Job? = null
     @Volatile private var generation = 0
     @Volatile private var hydratedGeneration = -1
-    @Volatile private var lastBrowse: String? = null
+    private val sourceSession = SpiderSourceSession()
+    private val lastBrowse: String? get() = sourceSession.descriptor()
     /** A read-only hint, not execution authorization; worker verifies identity. */
     fun approvedActiveSiteKey(): String? = lastBrowse?.let { payload ->
         runCatching { JSONObject(payload).getJSONObject("site").optString("key")
@@ -551,33 +582,56 @@ internal class TvBoxSpiderBridge(context: Context) {
     // Serialize source changes and media calls. A Binder death can be observed
     // during playerContent, so rehydrate the exact approved source before one
     // replay. Never replay a failed browse or an authentication/provider error.
-    private suspend fun request(operation: Int, payload: JSONObject): SpiderResult<JSONObject> =
-        requests.withLock {
+    private suspend fun request(operation: Int, payload: JSONObject,
+        invocation: Long = sourceSession.snapshot()): SpiderResult<JSONObject> {
+        // Capture the intent before waiting for another loader operation.
+        // An explicit close/source change must retire queued work as well.
+        return requests.withLock {
             if (operation == SpiderIpc.BROWSE) {
-                lastBrowse = null
-                hydratedGeneration = -1
-                val result = sendRequest(operation, payload)
-                if (result is SpiderResult.Ready) {
-                    lastBrowse = payload.toString()
-                    hydratedGeneration = generation
+                val started = withContext(Dispatchers.Main.immediate) {
+                    sourceSession.beginBrowse(invocation)?.let { ticket ->
+                        hydratedGeneration = -1
+                        ticket to generation
+                    }
+                } ?: return@withLock SpiderResult.Failure("Spider 会话已结束或变化，已取消应用")
+                val result = sendRequest(operation, payload, started.first)
+                if (result !is SpiderResult.Ready) return@withLock result
+                return@withLock withContext(Dispatchers.Main.immediate) {
+                    // Publish together with the binding generation on the same
+                    // dispatcher as invalidate(), never after a stale success.
+                    if (started.second != generation ||
+                        !sourceSession.publish(started.first, payload.toString())) {
+                        SpiderResult.Failure("Spider 会话已结束或变化，已取消应用")
+                    } else {
+                        hydratedGeneration = generation
+                        result
+                    }
                 }
-                return@withLock result
             }
+            if (!sourceSession.isCurrent(invocation))
+                return@withLock SpiderResult.Failure("Spider 会话已结束或变化，已取消操作")
             val remembered = lastBrowse
                 ?: return@withLock SpiderResult.Failure("Spider 站点尚未就绪，请重新应用站点")
             for (attempt in 0..1) {
+                if (!sourceSession.isCurrent(invocation))
+                    return@withLock SpiderResult.Failure("Spider 会话已结束或变化，已取消恢复")
                 val startedGeneration = generation
                 if (hydratedGeneration != generation) {
-                    when (val restored = sendRequest(SpiderIpc.BROWSE, JSONObject(remembered))) {
+                    when (val restored = sendRequest(SpiderIpc.BROWSE, JSONObject(remembered), invocation)) {
                         is SpiderResult.Failure -> return@withLock restored
                         is SpiderResult.Ready -> {
-                            if (startedGeneration != generation)
+                            val current = withContext(Dispatchers.Main.immediate) {
+                                if (startedGeneration != generation || !sourceSession.isCurrent(invocation)) false
+                                else { hydratedGeneration = generation; true }
+                            }
+                            if (!current)
                                 return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
-                            hydratedGeneration = generation
                         }
                     }
                 }
-                val result = sendRequest(operation, payload)
+                val result = sendRequest(operation, payload, invocation)
+                if (!sourceSession.isCurrent(invocation))
+                    return@withLock SpiderResult.Failure("Spider 会话已结束或变化，已取消操作")
                 if (startedGeneration == generation) return@withLock result
                 if (result is SpiderResult.Ready)
                     return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
@@ -589,12 +643,16 @@ internal class TvBoxSpiderBridge(context: Context) {
             }
             error("Unreachable bounded Spider recovery")
         }
+    }
 
-    private suspend fun sendRequest(operation: Int, payload: JSONObject): SpiderResult<JSONObject> = try {
+    private suspend fun sendRequest(operation: Int, payload: JSONObject,
+        sourceEpoch: Long? = null): SpiderResult<JSONObject> = try {
         val response = withContext(Dispatchers.Main.immediate) {
+            check(sourceEpoch == null || sourceSession.isCurrent(sourceEpoch)) { "Spider 会话已结束或变化" }
             val encoded = payload.toString()
             require(encoded.length <= SpiderIpc.MAX_REQUEST_CHARS) { "Spider 请求超过进程通信限制" }
             val server = service()
+            check(sourceEpoch == null || sourceSession.isCurrent(sourceEpoch)) { "Spider 会话已结束或变化" }
             val id = nextId.incrementAndGet()
             val deferred = CompletableDeferred<String>()
             pending[id] = deferred
@@ -629,13 +687,16 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> {
+        val invocation = sourceSession.snapshot()
         withContext(Dispatchers.Main.immediate) { SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge) }
         val payload = JSONObject().put("site", SpiderIpc.site(site))
+            .put("originSecret", sourceSession.filmSecret(invocation)
+                ?: return SpiderResult.Failure("Spider 会话已变化"))
             .put("defaultJar", config.spiderJar ?: "")
             .put("vipFlags", JSONArray(config.vipFlags.take(32)))
             .put("jsonParsers", SpiderIpc.jsonParsers(config.jsonParsers))
             .put("playbackParsers", SpiderIpc.playbackParsers(config.playbackParsers))
-        return when (val response = request(SpiderIpc.BROWSE, payload)) {
+        return when (val response = request(SpiderIpc.BROWSE, payload, invocation)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> {
                 try {
@@ -650,10 +711,11 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     /** Search ONLY the previously user-applied active Spider site. */
     suspend fun search(site: TvBoxSite, query: String): SpiderResult<List<Film>> {
+        val invocation = sourceSession.snapshot()
         val keyword = query.trim().take(120)
         if (keyword.length < 2) return SpiderResult.Failure("搜索片名太短")
         val payload = JSONObject().put("site", SpiderIpc.site(site)).put("query", keyword)
-        return when (val response = request(SpiderIpc.SEARCH, payload)) {
+        return when (val response = request(SpiderIpc.SEARCH, payload, invocation)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> try {
                 val array = response.value.getJSONArray("films")
@@ -666,9 +728,11 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
     }
 
-    suspend fun details(film: Film): SpiderResult<Film> =
-        when (val response = request(SpiderIpc.DETAILS,
-            JSONObject().put("film", SpiderIpc.film(film)))) {
+    suspend fun details(film: Film): SpiderResult<Film> {
+        val invocation = sourceSession.snapshot()
+        if (!ownsFilm(film, invocation)) return SpiderResult.Failure("Spider 影片来源已失效，请重新查找片源")
+        return when (val response = request(SpiderIpc.DETAILS,
+            JSONObject().put("film", SpiderIpc.film(film)), invocation)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> try {
                 SpiderResult.Ready(SpiderIpc.readFilm(response.value.getJSONObject("film")))
@@ -676,53 +740,58 @@ internal class TvBoxSpiderBridge(context: Context) {
                 SpiderResult.Failure("Spider 详情无效：" + SpiderFailureDetails.message(error))
             }
         }
+    }
 
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
+        val invocation = sourceSession.snapshot()
+        if (!ownsFilm(film, invocation))
+            return PlaybackResult.Unavailable("Spider 影片或选集来源已失效，请重新查找片源")
         val payload = JSONObject().put("film", SpiderIpc.film(film))
             .put("episode", episode).put("line", line).put("allowHttp", allowHttp)
-        return when (val response = request(SpiderIpc.PLAY, payload)) {
-            is SpiderResult.Failure -> {
-                // The source has ALREADY supplied a direct HTTP(S) media URL.
-                // If the Java Spider crashed resolving it again, try that exact
-                // URL; never infer a URL from an opaque episode identifier.
-                val appliedSite = if (SpiderDirectPlayback.eligibleFailure(response.message)) {
-                    runCatching {
-                        lastBrowse?.let { SpiderIpc.readSite(JSONObject(it).getJSONObject("site")) }
-                    }.getOrNull()
-                } else null
-                appliedSite?.let {
-                    SpiderDirectPlayback.resolve(film, episode, line, it, allowHttp)
-                } ?: PlaybackResult.Unavailable(response.message)
-            }
+        return when (val response = request(SpiderIpc.PLAY, payload, invocation)) {
+            is SpiderResult.Failure -> PlaybackResult.Unavailable(response.message)
             is SpiderResult.Ready -> try {
                 val ready = SpiderIpc.readPlayback(response.value, allowHttp)
-                if (ready is PlaybackResult.Ready && SpiderProxyPlayback.isCatVodProxy(ready.media.uri)) {
-                    val health = SpiderProxyPlayback.diagnose(ready.media.uri)
-                    if (health != SpiderProxyPlayback.Health.READY &&
+                val authorizedSiteKey = runCatching {
+                    lastBrowse?.let { SpiderIpc.readSite(JSONObject(it).getJSONObject("site")).key }
+                }.getOrNull().orEmpty()
+                if (ready is PlaybackResult.Ready)
+                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_RETURNED")
+                if (ready is PlaybackResult.Ready &&
+                    NativeFongMiRoute.isNativeProxy(ready.media.uri)) {
+                    val source = lastBrowse
+                    val responseGeneration = generation
+                    val health = probePlayback(ready.media.uri, authorizedSiteKey, invocation)
+                        ?: return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消健康检查结果")
+                    if (health != NativeFongMiRoute.Health.READY &&
                         !FongMiPlaybackRecovery.canRebuildProxy(health.name)) {
-                        PlaybackResult.Unavailable("本机 Spider 代理拒绝当前会话（PROXY_${health.name}）")
-                    } else if (health != SpiderProxyPlayback.Health.READY) {
+                        PlaybackResult.Unavailable("本机 Spider 代理健康检查失败（PROXY_${health.name}）")
+                    } else if (health != NativeFongMiRoute.Health.READY) {
                         // The remote process can die between returning playerContent
                         // and the Media3 connection. Explicitly invalidate its
                         // bound session and retry at most once from the last
                         // previously approved source, never an arbitrary URL.
-                        val rememberedSource = lastBrowse
-                        withContext(Dispatchers.Main.immediate) {
-                            invalidate("Spider 播放代理连接失效")
+                        val rememberedSource = source
+                        val retired = withContext(Dispatchers.Main.immediate) {
+                            if (!sourceSession.isCurrent(invocation) || generation != responseGeneration ||
+                                lastBrowse != rememberedSource) false
+                            else { invalidate("Spider 播放代理连接失效"); true }
                         }
+                        if (!retired) return PlaybackResult.Unavailable("Spider 会话已变化，已取消代理重建")
                         delay(400L)
                         if (rememberedSource == null || lastBrowse != rememberedSource)
                             return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消恢复")
-                        when (val retried = request(SpiderIpc.PLAY, payload)) {
+                        when (val retried = request(SpiderIpc.PLAY, payload, invocation)) {
                             is SpiderResult.Failure -> PlaybackResult.Unavailable(
                                 "本机 Spider 代理重连失败（PROXY_${health.name}）；" +
                                     retried.message)
                             is SpiderResult.Ready -> {
                                 val fixed = SpiderIpc.readPlayback(retried.value, allowHttp)
                                 if (fixed is PlaybackResult.Ready &&
-                                    SpiderProxyPlayback.isCatVodProxy(fixed.media.uri)) {
-                                    val retriedHealth = SpiderProxyPlayback.diagnose(fixed.media.uri)
-                                    if (retriedHealth != SpiderProxyPlayback.Health.READY)
+                                    NativeFongMiRoute.isNativeProxy(fixed.media.uri)) {
+                                    val retriedHealth = probePlayback(fixed.media.uri, authorizedSiteKey, invocation)
+                                        ?: return PlaybackResult.Unavailable("Spider 会话已结束或变化，已取消恢复结果")
+                                    if (retriedHealth != NativeFongMiRoute.Health.READY)
                                         PlaybackResult.Unavailable(
                                             "本机 Spider 播放代理无法启动（PROXY_${retriedHealth.name}），请重新应用影视站点")
                                     else fixed
@@ -738,6 +807,28 @@ internal class TvBoxSpiderBridge(context: Context) {
             }
         }
     }
+
+    private suspend fun probePlayback(uri: String, site: String, invocation: Long): NativeFongMiRoute.Health? {
+        val transport = generation
+        if (!sourceSession.isCurrent(invocation)) return null
+        HerrinPlaybackDiagnosticJournal.record("PROXY", "HEALTH_STARTED")
+        // Binder resumes on the caller's dispatcher. Compose calls from Main;
+        // localhost HTTP is still network I/O and must never run there.
+        val health = withContext(Dispatchers.IO) { NativeFongMiRoute.probe(uri, site) }
+        if (!sourceSession.isCurrent(invocation) || generation != transport) return null
+        HerrinPlaybackDiagnosticJournal.record("PROXY", "HEALTH_${health.name}")
+        return health
+    }
+
+    fun isApprovedSourceFilm(film: Film): Boolean = ownsFilm(film, sourceSession.snapshot())
+
+    private fun ownsFilm(film: Film, invocation: Long): Boolean = runCatching {
+        val secret = sourceSession.filmSecret(invocation) ?: return false
+        val source = JSONObject(lastBrowse ?: return false)
+        val site = SpiderIpc.readSite(source.getJSONObject("site"))
+        val jar = site.jar ?: source.optString("defaultJar")
+        SpiderFilmAuthority(site.key, SpiderRuntimeCompat.sessionKey(jar, site), secret).accepts(film)
+    }.getOrDefault(false)
 
     /**
      * Close before a subsequent play can reuse the bound service. Android may
@@ -781,14 +872,17 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
 
     fun close() {
-        Handler(Looper.getMainLooper()).post {
-            if (closed) return@post
+        // Revoke immediately, even when main-thread cleanup is still queued.
+        sourceSession.revoke()
+        val release = Runnable {
+            if (closed) return@Runnable
             closed = true
             cleanupJob?.cancel()
             cleanupJob = null
-            lastBrowse = null
             invalidate("Spider 会话已结束")
             closed = false // A later "应用影视源" starts a new bound session.
         }
+        if (Looper.myLooper() == Looper.getMainLooper()) release.run()
+        else Handler(Looper.getMainLooper()).post(release)
     }
 }

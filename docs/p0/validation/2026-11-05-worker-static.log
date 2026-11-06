@@ -1,0 +1,13 @@
+PASS: XML, TV manifest, official wrapper integrity, Gradle files, native-only source
+PASS: 43 exact pinned upstream FongMi files; not a playback test
+PASS: no legacy playback implementation/reference in production source sets
+PASS: Sardine v0.9 90 exact source files, license and upstream build contract
+test_complete_run_requires_every_critical_class (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_complete_run_requires_every_critical_class) ... ok
+test_empty_results_are_rejected (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_empty_results_are_rejected) ... ok
+test_green_gradle_with_missing_feature_tests_must_fail (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_green_gradle_with_missing_feature_tests_must_fail) ... ok
+test_skip_and_failure_cannot_be_misreported_as_pass (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_skip_and_failure_cannot_be_misreported_as_pass) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.004s
+
+OK

@@ -5,6 +5,8 @@
  * HERRIN modifications 2026-11-01: inject host services instead of App,
  * VodConfig, BaseLoader and ParseWebView globals; retain scheduling, parser
  * dispatch, latch, first-success and cancellation control flow.
+ * HERRIN modifications 2026-11-05: release resources if the injected UI host
+ * rejects final result dispatch after the parser has completed.
  */
 package tv.herrin.app.fongmi.parse;
 
@@ -65,7 +67,7 @@ public class ParseJob implements ParseCallback {
 
     private final AtomicBoolean done = new AtomicBoolean();
     private final Set<Call> calls = ConcurrentHashMap.newKeySet();
-    private final List<AutoCloseable> webViews;
+    private final java.util.concurrent.ConcurrentLinkedQueue<AutoCloseable> webViews;
     private final Host host;
     private ScheduledFuture<?> timeout;
     private ExecutorService executor;
@@ -79,7 +81,7 @@ public class ParseJob implements ParseCallback {
         this.host = host;
         this.executor = Executors.newSingleThreadExecutor();
         this.infinite = Executors.newCachedThreadPool();
-        this.webViews = new ArrayList<>();
+        this.webViews = new java.util.concurrent.ConcurrentLinkedQueue<>();
         this.callback = callback;
     }
 
@@ -88,9 +90,16 @@ public class ParseJob implements ParseCallback {
     }
 
     public ParseJob start(Result result, boolean useParse) {
-        setParse(result, useParse);
-        execute(result);
-        return this;
+        // Configuration and executor scheduling can fail synchronously before
+        // any parser callback is installed. Do not leak the two worker pools.
+        try {
+            setParse(result, useParse);
+            execute(result);
+            return this;
+        } catch (RuntimeException | Error failure) {
+            stop();
+            throw failure;
+        }
     }
 
     private void setParse(Result result, boolean useParse) {
@@ -111,7 +120,12 @@ public class ParseJob implements ParseCallback {
     private void execute(Result result) {
         FutureTask<?> task = new FutureTask<>(() -> parseResult(result), null);
         timeout = host.scheduler().schedule(() -> {
-            if (task.cancel(true)) {
+            // A parser may have returned from parseResult after dispatching an
+            // asynchronous WebView/HTTP callback. In that case FutureTask is
+            // already complete but the playback result is still pending.
+            // The deadline belongs to the entire ParseJob, not just the worker.
+            if (!done.get()) {
+                task.cancel(true);
                 host.onFailure(new java.util.concurrent.TimeoutException("Parse deadline"));
                 onParseError();
             }
@@ -233,13 +247,35 @@ public class ParseJob implements ParseCallback {
             callback.onParseError();
             return;
         }
-        host.post(() -> {
+        try {
+            host.post(() -> {
             if (done.get()) return;
-            AutoCloseable view = host.startWeb(key, from, headers, url, click, callback, !url.contains("player/?url="));
-            // A host may complete synchronously before returning its handle.
-            if (done.get()) try { view.close(); } catch (Exception ignored) {}
-            else webViews.add(view);
-        });
+            try {
+                AutoCloseable view = host.startWeb(key, from, headers, url, click, callback, !url.contains("player/?url="));
+                // A host may complete synchronously before returning its handle.
+                if (view == null) throw new IllegalStateException("WebView host returned no handle");
+                if (done.get()) try { view.close(); } catch (Exception ignored) {}
+                else {
+                    webViews.add(view);
+                    // stop() may have drained the queue between the done check
+                    // and insertion. Reclaim the late handle exactly once.
+                    if (done.get() && webViews.remove(view))
+                        try { view.close(); } catch (Exception ignored) {}
+                }
+            } catch (RuntimeException failure) {
+                // WebView startup is dispatched on the UI thread. Without
+                // notifying ParseJob, a synchronous host failure strands the
+                // parser until its deadline and may crash the main process.
+                host.onFailure(failure);
+                if (!done.get()) callback.onParseError();
+            }
+            });
+        } catch (RuntimeException failure) {
+            // A destroyed UI dispatcher may reject posting before the WebView
+            // starts. Report the failure rather than stranding the ParseJob.
+            host.onFailure(failure);
+            if (!done.get()) callback.onParseError();
+        }
     }
 
     private Map<String, String> getHeaders(Parse item) {
@@ -267,7 +303,14 @@ public class ParseJob implements ParseCallback {
 
     private void complete(Consumer<ParseCallback> result) {
         if (!done.compareAndSet(false, true)) return;
-        host.post(() -> deliverResult(result));
+        try {
+            host.post(() -> deliverResult(result));
+        } catch (RuntimeException | Error failure) {
+            // No queued deliverResult means its finally block cannot clean up.
+            // Preserve the dispatch failure; never invoke UI callbacks here.
+            stop();
+            throw failure;
+        }
     }
 
     private void deliverResult(Consumer<ParseCallback> result) {
@@ -288,7 +331,8 @@ public class ParseJob implements ParseCallback {
         if (infinite != null) infinite.shutdownNow();
         infinite = null;
         executor = null;
-        for (AutoCloseable webView : webViews) try { webView.close(); } catch (Exception ignored) {}
-        webViews.clear();
+        AutoCloseable webView;
+        while ((webView = webViews.poll()) != null)
+            try { webView.close(); } catch (Exception ignored) {}
     }
 }

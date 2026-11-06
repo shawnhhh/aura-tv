@@ -10,11 +10,16 @@ android {
         applicationId = "tv.herrin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 63
-        versionName = "0.4.59-alpha"
+        versionCode = 68
+        versionName = "0.4.64-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
+    // Compile the exact Apache-2.0 Sardine v0.9 sources instead of relying on
+    // a JitPack-produced AAR. Preserve its public Java ABI and consumer rules.
+    sourceSets.getByName("main").java.srcDir("../vendor/sardine-android/src/main/java")
+    sourceSets.getByName("main").assets.srcDir("../vendor/sardine-android/assets")
+    buildTypes.getByName("release").proguardFiles("../vendor/sardine-android/proguard-rules.pro")
     // Live provider tests are opt-in, only compiled when explicitly requested.
     // The ordinary 113-case TV suite never downloads or executes remote Spider code.
     if (project.providers.gradleProperty("herrinLiveSourceTest").orNull == "true") {
@@ -58,7 +63,12 @@ dependencies {
     implementation("com.googlecode.juniversalchardet:juniversalchardet:1.0.3")
     implementation("com.orhanobut:logger:2.2.0")
     implementation("androidx.preference:preference:1.2.1")
-    implementation("com.github.thegrizzlylabs:sardine-android:0.9")
+    // Same transitive dependency/exclusions as the pinned Sardine v0.9 build.
+    implementation("org.simpleframework:simple-xml:2.7.1") {
+        exclude(module = "stax")
+        exclude(module = "stax-api")
+        exclude(module = "xpp3")
+    }
     implementation("com.hierynomus:smbj:0.15.0")
     implementation("androidx.startup:startup-runtime:1.2.0")
     implementation("com.google.zxing:core:3.5.4")

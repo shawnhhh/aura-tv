@@ -1,5 +1,6 @@
 package tv.herrin.app
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -20,7 +21,9 @@ internal data class HerrinTmdbShelf(
  */
 internal class HerrinTmdbDiscovery(
     private val fetcher: ArtworkJsonFetcher = NetworkArtworkFetcher,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val cacheDir: java.io.File? = null,
+    private val language: String = "zh-CN"
 ) {
     private data class Cached(val until: Long, val entries: List<Film>)
     private val cache = ConcurrentHashMap<String, Cached>()
@@ -42,6 +45,7 @@ internal class HerrinTmdbDiscovery(
         Section("mystery", "悬疑电影", "/discover/movie?with_genres=9648&sort_by=popularity.desc", "movie"),
         Section("comedy", "喜剧电影", "/discover/movie?with_genres=35&sort_by=popularity.desc", "movie"),
         Section("animation", "动漫", "/discover/tv?with_genres=16&sort_by=popularity.desc", "tv"),
+        Section("variety", "综艺", "/discover/tv?with_genres=10764|10767&sort_by=popularity.desc", "tv"),
         Section("documentary", "纪录片", "/discover/movie?with_genres=99&sort_by=popularity.desc", "movie")
     )
 
@@ -50,26 +54,97 @@ internal class HerrinTmdbDiscovery(
         withContext(Dispatchers.IO) {
             require(section in sections && page in 1..13)
             if (token.isBlank()) return@withContext HerrinTmdbShelf(section.key, section.title, emptyList(), false)
-            val cacheKey = section.key + ":" + page + ":" + token.hashCode()
+            val cacheKey = pageKey(section.key, page, token)
+            val file = cacheDir?.let { java.io.File(it, "$cacheKey.json") }
             val existing = cache[cacheKey]
             if (existing != null && existing.until > clock())
                 return@withContext HerrinTmdbShelf(section.key, section.title, existing.entries)
             val endpoint = section.endpoint + (if ('?' in section.endpoint) "&" else "?") +
-                "language=zh-CN&page=" + page + "&include_adult=false"
-            val films = parsePage(fetcher.load(base + endpoint, token), section.kind)
-            cache[cacheKey] = Cached(clock() + 6 * 60 * 60 * 1000L, films)
+                "language=$language&page=" + page + "&include_adult=false"
+            val films = synchronized(pageLocks.getOrPut(cacheKey) { Any() }) {
+                cache[cacheKey]?.takeIf { it.until > clock() }?.let { return@synchronized it.entries }
+                val disk = file?.takeIf { it.isFile && it.length() in 1..2_000_000 }
+                val saved = disk?.let { runCatching { parsePage(it.readText(), section.kind) }.getOrNull() }.orEmpty()
+                if (saved.isNotEmpty() && disk!!.lastModified() > 0L && clock() - disk.lastModified() in 0..6*3600_000L) saved
+                else {
+                    val raw = try { fetcher.load(base + endpoint, token) } catch (_: java.io.IOException) { null }
+                    val fresh = parsePage(raw, section.kind)
+                    if (fresh.isNotEmpty() && raw != null && raw.length <= 2_000_000 && file != null) {
+                        try {
+                            file.parentFile?.mkdirs()
+                            val tmp = java.io.File(file.parentFile, file.name + ".tmp")
+                            tmp.writeText(displayPage(raw))
+                            if (!tmp.renameTo(file)) tmp.delete() else file.setLastModified(clock())
+                            file.parentFile?.listFiles()?.filter { it.extension == "json" }?.sortedByDescending { it.lastModified() }
+                                ?.drop(64)?.forEach { it.delete() }
+                        } catch (_: java.io.IOException) {
+                            HerrinPlaybackDiagnosticJournal.record("RECOVERY", "TMDB_CACHE_WRITE_FAILED")
+                        }
+                    }
+                    fresh.ifEmpty { saved }
+                }.also { entries ->
+                    if (entries.isNotEmpty()) cache[cacheKey] = Cached(
+                        file?.takeIf { it.exists() }?.let { if (it.lastModified() == 0L) 0L else it.lastModified() + 6*3600_000L } ?: (clock() + 6*3600_000L), entries)
+                }
+            }
+            if (films.isNotEmpty()) cache[cacheKey] = Cached(file?.takeIf { it.exists() }?.let { if (it.lastModified() == 0L) 0L else it.lastModified() + 6*3600_000L } ?: (clock() + 6*3600_000L), films)
             HerrinTmdbShelf(section.key, section.title, films, films.isNotEmpty())
         }
 
+    /** Persist the metadata projection, never arbitrary endpoint response fields. */
+    private fun displayPage(raw: String): String {
+        val rows = JSONObject(raw).optJSONArray("results") ?: JSONArray()
+        val output = JSONArray()
+        val fields = setOf("id", "title", "name", "original_title", "original_name", "release_date",
+            "first_air_date", "overview", "poster_path", "backdrop_path", "vote_average", "vote_count", "genre_ids", "adult")
+        for (i in 0 until minOf(20, rows.length())) {
+            val row = rows.optJSONObject(i) ?: continue
+            val safe = JSONObject()
+            fields.forEach { key -> if (row.has(key)) safe.put(key, row.get(key)) }
+            output.put(safe)
+        }
+        return JSONObject().put("results", output).toString()
+    }
+
+    private val pageLocks = ConcurrentHashMap<String, Any>()
+    private fun pageKey(section: String, page: Int, token: String): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(("$language|$section|$page|$token").toByteArray()).joinToString("") { "%02x".format(it) }
+    fun cachedHome(token: String): List<Film> = sections.flatMap { section ->
+        val file = cacheDir?.let { java.io.File(it, pageKey(section.key, 1, token) + ".json") }
+        if (file == null || !file.isFile || file.length() !in 1..2_000_000) emptyList()
+        else runCatching { parsePage(file.readText(), section.kind) }.getOrDefault(emptyList())
+    }.distinctBy(Film::id)
+    fun cachedTop250(token: String): List<Film> = (1..13).flatMap { page ->
+        val file = cacheDir?.let { java.io.File(it, pageKey("top250", page, token) + ".json") }
+        if (file == null || !file.isFile || file.length() !in 1..2_000_000) emptyList()
+        else runCatching { parsePage(file.readText(), "movie") }.getOrDefault(emptyList())
+    }.distinctBy(Film::id).take(250)
+    /** Explicit refresh expires freshness, retaining last-good offline pages until replacement succeeds. */
+    fun invalidate(token: String) {
+        for (section in sections) for (page in 1..13) {
+            val key = pageKey(section.key, page, token)
+            cache.remove(key)
+            cacheDir?.let { java.io.File(it, "$key.json") }?.takeIf { it.isFile }?.setLastModified(0L)
+        }
+    }
+    fun clearPersistent() { cache.clear(); cacheDir?.listFiles()?.forEach { it.delete() } }
+
     /** Only call on opening Top250 rail: 13 pages, capped to EXACTLY 250. */
-    suspend fun loadTop250(token: String): HerrinTmdbShelf {
+    suspend fun loadTop250(token: String,
+        onProgress: (HerrinTmdbShelf) -> Unit = {}): HerrinTmdbShelf {
         val section = sections.first { it.key == "top250" }
         val all = mutableListOf<Film>()
         var complete = true
         for (page in 1..13) {
-            val next = load(section, token, page)
+            val next = try { load(section, token, page) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { complete = false; break }
             if (!next.isComplete) { complete = false; break }
             all += next.films
+            // First 20 posters are usable before all 13 pages have returned.
+            // Never hold the entire grid blank behind a slow mainland API.
+            onProgress(HerrinTmdbShelf(section.key, section.title,
+                all.distinctBy(Film::id).take(250), false))
             if (all.size >= 250) break
         }
         return HerrinTmdbShelf(section.key, section.title,
@@ -149,7 +224,7 @@ internal class HerrinTmdbDiscovery(
                 synopsis = item.optString("overview").trim().take(2_000),
                 artwork = R.drawable.photofilm_orbit,
                 artworkUrl = posterPath("poster_path", "w500"),
-                backdropUrl = posterPath("backdrop_path", "w1280"),
+                backdropUrl = posterPath("backdrop_path", "original"),
                 genres = genres, ratingValue = score,
                 ratingProvider = if (score != null) "TMDB" else null,
                 metadataSource = "TMDB",

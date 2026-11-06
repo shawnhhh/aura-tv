@@ -95,7 +95,9 @@ internal class SpiderLoopbackProxy(
         if (params["session"] != token ||
             (params["siteKey"] != null && params["siteKey"] != siteKey) || closed.get() ||
             (path == "/health" && params["siteKey"] != siteKey) ||
-            (path == "/proxy" && params["do"] != "jar")) {
+            (path == "/proxy" && params["do"] != "jar" &&
+                !(params["__herrin_static"] == "1" &&
+                    params["do"] in SpiderProxyPlayback.approvedStaticOperations))) {
             failure(output, 403)
             return
         }
@@ -150,10 +152,71 @@ internal class SpiderLoopbackProxy(
                 failure(output, 502)
                 return
             }
+            // A Spider's HLS playlist may contain nested old TVBox
+            // localhost URLs. Before Media3 receives an HTTP 200 manifest,
+            // rebase those segment/key references into this authenticated
+            // worker's random-port session. Bounded to 256 KiB and NEVER
+            // applied to MP4/MKV/TS binary streams or Range 206 responses.
+            var payload: InputStream = stream
+            var responseMime = mime
+            val declaredHls = mime.lowercase().contains("mpegurl")
+            // Some approved Java Spider callbacks label a real HLS manifest
+            // application/octet-stream or text/plain. Those manifests can
+            // contain proxy:// segment/key URLs that Media3 cannot open.
+            // Sniff just seven bytes and push them back: never buffer or
+            // corrupt MP4/TS/MKV, inspect encrypted bodies, or rewrite 206.
+            val inspectManifest = status == 200 && method == "GET" &&
+                (declaredHls || params["range"] == null) &&
+                safeHeaders.none { it.first.equals("content-encoding", true) }
+            if (inspectManifest) {
+                val probe = java.io.PushbackInputStream(stream, 7)
+                val signature = "#EXTM3U".toByteArray(StandardCharsets.US_ASCII)
+                val firstBytes = ByteArray(signature.size)
+                var seen = 0
+                while (seen < firstBytes.size) {
+                    val read = probe.read(firstBytes, seen, firstBytes.size - seen)
+                    if (read <= 0) break
+                    seen += read
+                }
+                if (seen > 0) probe.unread(firstBytes, 0, seen)
+                payload = probe
+                val identifiedHls = seen == signature.size &&
+                    firstBytes.contentEquals(signature)
+                if (declaredHls || identifiedHls) {
+                    if (identifiedHls && !declaredHls)
+                        responseMime = "application/vnd.apple.mpegurl"
+                    val limit = HerrinSpiderHlsProxyRewrite.MAX_MANIFEST_BYTES
+                    val prefix = ByteArray(limit + 1)
+                    var count = 0
+                    var complete = false
+                    while (count < prefix.size) {
+                        val read = probe.read(prefix, count, prefix.size - count)
+                        if (read < 0) { complete = true; break }
+                        if (read == 0) break
+                        count += read
+                    }
+                    if (complete && count <= limit) {
+                        val transformed = HerrinSpiderHlsProxyRewrite.rewrite(
+                            String(prefix, 0, count, StandardCharsets.UTF_8),
+                            siteKey, this)
+                        if (transformed == null) {
+                            failure(output, 502)
+                            return
+                        }
+                        payload = java.io.ByteArrayInputStream(
+                            transformed.toByteArray(StandardCharsets.UTF_8))
+                    } else {
+                        // Oversized or streaming manifests retain their
+                        // unmodified bytes, without unbounded allocation.
+                        payload = java.io.SequenceInputStream(
+                            java.io.ByteArrayInputStream(prefix.copyOf(count)), probe)
+                    }
+                }
+            }
             val noBody = method == "HEAD" || status in 100..199 || status == 204 || status == 304
             val head = buildString {
                 append("HTTP/1.1 "); append(status); append(" Proxy Response\r\n")
-                append("Content-Type: "); append(mime); append("\r\n")
+                append("Content-Type: "); append(responseMime); append("\r\n")
                 append("Connection: close\r\n")
                 if (noBody) append("Content-Length: 0\r\n")
                 else append("Transfer-Encoding: chunked\r\n")
@@ -170,7 +233,7 @@ internal class SpiderLoopbackProxy(
             // Stream with a fixed 16 KiB buffer until EOF or cancellation;
             // bound memory, sockets and concurrent workers instead of bytes.
             while (!closed.get()) {
-                val size = stream.read(buffer)
+                val size = payload.read(buffer)
                 if (size < 0) break
                 if (size == 0) continue
                 output.write(Integer.toHexString(size).toByteArray(StandardCharsets.US_ASCII))

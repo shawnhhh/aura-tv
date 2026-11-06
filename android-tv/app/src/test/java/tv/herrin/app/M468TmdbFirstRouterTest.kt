@@ -108,6 +108,7 @@ class M468TmdbFirstRouterTest {
         })
         assertEquals("TMDB 高分电影 Top 250", parser.sections.first { it.key == "top250" }.title)
         assertTrue(requested.isEmpty())
-        assertEquals(11, parser.sections.size)
+        assertEquals(12, parser.sections.size)
+        assertTrue(parser.sections.any { it.key == "variety" })
     }
 }

@@ -50,7 +50,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -76,8 +75,12 @@ fun AuthorizedPlaybackPanel(
     focusRestoreEpoch: Int = 0,
     onLineSelection: (() -> Unit)? = null,
     onEpisodeSelection: (() -> Unit)? = null,
+    onNextEpisode: (() -> Unit)? = null,
+    onPreviousEpisode: (() -> Unit)? = null,
     /** Re-run the source's playerContent; differs from replaying a stale signed URL. */
     onRefreshSource: (() -> Unit)? = null,
+    onTryOtherSource: (() -> Unit)? = null,
+    onSourceExhausted: ((FongMiPlaybackRecovery.Failure, Long) -> Boolean)? = null,
     onBack: () -> Unit,
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
     testDiagnostics: Boolean = false,
@@ -90,7 +93,8 @@ fun AuthorizedPlaybackPanel(
     key(media) {
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
-            onLineSelection, onEpisodeSelection, onRefreshSource, onBack, testDiagnostics, recoverySession)
+            onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onSourceExhausted, onBack,
+            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode)
     }
 }
 
@@ -108,9 +112,13 @@ private fun AuthorizedPlaybackSession(
     onLineSelection: (() -> Unit)?,
     onEpisodeSelection: (() -> Unit)?,
     onRefreshSource: (() -> Unit)?,
+    onTryOtherSource: (() -> Unit)?,
+    onSourceExhausted: ((FongMiPlaybackRecovery.Failure, Long) -> Boolean)?,
     onBack: () -> Unit,
     testDiagnostics: Boolean,
-    recoverySession: FongMiPlaybackRecovery.Session
+    recoverySession: FongMiPlaybackRecovery.Session,
+    onNextEpisode: (() -> Unit)?,
+    onPreviousEpisode: (() -> Unit)?
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -149,11 +157,8 @@ private fun AuthorizedPlaybackSession(
     // A single shared State would route old onDispose progress into the new episode.
     val recoveryScope = rememberCoroutineScope()
     var pendingRecovery by remember { mutableStateOf<Job?>(null) }
-    var onLoadTimeout by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var playbackForeground by remember(lifecycle) {
-        mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
-    }
     val latestRefreshSource by rememberUpdatedState(onRefreshSource)
+    val latestSourceExhausted by rememberUpdatedState(onSourceExhausted)
     val latestProgressCallback by rememberUpdatedState(onPlaybackProgress)
     val latestMediaSpecCallback by rememberUpdatedState(onMediaSpecDetected)
     val retries = remember(media, isLive) {
@@ -163,12 +168,10 @@ private fun AuthorizedPlaybackSession(
     }
     val candidates = retries.candidates
     val journey = remember(media) { PlaybackJourneyTrace() }
-    fun itemFor(uri: String, candidateIndex: Int, mimeOverride: String? = null): MediaItem =
-        FongMiExoPlayerFactory.mediaItem(media, uri,
-            mimeOverride ?: PlaybackFormatRetry.candidateMime(uri, candidateIndex, media.declaredMime))
-    val player = remember(media, context, lifecycle) {
+    val playback = remember(media, context, lifecycle) { HerrinPlaybackAdapter(context, media, persistTrackPreferences = !testDiagnostics) }
+    val player = remember(playback) {
         journey.begin(0, candidates.size, android.os.SystemClock.elapsedRealtime())
-        FongMiExoPlayerFactory.create(context, media).apply {
+        playback.player.apply {
             val events = object : Player.Listener {
                 override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                     uiEpoch++
@@ -208,6 +211,8 @@ private fun AuthorizedPlaybackSession(
                         httpStatus, error, failedUrl)
                     val diagnostic = PlaybackErrorReport.media(error.errorCodeName,
                         error.errorCode, httpStatus, error, failedUrl, activeVariant + 1, candidates.size)
+                    HerrinPlaybackDiagnosticJournal.record("MEDIA3", "PLAYBACK_ERROR",
+                        "CODE=${error.errorCode}")
                     // FongMi source fallback: a server-side 5xx on one explicitly
                     // authorized URL need not consume two delayed retries while a
                     // separately provided healthy media URL is available. Switch
@@ -232,10 +237,8 @@ private fun AuthorizedPlaybackSession(
                         errorMessage = null
                         android.util.Log.i("HerrinRecovery",
                             "action=authorized-alternate http=5xx index=${failover.candidateIndex}")
-                        setMediaItem(itemFor(failover.uri, failover.candidateIndex, failover.mime))
-                        if (!isLive && resume > 0L) seekTo(resume)
-                        prepare()
-                        play()
+                        playback.start(failover.uri, failover.mime,
+                            if (!isLive && resume > 0L) resume else C.TIME_UNSET)
                         return
                     }
                     val plan = recoverySession.next(failure, latestRefreshSource != null, isLive)
@@ -252,8 +255,7 @@ private fun AuthorizedPlaybackSession(
                                     latestRefreshSource?.invoke()
                                 }
                                 FongMiPlaybackRecovery.Action.SEEK_LIVE -> {
-                                    seekToDefaultPosition()
-                                    prepare()
+                                    playback.start(retries.current.uri, retries.current.mime)
                                 }
                                 FongMiPlaybackRecovery.Action.RETRY_MEDIA -> {
                                     // After a fatal Media3 source error, prepare() alone
@@ -262,10 +264,8 @@ private fun AuthorizedPlaybackSession(
                                     // MIME before preparing so the next HTTP GET is real;
                                     // retain the original per-source headers and seek.
                                     val current = retries.current
-                                    setMediaItem(itemFor(current.uri, current.candidateIndex, current.mime))
-                                    if (!isLive && resumePosition > 0L) seekTo(resumePosition)
-                                    prepare()
-                                    play()
+                                    playback.start(current.uri, current.mime,
+                                        if (!isLive && resumePosition > 0L) resumePosition else C.TIME_UNSET)
                                 }
                             }
                         }
@@ -285,36 +285,36 @@ private fun AuthorizedPlaybackSession(
                             android.os.SystemClock.elapsedRealtime(),
                             videoDecoderCounters?.renderedOutputBufferCount ?: 0)
                         errorMessage = null
-                        setMediaItem(itemFor(next.uri, next.candidateIndex, next.mime))
-                        if (!isLive && recoveryPositionMs > 0L) seekTo(recoveryPositionMs)
-                        prepare()
-                        play()
+                        playback.start(next.uri, next.mime,
+                            if (!isLive && recoveryPositionMs > 0L) recoveryPositionMs else C.TIME_UNSET)
                     } else {
-                        errorMessage = diagnostic
+                        val position = currentPosition.coerceAtLeast(0L)
+                        latestProgressCallback(position,
+                            duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L, false)
+                        if (!isLive && latestSourceExhausted?.invoke(failure, position) == true) {
+                            playback.manager.stop()
+                            errorMessage = null
+                        } else errorMessage = diagnostic
                     }
                 }
             }
             addListener(events)
-            onLoadTimeout = {
-                stop()
-                events.onPlayerError(PlaybackException("Host playback loading deadline",
-                    java.net.SocketTimeoutException(), PlaybackException.ERROR_CODE_TIMEOUT))
-            }
-        }
-    }
-    // FongMi PlayerManager.onPlayTimeout stops a load whose deadline elapsed.
-    // Use one deadline per buffering interval, independent of UI/tracks updates.
-    LaunchedEffect(player, playbackState, playbackForeground) {
-        if (playbackForeground && playbackState == Player.STATE_BUFFERING) {
-            delay(15_000L)
-            if (!player.isReleased && player.playbackState == Player.STATE_BUFFERING)
-                onLoadTimeout?.invoke()
+            playback.manager.onTimeout = events::onPlayerError
         }
     }
     fun reportProgress() {
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
         latestProgressCallback(player.currentPosition.coerceAtLeast(0L), duration,
             player.playbackState == Player.STATE_ENDED)
+    }
+    val latestNextEpisode by rememberUpdatedState(onNextEpisode)
+    var endHandled by remember(player) { mutableStateOf(false) }
+    LaunchedEffect(player, playbackState) {
+        if (playbackState == Player.STATE_ENDED && !endHandled) {
+            endHandled = true
+            reportProgress()
+            if (!isLive) latestNextEpisode?.invoke()
+        }
     }
     fun retryPlayback() {
         pendingRecovery?.cancel()
@@ -327,10 +327,8 @@ private fun AuthorizedPlaybackSession(
             player.videoDecoderCounters?.renderedOutputBufferCount ?: 0)
         activeVariant = first.candidateIndex
         errorMessage = null
-        player.setMediaItem(itemFor(first.uri, first.candidateIndex, first.mime))
-        if (!isLive && resumePosition > 0L) player.seekTo(resumePosition)
-        player.prepare()
-        player.play()
+        playback.start(first.uri, first.mime,
+            if (!isLive && resumePosition > 0L) resumePosition else C.TIME_UNSET)
     }
     LaunchedEffect(player) {
         var tick = 0
@@ -408,40 +406,42 @@ private fun AuthorizedPlaybackSession(
         val session = MediaSession.Builder(context, player)
             .setId("herrin-${java.util.UUID.randomUUID()}").build()
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) playbackForeground = true
             if (event == Lifecycle.Event.ON_STOP) {
-                playbackForeground = false
                 pendingRecovery?.cancel()
                 recoverySession.cancelPending()
                 reportProgress()
-                player.pause()
+                playback.pause()
             }
         }
         lifecycle.addObserver(observer)
         // Start only after this composition has committed and the outgoing
         // effect has released its session. Starting inside remember overlaps
         // prepare/play with the previous player's teardown during inline swaps.
-        player.setMediaItem(itemFor(candidates.first(), 0))
-        if (startPositionMs > 0L)
-            player.seekTo(startPositionMs.coerceAtMost(12L * 60L * 60_000L))
-        player.prepare()
-        player.playWhenReady = true
+        playback.start(candidates.first(),
+            PlaybackFormatRetry.candidateMime(candidates.first(), 0, media.declaredMime),
+            if (startPositionMs > 0L) startPositionMs.coerceAtMost(12L * 60L * 60_000L) else C.TIME_UNSET)
         onDispose {
             pendingRecovery?.cancel()
             recoverySession.cancelPending()
             reportProgress()
             lifecycle.removeObserver(observer)
             session.release()
-            onLoadTimeout = null
-            player.stop()
-            player.release()
+            playback.close()
         }
     }
     // Publish the player from the committed composition, after remember/dispose
     // callbacks. A transition must never leave an observer holding a player
     // created by an outgoing or abandoned composition.
     SideEffect { onPlayer(player) }
-    fun requestBack(source: String) {
+    val backGate = remember { PlaybackBackGate() }
+    fun requestBack(source: String, physicalKey: Long? = null) {
+        if (!backGate.accept(physicalKey, android.os.SystemClock.uptimeMillis())) return
+        if (!testDiagnostics && controlsVisible && !isLive) {
+            controlsVisible = false
+            advancedControlsVisible = false
+            playerRootFocus.requestFocus()
+            return
+        }
         android.util.Log.i("HerrinPlayerBack",
             "source=$source focus=${context.javaClass.simpleName} released=${player.isReleased}")
         onBack()
@@ -449,7 +449,7 @@ private fun AuthorizedPlaybackSession(
     fun applyRemoteSeek(deltaMs: Long) {
         // Reflect the actual committed target immediately in the seek bar.
         // Player timeline updates can otherwise lag the remote by one second.
-        shownPosition = PlaybackTransport.seekBy(player, deltaMs)
+        shownPosition = playback.manager.seekBy(deltaMs)
         if (!isLive) controlsVisible = true
         controlsInteractionEpoch++
     }
@@ -460,12 +460,18 @@ private fun AuthorizedPlaybackSession(
         .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
+        if (key.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT || key.keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                if (key.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) onNextEpisode?.invoke() else onPreviousEpisode?.invoke()
+            }
+            return@onPreviewKeyEvent true
+        }
         // A held key may generate dozens of native repeat events. Avoid
         // invalidating the whole overlay on every ignored/coalesced repeat.
         if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0)
             controlsInteractionEpoch++
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
-            if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
+            if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview", key.downTime)
             true
         } else if (!isLive && transportFocused && mainTransportRowFocused &&
             key.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
@@ -516,9 +522,9 @@ private fun AuthorizedPlaybackSession(
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 when (key.keyCode) {
-                    KeyEvent.KEYCODE_MEDIA_PLAY -> player.play()
-                    KeyEvent.KEYCODE_MEDIA_PAUSE -> player.pause()
-                    else -> if (player.playWhenReady) player.pause() else player.play()
+                    KeyEvent.KEYCODE_MEDIA_PLAY -> playback.play()
+                    KeyEvent.KEYCODE_MEDIA_PAUSE -> playback.pause()
+                    else -> if (player.playWhenReady) playback.pause() else playback.play()
                 }
             }
             true
@@ -531,16 +537,16 @@ private fun AuthorizedPlaybackSession(
         AndroidView(
             factory = { ctx -> object : PlayerView(ctx) {
                 // Native PlayerView otherwise consumes the first Back to hide its controller.
-                // HERRIN treats Back as leaving playback, independent of controller visibility.
+                // The shared handler closes Compose controls before leaving playback.
                 override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                     if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                        if (event.action == KeyEvent.ACTION_UP) requestBack("native-player-view")
+                        if (event.action == KeyEvent.ACTION_UP) requestBack("native-player-view", event.downTime)
                         return true
                     }
                     if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
                         event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
                         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                            PlaybackTransport.seekBy(player,
+                            playback.manager.seekBy(
                                 if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 10_000L else -10_000L)
                         }
                         return true
@@ -614,6 +620,15 @@ private fun AuthorizedPlaybackSession(
             }
             if (errorMessage != null) {
                 Text(errorMessage!!, color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
+                Button(onClick = {
+                    val clipboard = context.getSystemService(
+                        android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+                        "Herrin 播放诊断", errorMessage!! + "\n" +
+                            HerrinPlaybackDiagnosticJournal.export()))
+                }, modifier = Modifier.testTag("player-copy-diagnostics")) {
+                    Text("复制详细诊断日志")
+                }
                 Button(onClick = { retryPlayback() },
                     modifier = Modifier.focusRequester(retryControl)
                         .testTag("player-retry")) { Text("重试播放") }
@@ -624,6 +639,12 @@ private fun AuthorizedPlaybackSession(
                     Button(onClick = { recoverySession.userRetry(); refresh() },
                         modifier = Modifier.testTag("player-refresh-source")) {
                         Text("重新解析播放地址")
+                    }
+                }
+                onTryOtherSource?.let { tryAnother ->
+                    Button(onClick = tryAnother,
+                        modifier = Modifier.testTag("player-try-other-source")) {
+                        Text("查找其他片源")
                     }
                 }
                 // Network errors are often source-specific, not decoder bugs.
@@ -691,7 +712,7 @@ private fun AuthorizedPlaybackSession(
                 verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = { applyRemoteSeek(-10_000L) },
                     modifier = Modifier.testTag("transport-rewind")) { Text("−10s") }
-                Button(onClick = { if (player.playWhenReady) player.pause() else player.play() },
+                Button(onClick = { if (player.playWhenReady) playback.pause() else playback.play() },
                     modifier = Modifier.focusRequester(initialControl).focusProperties {
                         down = if (advancedControlsVisible &&
                             (onLineSelection != null || onEpisodeSelection != null))
@@ -703,17 +724,17 @@ private fun AuthorizedPlaybackSession(
                     modifier = Modifier.testTag("transport-forward")) { Text("+10s") }
                 if (advancedControlsVisible) {
                     Button(onClick = {
-                        player.setPlaybackSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
+                        playback.manager.setSpeed(PlaybackTransport.nextSpeed(player.playbackParameters.speed))
                         uiEpoch++
                     }, modifier = Modifier.testTag("transport-speed")) {
                         Text("倍速: ${player.playbackParameters.speed}×")
                     }
                     Button(
-                        onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_AUDIO)) uiEpoch++ },
+                        onClick = { if (playback.manager.cycleTrack(C.TRACK_TYPE_AUDIO)) uiEpoch++ },
                         enabled = audios.size > 1, modifier = Modifier.testTag("transport-audio")
                     ) { Text("音轨: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)) }
                     Button(
-                        onClick = { if (PlaybackTransport.cycle(player, C.TRACK_TYPE_TEXT)) uiEpoch++ },
+                        onClick = { if (playback.manager.cycleTrack(C.TRACK_TYPE_TEXT)) uiEpoch++ },
                         enabled = captions.isNotEmpty(), modifier = Modifier.testTag("transport-subtitle")
                     ) { Text("字幕: " + PlaybackTransport.currentLabel(player, C.TRACK_TYPE_TEXT)) }
                 }
@@ -723,6 +744,14 @@ private fun AuthorizedPlaybackSession(
                 }, modifier = Modifier.focusRequester(moreControl)
                     .testTag("transport-more")) {
                     Text(if (advancedControlsVisible) "收起" else "更多")
+                }
+            }
+            if (advancedControlsVisible && (onNextEpisode != null || onPreviousEpisode != null)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { onPreviousEpisode?.invoke() }, enabled = onPreviousEpisode != null,
+                        modifier = Modifier.testTag("transport-previous-episode")) { Text("上一集") }
+                    Button(onClick = { onNextEpisode?.invoke() }, enabled = onNextEpisode != null,
+                        modifier = Modifier.testTag("transport-next-episode")) { Text("下一集") }
                 }
             }
             if (advancedControlsVisible && (onLineSelection != null || onEpisodeSelection != null)) {
@@ -750,6 +779,18 @@ private fun AuthorizedPlaybackSession(
                         controlsInteractionEpoch++
                     }, modifier = Modifier.testTag("transport-viewport-mode")) {
                         Text("画面：" + viewportMode.label)
+                    }
+                    if (!isLive) Button(onClick = {
+                        playback.manager.setRepeatOne(player.repeatMode != Player.REPEAT_MODE_ONE)
+                        uiEpoch++
+                    }, modifier = Modifier.testTag("transport-repeat")) {
+                        Text("单集循环：" + if (player.repeatMode == Player.REPEAT_MODE_ONE) "开" else "关")
+                    }
+                    Button(onClick = {
+                        playback.manager.setSkipSilenceEnabled(!player.skipSilenceEnabled)
+                        uiEpoch++
+                    }, modifier = Modifier.testTag("transport-skip-silence")) {
+                        Text("跳过静音：" + if (player.skipSilenceEnabled) "开" else "关")
                     }
                     if (testDiagnostics) {
                         Button(onClick = { showVerification = !showVerification

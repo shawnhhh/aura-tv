@@ -5,6 +5,40 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TvFocusRoutesTest {
+    @Test fun rawTop250MoviesCannotShareTheCollapsedShowKey() {
+        val first = Film("tmdb-movie-1", "原创排行 第1季", "", "动漫", "2026", "", 1)
+        val second = first.copy(id = "tmdb-movie-2", title = "原创排行 第2季")
+        val groups = ShowCatalog.build(listOf(first, second), "original-test")
+        val groupKey = groups.groupFor(first.id)!!.key
+        assertEquals(groupKey, groups.groupFor(second.id)!!.key)
+        val keys = listOf(first, second).map {
+            TvFocusRoutes.posterKey("Top 250", true, it.id, groups.groupFor(it.id)?.key)
+        }
+        assertEquals(listOf(first.id, second.id), keys)
+        assertEquals(groupKey, TvFocusRoutes.posterKey("动漫", true, first.id, groupKey))
+    }
+
+    @Test fun top250PostersReturnToTheirOwnAttachedNavigationTab() {
+        for (index in listOf(0, 1, 10, 49))
+            assertEquals("nav-Top 250", TvFocusRoutes.posterUp("Top 250", index, true))
+    }
+
+    @Test fun personalLibraryPostersDoNotTargetAbsentHeroButtons() {
+        for (index in listOf(0, 1, 10, 49))
+            assertEquals("my-manage-personal-sources", TvFocusRoutes.posterUp("我的", index, true))
+    }
+
+    @Test fun sourceOnlyEmptyCatalogHistoryReturnsToNavigation() {
+        for (index in listOf(0, 1, 10))
+            assertEquals("nav-首页", TvFocusRoutes.posterUp("首页", index, false))
+    }
+
+    @Test fun ordinaryMovieHeroRetainsItsPlayAndDetailsNavigation() {
+        assertEquals("play", TvFocusRoutes.posterUp("电影", 0, true))
+        assertEquals("details", TvFocusRoutes.posterUp("电影", 9, true))
+        assertEquals("play", TvFocusRoutes.posterUp("首页", 0, true))
+    }
+
     @Test fun compactSettingsHasReversibleVerticalPathIncludingTmdbEditor() {
         val ids = listOf("screen-first", "tvbox-warehouse-url", "tvbox-warehouse-load",
             "compact-tmdb-split-toggle", "compact-tmdb-token", "compact-tmdb-save",

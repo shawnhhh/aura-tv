@@ -65,7 +65,7 @@ object FongMiPlaybackRecovery {
 
     /** Exactly the health failures that prove a transport failure, not a denied session. */
     fun canRebuildProxy(healthName: String): Boolean = healthName in
-        setOf("CONNECT_REFUSED", "TIMEOUT", "IO_FAILURE", "HTTP_5XX")
+        setOf("CONNECT_REFUSED", "TIMEOUT", "IO_CONNECT", "IO_SOCKET", "HTTP_5XX")
 
     /**
      * Keep this object outside a media/refresh key. READY must not reset counters:

@@ -6,6 +6,7 @@ on:
   pull_request:
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 concurrency:
@@ -13,6 +14,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   emulator:
+    # P0 pushes use the serial caller, including when its PR becomes mergeable.
+    if: github.event_name != 'pull_request' || github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

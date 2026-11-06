@@ -33,6 +33,28 @@ internal object SeasonPlayback {
         return PlaybackRequest(film.id, entry.source.number, line.id)
     }
 
+    /** Only a unique consecutive episode in the same season; never bridge a gap. */
+    fun adjacent(film: Film, sourceNumber: Int, lineId: String, delta: Int): PlaybackRequest? {
+        require(delta == -1 || delta == 1)
+        val layout = SeasonEpisodes.fromFilm(film)
+        if (layout != null) {
+            val current = layout.sections.flatMap { it.episodes }.singleOrNull {
+                it.source.number == sourceNumber && it.lines.any { line -> line.id == lineId }
+            } ?: return null
+            val next = layout.find(current.season, current.number + delta) ?: return null
+            return target(film, next, next.preferredLine(lineId))
+        }
+        val current = film.playbackEpisodes.singleOrNull { it.number == sourceNumber } ?: return null
+        val pair = SeasonEpisodes.explicitEpisode(current.title)
+        val number = pair?.second ?: SeasonEpisodes.explicitNumber(current.title) ?: return null
+        val next = film.playbackEpisodes.singleOrNull {
+            if (pair != null) SeasonEpisodes.explicitEpisode(it.title) == (pair.first to number + delta)
+            else SeasonEpisodes.explicitNumber(it.title) == number + delta
+        } ?: return null
+        val line = next.lines.firstOrNull { it.id == lineId } ?: next.lines.firstOrNull() ?: return null
+        return PlaybackRequest(film.id, next.number, line.id)
+    }
+
     fun latest(layout: SeasonLayout, load: (Int, String) -> WatchPosition?): SeasonResume? =
         layout.sections.asSequence().flatMap { section -> section.episodes.asSequence() }
             .flatMap { entry -> entry.lines.asSequence().mapNotNull { line ->

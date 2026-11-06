@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,8 +40,12 @@ internal fun PlayerStartupSurface(
     failureHint: String? = null,
     failureDiagnostic: String? = null,
     onRetry: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onTryOtherSource: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+    var showJournal by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
         .testTag("player-startup-surface"), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally,
@@ -64,11 +73,38 @@ internal fun PlayerStartupSurface(
                 if (!failureDiagnostic.isNullOrBlank() && !offlineDemonstration) {
                     Text(failureDiagnostic, color = Color(0xFFFFD0D0), fontSize = 15.sp,
                         modifier = Modifier.testTag("player-startup-diagnostic"))
+                    TvButton(if (copied) "诊断已复制" else "复制详细诊断日志",
+                        modifier = Modifier.testTag("player-startup-copy-diagnostics"),
+                        reduced = reducedMotion) {
+                        val clipboard = context.getSystemService(
+                            android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+                            "Herrin 播放诊断", failureDiagnostic + "\n" +
+                                HerrinPlaybackDiagnosticJournal.export()))
+                        copied = true
+                    }
+                    TvButton(if (showJournal) "收起诊断事件" else "展开诊断事件",
+                        modifier = Modifier.testTag("player-startup-show-diagnostics"),
+                        reduced = reducedMotion) { showJournal = !showJournal }
+                    if (showJournal) {
+                        Text(HerrinPlaybackDiagnosticJournal.export().lines()
+                            .takeLast(7).joinToString("\n"),
+                            color = Color(0xFFB6D1E8), fontSize = 12.sp,
+                            modifier = Modifier.testTag("player-startup-diagnostic-events"))
+                    }
                 }
                 if (retryAvailable) {
                     TvButton(if (failureHint != null) "重新向来源解析" else "重新播放",
                         modifier = Modifier.testTag("player-startup-retry"),
                         reduced = reducedMotion, onClick = onRetry)
+                }
+                // A provider can fail during CMS/Spider URL parsing, before any
+                // ExoPlayer exists. It must expose the same explicit fallback
+                // as a decoder failure, without silently starting playback.
+                if (!offlineDemonstration) onTryOtherSource?.let { action ->
+                    TvButton("查找其他片源",
+                        modifier = Modifier.testTag("player-startup-other-source"),
+                        reduced = reducedMotion, onClick = action)
                 }
             }
             TvButton(if (cmsFailed) "返回片库" else "返回选集",

@@ -13,7 +13,8 @@ import org.json.JSONObject
 /**
  * The source may return a CatVod proxy URL containing TVBox's fixed port, or
  * an older HERRIN loopback port from a previous session. Neither listener
- * exists in this worker. Only rebase known CatVod /proxy?do=jar requests for
+ * exists in this worker. Only rebase known Java CatVod /proxy?do=jar
+ * and newer /proxy?do=csp requests for
  * the CURRENT selected site, never arbitrary localhost URLs.
  *
  * The health endpoint verifies a real listener across :spider and the UI
@@ -21,13 +22,23 @@ import org.json.JSONObject
  */
 internal object SpiderProxyPlayback {
     private const val MAX_URL = 4_096
+    // Newer CatVodSpider Java proxy uses do=csp, older FongMi uses jar.
+    // Both dispatch to the same approved JAR Spider. JS/Python have different
+    // runtimes and must NEVER be accepted by this Java-only bridge.
+    private val approvedJavaOperations = setOf("jar", "csp")
+    // Public FongMi/CatVod Java static Proxy.proxy(Map) implementations
+    // use the original "do" selector (e.g. live / push / czspp / ck).
+    // Only routes explicitly marked for the selected JAR static handler may
+    // preserve these. Dynamic site proxies remain jar/csp only.
+    internal val approvedStaticOperations = setOf("live", "push", "czspp", "ck")
     private fun local(uri: URI): Boolean =
         uri.scheme == "http" && uri.host?.lowercase() in
             setOf("127.0.0.1", "localhost", "::1", "[::1]")
 
     fun isCatVodProxy(raw: String): Boolean = runCatching {
         val uri = URI(raw)
-        local(uri) && uri.path == "/proxy" && query(uri.rawQuery)["do"] == "jar"
+        local(uri) && uri.path == "/proxy" &&
+            query(uri.rawQuery)["do"] in (approvedJavaOperations + approvedStaticOperations)
     }.getOrDefault(false)
 
     private fun query(raw: String?): Map<String, String> {
@@ -66,7 +77,11 @@ internal object SpiderProxyPlayback {
         }
         if (parameters.isEmpty() && !(legacy && raw.substring(8).trim('?').isEmpty()))
             return null
-        if (parameters["do"].let { it != null && it != "jar" }) return null
+        val staticCandidate = !parameters.containsKey("siteKey") ||
+            parameters["__herrin_static"] == "1"
+        val operation = parameters["do"]
+        if (operation != null && operation !in approvedJavaOperations &&
+            !(staticCandidate && operation in approvedStaticOperations)) return null
         if (parameters["siteKey"].let { it != null && it != siteKey }) return null
         // The private marker may survive a second normalization only when it
         // already belongs to this exact authenticated session. Untrusted legacy
@@ -86,7 +101,11 @@ internal object SpiderProxyPlayback {
             .joinToString("&") { (k, v) ->
                 URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
             }
-        return proxy.url +
+        val dispatchedDo = if (useStatic && operation in approvedStaticOperations)
+            operation else "jar"
+        val route = if (dispatchedDo == "jar") proxy.url
+            else proxy.url.replace("&do=jar&", "&do=$dispatchedDo&")
+        return route +
             (if (useStatic) "&__herrin_static=1" else "") +
             (if (extra.isEmpty()) "" else "&$extra")
     }
@@ -132,12 +151,114 @@ internal object SpiderProxyPlayback {
         return obj.toString()
     }
 
+    /** Codes only: never include URL query values, proxy sessions or plugins' text. */
+    internal fun routeReason(raw: String, siteKey: String, proxy: SpiderLoopbackProxy): String {
+        if (!proxy.isOpen) return "PROXY_STOPPED"
+        if (raw.isBlank()) return "EMPTY_URL"
+        val legacy = raw.startsWith("proxy://", ignoreCase = true)
+        val args = if (legacy) {
+            val tail = raw.substring(8).removePrefix("?")
+            if (tail.startsWith('/') || tail.contains('#')) return "INVALID_ALIAS"
+            if (tail.length > MAX_URL) return "QUERY_TOO_LONG"
+            runCatching { query(tail) }.getOrElse { return "INVALID_QUERY" }
+        } else {
+            val u = runCatching { URI(raw) }.getOrNull() ?: return "MALFORMED_URI"
+            if (!local(u)) return "NOT_LOCAL_PROXY"
+            if (u.path != "/proxy") return "NOT_PROXY_PATH"
+            runCatching { query(proxy.compatibleQuery(u.rawQuery)) }
+                .getOrElse { return "INVALID_QUERY" }
+        }
+        if (args.isEmpty() && !legacy) return "INVALID_QUERY"
+        val staticCandidate = !args.containsKey("siteKey") ||
+            args["__herrin_static"] == "1"
+        if (args["do"] != null && args["do"] !in approvedJavaOperations &&
+            !(staticCandidate && args["do"] in approvedStaticOperations))
+            return "UNSUPPORTED_OPERATION"
+        if (args["siteKey"] != null && args["siteKey"] != siteKey) return "SITE_KEY_MISMATCH"
+        val current = !legacy && runCatching {
+            val u = URI(raw)
+            u.port == proxy.port && args["session"] == proxy.token
+        }.getOrDefault(false)
+        if (args.containsKey("__herrin_static") &&
+            (!current || args["__herrin_static"] != "1")) return "STATIC_MARKER_FORGED"
+        if (args.size > 24) return "TOO_MANY_PARAMETERS"
+        return if (legacy) "ALIAS_REJECTED" else "LOOPBACK_ROUTE_REJECTED"
+    }
+
+    /**
+     * Diagnostic routing must follow the same playerContent URL order and
+     * session validation as normalizePlayerResponse(). The old code read the
+     * FIRST proxy from an array / values block even if that proxy succeeded
+     * and a LATER route caused normalization to abort.
+     *
+     * This helper is diagnostic only: it never opens a URL and its raw result
+     * is never placed in a message or Logcat.
+     */
+    private fun diagnosticUrls(obj: JSONObject): List<String> = when (val value = obj.opt("url")) {
+        is String -> listOf(value)
+        is JSONArray -> (0 until minOf(value.length(), 32)).map { value.optString(it) }
+        is JSONObject -> value.optJSONArray("values")?.let { values ->
+            (0 until minOf(values.length(), 20)).mapNotNull { i ->
+                values.optJSONObject(i)?.takeIf { it.has("v") }?.optString("v")
+            }
+        }.orEmpty()
+        else -> emptyList()
+    }
+
+    private fun isProxyCandidate(value: String): Boolean =
+        value.startsWith("proxy://", ignoreCase = true) || runCatching {
+            val uri = URI(value)
+            local(uri) && uri.path == "/proxy"
+        }.getOrDefault(false)
+
+    private fun diagnosedRoute(
+        obj: JSONObject, siteKey: String, proxy: SpiderLoopbackProxy
+    ): String? {
+        val urls = diagnosticUrls(obj)
+        return urls.firstOrNull {
+            isProxyCandidate(it) && rebaseUrl(it, siteKey, proxy) == null
+        } ?: urls.firstOrNull(::isProxyCandidate)
+            ?: (obj.opt("url") as? String)
+    }
+
+    internal fun playerResponseReason(rawJson: String, siteKey: String,
+                                      proxy: SpiderLoopbackProxy): String {
+        val obj = runCatching { JSONObject(rawJson) }.getOrNull()
+            ?: return "INVALID_PLAYER_JSON"
+        val raw = diagnosedRoute(obj, siteKey, proxy) ?: return "MISSING_PLAYER_URL"
+        return routeReason(raw, siteKey, proxy)
+    }
+
+    /**
+     * Classify the ACTUAL rejected route, but never export its original URL,
+     * operation when unknown, query values, credentials or session.
+     */
+    internal fun safeOperation(rawJson: String, proxy: SpiderLoopbackProxy): String {
+        val obj = runCatching { JSONObject(rawJson) }.getOrNull() ?: return "UNAVAILABLE"
+        val siteKey = runCatching {
+            query(URI(proxy.url).rawQuery)["siteKey"]
+        }.getOrNull().orEmpty()
+        val url = diagnosedRoute(obj, siteKey, proxy) ?: return "UNAVAILABLE"
+        val rawQuery = if (url.startsWith("proxy://", ignoreCase = true))
+            url.substring(8).removePrefix("?")
+        else runCatching { proxy.compatibleQuery(URI(url).rawQuery) }.getOrNull()
+        val operation = runCatching { query(rawQuery)["do"] }.getOrNull()
+        return when (operation) {
+            null -> "MISSING"
+            in approvedJavaOperations -> operation.uppercase(java.util.Locale.ROOT)
+            in approvedStaticOperations -> operation.uppercase(java.util.Locale.ROOT)
+            "parse", "play", "proxy", "vod", "m3u8" -> operation.uppercase(java.util.Locale.ROOT)
+            else -> "OTHER"
+        }
+    }
+
     fun rebind(media: PlaybackMedia, siteKey: String, proxy: SpiderLoopbackProxy): PlaybackResult {
         if (siteKey.isBlank() || !proxy.isOpen)
             return PlaybackResult.Unavailable("本机 Spider 播放代理未启动（PROXY_NOT_RUNNING）")
         val primary = rebaseUrl(media.uri, siteKey, proxy)
             ?: return PlaybackResult.Unavailable(
-                "此线路的代理不属于当前 Spider 站点（PROXY_INVALID_ROUTE）")
+                "此线路的代理不属于当前 Spider 站点（PROXY_INVALID_ROUTE route_reason=" +
+                    routeReason(media.uri, siteKey, proxy) + "）")
         val alternates = media.alternateUris.mapNotNull {
             rebaseUrl(it, siteKey, proxy)
         }.filter { it != primary }.distinct()

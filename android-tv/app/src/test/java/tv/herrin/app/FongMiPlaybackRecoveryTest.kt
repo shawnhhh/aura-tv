@@ -69,9 +69,10 @@ class FongMiPlaybackRecoveryTest {
     }
 
     @Test fun invalidOrDeniedProxySessionIsNeverRebuiltBlindly() {
-        for (health in listOf("HTTP_403", "HTTP_404", "INVALID_SESSION", "INVALID_PORT", "NOT_CATVOD", "READY"))
+        for (health in listOf("HTTP_403", "HTTP_404", "INVALID_SESSION", "INVALID_PORT", "NOT_CATVOD", "READY",
+                "IO_MAIN_THREAD", "IO_POLICY", "IO_TLS", "IO_UNKNOWN", "IO_FAILURE", "IO_STREAM"))
             assertFalse(health, FongMiPlaybackRecovery.canRebuildProxy(health))
-        for (health in listOf("CONNECT_REFUSED", "TIMEOUT", "IO_FAILURE", "HTTP_5XX"))
+        for (health in listOf("CONNECT_REFUSED", "TIMEOUT", "IO_CONNECT", "IO_SOCKET", "HTTP_5XX"))
             assertTrue(health, FongMiPlaybackRecovery.canRebuildProxy(health))
     }
 

@@ -42,6 +42,22 @@ class FongMiPlaybackRouterTest {
             (route as FongMiPlayRoute.Direct).playback.media.uri)
     }
 
+    @Test fun authorizedNativeProxyWithNonLegacyOperationNeverGoesThroughJsonParser() {
+        tv.herrin.app.nativeplayback.NativeFongMiProxy(
+            "approved", { _ -> null }, null
+        ).use { proxy ->
+            val url = proxy.baseUrl() + "&do=part&siteKey=approved&episode=1"
+            val response = org.json.JSONObject()
+                .put("parse", 1)
+                .put("url", url)
+                .toString()
+            val route = FongMiPlaybackRouter.route(response, "官方", parsers, true)
+            assertTrue("Authenticated native Spider media must bypass legacy do whitelist",
+                route is FongMiPlayRoute.Direct)
+            assertEquals(url, (route as FongMiPlayRoute.Direct).playback.media.uri)
+        }
+    }
+
     @Test fun signedHlsWithDeclaredMimeStaysDirectEvenWhenParseFlagIsOne() {
         val route = FongMiPlaybackRouter.route("""{
             "parse":1,"format":"application/vnd.apple.mpegurl",

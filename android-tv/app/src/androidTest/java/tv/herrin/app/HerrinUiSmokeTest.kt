@@ -93,6 +93,16 @@ class HerrinUiSmokeTest {
     private fun advancedSettings() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The route callback precedes attachment/focus of the settings tree.
+        // Query the collection while it is absent: fetchOne's diagnostic tree
+        // printer can otherwise read lazy semantics on the instrumentation
+        // thread during the layout transition (SnapshotStateObserver failure).
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("settings-list").fetchSemanticsNodes().size == 1 &&
+                compose.onAllNodes(hasTestTag("screen-first") and isFocused())
+                    .fetchSemanticsNodes().size == 1
+        }
+        compose.waitForIdle()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
         compose.onNodeWithTag("settings-advanced").performClick()
         compose.waitForIdle()
@@ -272,11 +282,11 @@ class HerrinUiSmokeTest {
         }
         capture("poster-cross-rail-vertical-focus")
     }
-    @Test fun centeredHeaderHasExactlyEightTabsPlusSearchAndRightOnlyGear() {
+    @Test fun centeredHeaderHasNineTabsIncludingMyBetweenLiveAndSearchWithRightOnlyGear() {
         val expected = listOf("首页", "电影", "剧集", "动漫", "综艺",
-            "纪录片", "Top 250", "直播")
+            "纪录片", "Top 250", "直播", "我的")
         expected.forEach { compose.onNodeWithTag("nav-$it").assertIsDisplayed() }
-        for (removed in listOf("科幻", "动作", "悬疑", "喜剧", "我的"))
+        for (removed in listOf("科幻", "动作", "悬疑", "喜剧"))
             compose.onNodeWithTag("nav-$removed").assertDoesNotExist()
         compose.onNodeWithTag("search").assertIsDisplayed()
         compose.onNodeWithTag("settings").assertIsDisplayed()
@@ -288,6 +298,70 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("search").assertIsFocused()
         capture("m469-real-header-centered-search-right-gear")
     }
+    @Test fun myTabAfterLiveOpensRealPersonalShelfWithEmptyState() {
+        focus("nav-直播")
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("nav-我的").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("my-library-heading").assertIsDisplayed()
+        compose.onNodeWithTag("my-library-empty").assertIsDisplayed()
+        compose.onNodeWithText("继续观看与收藏 · 0 部").assertIsDisplayed()
+        focus("nav-我的")
+        key(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("search").assertIsFocused()
+        // Focus traversal preserves user-requested visual ordering.
+        val live = compose.onNodeWithTag("nav-直播").fetchSemanticsNode().boundsInRoot
+        val mine = compose.onNodeWithTag("nav-我的").fetchSemanticsNode().boundsInRoot
+        val search = compose.onNodeWithTag("search").fetchSemanticsNode().boundsInRoot
+        assertTrue("我的 must be physically between 直播 and Search",
+            live.right <= mine.left && mine.right <= search.left)
+        capture("m473-my-between-live-and-search")
+    }
+
+    @Test fun myPersonalSourcesShortcutOpensRealNasAndCloudEditors() {
+        focus("nav-我的")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("my-manage-personal-sources").performClick()
+        compose.onNodeWithTag("settings-list").assertExists()
+        compose.onNodeWithTag("settings-list")
+            .performScrollToNode(hasTestTag("nas-webdav-url"))
+        compose.onNodeWithTag("nas-webdav-url").assertIsDisplayed()
+        compose.onNodeWithTag("settings-list")
+            .performScrollToNode(hasTestTag("cloud-webdav-save"))
+        compose.onNodeWithTag("cloud-webdav-save").assertIsDisplayed()
+        capture("m473-my-nas-cloud-shortcut")
+    }
+
+    @Test fun favoritedMovieAppearsInPersonalTabWithoutChangingOriginalPlayback() {
+        focus("card-orbit")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        activate("♡ 添加收藏")
+        compose.onNodeWithText("♥ 已收藏 · 取消").assertExists()
+        key(KeyEvent.KEYCODE_BACK)
+        focus("nav-我的")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("my-library-heading").assertIsDisplayed()
+        compose.onNodeWithTag("my-library-empty").assertDoesNotExist()
+        compose.onNodeWithTag("card-orbit").assertIsDisplayed()
+        compose.onNodeWithText("继续观看与收藏 · 1 部").assertIsDisplayed()
+        focus("card-orbit")
+        key(KeyEvent.KEYCODE_DPAD_UP)
+        compose.onNodeWithTag("my-manage-personal-sources").assertIsFocused()
+        capture("m473-my-favorite-actual-poster")
+    }
+
+    @Test fun top250WithoutTmdbTokenExplainsEmptyListAndProvidesRetry() {
+        focus("nav-Top 250")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("top250-heading").assertIsDisplayed()
+        compose.onNodeWithTag("top250-network-status").assertIsDisplayed()
+        compose.onNodeWithTag("top250-retry").assertIsDisplayed()
+        compose.onNodeWithTag("top250-token-settings").assertIsDisplayed()
+        // The top-ranked grid must never silently fall back to demo films.
+        compose.onNodeWithTag("card-orbit").assertDoesNotExist()
+        capture("m473-top250-no-token-diagnostic")
+    }
+
     @Test fun cinematicNavigationKeepsSearchInsideGlassRailAndGearSeparate() {
         val rail = compose.onNodeWithTag("nav-shell").fetchSemanticsNode().boundsInRoot
         val searchButton = compose.onNodeWithTag("search").fetchSemanticsNode().boundsInRoot
@@ -460,7 +534,7 @@ http://example.org/live/channel.m3u8
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")
         // Visual parity: both home shelves must be displayed, not simply composed off-screen.
-        compose.onNodeWithText("继续观看").assertIsDisplayed()
+        compose.onNodeWithTag("recent-heading").assertTextEquals("演示片库").assertIsDisplayed()
         compose.onNodeWithText("热门推荐").assertIsDisplayed()
         compose.onNodeWithTag("card-orbit").assertExists()
         compose.onNodeWithTag("recommend-blue").assertExists()
@@ -581,7 +655,7 @@ http://example.org/live/channel.m3u8
         focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         focus("search-favorites"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("card-orbit").assertIsDisplayed()
-        compose.onNodeWithTag("nav-我的").assertDoesNotExist()
+        compose.onNodeWithTag("nav-我的").assertExists()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(15_000) {
             runCatching {

@@ -100,4 +100,58 @@ class M457PlaybackFailureRecoveryTest {
         compose.onNodeWithTag("player-startup-back").assertExists()
     }
 
+    @Test fun preDecoderCmsFailureCanSelectOtherAuthorizedProvider() {
+        var fallbackCount = 0
+        compose.setContent {
+            PlayerStartupSurface(
+                loading = false, offlineDemonstration = false,
+                cmsFailed = true, retryAvailable = true,
+                reducedMotion = true,
+                failureDiagnostic = PlaybackErrorReport.source("CMS", "HTTP 404"),
+                onRetry = {}, onBack = {},
+                onTryOtherSource = { fallbackCount++ }
+            )
+        }
+        compose.onNodeWithTag("player-startup-error").assertIsDisplayed()
+        compose.onNodeWithTag("player-startup-other-source").assertIsDisplayed()
+            .performClick()
+        compose.runOnIdle { assertEquals(1, fallbackCount) }
+    }
+
+    @Test fun proxyRouteFailureShowsActualSanitizedUiJournalInsteadOfNoEvents() {
+        HerrinPlaybackDiagnosticJournal.clear()
+        HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_REJECTED")
+        HerrinPlaybackDiagnosticJournal.record("PROXY", "ROUTE_UNSUPPORTED_OPERATION")
+        compose.setContent {
+            PlayerStartupSurface(
+                loading = false, offlineDemonstration = false,
+                cmsFailed = false, retryAvailable = true,
+                reducedMotion = true,
+                failureDiagnostic = PlaybackErrorReport.source("SPIDER",
+                    "PROXY_INVALID_ROUTE route_reason=UNSUPPORTED_OPERATION"),
+                onRetry = {}, onBack = {})
+        }
+        compose.onNodeWithTag("player-startup-diagnostic")
+            .assertTextContains("SOURCE_PROXY_INVALID_ROUTE", substring = true)
+        compose.onNodeWithTag("player-startup-show-diagnostics").performClick()
+        compose.onNodeWithTag("player-startup-diagnostic-events")
+            .assertTextContains("ROUTE_UNSUPPORTED_OPERATION", substring = true)
+        compose.onNodeWithTag("player-startup-diagnostic-events")
+            .assertTextContains("PLAYER_CONTENT_REJECTED", substring = true)
+        compose.runOnIdle { HerrinPlaybackDiagnosticJournal.clear() }
+    }
+
+    @Test fun loadingAndOfflineDemoNeverExposeSourceSwitch() {
+        val loading = androidx.compose.runtime.mutableStateOf(true)
+        compose.setContent {
+            PlayerStartupSurface(loading = loading.value, offlineDemonstration = !loading.value,
+                cmsFailed = false, retryAvailable = false,
+                reducedMotion = true, onRetry = {}, onBack = {},
+                onTryOtherSource = {})
+        }
+        compose.onNodeWithTag("player-startup-other-source").assertDoesNotExist()
+        compose.runOnIdle { loading.value = false }
+        compose.onNodeWithTag("player-demo-status").assertIsDisplayed()
+        compose.onNodeWithTag("player-startup-other-source").assertDoesNotExist()
+    }
 }

@@ -11,8 +11,10 @@ import androidx.media3.exoplayer.ExoPlayer
 /** Debug-only host. Local test media is never accepted by production settings. */
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
+    var nextEpisodeRequests = 0
     var lineSelections = 0
     var episodeSelections = 0
+    var otherSourceSelections = 0
     data class ProgressEvent(val sessionUri: String, val positionMs: Long,
                              val durationMs: Long, val finished: Boolean)
     val progressEvents = java.util.concurrent.CopyOnWriteArrayList<ProgressEvent>()
@@ -48,14 +50,20 @@ class PlaybackTestActivity : ComponentActivity() {
                     } ?: PlaybackMedia(
                         inPlaceFixture ?: intent.getStringExtra("fixture")
                             ?: error("Debug playback fixture not configured"),
+                        // Test-only source credentials: prove they reach Media3 on
+                        // original local fixtures, never production player settings.
+                        headers = intent.getStringExtra("fixtureAuthorization")
+                            ?.let { mapOf("Authorization" to it) }.orEmpty(),
                         subtitles = intent.getStringExtra("subtitle")?.let {
                             listOf(AuthorizedSubtitle("zh", "简体中文测试字幕", it))
                         }.orEmpty(),
-                        alternateUris = intent.getStringExtra("alternate")?.let { listOf(it) }.orEmpty()
+                        alternateUris = intent.getStringExtra("alternate")?.let { listOf(it) }.orEmpty(),
+                        declaredMime = intent.getStringExtra("fixtureMime")
                     )
                     val sessionUri = media.uri
                     AuthorizedPlaybackPanel(
                         media = media,
+                        onNextEpisode = if (intent.getBooleanExtra("continuousFixture", false)) ({ nextEpisodeRequests++ }) else null,
                         onPlaybackProgress = { position, duration, finished ->
                             progressEvents.add(ProgressEvent(sessionUri, position, duration, finished))
                         },
@@ -84,13 +92,15 @@ class PlaybackTestActivity : ComponentActivity() {
                             ({ lineSelections++ }) else null,
                         onEpisodeSelection = if (intent.getBooleanExtra("withSelectionActions", false))
                             ({ episodeSelections++ }) else null,
+                        onTryOtherSource = if (intent.getBooleanExtra("withOtherSourceAction", false))
+                            ({ otherSourceSelections++ }) else null,
                         onBack = {
                             android.util.Log.i("HerrinPlayerBack", "debug onBack invoked showing=$showing")
                             showing = false
                         },
                         // Diagnostics are available solely in this isolated
                         // debug/test fixture, never in the real HERRIN player.
-                        testDiagnostics = true
+                        testDiagnostics = !intent.getBooleanExtra("consumerControls", false)
                     )
                 } else Text("Playback released")
             }

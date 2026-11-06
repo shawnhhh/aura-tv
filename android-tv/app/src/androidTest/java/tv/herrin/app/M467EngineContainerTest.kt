@@ -96,6 +96,7 @@ class M467EngineContainerTest {
     @Test fun assTextIsDecoded() = caption("ass")
     @Test fun ssaTextIsDecoded() = caption("ssa")
     @Test fun vttIsDecoded() = caption("vtt")
+    @Test fun ttmlTextIsDecoded() = caption("ttml")
     private fun caption(extension: String) = play("synthetic.mp4", extension) {
         decoded(it) && it.cueHistory.any { text -> text.contains("M467 caption decoded") }
     }
