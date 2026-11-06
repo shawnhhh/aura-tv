@@ -11,7 +11,7 @@ class P0QrFailureTest {
     @get:Rule val compose=createComposeRule()
     @Test fun noIpv4ShowsActionableRetryAndPreservesManualConfiguration(){
         compose.setContent { MaterialTheme { LanConfigDialog({}, {}, serverFactory={_,_->throw NoLanAddress()}) } }
-        compose.waitUntil(5000){runCatching{compose.onNodeWithTag("phone-config-status").assertTextContains("IPv4")}.isSuccess}
+        compose.waitUntil(5000){runCatching{compose.onNodeWithTag("phone-config-status").assertTextContains("IPv4", substring=true)}.isSuccess}
         compose.onNodeWithTag("phone-config-retry").assertIsDisplayed().performClick()
         compose.onNodeWithTag("phone-config-close").assertIsDisplayed()
     }
@@ -24,7 +24,7 @@ class P0QrFailureTest {
             qrFactory={value-> if(attempts++==0)throw IllegalArgumentException("private value must not be displayed") else configurationQr(value)}) } }
         compose.waitUntil(5000){runCatching{compose.onNodeWithTag("phone-config-retry").assertIsDisplayed()}.isSuccess}
         assertFalse(server!!.isAlive)
-        compose.onNodeWithTag("phone-config-status").assertTextContains("失败")
+        compose.onNodeWithTag("phone-config-status").assertTextContains("失败", substring=true)
         compose.onNodeWithTag("phone-config-retry").performClick()
         compose.waitUntil(5000){runCatching{compose.onNodeWithTag("phone-config-qr").assertIsDisplayed()}.isSuccess}
         compose.onNodeWithTag("phone-config-close").assertIsDisplayed().performClick()

@@ -5,6 +5,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class P0MetadataStabilityTest {
+    @Test fun everyDiscoveryEndpointIsAValidUriAndVarietyKeepsItsOrFilter() {
+        val loader = HerrinTmdbDiscovery(ArtworkJsonFetcher { _,_ -> null })
+        loader.sections.forEach { java.net.URI("https://api.tmdb.org/3" + it.endpoint) }
+        val variety = loader.sections.single { it.key == "variety" }
+        assertTrue(java.net.URI("https://api.tmdb.org/3" + variety.endpoint).query.contains("with_genres=10764|10767"))
+    }
     private fun film(id: String, name: String) = Film(id,name,"","剧集","2026","",0,tmdbTvId=99,
         metadataSource="TMDB",cmsVodId=id,playbackEpisodes=listOf(PlaybackEpisode(1,"1",listOf(PlaybackLine("a","A","https://media.invalid/$id.mp4")))))
     @Test fun successfulSeriesMatchingCannotDuplicateRecentLazyKeysOrLoseSourceEpisodes() {
