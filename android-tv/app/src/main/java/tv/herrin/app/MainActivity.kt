@@ -376,6 +376,7 @@ private fun Herrin() {
     var pendingLiveSearchFocus by remember { mutableStateOf(false) }
     val prefs = remember { Preferences(context) }
     val uiScope = rememberCoroutineScope()
+    var lanConfigOpen by remember { mutableStateOf(false) }
     val personalImdbRatings = remember(context) { HerrinImdbRatings(context) }
     var imdbRatingsEpoch by remember { mutableIntStateOf(0) }
     var imdbImportStatus by remember { mutableStateOf("IMDb 数据需用户自行导入；不随开源 APK 分发") }
@@ -4132,6 +4133,7 @@ private fun Herrin() {
                             Text("This product uses the TMDB API but is not endorsed or certified by TMDB.",
                                 fontSize = 12.sp, color = Color(0xFF99A6B8))
                         } }
+                        item { TvButton("手机扫码配置", modifier = Modifier.testTag("phone-config-open"), reduced = reduceMotion) { lanConfigOpen = true } }
                         item { Text("设备状态与维护", fontSize = 21.sp) }
                         item { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             TvButton("查看设备状态", modifier = Modifier.testTag("diagnostic-refresh"),
@@ -4551,6 +4553,18 @@ private fun Herrin() {
                     metadataCorrection = null
                 }, onDismiss = { metadataCorrection = null })
         }
+        if (lanConfigOpen) LanConfigDialog(onDismiss = { lanConfigOpen = false }) { module ->
+            when (module) {
+                "tmdb" -> { prefs.invalidateTokenCache(); metadataToken = prefs.tmdbReadToken; tmdbProbeEpoch++ }
+                "sources" -> {
+                    configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
+                    tvBoxRequest = prefs.tvBoxWarehouseUrl to true
+                    tvBoxLoadEpoch++
+                }
+                "live" -> { liveRefresh++; epgRefresh++ }
+                "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }
+            }
+        }
         if (splash) {
             SplashExitCurtain(reduceMotion, splashExiting,
                 onReady = { splashExiting = true }, onFinished = { splash = false },
@@ -4585,6 +4599,7 @@ internal fun SeasonBrowser(
         if (index >= 0) rowState.scrollToItem(index)
     }
     val uiScope = rememberCoroutineScope()
+    var lanConfigOpen by remember { mutableStateOf(false) }
     val focusers = remember { mutableMapOf<String, FocusRequester>() }
     fun focusAt(key: String): FocusRequester = focusers.getOrPut(key) { FocusRequester() }
     Column(Modifier.fillMaxWidth().testTag("season-browser"),

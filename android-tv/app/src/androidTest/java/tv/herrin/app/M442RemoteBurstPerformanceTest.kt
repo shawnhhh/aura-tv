@@ -85,6 +85,12 @@ class M442RemoteBurstPerformanceTest {
     private fun p50Ms(samples: List<RemoteFocusLatencyProbe.Sample>): String =
         String.format(Locale.US, "%.2f", samples.map { it.millis }.sorted()[samples.size / 2])
 
+    private fun p99Ms(samples: List<RemoteFocusLatencyProbe.Sample>): String {
+        val values = samples.map { it.elapsedNanos }.sorted()
+        if (values.isEmpty()) return "unavailable"
+        return String.format(Locale.US, "%.2f", values[(values.size * 99 / 100).coerceAtMost(values.lastIndex)] / 1_000_000.0)
+    }
+
     private fun p95Ms(samples: List<RemoteFocusLatencyProbe.Sample>): String {
         val values = samples.map { it.millis }.sorted()
         return String.format(Locale.US, "%.2f",
@@ -116,7 +122,7 @@ class M442RemoteBurstPerformanceTest {
         val p95EndToIdle = p95Long(endToIdleMs.sorted())
         val keyToFocusP95 = p95Ms(samples)
         val verticalMetrics = "m443_vertical_dpad_events=32 focus_success=${samples.size} " +
-            "key_to_focus_p50_ms=${p50Ms(samples)} key_to_focus_p95_ms=$keyToFocusP95 end_to_idle_p95_ms=$p95EndToIdle"
+            "key_to_focus_p99_ms=${p99Ms(samples)} key_to_focus_p50_ms=${p50Ms(samples)} key_to_focus_p95_ms=$keyToFocusP95 end_to_idle_p95_ms=$p95EndToIdle"
         Log.i("HerrinPerf", verticalMetrics)
         persistMetricLine(verticalMetrics)
         assertTrue("Vertical focus severe idle stall P95=$p95EndToIdle ms",
@@ -173,7 +179,7 @@ class M442RemoteBurstPerformanceTest {
         val longFramePct = if (frames.isEmpty()) 0.0 else 100.0 * longFrames / frames.size
         val longFramePctText = String.format(Locale.US, "%.2f", longFramePct)
         val horizontalMetrics = "m443_horizontal_dpad_events=40 focus_success=${samples.size} " +
-            "key_to_focus_p50_ms=${p50Ms(samples)} key_to_focus_p95_ms=$keyToFocusP95 end_to_idle_p95_ms=$p95EndToIdle " +
+            "key_to_focus_p99_ms=${p99Ms(samples)} key_to_focus_p50_ms=${p50Ms(samples)} key_to_focus_p95_ms=$keyToFocusP95 end_to_idle_p95_ms=$p95EndToIdle " +
             "frame_p95_ms=$frameP95Ms frames_total=${frames.size} " +
             "frames_over_16_67ms=$longFrames frames_over_33_33ms=$severeFrames " +
             "long_frame_pct=$longFramePctText"

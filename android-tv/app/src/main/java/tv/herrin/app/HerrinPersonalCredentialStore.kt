@@ -16,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Failed decryption never silently falls back to plaintext persistence.
  */
 internal class HerrinPersonalCredentialStore(context: Context, private val slot: String = "nas") {
-    init { require(slot in setOf("nas", "cloud")) }
+    init { require(slot in setOf("nas", "cloud", "tmdb")) }
     private val prefs = context.getSharedPreferences("herrin_personal_secrets", Context.MODE_PRIVATE)
     private val alias = "herrin-webdav-aes-gcm-v1-" + slot
 
