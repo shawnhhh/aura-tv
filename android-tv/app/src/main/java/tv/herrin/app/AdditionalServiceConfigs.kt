@@ -24,7 +24,7 @@ internal class AdditionalServiceConfigs(private val context: Context) {
     }
     fun enabled(module: String) = list(module).filter { it.enabled }
     fun publicList(module: String): JSONArray = JSONArray().apply { list(module).forEach { put(json(it)) } }
-    @Synchronized fun save(module: String, input: JSONObject): String {
+    fun save(module: String, input: JSONObject): String = synchronized(mutationLock) {
         val current = list(module)
         val supplied = input.optString("id")
         val existing = current.firstOrNull { it.id == supplied }
@@ -45,13 +45,13 @@ internal class AdditionalServiceConfigs(private val context: Context) {
         check(prefs.edit().putString("services_$module", JSONArray().apply { result.forEach { put(json(it)) } }.toString()).commit())
         return id
     }
-    @Synchronized fun remove(module: String, id: String) {
+    fun remove(module: String, id: String) = synchronized(mutationLock) {
         val current = list(module)
         require(current.any { it.id == id })
         check(prefs.edit().putString("services_$module", JSONArray().apply { current.filterNot { it.id == id }.forEach { put(json(it)) } }.toString()).commit())
         if (module == "nas") HerrinPersonalCredentialStore(context, "config-$id").clear()
     }
-    @Synchronized fun batchSources(raw: String) {
+    fun batchSources(raw: String) = synchronized(mutationLock) {
         val addresses = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
             .map(::checkedAddress).distinct().toList()
         require(addresses.isNotEmpty())
@@ -68,6 +68,7 @@ internal class AdditionalServiceConfigs(private val context: Context) {
     private fun json(e: Entry) = JSONObject().put("id", e.id).put("name", e.name).put("url", e.url)
         .put("epg", e.epg).put("enabled", e.enabled)
     companion object {
+        private val mutationLock = Any()
         fun checkedAddress(raw: String): String {
             require(raw.length in 1..2048)
             val uri = URI(raw.trim())

@@ -55,5 +55,8 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
         plain.substringBefore('\u0000') to plain.substringAfter('\u0000')
     }.getOrDefault("" to "")
 
-    fun clear() { prefs.edit().remove(slot).apply() }
+    fun clear() {
+        prefs.edit().remove(slot).commit()
+        runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias) }
+    }
 }
