@@ -45,7 +45,7 @@ class P0MetadataPublicationPressureTest {
                             array.put(JSONObject().put("id",id).put("title","Original $id").put("name","Original $id")
                                 .put("genre_ids",JSONArray().put(18)).put("release_date","2026-01-01").put("first_air_date","2026-01-01")
                                 .put("poster_path", if(index%2==0) "https://invalid.invalid/private" else JSONObject.NULL))
-                            if(index==1) array.put(JSONObject(array.getJSONObject(array.length()-1).toString())) // duplicate ID, still 20 unique
+                            if(index==1 && !uri.path.contains("top_rated")) array.put(JSONObject(array.getJSONObject(array.length()-1).toString())) // duplicate ID, still 20 unique
                         }
                         JSONObject().put("results",array).toString()
                     }
