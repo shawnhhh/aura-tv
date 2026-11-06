@@ -58,6 +58,13 @@ dump_ui after-cancel
 if ! grep -q '精选电影' "$evidence/after-cancel.xml"; then
     echo "FAIL: cancelling exit did not preserve Movies"; exit 1
 fi
+adb shell input keyevent KEYCODE_HOME
+adb shell am start -W -n tv.herrin.app/.MainActivity | tee "$evidence/hot-resume.txt"
+sleep 1
+dump_ui hot-resume
+if ! grep -q '精选电影' "$evidence/hot-resume.xml"; then
+    echo "FAIL: background resume did not retain Movies"; exit 1
+fi
 adb shell input keyevent KEYCODE_BACK
 sleep 1
 adb shell input keyevent KEYCODE_DPAD_LEFT
