@@ -54,7 +54,8 @@ class P0ExitAndEntryTest {
         val preview=android.graphics.Bitmap.createScaledBitmap(screen,640,360,true)
         val bytes=java.io.ByteArrayOutputStream()
         preview.compress(android.graphics.Bitmap.CompressFormat.JPEG,80,bytes)
-        android.util.Log.i("HerrinExitPreview","HERRIN_EXIT_FRAME_BASE64="+android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP))
+        val chunks=android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP).chunked(3000)
+        chunks.forEachIndexed { index,chunk->android.util.Log.i("HerrinExitPreview","EXIT_FRAME ${index+1}/${chunks.size} $chunk") }
         if(preview!==screen) preview.recycle()
         screen.recycle()
         back();compose.onNodeWithTag("exit-dialog").assertDoesNotExist();assertFalse(compose.activity.isFinishing)

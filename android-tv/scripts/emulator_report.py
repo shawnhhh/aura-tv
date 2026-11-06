@@ -77,7 +77,11 @@ if frames and len(frames) == next(iter(frames.values()))[0]:
         print('HERRIN_ORIGINAL_VIDEO_FRAME_BASE64=' + encoded)
 
 # Test-controlled offline exit dialog; never export phone pairing QR/service secrets.
-exit_frames = re.findall(r'HERRIN_EXIT_FRAME_BASE64=([A-Za-z0-9+/=]+)', log)
-if exit_frames and len(exit_frames[-1]) <= 180000:
-    (out / 'exit-confirmation-preview.jpg').write_bytes(base64.b64decode(exit_frames[-1]))
-    print('HERRIN_EXIT_FRAME_BASE64=' + exit_frames[-1])
+exit_parts = {}
+for index, total, data in re.findall(r'EXIT_FRAME (\d+)/(\d+) ([A-Za-z0-9+/=]+)', log):
+    exit_parts[int(index)] = (int(total), data)
+if exit_parts and len(exit_parts) == next(iter(exit_parts.values()))[0]:
+    encoded = ''.join(exit_parts[i][1] for i in range(1, len(exit_parts)+1))
+    if len(encoded) <= 180000:
+        (out / 'exit-confirmation-preview.jpg').write_bytes(base64.b64decode(encoded))
+        print('HERRIN_EXIT_FRAME_BASE64=' + encoded)
