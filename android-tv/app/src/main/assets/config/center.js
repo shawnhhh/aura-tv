@@ -18,9 +18,9 @@ document.querySelector('#pair').onclick=async()=>{
 };
 let module='tmdb';
 async function refreshEntries(){
- const additional=document.querySelector('#additional');additional.hidden=module==='tmdb';if(additional.hidden)return;
+ const additional=document.querySelector('#additional');additional.hidden=module==='tmdb';document.querySelector('#catalog-manager').hidden=module!=='sources';if(additional.hidden)return;
  document.querySelector('#entry-edit').hidden=false;
- document.querySelector('#extra-epg').hidden=module!=='live';document.querySelector('#extra-login').hidden=module!=='nas';document.querySelector('#batch').hidden=module!=='sources';
+ document.querySelector('#extra-epg').hidden=module!=='live';document.querySelector('#extra-login').hidden=module!=='nas';document.querySelector('#batch').hidden=module!=='sources';await refreshCatalogs();
  const r=await call('/entries',{module});const list=document.querySelector('#entries');list.replaceChildren();
  r.entries.forEach(entry=>{const row=document.createElement('p');const name=document.createElement('span');name.textContent=entry.name+' · '+(entry.enabled?'启用':'停用');row.append(name);
  const button=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await action();}catch(e){status.textContent=e.message;}};row.append(b);};
@@ -30,7 +30,7 @@ async function refreshEntries(){
  if(module==='nas')button('测试',async()=>{status.textContent=(await call('/nas/test',{id:entry.id})).result;});list.append(row);});
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('form').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();}catch(e){status.textContent=e.message;}});
-document.querySelectorAll('form:not(#entry-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{await call('/'+f.id,Object.fromEntries(new FormData(f)));f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
+document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{await call('/'+f.id,Object.fromEntries(new FormData(f)));f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
 document.querySelector('#test').onclick=async()=>{try{status.textContent=(await call('/tmdb/test')).result;}catch(e){status.textContent=e.message;}};
 document.querySelector('#end').onclick=async()=>{try{await call('/end');}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束，请在电视重新开启';}};
 // Editing a long form is activity; refresh only while the user is actively editing.
@@ -40,3 +40,16 @@ setInterval(()=>{if(session&&Date.now()-lastActivity<60000)call('/status').catch
 document.querySelector('#entry-edit').onsubmit=async e=>{e.preventDefault();const f=e.target;const data=Object.fromEntries(new FormData(f));data.module=module;data.enabled=f.elements.enabled.checked;if(data.id&&!data.password)delete data.password;try{await call('/entries/save',data);f.reset();await refreshEntries();status.textContent='已保存并通知电视';}catch(e){status.textContent=e.message;}};
 document.querySelector('#new-entry').onclick=()=>document.querySelector('#entry-edit').reset();
 document.querySelector('#batch-save').onclick=async()=>{try{await call('/entries/batch',{urls:document.querySelector('#batch-urls').value});await refreshEntries();status.textContent='批量地址已保存并去重';}catch(e){status.textContent=e.message;}};
+
+async function refreshCatalogs(){
+ const section=document.querySelector('#catalog-manager');section.hidden=module!=='sources';if(section.hidden)return;
+ document.querySelector('#catalog-edit').hidden=false;const data=await call('/catalogs');const list=document.querySelector('#catalog-list');list.replaceChildren();
+ data.entries.forEach(entry=>{const row=document.createElement('p');row.textContent=entry.name+(data.active===entry.id?' · 已启用':'');
+ const add=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await action();}catch(e){status.textContent=e.message;}};row.append(b);};
+ add('编辑',()=>{const f=document.querySelector('#catalog-edit');for(const key of ['id','name','url'])f.elements[key].value=entry[key];});
+ add('启用',async()=>{await call('/catalogs/activate',{id:entry.id});await refreshCatalogs();});
+ add('删除',async()=>{await call('/catalogs/delete',{id:entry.id});await refreshCatalogs();});list.append(row);});
+}
+document.querySelector('#catalog-edit').onsubmit=async e=>{e.preventDefault();try{await call('/catalogs/save',Object.fromEntries(new FormData(e.target)));e.target.reset();await refreshCatalogs();status.textContent='目录已保存';}catch(e){status.textContent=e.message;}};
+document.querySelector('#catalog-new').onclick=()=>document.querySelector('#catalog-edit').reset();
+document.querySelector('#catalog-disable').onclick=async()=>{try{await call('/catalogs/activate',{id:''});await refreshCatalogs();}catch(e){status.textContent=e.message;}};

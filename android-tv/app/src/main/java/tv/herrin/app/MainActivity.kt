@@ -4611,6 +4611,7 @@ private fun Herrin() {
                         tvBoxLoadEpoch++
                     }
                 }
+                "catalogs" -> { catalogRefresh++ }
                 "live" -> { liveRefresh++; epgRefresh++ }
                 "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }
             }

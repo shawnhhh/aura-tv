@@ -68,6 +68,24 @@ internal class LanConfigServer(
                 return response(Response.Status.OK, JSONObject().put("entries", extra.publicList(module)).toString())
             }
             val output = when (session.uri) {
+                "/catalogs" -> JSONObject().put("entries", org.json.JSONArray(CatalogProfileCodec.encode(CatalogProfiles(context).list())))
+                    .put("active", CatalogProfiles(context).activeId() ?: "")
+                "/catalogs/save" -> {
+                    val store = CatalogProfiles(context)
+                    val id = input.optString("id")
+                    val result = if (id.isBlank()) store.addAndActivate(input.getString("name"), input.getString("url"))
+                        else store.update(id, input.getString("name"), input.getString("url"))
+                    require(result is SaveProfileResult.Saved)
+                    applied("catalogs"); JSONObject().put("ok", true)
+                }
+                "/catalogs/delete" -> {
+                    require(CatalogProfiles(context).delete(input.getString("id")))
+                    applied("catalogs"); JSONObject().put("ok", true)
+                }
+                "/catalogs/activate" -> {
+                    require(CatalogProfiles(context).activate(input.optString("id").takeIf { it.isNotBlank() }))
+                    applied("catalogs"); JSONObject().put("ok", true)
+                }
                 "/entries/batch" -> { extra.batchSources(input.getString("urls")); applied("sources"); JSONObject().put("ok", true) }
                 "/nas/test" -> {
                     val id = input.optString("id")
