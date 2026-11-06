@@ -414,6 +414,7 @@ private fun Herrin() {
     val providerRepo = remember(context) { RemoteCatalogRepository(context) }
     val posterCache = remember(context) { PosterCacheMaintenance(context) }
     var deviceStatus by remember { mutableStateOf("选择「查看设备状态」读取当前输出刷新率") }
+    var imageCdnStatus by remember { mutableStateOf("图片 CDN 尚未探测，与 API 状态独立") }
     var posterCacheStatus by remember { mutableStateOf("海报缓存不会影响收藏或观看历史") }
     var confirmCacheClear by remember { mutableStateOf(false) }
     LaunchedEffect(confirmCacheClear) {
@@ -4187,6 +4188,11 @@ private fun Herrin() {
                                 configStatus = "诊断摘要已复制；不包含目录地址或播放链接"
                             }
                         } }
+                        item { TvButton("检测 TMDB 图片服务", reduced = reduceMotion) {
+                            imageCdnStatus = "正在独立检测图片 CDN…"
+                            uiScope.launch { imageCdnStatus = withContext(Dispatchers.IO) { TmdbImageConnectivity.check() } }
+                        } }
+                        item { Text(imageCdnStatus, fontSize = 14.sp) }
                         item { Text(deviceStatus, modifier = Modifier.testTag("device-status"),
                             color = Color(0xFFCFD7E4), lineHeight = 22.sp) }
                         item { TvButton(if (confirmCacheClear) "再次确定清理海报缓存" else "清理海报缓存",
