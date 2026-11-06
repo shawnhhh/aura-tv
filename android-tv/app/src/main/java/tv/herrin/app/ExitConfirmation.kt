@@ -52,7 +52,8 @@ private fun ExitAction(label: String, tag: String, requester: FocusRequester, ne
         .onFocusChanged { focused = it.isFocused }
         .background(ExitButtonBackground, shape)
         .border(2.dp, if (focused) Color.White else Color.Transparent, shape)
-        .clickable(onClick = click).padding(horizontal = 20.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+            indication = null, onClick = click).padding(horizontal = 20.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
         Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
     }
 }

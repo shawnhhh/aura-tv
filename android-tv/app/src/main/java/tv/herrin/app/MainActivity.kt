@@ -401,6 +401,7 @@ private fun Herrin(startup: StartupPresentation) {
     val prefs = remember(startup.preferences) { requireNotNull(startup.preferences) }
     val uiScope = rememberCoroutineScope()
     var lanConfigOpen by remember { mutableStateOf(false) }
+    val phoneTokenReload = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     var exitConfirmation by remember { mutableStateOf(false) }
     var lastExitDismissedAt by remember { mutableLongStateOf(0L) }
     val personalImdbRatings = remember(context) { HerrinImdbRatings(context) }
@@ -4663,7 +4664,15 @@ private fun Herrin(startup: StartupPresentation) {
         })
         if (lanConfigOpen) LanConfigDialog(onDismiss = { lanConfigOpen = false }, onApplied = { module ->
             when (module) {
-                "tmdb" -> { prefs.invalidateTokenCache(); metadataToken = prefs.tmdbReadToken; tmdbProbeEpoch++ }
+                "tmdb" -> {
+                    phoneTokenReload[0]?.cancel()
+                    phoneTokenReload[0] = uiScope.launch {
+                        val saved = withContext(Dispatchers.IO) { Preferences(context).tmdbReadToken }
+                        prefs.acceptPersistedToken(saved)
+                        metadataToken = saved
+                        tmdbProbeEpoch++
+                    }
+                }
                 "sources" -> {
                     personalSourceConfigEpoch++
                     configuredTvBoxUrl = prefs.tvBoxWarehouseUrl

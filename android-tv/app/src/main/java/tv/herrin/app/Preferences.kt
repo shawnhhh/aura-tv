@@ -88,6 +88,7 @@ class Preferences(context: Context) : FavoritesStore {
     var cloudAllowHttp: Boolean
         get() = prefs.getBoolean("cloud_allow_http", false)
         set(value) { prefs.edit().putBoolean("cloud_allow_http", value).apply() }
+    internal fun acceptPersistedToken(value: String) { tokenCache = value }
     fun invalidateTokenCache() { tokenCache = null }
     /** Optional personal TMDB API Read Access Token; empty disables metadata calls. */
     var tmdbReadToken: String
