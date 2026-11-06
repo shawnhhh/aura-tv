@@ -4,6 +4,7 @@ on:
     branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106']
     paths:
       - 'android-tv/**'
+      - '!android-tv/docs/**'
       - '.github/workflows/android-debug.yml'
       - '.github/workflows/android-emulator.yml'
       - '.github/workflows/p0-playback.yml'
