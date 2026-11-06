@@ -7,6 +7,7 @@
 - 一套 SwiftUI 源码构建两个 App Target：iOS (iPhone + iPad)、macOS 原生。
 - 通过 TMDB Read Access Token 加载推荐、电影、剧集与搜索；Token 仅保存在本机 Keychain，**不内置私人 API Key**。
 - 国内网络首选 `https://api.tmdb.org/3`，备用官方入口 `https://api.themoviedb.org/3`。仅网络不可达或 5xx 故障回退；401/403/429 不切换域名。
+- 按设备自动选择图片：**iPhone 竖版 `poster_path`（2:3）**；**iPad / Mac 横版 `backdrop_path`（16:9）**。数据层同时保留两个字段；缺图时另一方向图片等比留边显示，绝不硬拉变形。
 - 本阶段只是基础目录与 TMDB 预览：**还未实现真实影视播放、NAS、直播、TVBox Spider、收藏同步或完整 UI**。
 
 ## 本地构建
