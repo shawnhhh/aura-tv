@@ -1,5 +1,20 @@
 # P0 Cloud 断点
 
+## 当前：67 真机 Top250 浏览闪退专项 / 68（2026-11-06）
+
+- 用户新确认：新版67，在Top250里浏览容易闪退；不是旧65/66的问题。尚无TCL FATAL/APP_EXIT_REASON，不能认定唯一根因。
+- 基线HEAD543bf86246869b46dd10e1e4940d0a5f2213fae8，CI42156486603完整通过：569 JVM/202 TV、0失败/跳过、无主进程FATAL；PR80仍Draft。
+- 实际67代码定位：海报Up统一请求play/details，而Top250/我的无这些按钮；仅有历史的源目录空态也无Hero按钮。
+- 第二缺口：Top250保留原始Film条目，却用ShowCatalog合并key；原创两条同系列/不同季记录能生成相同LazyRow key。Top250应按TMDB Film ID保留独立排行身份。
+- 回归先红：从实际调用点抽出原行为，TvFocusRoutesTest 8项中4失败（3焦点/1 key），日志/workspace/.cache/aura-android/p0-68-focus-keys-red.log，失败XML/workspace/artifacts/p0-68-focus-red.xml。
+- 修复：Top250 Up→自身导航、我的Up→来源管理、隐藏Hero→当前导航；Top250采用原Film ID，其他合并栏目不变。列表key/路由使用当前渲染快照，换栏目/离页取消旧跨栏焦点任务。
+- 修复后8项定向通过；新增完整250条原创缓存（含可产生相同分组key的两条电影），首/中/尾方向键及Top250↔动漫回归；保留全部播放测试。未修改原图质量、播放核心、来源优先级或授权。
+- 图片路径追加实际证据：已核查当前AndroidX animation 1.7.6 AAR字节码，Crossfade仅在currentState==targetState时清理旧状态，连续打断会累积旧内容。字节码记录/workspace/.cache/aura-android/p0-68-crossfade-bytecode.txt。
+- Hero改用最多当前/上一张两层的原图过渡，同一层换角色不重启图片任务，淘汰旧层即取消其加载；原图URL、解码目标、缓存容量及180ms淡化不降级。添加可控动画时钟的旧机制对照/两层上限/减少动态回归，不主动制造OOM。
+- 574项JVM已通过，静态安全/固定上游通过；新Hero及设备测试编译通过。设备回归尚待CI，不把框架保留风险当作已证实的TCL OOM。
+- 版本0.4.64-alpha（68），本地574 JVM、lint、Debug/测试APK通过，最终设备测试代码重新编译通过。下一步：提交、push单次串行Debug→Emulator，下载并核验该SHA的真实APK。
+- 不能把这两处可复现缺口直接宣布为TCL全部闪退根因；图片OOM等需OS退出分类/堆栈证明。准确Codex额度/恢复时间不可查询，不虚构；无自动唤醒承诺。
+
 ## 当前：11项真机体验集成 / 67（2026-11-06）
 
 - 恢复基线/远端 HEAD：b01a4698a7e766772f9e688e5188af15fd9398c2；CI42051442821成功，PR80 Draft。工作区为本轮单代理增量，未合并/未改播放核心。

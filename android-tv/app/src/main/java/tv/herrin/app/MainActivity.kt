@@ -14,7 +14,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
@@ -1597,7 +1596,11 @@ private fun Herrin() {
         if (screen == "search") delay(RemoteMotionPolicy.HERO_DWELL_MS)
         backdropFilm = displayFilm
     }
-    fun displayKey(item: Film): String = showCatalog.groupFor(item.id)?.key ?: item.id
+    // Item providers may outlive the frame which created them during a category change.
+    // Freeze key policy with that provider instead of reading the new category midway through layout.
+    val keyCategory = category
+    val keysInBrowse = screen == "browse"
+    fun displayKey(item: Film): String = TvFocusRoutes.posterKey(keyCategory, keysInBrowse, item.id, showCatalog.groupFor(item.id)?.key)
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
     LaunchedEffect(screen, filmId, spiderActive, showGroup?.key, detailLoadEpoch) {
@@ -1950,6 +1953,9 @@ private fun Herrin() {
         }
     }
     val posterFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    DisposableEffect(screen, category) {
+        onDispose { posterFocusJob[0]?.cancel(); posterFocusJob[0] = null }
+    }
     fun transferPosterFocus(from: LazyListState, to: LazyListState,
                             fromIndex: Int, destination: List<Film>, prefix: String,
                             vertical: androidx.compose.foundation.ScrollState, toBottom: Boolean) {
@@ -2247,10 +2253,8 @@ private fun Herrin() {
         // On resource-limited TVs this avoids competing with first-frame UI.
         if (!splash && screen != "player" && screen != "live-player" &&
             (!sourceConfigured || films.isNotEmpty())) {
-            Crossfade(targetState = backdropFilm.takeIf { it.id == displayFilm.id } ?: displayFilm, animationSpec = if (reduceMotion) tween(0)
-                else tween(RemoteMotionPolicy.HERO_CROSSFADE_MS, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
-                FilmArtwork(hero, Modifier.fillMaxSize().testTag("hero-art-${hero.id}"))
-            }
+            HeroArtworkTransition(backdropFilm.takeIf { it.id == displayFilm.id } ?: displayFilm,
+                reduced = reduceMotion, modifier = Modifier.fillMaxSize())
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
                 0.0f to Color(0xEA05080D), 0.36f to Color(0xBD060A11),
@@ -2420,6 +2424,7 @@ private fun Herrin() {
         // Standalone Compose method: keep Herrin() below JVM 64-KiB limit.
         @Composable fun renderBrowseSearch() {
                 val isSearch = screen == "search"
+                val renderedCategory = category
                 // Focus color animations can recompose every frame: searching,
                 // regrouping and reading playback history must NOT run per frame.
                 val filtered = remember(showCatalog, films, category, isSearch,
@@ -3033,7 +3038,7 @@ private fun Herrin() {
                     }
                     else if (!isSearch && category == "首页" && railFilms.isEmpty()) Text("暂无最近播放", Modifier.padding(24.dp).testTag("recent-empty"))
                     else if (railFilms.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
-                    else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    else LazyRow(modifier = Modifier.testTag("catalog-film-rail"), state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         itemsIndexed(railFilms, key = { _, item -> displayKey(item) }) { index, item ->
                             // Runs after this lazy item's focus target is attached, including Back from detail.
                             LaunchedEffect(item.id) {
@@ -3045,11 +3050,10 @@ private fun Herrin() {
                             val homeRail = !isSearch && category == "首页" && recommendedFilms.isNotEmpty()
                             Poster(item, Modifier.testTag("card-${displayKey(item)}")
                                 .focusProperties {
-                                    up = requester(when {
-                                        isSearch -> "search-suggest-${suggestions[index.coerceAtMost(suggestions.lastIndex)]}"
-                                        index == 0 -> "play"
-                                        else -> "details"
-                                    })
+                                    up = requester(if (isSearch)
+                                        "search-suggest-${suggestions[index.coerceAtMost(suggestions.lastIndex)]}"
+                                        else TvFocusRoutes.posterUp(renderedCategory, index,
+                                            heroActionsVisible = tmdbPrimary || !sourceConfigured || catalogFilms.isNotEmpty()))
                                     down = if (homeRail) requester("recommend-${displayKey(recommendedFilms[index.coerceAtMost(recommendedFilms.lastIndex)])}")
                                         else FocusRequester.Cancel
                                 }

@@ -2,6 +2,19 @@ package tv.herrin.app
 
 /** D-pad navigation over TV-safe controls, including offscreen TMDB fields. */
 internal object TvFocusRoutes {
+    /** Extracted from the poster row; each result must exist on the active surface. */
+    fun posterUp(category: String, index: Int, heroActionsVisible: Boolean): String = when {
+        category == "Top 250" -> "nav-Top 250"
+        category == "我的" -> "my-manage-personal-sources"
+        !heroActionsVisible -> "nav-$category"
+        index == 0 -> "play"
+        else -> "details"
+    }
+
+    /** Top250 retains raw ranks; collapsed series keys are only valid on collapsed shelves. */
+    fun posterKey(category: String, inBrowse: Boolean, filmId: String, groupKey: String?): String =
+        if (inBrowse && category == "Top 250") filmId else groupKey ?: filmId
+
     fun compactSettingsNeighbor(
         current: String, down: Boolean, movieAction: String,
         splitToken: Boolean = false

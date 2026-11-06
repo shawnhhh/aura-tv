@@ -344,6 +344,9 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("my-library-empty").assertDoesNotExist()
         compose.onNodeWithTag("card-orbit").assertIsDisplayed()
         compose.onNodeWithText("继续观看与收藏 · 1 部").assertIsDisplayed()
+        focus("card-orbit")
+        key(KeyEvent.KEYCODE_DPAD_UP)
+        compose.onNodeWithTag("my-manage-personal-sources").assertIsFocused()
         capture("m473-my-favorite-actual-poster")
     }
 

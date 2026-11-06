@@ -52,6 +52,8 @@ class P0CachedHomeHeroTest {
                 compose.onNodeWithTag("nav-$category").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }
                 compose.onNodeWithTag("nav-$category").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.DirectionDown) }
                 compose.onNodeWithTag("card-$id").assertIsFocused()
+                compose.onNodeWithTag("card-$id").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.DirectionUp) }
+                compose.onNodeWithTag("nav-$category").assertIsFocused()
             }
         }
         compose.onNodeWithTag("source-empty-title").assertDoesNotExist()
