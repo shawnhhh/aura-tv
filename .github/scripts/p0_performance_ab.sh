@@ -5,6 +5,7 @@ mkdir -p performance-ab
 adb wait-for-device
 adb shell wm size 1920x1080
 adb shell wm density 240
+adb logcat -G 16M
 adb shell dumpsys display > performance-ab/display.txt
 adb shell dumpsys SurfaceFlinger > performance-ab/surface-flinger.txt
 classes='tv.herrin.app.M442RemoteBurstPerformanceTest,tv.herrin.app.M443RemoteBurstWithoutIdleTest,tv.herrin.app.M445FrameBaselineTest,tv.herrin.app.RemoteHoldReleaseTest'
@@ -24,7 +25,6 @@ for leg in A1 B1 B2 A2; do
   adb shell setprop log.tag.HerrinRemote DEBUG
   adb shell am instrument -w -r -e class "$classes" tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee "performance-ab/$leg-instrumentation.txt"
   adb logcat -d > "performance-ab/$leg-logcat.txt"
-  adb pull /data/local/tmp/herrin-test-evidence/remote-performance.log "performance-ab/$leg-metrics.txt"
   python3 - "$leg" <<'PY'
 import pathlib, sys
 text=pathlib.Path('performance-ab/'+sys.argv[1]+'-instrumentation.txt').read_text()

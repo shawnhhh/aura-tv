@@ -1,8 +1,5 @@
 name: HERRIN P0 Same Device Performance ABBA
-on:
-  push:
-    branches: ['codex/herrin-responsive-config-20261106']
-    paths: ['.github/workflows/p0-performance-ab.yml', '.github/scripts/p0_performance_ab.*']
+on: workflow_dispatch
 permissions:
   contents: read
 jobs:

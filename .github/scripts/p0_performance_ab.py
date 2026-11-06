@@ -8,8 +8,11 @@ sys.path.insert(0, str(pathlib.Path('candidate/android-tv/scripts').resolve()))
 from remote_perf_report import parse_remote_performance
 
 root=pathlib.Path('performance-ab')
-legs={leg:parse_remote_performance('\n'.join('HerrinPerf: '+line for line in (root/(leg+'-metrics.txt')).read_text().splitlines())) for leg in ('A1','B1','B2','A2')}
+legs={leg:parse_remote_performance((root/(leg+'-logcat.txt')).read_text()) for leg in ('A1','B1','B2','A2')}
 for leg, metrics in legs.items():
+    result=(root/(leg+'-instrumentation.txt')).read_text()
+    assert 'OK (5 tests)' in result and 'INSTRUMENTATION_CODE: -1' in result, leg
+    assert 'FAILURES!!!' not in result and 'INSTRUMENTATION_FAILED' not in result, leg
     assert all(key in metrics for key in ('horizontal','vertical','burst','frame_baseline')), leg
     assert metrics['horizontal']['focus_success']==40 and metrics['vertical']['focus_success']==32
     assert metrics['burst']['events']==120 and metrics['burst']['last_focus_correct']==1
