@@ -2548,7 +2548,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 // History is recomputed on returning from playback or when the
                 // source/catalog changes, not on every D-pad/animation frame.
-                var watched by remember { mutableStateOf<List<Film>>(emptyList()) }
+                var watched by remember(catalogScope) { mutableStateOf<List<Film>>(emptyList()) }
                 LaunchedEffect(isSearch, category, filtered, showCatalog, catalogScope, screen) {
                     watched = withContext(Dispatchers.Default) {
                         if (!isSearch && category == "首页") filtered.mapNotNull { shown ->
