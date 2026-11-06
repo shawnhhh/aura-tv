@@ -22,6 +22,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -214,7 +215,7 @@ internal fun TvNavTab(
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .clip(RoundedCornerShape(22.dp))
         .background(fill)
-        .clickable(onClick = onClick)
+        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
         .padding(horizontal = 12.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center) {
         // Top250's Latin letters and numerals appear optically larger than CJK glyphs
@@ -248,7 +249,7 @@ private fun TvHeaderIconButton(
         .clip(shape)
         .background(if (focused) Color(0xFFF4F4F4)
             else if (selected) Color(0xFF3A3D43) else Color.Transparent)
-        .clickable(onClick = onClick),
+        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(if (gear) 18.dp else 17.dp)) {
             val d = size.minDimension
@@ -1559,6 +1560,7 @@ private fun Herrin() {
         }
     }
     val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
+    val browseScrollStates = railStates.keys.associateWith { rememberScrollState() }
     val facetResultState = rememberLazyListState()
     // M4.25: only the active, already-loaded catalog is grouped. This is a
     // display projection; Film.id and the licensed playback paths stay intact.
@@ -1997,9 +1999,14 @@ private fun Herrin() {
             RemoteTrace.event { "RAIL focus not confirmed target=$target" }
         }
     }
+    var recentPlaybackReturn by remember { mutableStateOf<PlaybackReturnContext?>(null) }
     var pendingHistoryFilm by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(screen, pendingHistoryFilm, film.id, film.playbackEpisodes, catalogScope) {
-        if (screen != "detail") { pendingHistoryFilm = null; return@LaunchedEffect }
+        if (screen != "detail") {
+            pendingHistoryFilm = null
+            if (screen != "player") recentPlaybackReturn = null
+            return@LaunchedEffect
+        }
         if (pendingHistoryFilm != film.id || film.playbackEpisodes.isEmpty()) return@LaunchedEffect
         val saved = withContext(Dispatchers.IO) { watchHistory.resolveIndexed(film, catalogScope) }
         if (saved != null) {
@@ -2010,10 +2017,12 @@ private fun Herrin() {
                 detailSeasonLines[it.number] = line
             }
             automaticResume = HerrinAutomaticPlayback.Resume(film.id, episode, line, saved.second)
+            if (recentPlaybackReturn != null) screen = "player"
         }
         pendingHistoryFilm = null
     }
     fun details(f: Film) {
+        recentPlaybackReturn = null
         RemoteTrace.event { "DETAILS invoked film=${f.id} from=$screen" }
         cmsDetailStatus = ""
         if (f.id.startsWith("tmdb-")) {
@@ -2156,20 +2165,18 @@ private fun Herrin() {
             RemoteTrace.event { "IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}" }
         }
     }
-    var lastBackAt by remember { mutableLongStateOf(0L) }
     var lastNonPlayback by remember { mutableStateOf(PlaybackReturnContext("detail", category, focusId, filmId)) }
     var playbackReturn by remember { mutableStateOf(lastNonPlayback) }
     SideEffect {
         if (screen != "player") lastNonPlayback = PlaybackReturnContext(screen, category, focusId, filmId)
     }
     LaunchedEffect(screen) {
-        if (screen == "player") playbackReturn = lastNonPlayback
-        else recentIndexEpoch++
+        if (screen == "player") {
+            playbackReturn = recentPlaybackReturn ?: lastNonPlayback
+            recentPlaybackReturn = null
+        } else recentIndexEpoch++
     }
     fun back() {
-        val now = android.os.SystemClock.elapsedRealtime()
-        if (now - lastBackAt < 350L) return
-        lastBackAt = now
         when (screen) {
             "player" -> {
                 restoreGroupFocus = showGroup != null
@@ -2455,17 +2462,29 @@ private fun Herrin() {
                 }
                 val railFilms = if (!isSearch && category == "首页" && sourceConfigured) (recentIndexFilms + watched).distinctBy(Film::id) else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
-                val recommendedFilms = if (!isSearch && category == "首页") { if (tmdbPrimary) BrowseHeroSelection.candidates("首页", collapsedCatalog, tmdbTop250Films) else collapsedCatalog.asReversed() } else emptyList()
+                val recommendedFilms = if (!isSearch && category == "首页") { if (sourceConfigured) BrowseHeroSelection.candidates("首页", collapsedCatalog, tmdbTop250Films) else collapsedCatalog.asReversed() } else emptyList()
                 val recommendationPrefix = if (railFilms.isEmpty()) "card-" else "recommend-"
                 val recommendState = railStates.getValue("recommend")
-                val browseScroll = rememberScrollState()
-                LaunchedEffect(category) { browseScroll.scrollTo(0) }
+                val browseScroll = browseScrollStates.getValue(if (isSearch) "search" else category)
+                LaunchedEffect(screen, category, recentIndexFilms) {
+                    if (!isSearch && category == "首页" && sourceConfigured) {
+                        val index = railFilms.indexOfFirst { "card-${displayKey(it)}" == focusId }
+                        if (index >= 0) {
+                            railState.scrollToItem(index)
+                            repeat(4) {
+                                withFrameNanos { }
+                                if (runCatching { requester(focusId).requestFocus() }.isSuccess) return@LaunchedEffect
+                            }
+                        }
+                    }
+                }
                 val suggestions = listOf("轨道", "潮汐", "群山", "星夜", "清空")
                 val headerDownTarget = when {
                     isSearch -> "search-input"
                     category == "直播" -> if (liveChannels.isEmpty()) "live-config" else "live-group-all"
-                    category == "我的" && railFilms.isEmpty() -> null
-                    category == "Top 250" && railFilms.isEmpty() -> "top250-retry"
+                    category == "我的" -> "my-manage-personal-sources"
+                    category == "Top 250" -> if (railFilms.isEmpty()) "top250-retry" else
+                        "card-${displayKey(railFilms.getOrNull(railState.firstVisibleItemIndex) ?: railFilms.first())}"
                     tmdbPrimary && catalogFilms.isEmpty() -> "tmdb-home-retry"
                     sourceConfigured && catalogFilms.isEmpty() -> null
                     films.isNotEmpty() -> "play"
@@ -2639,6 +2658,15 @@ private fun Herrin() {
                         Spacer(Modifier.height(56.dp))
                         Text("TMDB 高分电影 Top 250", fontSize = 32.sp,
                             modifier = Modifier.testTag("top250-heading"))
+                        if (categoryHero != null) {
+                            Text(displayFilm.title, Modifier.testTag("hero-title-${displayFilm.id}"),
+                                fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFF5F7FA))
+                            Text(listOfNotNull(displayFilm.year.takeIf { it.isNotBlank() }, displayFilm.category,
+                                FilmMetadataEnrichment.ratingLabel(displayFilm)).joinToString(" · "),
+                                fontSize = 13.sp, color = Color(0xFFE8CDA0))
+                            Text(displayFilm.synopsis, Modifier.widthIn(max = 600.dp), maxLines = 2,
+                                fontSize = 12.sp, lineHeight = 18.sp, color = Color(0xFFCDD8E6))
+                        }
                         Text(tmdbTop250Status.ifBlank {
                             if (railFilms.isNotEmpty()) "已读取 ${railFilms.size} 部高分电影"
                             else "正在等待 TMDB 高分榜数据…"
@@ -2677,7 +2705,7 @@ private fun Herrin() {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             TvButton("管理 NAS / 云盘",
-                                modifier = Modifier.testTag("my-manage-personal-sources"),
+                                modifier = Modifier.testTag("my-manage-personal-sources").focusRequester(requester("my-manage-personal-sources")),
                                 reduced = reduceMotion) {
                                 // NAS / cloud editors are in the existing
                                 // compact Content Sources settings section.
@@ -3004,7 +3032,7 @@ private fun Herrin() {
                         }
                     }
                     else if (!isSearch && category == "首页" && railFilms.isEmpty()) Text("暂无最近播放", Modifier.padding(24.dp).testTag("recent-empty"))
-                    else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
+                    else if (railFilms.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         itemsIndexed(railFilms, key = { _, item -> displayKey(item) }) { index, item ->
                             // Runs after this lazy item's focus target is attached, including Back from detail.
@@ -3034,7 +3062,12 @@ private fun Herrin() {
                                     } else false
                                 }
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
-                                onFocus = { filmId = item.id; heroSelections[category] = item.id; focusId = "card-${displayKey(item)}" }, onClick = { openMovie(item) },
+                                onFocus = { filmId = item.id; heroSelections[category] = item.id; focusId = "card-${displayKey(item)}" }, onClick = {
+                                    val recent = !isSearch && sourceConfigured && category in setOf("首页", "我的") && recentIndexFilms.any { it.id == item.id }
+                                    val origin = if (recent) PlaybackReturnContext(screen, category, "card-${displayKey(item)}", item.id) else null
+                                    openMovie(item)
+                                    recentPlaybackReturn = origin
+                                },
                                 progress = if (!isSearch && category == "首页") {
                                     remember(item.id, showCatalog, catalogScope, screen) {
                                         showCatalog.watchProgress(item) { source, part, option ->
@@ -3286,7 +3319,7 @@ private fun Herrin() {
                             watchHistory.updateSession(historyTicket, historyScope, film.id, historyEpisode, historyLine,
                                 position, duration, finished)
                         },
-                        onBack = { back() }
+                        onBack = { if (screen == "player") back() }
                     )
                     }
                     if (playbackPicker != null) PlaybackSelectionDialog(
@@ -3348,8 +3381,10 @@ private fun Herrin() {
                         },
                         onTryOtherSource = tryOtherTmdbSource,
                         onBack = {
-                            if (cmsFailed) { cmsPlaybackPendingId = null; cmsPlaybackFailedId = null }
-                            back()
+                            if (screen == "player") {
+                                if (cmsFailed) { cmsPlaybackPendingId = null; cmsPlaybackFailedId = null }
+                                back()
+                            }
                         }
                     )
                 } else {

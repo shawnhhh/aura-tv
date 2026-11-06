@@ -9,6 +9,7 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 
 /** Real Activity cold start with public original metadata; the short token disables all network probes. */
+@OptIn(ExperimentalTestApi::class)
 class P0CachedHomeHeroTest {
     @get:Rule(order=0) val fixture=object:ExternalResource() {
         override fun before() {
@@ -47,6 +48,11 @@ class P0CachedHomeHeroTest {
             compose.onNodeWithTag("nav-$category").performClick()
             compose.onNodeWithTag("hero-title-$id").assertTextEquals("Original ${id.substringAfterLast('-')}")
             compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("hero-art-$id").assertExists() }.isSuccess }
+            if (category == "Top 250") {
+                compose.onNodeWithTag("nav-$category").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }
+                compose.onNodeWithTag("nav-$category").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.DirectionDown) }
+                compose.onNodeWithTag("card-$id").assertIsFocused()
+            }
         }
         compose.onNodeWithTag("source-empty-title").assertDoesNotExist()
         compose.onAllNodesWithText("来自影视源",substring=true).assertCountEquals(0)

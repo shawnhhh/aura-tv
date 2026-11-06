@@ -33,6 +33,7 @@ REQUIRED_CLASSES = (
     "PlaybackExperiencePersistenceTest",
     "P0ExperienceDpadTest",
     "P0RecentIndexTest",
+    "P0RecentPlaybackReturnTest",
     "P0CachedHomeHeroTest",
     "M467FongMiTrackRestoreTest",
     "TmdbSpiderPlaybackClosureTest",
