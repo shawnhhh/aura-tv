@@ -12,9 +12,7 @@ internal object TmdbSeasonParser {
     private val stillPath = Regex("^/[A-Za-z0-9_./-]+\\.(?:jpg|jpeg|png|webp)$")
 
     fun parse(raw: String, expectedSeason: Int): Map<Int, TmdbEpisodeDisplay> {
-        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return if (file.isFile && file.length() in 1..60_000)
-            runCatching { TmdbSeasonParser.parse(file.readText(), season) }.getOrDefault(emptyMap())
-            else emptyMap()
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyMap()
         if (root.optInt("season_number", -1) != expectedSeason) return emptyMap()
         val episodes = root.optJSONArray("episodes") ?: return emptyMap()
         val accepted = linkedMapOf<Int, TmdbEpisodeDisplay>()

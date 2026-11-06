@@ -22,7 +22,7 @@ internal class LanConfigServer(
     val qr: String get() = "$origin/#${pairing.pairing}"
     init {
         val tls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
-        makeSecure(tls.sslSocketFactory(), null)
+        makeSecure(tls.sslContext().serverSocketFactory, null)
     }
     override fun serve(session: IHTTPSession): Response {
         fun response(code: Response.Status, body: String, type: String = "application/json"): Response =
