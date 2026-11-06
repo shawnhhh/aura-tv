@@ -545,7 +545,7 @@ internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
         }
     }
 
-    private fun requestOnce(url: String, readAccessToken: String): String? {
+    internal fun requestOnce(url: String, readAccessToken: String): String? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 3000
             readTimeout = 5000
