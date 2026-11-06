@@ -14,7 +14,7 @@ out.mkdir(parents=True, exist_ok=True)
 sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
 run = f"https://github.com/{os.getenv('GITHUB_REPOSITORY', 'shawnhhh/aura-tv')}/actions/runs/{os.getenv('GITHUB_RUN_ID', 'local')}"
 gradle_text = (root / 'app/build.gradle.kts').read_text()
-version_match = re.search(r'^\\s*versionName\\s*=\\s*"([^"]+)"', gradle_text, re.M)
+version_match = re.search(r'^\s*versionName\s*=\s*"([^"]+)"', gradle_text, re.M)
 version_label = version_match.group(1) if version_match else '版本未识别'
 lines = [f'# HERRIN {version_label} 自动验收记录', '', f'- 构建提交：`{sha}`', f'- CI：{run}',
          '- 结论：必须同时确认本提交的 Debug 与 Android TV Emulator 两项工作流均成功。', '',

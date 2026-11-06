@@ -29,7 +29,7 @@ internal fun StartupHost(home: @Composable (StartupPresentation) -> Unit) {
             // Prewarm the existing preferences before the home accesses them.
             context.getSharedPreferences("herrin", 0).all
         }
-        while (true) { withContext(Dispatchers.Default) { CrashJournal.sampleMemory() }; delay(5000) }
+        while (true) { withContext(Dispatchers.IO) { CrashJournal.sampleMemory(); CrashJournal.checkpoint(context) }; delay(5000) }
     }
     Box(Modifier.fillMaxSize().drawWithContent { drawContent(); StartupTiming.firstDraw() }) {
         if (state.prepareHome) home(state)

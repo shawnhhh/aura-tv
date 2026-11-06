@@ -65,11 +65,22 @@ internal object CrashJournal {
         }
         installed = true
     }
+    fun checkpoint(context: Context) {
+        val file = File(context.filesDir, "last-safe-stage.txt")
+        runCatching {
+            val tmp = File(context.filesDir, "last-safe-stage.tmp")
+            tmp.writeText("CHECKPOINT time=${System.currentTimeMillis()} stage=$phase location=$location $memory")
+            if (!tmp.renameTo(file)) tmp.delete()
+        }
+    }
     /** Only invoked on IO before the normal home is composed. */
     fun loadPrevious(context: Context) {
         val file = File(context.filesDir, "last-safe-crash.txt")
         previous = runCatching { if (file.isFile && file.length() in 1..16000) file.readText()
             else "上次 Java 异常：尚无脱敏记录" }.getOrDefault("上次 Java 异常：记录不可读取")
+        val checkpoint = File(context.filesDir, "last-safe-stage.txt")
+        previous += runCatching { if (checkpoint.isFile && checkpoint.length() in 1..1024)
+            "\n上次运行检查点（约 5 秒采样）：" + checkpoint.readText() else "" }.getOrDefault("")
     }
 }
 

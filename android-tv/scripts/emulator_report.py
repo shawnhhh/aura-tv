@@ -47,6 +47,14 @@ for metric_file in (
         )
 # Only whitelisted numeric key/value pairs go into artifacts.
 summary['remote_performance'] = parse_remote_performance(metric_log)
+startup_log = out / 'startup-smoke.log'
+startup_source = startup_log.read_text(errors='replace') if startup_log.exists() else ''
+startup_fields = ('process_to_activity_ms', 'activity_to_first_draw_ms', 'first_draw_to_wordmark_ms',
+                  'wordmark_complete_ms', 'activity_to_home_ms')
+summary['startup_samples'] = [
+    {key: int(value) for key, value in re.findall(r'([a-z_]+)=(-?\d+)', line) if key in startup_fields}
+    for line in startup_source.splitlines() if 'process_to_activity_ms=' in line
+]
 (out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',
          '| Instrumentation test | Result |', '| --- | --- |']
@@ -67,3 +75,9 @@ if frames and len(frames) == next(iter(frames.values()))[0]:
     if len(encoded) <= 180_000:
         (out / 'original-mp4-compositor-thumbnail.jpg').write_bytes(base64.b64decode(encoded))
         print('HERRIN_ORIGINAL_VIDEO_FRAME_BASE64=' + encoded)
+
+# Test-controlled offline exit dialog; never export phone pairing QR/service secrets.
+exit_frames = re.findall(r'HERRIN_EXIT_FRAME_BASE64=([A-Za-z0-9+/=]+)', log)
+if exit_frames and len(exit_frames[-1]) <= 180000:
+    (out / 'exit-confirmation-preview.jpg').write_bytes(base64.b64decode(exit_frames[-1]))
+    print('HERRIN_EXIT_FRAME_BASE64=' + exit_frames[-1])

@@ -49,6 +49,14 @@ class P0ExitAndEntryTest {
         val i=InstrumentationRegistry.getInstrumentation()
         i.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence").close()
         i.uiAutomation.executeShellCommand("screencap -p /data/local/tmp/herrin-test-evidence/exit-confirmation.png").use { fd->java.io.FileInputStream(fd.fileDescriptor).use{it.readBytes()} }
+        // Fixed offline demo only. Never export a QR or a user's service form.
+        val screen=i.uiAutomation.takeScreenshot()
+        val preview=android.graphics.Bitmap.createScaledBitmap(screen,640,360,true)
+        val bytes=java.io.ByteArrayOutputStream()
+        preview.compress(android.graphics.Bitmap.CompressFormat.JPEG,80,bytes)
+        android.util.Log.i("HerrinExitPreview","HERRIN_EXIT_FRAME_BASE64="+android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP))
+        if(preview!==screen) preview.recycle()
+        screen.recycle()
         back();compose.onNodeWithTag("exit-dialog").assertDoesNotExist();assertFalse(compose.activity.isFinishing)
     }
     @Test fun explicitExitFinishesActivityWithoutErasingSettings(){

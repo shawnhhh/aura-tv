@@ -919,7 +919,7 @@ private fun Herrin(startup: StartupPresentation) {
             profileStore.list().size, prefs.livePlaylistUrl.isNotBlank()) +
             "\n系统模式：${supported.joinToString()}\n窗口请求：${activity.window.attributes.preferredRefreshRate}Hz" +
             "\nTMDB API：${TmdbEndpoints.current}（图片 CDN 独立）" +
-            "\n" + (activity as? MainActivity)?.frameSummary().orEmpty() + MainExitDiagnostics.recent(context) + "\n" + CrashJournal.previous
+            "\n" + (activity as? MainActivity)?.frameSummary().orEmpty() + MainExitDiagnostics.recent(context) + "\n" + CrashJournal.previous + "\n" + StartupTiming.summary()
     }
     LaunchedEffect(catalogRefresh) {
         // Once a TVBox URL has been applied, the legacy/demo catalog must not
@@ -2330,6 +2330,7 @@ private fun Herrin(startup: StartupPresentation) {
                 return@LaunchedEffect
             runCatching { requester(id).requestFocus() }.onSuccess {
                 pendingToolbarFocus = null
+                StartupTiming.finish()
                 RemoteTrace.event { "RESTORE target=$id completed" }
             }.onFailure {
                 if (screen == "browse") runCatching { requester("nav-$category").requestFocus() }
@@ -4783,7 +4784,6 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
         if (exiting) {
             if (reduced) opacity.snapTo(0f)
             else opacity.animateTo(0f, tween(LaunchMotion.FADE_MS))
-            StartupTiming.finish()
             onFinished()
         }
     }
