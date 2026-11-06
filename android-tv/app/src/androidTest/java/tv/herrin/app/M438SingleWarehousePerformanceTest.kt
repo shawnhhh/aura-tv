@@ -141,7 +141,7 @@ class M438SingleWarehousePerformanceTest {
                 " frames_over_16ms=" + frames.count { it > 16L } +
                 " frames_total=" + frames.size)
             val denseMetrics = "m447_dense_dpad_events=16 focus_success=${focusEvents.size} " +
-                "key_to_focus_p95_ms=$focusP95 end_to_idle_p95_ms=$p95 " +
+                "key_to_focus_p50_ms=${keyToFocus[keyToFocus.size / 2]} key_to_focus_p95_ms=$focusP95 end_to_idle_p95_ms=$p95 " +
                 "frame_p95_ms=${frameP95 ?: "unavailable"} frames_total=${frames.size}"
             Log.i("HerrinPerf", denseMetrics)
             val fd = InstrumentationRegistry.getInstrumentation().uiAutomation

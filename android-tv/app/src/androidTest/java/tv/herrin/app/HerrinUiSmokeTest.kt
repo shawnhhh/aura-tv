@@ -531,7 +531,7 @@ http://example.org/live/channel.m3u8
     @Test fun remoteAllDirectionsCategoriesAndVisibleFocus() {
         focus("nav-首页")
         // Visual parity: both home shelves must be displayed, not simply composed off-screen.
-        compose.onNodeWithText("继续观看").assertIsDisplayed()
+        compose.onNodeWithTag("recent-heading").assertTextEquals("演示片库").assertIsDisplayed()
         compose.onNodeWithText("热门推荐").assertIsDisplayed()
         compose.onNodeWithTag("card-orbit").assertExists()
         compose.onNodeWithTag("recommend-blue").assertExists()

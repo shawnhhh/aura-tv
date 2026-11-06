@@ -194,22 +194,22 @@ internal fun TvButton(label: String, modifier: Modifier = Modifier, reduced: Boo
 /** Compact cinematic tabs: one visual language for Chinese labels and icon controls.
  * D-pad focus remains immediate; only GPU scale is animated. */
 @Composable
-private fun TvNavTab(
+internal fun TvNavTab(
     label: String, modifier: Modifier = Modifier, reduced: Boolean = false,
     selected: Boolean = false, onFocus: () -> Unit = {}, onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
     val focusScale by animateFloatAsState(
         if (focused && !reduced) 1.018f else 1f,
-        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 850f),
+        if (reduced) snap() else tween(120),
         label = "nav-tab-focus"
     )
     val fill = when {
-        focused -> Color(0xFFF0F1F3)
-        selected -> Color(0xFFD3D6DB)
+        focused -> Color(0xFFF4F4F4)
+        selected -> Color(0xFF3A3D43)
         else -> Color.Transparent
     }
-    val textColor = if (focused || selected) Color(0xFF1D222B) else Color(0xE6EEF1F6)
+    val textColor = if (focused) Color(0xFF151515) else if (selected) Color(0xFFF5F5F5) else Color(0xFFBFC3CA)
     Box(modifier.graphicsLayer { scaleX = focusScale; scaleY = focusScale }
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .clip(RoundedCornerShape(22.dp))
@@ -236,18 +236,18 @@ private fun TvHeaderIconButton(
     val shape = RoundedCornerShape(22.dp)
     val focusScale by animateFloatAsState(
         if (focused && !reduced) 1.025f else 1f,
-        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 850f),
+        if (reduced) snap() else tween(120),
         label = "header-icon-focus"
     )
-    val foreground = if (focused || selected) Color(0xFF1D222B) else Color(0xDCEBF0F7)
+    val foreground = if (focused) Color(0xFF151515) else Color(0xFFF5F5F5)
     val label = if (gear) "设置" else "搜索"
     Box(modifier.size(if (gear) 35.dp else 33.dp)
         .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
         .semantics { contentDescription = label }
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .clip(shape)
-        .background(if (focused) Color(0xFFF0F1F3)
-            else if (selected) Color(0xFFD3D6DB) else Color.Transparent)
+        .background(if (focused) Color(0xFFF4F4F4)
+            else if (selected) Color(0xFF3A3D43) else Color.Transparent)
         .clickable(onClick = onClick),
         contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(if (gear) 18.dp else 17.dp)) {
@@ -825,12 +825,20 @@ private fun Herrin() {
     var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
     var catalogRefresh by remember { mutableIntStateOf(0) }
-    val sourceConfigured = configuredTvBoxUrl.isNotBlank() || tmdbHomeFilms.isNotEmpty() ||
+    val tmdbPrimary = prefs.tmdbReadToken.isNotBlank()
+    val sourceConfigured = tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbHomeFilms.isNotEmpty() ||
         prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
-    val films = if (tmdbHomeFilms.isNotEmpty()) {
+    var recentIndexEpoch by remember { mutableIntStateOf(0) }
+    var recentIndexFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
+    LaunchedEffect(recentIndexEpoch) { recentIndexFilms = withContext(Dispatchers.IO) { watchHistory.indexedFilms() } }
+    val resolvedSnapshot = tmdbResolved.toMap()
+    val catalogFilms = remember(tmdbPrimary, tmdbHomeFilms, tmdbTop250Films, resolvedSnapshot, providerFilms, sourceConfigured) { if (tmdbPrimary) {
         (tmdbHomeFilms + tmdbTop250Films).distinctBy(Film::id)
-            .map { tmdbResolved[it.id] ?: it }
-    } else providerFilms ?: if (sourceConfigured) emptyList() else demoFilms
+            .map { resolvedSnapshot[it.id] ?: it }
+    } else providerFilms ?: if (sourceConfigured) emptyList() else demoFilms }
+    val films = remember(catalogFilms, recentIndexFilms, resolvedSnapshot) {
+        (catalogFilms + recentIndexFilms.map { resolvedSnapshot[it.id] ?: it }).distinctBy(Film::id)
+    }
     // Source settings can change independently of the TMDB title. Do not keep
     // old playable URLs or credential maps after NAS/cloud/TVBox is reconfigured.
     LaunchedEffect(personalSourceConfigEpoch, tvBoxSingle, tvBoxWarehouses, tvBoxAllowHttp) {
@@ -859,7 +867,7 @@ private fun Herrin() {
             UiDisplayMode(it.physicalWidth, it.physicalHeight, it.refreshRate)
         }
         return deviceStatusSummary(current, preferredUiRefreshRate(current, supported),
-            profileStore.list().size, prefs.livePlaylistUrl.isNotBlank())
+            profileStore.list().size, prefs.livePlaylistUrl.isNotBlank()) + MainExitDiagnostics.recent(context)
     }
     LaunchedEffect(catalogRefresh) {
         // Once a TVBox URL has been applied, the legacy/demo catalog must not
@@ -965,7 +973,7 @@ private fun Herrin() {
             screen = "live-player"
         }
     }
-    val catalogScope = if (tmdbHomeFilms.isNotEmpty()) "tmdb:discovery"
+    val catalogScope = if (tmdbPrimary) "tmdb:discovery"
         else tvBoxVodScope ?: prefs.catalogUrl.ifBlank { "herrin-offline-demo" }
     // Only the source's playback identity survives enrichment. Every network
     // result modifies display fields in-place and never alters episode links,
@@ -996,18 +1004,27 @@ private fun Herrin() {
             metadataRescanEpoch++
         }
     }
-    val tmdbDiscovery = remember { HerrinTmdbDiscovery() }
+    val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
+    LaunchedEffect(metadataToken) {
+        tmdbHomeFilms = emptyList()
+        tmdbTop250Films = emptyList()
+        if (metadataToken.isNotBlank()) {
+            val cached = withContext(Dispatchers.IO) { tmdbDiscovery.cachedHome(metadataToken) }
+            tmdbHomeFilms = cached
+            tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
+        }
+    }
     // TMDB is the authoritative discovery index. No video-site homepage is
     // consulted to build the hero, ratings or poster rails.
     LaunchedEffect(metadataToken, tmdbConnectivity) {
         if (tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
         tmdbDiscoveryStatus = "正在加载 TMDB 热播影片与类型推荐…"
         val keys = listOf("trending-movies", "trending-tv", "new-movies",
-            "on-air-tv", "top250", "sci-fi", "action", "mystery", "animation")
+            "on-air-tv", "top250", "sci-fi", "action", "mystery", "animation", "variety", "documentary")
         val loaded = mutableListOf<Film>()
         for (key in keys) {
             val section = tmdbDiscovery.sections.first { it.key == key }
-            val shelf = runCatching { tmdbDiscovery.load(section, metadataToken) }.getOrNull()
+            val shelf = try { tmdbDiscovery.load(section, metadataToken) } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: java.io.IOException) { null }
             if (shelf != null) {
                 loaded += shelf.films
                 // Top Rated is already loaded as a home recommendation.
@@ -1022,10 +1039,10 @@ private fun Herrin() {
         }
         if (loaded.isNotEmpty()) {
             tmdbHomeFilms = loaded.distinctBy(Film::id)
-            if (tmdbHomeFilms.none { it.id == filmId }) filmId = tmdbHomeFilms.first().id
+            // Discovery publication must not steal selection or focus.
             tmdbDiscoveryStatus = "TMDB 已加载 ${tmdbHomeFilms.size} 部作品；播放时优先检索 NAS／云盘"
         } else {
-            tmdbDiscoveryStatus = "TMDB 未返回可用影视资料；保留已配置的本地片库"
+            tmdbDiscoveryStatus = "TMDB 未返回新资料；保留首页缓存，可重试联网"
         }
     }
     LaunchedEffect(category, metadataToken, tmdbConnectivity, tmdbTop250RetryEpoch) {
@@ -1040,14 +1057,15 @@ private fun Herrin() {
         }
         if (tmdbTop250Films.size >= 250) return@LaunchedEffect
         tmdbTop250Status = "正在载入 TMDB 高分榜，请稍候…"
-        val shelf = runCatching {
+        val shelf = try {
             tmdbDiscovery.loadTop250(metadataToken) { page ->
                 if (page.films.isNotEmpty()) {
                     tmdbTop250Films = page.films
                     tmdbTop250Status = "已读取 ${page.films.size}/250 部高分电影，正在继续加载…"
                 }
             }
-        }.getOrNull()
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+          catch (_: java.io.IOException) { null }
         if (shelf == null) {
             tmdbTop250Status = "TMDB 高分榜请求失败；检查电视网络、DNS 或访问限制后重试"
         } else {
@@ -1062,18 +1080,18 @@ private fun Herrin() {
     }
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
     // the scraped poster/title as an executable source or auto-plays a video.
-    LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, tvBoxSingle,
+    LaunchedEffect(screen, filmId, tmdbHomeFilms, tmdbTop250Films, recentIndexFilms, tvBoxSingle,
         tvBoxWarehouses, personalSourceConfigEpoch, tmdbLookupEpoch) {
         val recoveryRequest = automaticSearch?.takeIf { it.film == filmId && screen == "player" }
         if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
             tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true) return@LaunchedEffect
-        val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
+        val tmdbFilm = (tmdbHomeFilms + tmdbTop250Films + recentIndexFilms).firstOrNull { it.id == filmId }
             ?: return@LaunchedEffect
         val tmdbKey = tmdbDiscovery.identity(tmdbFilm) ?: return@LaunchedEffect
         val targetId = tmdbFilm.id
         val searchIdentity = HerrinFilmIdentity(
             tmdbKey.second, tmdbKey.first,
-            listOf(tmdbFilm.title, tmdbFilm.subtitle).filter(String::isNotBlank),
+            listOf(tmdbFilm.title, tmdbFilm.subtitle.takeUnless { "集 · " in it }.orEmpty()).filter(String::isNotBlank),
             tmdbFilm.year.toIntOrNull(), season = recoveryRequest?.coordinate?.season,
             episode = recoveryRequest?.coordinate?.episode
         )
@@ -1393,7 +1411,9 @@ private fun Herrin() {
             return@LaunchedEffect
         val filmToEnrich = (tmdbHomeFilms + tmdbTop250Films).firstOrNull { it.id == filmId }
             ?: return@LaunchedEffect
-        val detailed = runCatching { tmdbDiscovery.detail(filmToEnrich, metadataToken) }.getOrNull()
+        val detailed = try { tmdbDiscovery.detail(filmToEnrich, metadataToken) }
+            catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+            catch (_: java.io.IOException) { null }
             ?: return@LaunchedEffect
         val imdbScore = withContext(Dispatchers.IO) {
             runCatching { personalImdbRatings.lookup(detailed.imdbId) }.getOrNull()
@@ -1544,18 +1564,35 @@ private fun Herrin() {
     // display projection; Film.id and the licensed playback paths stay intact.
     val showCatalog = remember(catalogScope, films) { ShowCatalog.build(films, catalogScope) }
     val browseFilms = remember(showCatalog, films) { showCatalog.collapse(films) }
+    LaunchedEffect(catalogFilms, catalogScope, screen) {
+        if (screen != "player" && withContext(Dispatchers.IO) { watchHistory.importLegacy(catalogScope, catalogFilms) } > 0) recentIndexEpoch++
+    }
     val film = films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
     // Single-source fallback is deliberately presentation-only: the original
     // Film remains the same, and legacy detail/selection paths stay usable.
     val showGroup = showCatalog.groupFor(film.id).takeUnless {
         screen == "detail" && film.id == bypassGroupFilmId
     }
-    val displayFilm = showGroup?.displayFilm ?: film
+    val heroSelections = remember { mutableStateMapOf<String, String>() }
+    val collapsedCatalog = remember(browseFilms, catalogFilms) {
+        val ids = catalogFilms.mapTo(hashSetOf(), Film::id)
+        browseFilms.filter { it.id in ids }
+    }
+    val categoryHeroFilms = remember(collapsedCatalog, category, tmdbTop250Films) {
+        BrowseHeroSelection.candidates(category, collapsedCatalog, tmdbTop250Films)
+    }
+    val categoryHero = BrowseHeroSelection.select(categoryHeroFilms, heroSelections[category])
+    val displayFilm = if (screen == "browse" && category !in setOf("直播", "我的"))
+        categoryHero ?: Film("loading-$category", "正在加载$category", "", category, "", "", R.drawable.photofilm_orbit)
+        else showGroup?.displayFilm ?: film
+    LaunchedEffect(category, categoryHero?.id, screen) {
+        if (screen == "browse" && category !in setOf("直播", "我的") && categoryHero != null) filmId = categoryHero.id
+    }
     // Focus/title change in the current input frame. Large hero decode and
     // full-screen crossfade should not run for every intermediate cursor stop.
     var backdropFilm by remember { mutableStateOf(displayFilm) }
-    LaunchedEffect(displayFilm, screen) {
-        if (screen == "browse" || screen == "search") delay(RemoteMotionPolicy.HERO_DWELL_MS)
+    LaunchedEffect(displayFilm, screen, category) {
+        if (screen == "search") delay(RemoteMotionPolicy.HERO_DWELL_MS)
         backdropFilm = displayFilm
     }
     fun displayKey(item: Film): String = showCatalog.groupFor(item.id)?.key ?: item.id
@@ -1830,6 +1867,22 @@ private fun Herrin() {
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
     val settingsListState = rememberLazyListState()
+    var lastDetailLineFocus by remember { mutableStateOf("detail-first-line") }
+    val detailFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    fun enterDetailEpisodes() {
+        detailFocusJob[0]?.cancel()
+        detailFocusJob[0] = uiScope.launch {
+            DetailRegionFocus.move(settingsListState, requester("detail-current-episode"), true)
+        }
+    }
+    LaunchedEffect(screen, film.id) { detailFocusJob[0]?.cancel(); if (screen == "detail") lastDetailLineFocus = "detail-first-line" }
+    fun returnDetailLine(): Boolean {
+        detailFocusJob[0]?.cancel()
+        detailFocusJob[0] = uiScope.launch {
+            DetailRegionFocus.move(settingsListState, requester(lastDetailLineFocus), false)
+        }
+        return true
+    }
     // Cast is the final offscreen LazyColumn item. Scroll it into composition
     // before requesting focus; native spatial search cannot reach detached rows.
     fun moveToDetailCast(): Boolean = screen == "detail" &&
@@ -1944,6 +1997,22 @@ private fun Herrin() {
             RemoteTrace.event { "RAIL focus not confirmed target=$target" }
         }
     }
+    var pendingHistoryFilm by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(screen, pendingHistoryFilm, film.id, film.playbackEpisodes, catalogScope) {
+        if (screen != "detail") { pendingHistoryFilm = null; return@LaunchedEffect }
+        if (pendingHistoryFilm != film.id || film.playbackEpisodes.isEmpty()) return@LaunchedEffect
+        val saved = withContext(Dispatchers.IO) { watchHistory.resolveIndexed(film, catalogScope) }
+        if (saved != null) {
+            episode = saved.first.episode; line = saved.first.line
+            seasonLayout?.sections?.firstOrNull { section -> section.episodes.any { it.source.number == episode } }?.let {
+                detailSelectedSeason = it.number
+                detailSeasonEpisodeNumbers[it.number] = episode
+                detailSeasonLines[it.number] = line
+            }
+            automaticResume = HerrinAutomaticPlayback.Resume(film.id, episode, line, saved.second)
+        }
+        pendingHistoryFilm = null
+    }
     fun details(f: Film) {
         RemoteTrace.event { "DETAILS invoked film=${f.id} from=$screen" }
         cmsDetailStatus = ""
@@ -1982,6 +2051,7 @@ private fun Herrin() {
             }
         }
         filmId = f.id
+        pendingHistoryFilm = f.id
         bypassGroupFilmId = null
         detailSelectedSeason = 0
         restoreSeasonFocus = false
@@ -2086,12 +2156,28 @@ private fun Herrin() {
             RemoteTrace.event { "IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}" }
         }
     }
+    var lastBackAt by remember { mutableLongStateOf(0L) }
+    var lastNonPlayback by remember { mutableStateOf(PlaybackReturnContext("detail", category, focusId, filmId)) }
+    var playbackReturn by remember { mutableStateOf(lastNonPlayback) }
+    SideEffect {
+        if (screen != "player") lastNonPlayback = PlaybackReturnContext(screen, category, focusId, filmId)
+    }
+    LaunchedEffect(screen) {
+        if (screen == "player") playbackReturn = lastNonPlayback
+        else recentIndexEpoch++
+    }
     fun back() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastBackAt < 350L) return
+        lastBackAt = now
         when (screen) {
             "player" -> {
                 restoreGroupFocus = showGroup != null
                 restoreSeasonFocus = showGroup == null && seasonLayout != null
-                screen = "detail"
+                category = playbackReturn.category
+                focusId = playbackReturn.focus
+                if (films.any { it.id == playbackReturn.film }) filmId = playbackReturn.film
+                screen = playbackReturn.screen
             }
             "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
             "detail" -> { bypassGroupFilmId = null; screen = returnScreen }
@@ -2115,7 +2201,7 @@ private fun Herrin() {
         inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
         pendingLiveSearchFocus = true
     }
-    BackHandler(splash || screen != "browse" || category != "首页") {
+    BackHandler(true) {
         when {
             splash -> splashExiting = true
             screen == "browse" && category == "直播" &&
@@ -2154,9 +2240,9 @@ private fun Herrin() {
         // On resource-limited TVs this avoids competing with first-frame UI.
         if (!splash && screen != "player" && screen != "live-player" &&
             (!sourceConfigured || films.isNotEmpty())) {
-            Crossfade(targetState = backdropFilm, animationSpec = if (reduceMotion) tween(0)
+            Crossfade(targetState = backdropFilm.takeIf { it.id == displayFilm.id } ?: displayFilm, animationSpec = if (reduceMotion) tween(0)
                 else tween(RemoteMotionPolicy.HERO_CROSSFADE_MS, easing = FastOutSlowInEasing), label = "hero-art-crossfade") { hero ->
-                FilmArtwork(hero, Modifier.fillMaxSize())
+                FilmArtwork(hero, Modifier.fillMaxSize().testTag("hero-art-${hero.id}"))
             }
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
@@ -2345,11 +2431,12 @@ private fun Herrin() {
                         // metadata grouping is not allowed to hide its ranks.
                         tmdbTop250Films.map { tmdbResolved[it.id] ?: it }.distinctBy(Film::id)
                     else if (category == "我的") {
-                        val recent = watchHistory.recent(catalogScope, films)
+                        val recent = (recentIndexFilms.map { cached -> films.firstOrNull { it.id == cached.id } ?: cached } +
+                            watchHistory.recent(catalogScope, films)).distinctBy(Film::id)
                         val saved = showCatalog.favorites(favorites)
                         showCatalog.collapse(HerrinMyLibrary.combine(recent, saved))
                     }
-                    else showCatalog.collapse(films.filter {
+                    else showCatalog.collapse(catalogFilms.filter {
                         category == "首页" || it.category == category ||
                             (category in setOf("科幻", "动作", "悬疑", "喜剧") &&
                                 category in it.genres)
@@ -2366,9 +2453,10 @@ private fun Herrin() {
                     }.sortedByDescending { it.second }.map { it.first }
                     else emptyList()
                 }
-                val railFilms = if (watched.isNotEmpty()) watched else filtered
+                val railFilms = if (!isSearch && category == "首页" && sourceConfigured) (recentIndexFilms + watched).distinctBy(Film::id) else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
-                val recommendedFilms = if (!isSearch && category == "首页") browseFilms.asReversed() else emptyList()
+                val recommendedFilms = if (!isSearch && category == "首页") { if (tmdbPrimary) BrowseHeroSelection.candidates("首页", collapsedCatalog, tmdbTop250Films) else collapsedCatalog.asReversed() } else emptyList()
+                val recommendationPrefix = if (railFilms.isEmpty()) "card-" else "recommend-"
                 val recommendState = railStates.getValue("recommend")
                 val browseScroll = rememberScrollState()
                 LaunchedEffect(category) { browseScroll.scrollTo(0) }
@@ -2378,7 +2466,8 @@ private fun Herrin() {
                     category == "直播" -> if (liveChannels.isEmpty()) "live-config" else "live-group-all"
                     category == "我的" && railFilms.isEmpty() -> null
                     category == "Top 250" && railFilms.isEmpty() -> "top250-retry"
-                    sourceConfigured && films.isEmpty() -> null
+                    tmdbPrimary && catalogFilms.isEmpty() -> "tmdb-home-retry"
+                    sourceConfigured && catalogFilms.isEmpty() -> null
                     films.isNotEmpty() -> "play"
                     else -> null
                 }?.let { requester(it) }
@@ -2387,7 +2476,7 @@ private fun Herrin() {
                 val visibleFirstIndex by remember(railState) {
                     derivedStateOf { railState.firstVisibleItemIndex }
                 }
-                val firstPosterTarget = railFilms.getOrNull(visibleFirstIndex)
+                val firstPosterTarget = (railFilms.getOrNull(visibleFirstIndex) ?: recommendedFilms.firstOrNull())
                     ?.let { requester("card-${displayKey(it)}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
                 Column(Modifier.fillMaxSize().testTag("browse-scroll").graphicsLayer {
@@ -2414,6 +2503,10 @@ private fun Herrin() {
                             onFocus = { focusId = it },
                             onSelect = { selected ->
                                 category = selected
+                                val candidates = if (selected == "Top 250") tmdbTop250Films else catalogFilms.filter {
+                                    selected == "首页" || it.category == selected || selected in it.genres
+                                }
+                                (candidates.firstOrNull { it.id == heroSelections[selected] } ?: candidates.firstOrNull())?.let { filmId = it.id }
                                 if (selected == "直播" && liveChannels.isNotEmpty()) {
                                     if (activeLiveChannel?.url !in liveChannels.map { it.url }) {
                                         activeLiveChannel = liveChannels.first()
@@ -2603,7 +2696,7 @@ private fun Herrin() {
                                 fontSize = 15.sp, color = Color(0xFFC4CEDD))
                         }
                         Spacer(Modifier.height(30.dp))
-                    } else if (sourceConfigured && films.isEmpty()) {
+                    } else if (!tmdbPrimary && sourceConfigured && catalogFilms.isEmpty()) {
                         Spacer(Modifier.height(135.dp))
                         Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.testTag("source-empty-title"))
@@ -2622,7 +2715,11 @@ private fun Herrin() {
                                 fontWeight = FontWeight.Medium, color = Color(0xC2DDE6F0))
                         }
                         Spacer(Modifier.height(11.dp))
-                        Text(displayFilm.title, fontSize = 42.sp, fontWeight = FontWeight.SemiBold,
+                        if (tmdbPrimary && catalogFilms.isEmpty()) {
+                            Text(tmdbDiscoveryStatus.ifBlank { tmdbProbeMessage }, color = Color(0xFFBFC3CA))
+                            TvButton("重试 TMDB 首页", Modifier.testTag("tmdb-home-retry").focusRequester(requester("tmdb-home-retry"))) { tmdbProbeEpoch++ }
+                        }
+                        Text(displayFilm.title, modifier = Modifier.testTag("hero-title-${displayFilm.id}"), fontSize = 42.sp, fontWeight = FontWeight.SemiBold,
                             letterSpacing = 0.4.sp, color = Color(0xFFF5F7FA), lineHeight = 48.sp)
                         Text(displayFilm.subtitle, fontSize = 12.sp, letterSpacing = 2.3.sp,
                             color = Color(0xCADFE5EE))
@@ -2660,9 +2757,10 @@ private fun Herrin() {
                     }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "继续观看与收藏 · ${filtered.size} 部"; category == "首页" -> if (sourceConfigured) "来自影视源 · ${filtered.size} 部" else "继续观看"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
+                        Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "继续观看与收藏 · ${filtered.size} 部"; category == "首页" -> if (sourceConfigured) "最近播放" else "演示片库"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
+                            modifier = Modifier.testTag("recent-heading"),
                             fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
-                        Text(if (sourceConfigured) "${providerStatus.take(48)}" else if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN",
+                        Text(if (!isSearch && category == "首页" && sourceConfigured) "" else if (sourceConfigured) "${providerStatus.take(48)}" else if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN",
                             fontSize = 11.sp, letterSpacing = 1.5.sp,
                             color = Color(0xFFB6BBC5))
                     }
@@ -2905,6 +3003,7 @@ private fun Herrin() {
                             }
                         }
                     }
+                    else if (!isSearch && category == "首页" && railFilms.isEmpty()) Text("暂无最近播放", Modifier.padding(24.dp).testTag("recent-empty"))
                     else if (filtered.isEmpty()) Text(if (isSearch) "没有找到匹配影片" else "暂无收藏，进入影片详情添加", Modifier.padding(24.dp))
                     else LazyRow(state = railState, contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         itemsIndexed(railFilms, key = { _, item -> displayKey(item) }) { index, item ->
@@ -2935,12 +3034,12 @@ private fun Herrin() {
                                     } else false
                                 }
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
-                                onFocus = { filmId = item.id; focusId = "card-${displayKey(item)}" }, onClick = { openMovie(item) },
+                                onFocus = { filmId = item.id; heroSelections[category] = item.id; focusId = "card-${displayKey(item)}" }, onClick = { openMovie(item) },
                                 progress = if (!isSearch && category == "首页") {
                                     remember(item.id, showCatalog, catalogScope, screen) {
                                         showCatalog.watchProgress(item) { source, part, option ->
                                             watchHistory.load(catalogScope, source.id, part.number, option.id)
-                                        }?.fraction
+                                        }?.fraction ?: watchHistory.indexedProgress(item.id)?.fraction
                                     }
                                 } else null)
                         }
@@ -2956,21 +3055,23 @@ private fun Herrin() {
                         LazyRow(state = recommendState, contentPadding = PaddingValues(10.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             itemsIndexed(recommendedFilms, key = { _, item -> displayKey(item) }) { index, item ->
-                                Poster(item, Modifier.testTag("recommend-${displayKey(item)}")
+                                Poster(item, Modifier.testTag("${recommendationPrefix}${displayKey(item)}")
                                     .focusProperties {
-                                        up = requester("card-${displayKey(railFilms[index.coerceAtMost(railFilms.lastIndex)])}")
+                                        up = railFilms.getOrNull(index.coerceAtMost(railFilms.lastIndex))?.let { requester("card-${displayKey(it)}") } ?: requester("play")
                                         down = FocusRequester.Cancel
                                     }
                                     .onPreviewKeyEvent { event ->
                                         if (event.type == KeyEventType.KeyDown &&
                                             event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                                            transferPosterFocus(recommendState, railState, index,
+                                            if (railFilms.isEmpty()) {
+                                                uiScope.launch { browseScroll.scrollTo(0); withFrameNanos { }; requester("play").requestFocus() }
+                                            } else transferPosterFocus(recommendState, railState, index,
                                                 railFilms, "card-", browseScroll, false)
                                             true
                                         } else false
                                     }
-                                    .focusRequester(requester("recommend-${displayKey(item)}")), reduceMotion,
-                                    onFocus = { filmId = item.id; focusId = "recommend-${displayKey(item)}" },
+                                    .focusRequester(requester("${recommendationPrefix}${displayKey(item)}")), reduceMotion,
+                                    onFocus = { filmId = item.id; heroSelections[category] = item.id; focusId = "${recommendationPrefix}${displayKey(item)}" },
                                     onClick = { openMovie(item) })
                             }
                         }
@@ -3178,14 +3279,14 @@ private fun Herrin() {
                         onSourceExhausted = recoverPlayback,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
+                            if (position >= 3_000L && duration > 0) uiScope.launch(Dispatchers.IO) {
+                                watchHistory.recordFilm(historyTicket, historyScope, film, historyEpisode, historyLine, position, duration)
+                                withContext(Dispatchers.Main) { if (screen != "player") recentIndexEpoch++ }
+                            }
                             watchHistory.updateSession(historyTicket, historyScope, film.id, historyEpisode, historyLine,
                                 position, duration, finished)
                         },
-                        onBack = {
-                            restoreGroupFocus = showGroup != null
-                            restoreSeasonFocus = showGroup == null && seasonLayout != null
-                            screen = "detail"
-                        }
+                        onBack = { back() }
                     )
                     }
                     if (playbackPicker != null) PlaybackSelectionDialog(
@@ -3247,11 +3348,8 @@ private fun Herrin() {
                         },
                         onTryOtherSource = tryOtherTmdbSource,
                         onBack = {
-                            if (cmsFailed) {
-                                cmsPlaybackPendingId = null
-                                cmsPlaybackFailedId = null
-                                screen = returnScreen
-                            } else screen = "detail"
+                            if (cmsFailed) { cmsPlaybackPendingId = null; cmsPlaybackFailedId = null }
+                            back()
                         }
                     )
                 } else {
@@ -3474,7 +3572,10 @@ private fun Herrin() {
                                         metadataToken = value
                                         clearTmdbInput()
                                         metadataRescanEpoch++
-                                        tmdbProbeEpoch++
+                                        uiScope.launch {
+                                            withContext(Dispatchers.IO) { tmdbDiscovery.invalidate(metadataToken) }
+                                            tmdbProbeEpoch++
+                                        }
                                         tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
@@ -3488,7 +3589,10 @@ private fun Herrin() {
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
                                         metadataRescanEpoch++
-                                        tmdbProbeEpoch++
+                                        uiScope.launch {
+                                            withContext(Dispatchers.IO) { tmdbDiscovery.invalidate(metadataToken) }
+                                            tmdbProbeEpoch++
+                                        }
                                         tmdbSettingsStatus = "正在重新匹配当前影视点的元数据"
                                     } else tmdbSettingsStatus = "请先配置 TMDB Token"
                                 }
@@ -3950,7 +4054,10 @@ private fun Herrin() {
                                     metadataToken = value
                                     clearTmdbInput()
                                     metadataRescanEpoch++
-                                    tmdbProbeEpoch++
+                                    uiScope.launch {
+                                        withContext(Dispatchers.IO) { tmdbDiscovery.invalidate(metadataToken) }
+                                        tmdbProbeEpoch++
+                                    }
                                     tmdbSettingsStatus = "已保存；正在重新匹配海报与影视资料"
                                 } else tmdbSettingsStatus = "请输入完整的 TMDB API Read Access Token"
                             }
@@ -3993,9 +4100,11 @@ private fun Herrin() {
                                 confirmCacheClear = true
                                 posterCacheStatus = "请在 15 秒内再次确定；只清理授权海报缓存文件"
                             } else {
-                                val cleared = posterCache.clearFiles()
                                 confirmCacheClear = false
-                                posterCacheStatus = "已清理 $cleared 个缓存文件；收藏、播放历史和目录均已保留"
+                                uiScope.launch {
+                                    val cleared = withContext(Dispatchers.IO) { tmdbDiscovery.clearPersistent(); posterCache.clearFiles() }
+                                    posterCacheStatus = "已清理 $cleared 个缓存文件；收藏、播放历史和目录均已保留"
+                                }
                             }
                         } }
                         item { Text(posterCacheStatus, modifier = Modifier.testTag("poster-cache-status"),
@@ -4183,26 +4292,16 @@ private fun Herrin() {
                                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
                             if (showGroup == null && !HerrinPlaybackEntry.unavailableTmdb(film) &&
                                 (providerFilms == null || displayedLines.isNotEmpty())) item {
-                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (displayedLines.isEmpty()) {
-                                    listOf("演示线路 A", "演示线路 B").forEachIndexed { index, name ->
-                                        TvButton(name, modifier = Modifier.testTag("line-$name")
-                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier),
-                                            reduced = reduceMotion, selected = line == name) { line = name }
-                                    }
-                                } else {
-                                    displayedLines.forEachIndexed { index, option ->
-                                        TvButton(option.title, modifier = Modifier.testTag("line-${option.id}")
-                                            .then(if (index == 0) Modifier.focusRequester(requester("detail-first-line")) else Modifier), reduced = reduceMotion,
-                                            selected = line == option.id) {
-                                            line = option.id
-                                            detailSeason?.let { detailSeasonLines[it.number] = option.id }
-                                        }
-                                    }
-                                }
-                                }
+                                DetailLineRow(
+                                    if (displayedLines.isEmpty()) listOf("演示线路 A" to "演示线路 A", "演示线路 B" to "演示线路 B")
+                                    else displayedLines.map { it.id to it.title },
+                                    line, reduceMotion,
+                                    requester = { index -> requester(if (index == 0) "detail-first-line" else "detail-line-$index") },
+                                    onFocus = { index -> lastDetailLineFocus = if (index == 0) "detail-first-line" else "detail-line-$index" },
+                                    onDown = ::enterDetailEpisodes,
+                                    onSelect = { id -> pendingHistoryFilm = null; line = id; detailSeason?.let { detailSeasonLines[it.number] = id } })
                             }
+
                             if (showGroup != null && groupLayout != null && groupSection != null) {
                                 item {
                                     GroupSeasonBrowser(groupLayout, groupSection,
@@ -4242,7 +4341,7 @@ private fun Herrin() {
                                         onEpisodeFocus = { entry ->
                                             detailSeasonEpisodeNumbers[entry.season] = entry.source.number
                                         }, onPlay = { entry -> playSeasonEpisode(entry) },
-                                        onMoveToCast = ::moveToDetailCast)
+                                        onMoveToCast = ::moveToDetailCast, entryFocus = requester("detail-current-episode"), onMoveToLines = ::returnDetailLine)
                                 }
                             } else if (HerrinPlaybackEntry.unavailableTmdb(film)) {
                                 item { Text("尚无可播放的授权选集",
@@ -4262,11 +4361,13 @@ private fun Herrin() {
                                     if (film.playbackEpisodes.isEmpty()) {
                                         (1..film.episodes).forEach { n ->
                                             TvButton("第 $n 集", modifier = Modifier.testTag("episode-$n")
+                                                .then(if (n == episode) Modifier.focusRequester(requester("detail-current-episode")) else Modifier)
                                                 .onPreviewKeyEvent { event ->
-                                                    event.type == KeyEventType.KeyDown &&
-                                                        event.nativeKeyEvent.keyCode ==
-                                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
-                                                        moveToDetailCast()
+                                                    event.type == KeyEventType.KeyDown && when (event.nativeKeyEvent.keyCode) {
+                                                        android.view.KeyEvent.KEYCODE_DPAD_UP -> returnDetailLine()
+                                                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> moveToDetailCast()
+                                                        else -> false
+                                                    }
                                                 }, reduced = reduceMotion,
                                                 selected = episode == n) {
                                                 episode = n
@@ -4277,11 +4378,12 @@ private fun Herrin() {
                                         film.playbackEpisodes.forEach { entry ->
                                             TvButton("第 ${entry.number} 集 · ${entry.title}",
                                                 modifier = Modifier.testTag("episode-${entry.number}")
+                                                    .then(if (entry.number == episode) Modifier.focusRequester(requester("detail-current-episode")) else Modifier)
                                                     .onPreviewKeyEvent { event ->
                                                         if (event.type != KeyEventType.KeyDown) false
                                                         else when (event.nativeKeyEvent.keyCode) {
                                                             android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                                                                runCatching { requester("detail-first-line").requestFocus() }.isSuccess
+                                                                returnDetailLine()
                                                             android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
                                                                 moveToDetailCast()
                                                             else -> false
@@ -4421,8 +4523,14 @@ internal fun SeasonBrowser(
     onSeasonSelect: (Int) -> Unit,
     onEpisodeFocus: (SeasonEpisode) -> Unit,
     onPlay: (SeasonEpisode) -> Unit,
-    onMoveToCast: () -> Boolean = { false }
+    onMoveToCast: () -> Boolean = { false },
+    entryFocus: FocusRequester? = null,
+    onMoveToLines: (() -> Boolean)? = null
 ) {
+    LaunchedEffect(active.number, currentlyPlayingEpisode) {
+        val index = active.episodes.indexOfFirst { it.source.number == currentlyPlayingEpisode }
+        if (index >= 0) rowState.scrollToItem(index)
+    }
     val uiScope = rememberCoroutineScope()
     val focusers = remember { mutableMapOf<String, FocusRequester>() }
     fun focusAt(key: String): FocusRequester = focusers.getOrPut(key) { FocusRequester() }
@@ -4439,16 +4547,19 @@ internal fun SeasonBrowser(
                                 event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
                                 onSeasonSelect(section.number)
                                 uiScope.launch {
-                                    rowState.scrollToItem(0)
+                                    val targetIndex = section.episodes.indexOfFirst { it.source.number == currentlyPlayingEpisode }.coerceAtLeast(0)
+                                    rowState.scrollToItem(targetIndex)
                                     repeat(3) {
                                         withFrameNanos { }
                                         if (runCatching {
-                                                focusAt("season-card-${section.number}-0").requestFocus()
+                                                focusAt("season-card-${section.number}-$targetIndex").requestFocus()
                                             }.isSuccess) return@launch
                                     }
                                 }
                                 true
-                            } else false
+                            } else event.type == KeyEventType.KeyDown &&
+                                event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
+                                onMoveToLines?.invoke() == true
                         },
                     reduced = reduced, selected = section.number == active.number,
                     onFocus = { onSeasonSelect(section.number) }) {
@@ -4468,13 +4579,15 @@ internal fun SeasonBrowser(
                         entry.lines.any { it.id == currentlyPlayingLine },
                     reduced = reduced,
                     modifier = Modifier.testTag("season-card-${entry.season}-$index")
+                        .then(if (entry.source.number == currentlyPlayingEpisode && entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier)
                         .focusRequester(focusAt("season-card-${entry.season}-$index"))
                         .focusProperties { up = focusAt("season-tab-${entry.season}") }
                         .onPreviewKeyEvent { event ->
-                            event.type == KeyEventType.KeyDown &&
-                                event.nativeKeyEvent.keyCode ==
-                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
-                                onMoveToCast()
+                            event.type == KeyEventType.KeyDown && when (event.nativeKeyEvent.keyCode) {
+                                android.view.KeyEvent.KEYCODE_DPAD_UP -> onMoveToLines?.invoke() == true
+                                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> onMoveToCast()
+                                else -> false
+                            }
                         },
                     onFocus = { onEpisodeFocus(entry) },
                     onClick = { onPlay(entry) })

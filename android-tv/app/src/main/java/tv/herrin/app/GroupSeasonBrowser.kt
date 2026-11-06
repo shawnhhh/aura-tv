@@ -51,6 +51,18 @@ internal fun GroupSeasonBrowser(
     val scope = rememberCoroutineScope()
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
+    val lastLine = remember(active.number) { intArrayOf(0) }
+    fun enterEpisode(number: Int) {
+        val index = active.episodes.indexOfFirst { it.number == number }
+        if (index < 0) return
+        scope.launch {
+            rowState.scrollToItem(index)
+            repeat(4) {
+                withFrameNanos { }
+                if (runCatching { requester("group-season-card-${active.number}-$index").requestFocus() }.isSuccess) return@launch
+            }
+        }
+    }
     // A requester created by MainActivity would not be attached to these cards.
     // Restore within the composable which owns the actual focus targets.
     LaunchedEffect(active.number, restoreEpisode) {
@@ -86,10 +98,11 @@ internal fun GroupSeasonBrowser(
                                 section.episodes.isNotEmpty()) {
                                 onSeasonSelect(section.number)
                                 scope.launch {
-                                    rowState.scrollToItem(0)
+                                    val targetIndex = section.episodes.indexOfFirst { it.number == focusedEpisode?.number }.coerceAtLeast(0)
+                                    rowState.scrollToItem(targetIndex)
                                     repeat(3) {
                                         withFrameNanos { }
-                                        if (runCatching { requester("group-season-card-${section.number}-0").requestFocus() }
+                                        if (runCatching { requester("group-season-card-${section.number}-$targetIndex").requestFocus() }
                                                 .isSuccess) return@launch
                                     }
                                 }
@@ -126,9 +139,17 @@ internal fun GroupSeasonBrowser(
                             .focusRequester(requester("group-season-card-${entry.season}-$index"))
                             .focusProperties { up = requester("group-season-tab-${entry.season}") }
                             .onPreviewKeyEvent { event ->
-                                event.type == KeyEventType.KeyDown &&
-                                    event.nativeKeyEvent.keyCode ==
-                                        android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
+                                if (event.type != KeyEventType.KeyDown) false
+                                else if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && entry.sources.size > 1) {
+                                    scope.launch {
+                                        repeat(4) {
+                                            withFrameNanos { }
+                                            val line = lastLine[0].coerceAtMost(entry.sources.lastIndex)
+                                            if (runCatching { requester("group-source-line-${entry.season}-${entry.number}-$line").requestFocus() }.isSuccess) return@launch
+                                        }
+                                    }
+                                    true
+                                } else event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
                                     entry.sources.size <= 1 && onMoveToCast()
                             },
                         onFocus = { onEpisodeFocus(entry) },
@@ -145,13 +166,14 @@ internal fun GroupSeasonBrowser(
                     alternatives.sources.forEachIndexed { index, ref ->
                         TvButton("${ref.film.title.take(22)} · ${ref.line.title.take(16)}",
                             modifier = Modifier.testTag("group-source-line-${alternatives.season}-${alternatives.number}-$index")
+                                .focusRequester(requester("group-source-line-${alternatives.season}-${alternatives.number}-$index"))
                                 .onPreviewKeyEvent { event ->
-                                    event.type == KeyEventType.KeyDown &&
-                                        event.nativeKeyEvent.keyCode ==
-                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN &&
-                                        onMoveToCast()
+                                    if (event.type == KeyEventType.KeyDown &&
+                                        event.nativeKeyEvent.keyCode in listOf(android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_UP)) {
+                                        enterEpisode(alternatives.number); true
+                                    } else false
                                 },
-                            reduced = reduced, quiet = true,
+                            reduced = reduced, quiet = true, onFocus = { lastLine[0] = index },
                             selected = selected?.let { it.film.id == ref.film.id &&
                                 it.source.number == ref.source.number && it.line.id == ref.line.id } == true) {
                             onLinePlay(ref)

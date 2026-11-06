@@ -8,8 +8,80 @@ data class WatchPosition(val positionMs: Long, val durationMs: Long, val updated
         else (positionMs.toDouble() / durationMs.toDouble()).toFloat().coerceIn(0f, 1f)
 }
 
-/** Stores only playback offsets. Never stores stream URLs, access tokens or provider credentials. */
-class PlaybackHistory(context: Context) {
+/** Stores public display metadata and playback offsets. Never stores stream URLs, access tokens or provider credentials. */
+class PlaybackHistory(private val context: Context) {
+    private fun readIndex(): org.json.JSONArray = try { org.json.JSONArray(prefs.getString("recent-index", "[]")) }
+        catch (_: org.json.JSONException) { org.json.JSONArray() }
+    private val snapshots = TvBoxCatalogSnapshot(context, Long.MAX_VALUE)
+    @Synchronized fun recordFilm(ticket: Long, scope: String, film: Film, episode: Int, line: String, position: Long, duration: Long) {
+        if (generation != ticket || position < 3_000L || duration < 10_000L) return
+        writeRecord(scope, film, episode, line, position, duration, System.currentTimeMillis())
+    }
+    private fun writeRecord(scope: String, film: Film, episode: Int, line: String, position: Long, duration: Long, at: Long) {
+        val id = film.id
+        val entries = readIndex()
+        val coordinate = HerrinPlaybackCoordinate.from(film, episode, line)
+        val scopeHash = java.security.MessageDigest.getInstance("SHA-256").digest(scope.toByteArray()).joinToString("") { "%02x".format(it) }
+        val next = org.json.JSONArray().put(org.json.JSONObject().put("id", id).put("scope", scopeHash)
+            .put("key", key(scope, id, episode, line)).put("position", position).put("duration", duration)
+            .put("season", coordinate?.season ?: 0).put("logicalEpisode", coordinate?.episode ?: 0)
+            .put("portable", coordinate?.canMapAcrossSources == true)
+            .put("episode", episode).put("line", line.takeIf { it.matches(Regex("[A-Za-z0-9_.:-]{1,150}")) } ?: "").put("at", at))
+        for (i in 0 until entries.length()) if (entries.optJSONObject(i)?.optString("id") != id && next.length() < 100)
+            next.put(entries.getJSONObject(i))
+        val ordered = (0 until next.length()).map { next.getJSONObject(it) }.sortedByDescending { it.optLong("at") }
+        prefs.edit().putString("recent-index", org.json.JSONArray(ordered).toString()).apply()
+        try { snapshots.save("history-index", id, listOf(film)) } catch (_: java.io.IOException) {
+            HerrinPlaybackDiagnosticJournal.record("RECOVERY", "HISTORY_INDEX_WRITE_FAILED")
+        }
+    }
+    /** One-time projection of pre-index offsets, only once their authorized source playlist is available. */
+    @Synchronized fun importLegacy(scope: String, films: List<Film>): Int {
+        val rows = readIndex()
+        val indexed = (0 until rows.length()).mapNotNull { rows.optJSONObject(it)?.optString("id") }.toSet()
+        var imported = 0
+        for (film in films) {
+            if (film.id in indexed) continue
+            val latest = film.playbackEpisodes.flatMap { ep -> ep.lines.mapNotNull { line ->
+                load(scope, film.id, ep.number, line.id)?.let { Triple(ep.number, line.id, it) }
+            } }.maxByOrNull { it.third.updatedAtMs } ?: continue
+            writeRecord(scope, film, latest.first, latest.second, latest.third.positionMs, latest.third.durationMs, latest.third.updatedAtMs)
+            imported++
+        }
+        return imported
+    }
+    fun indexedFilms(): List<Film> = runCatching {
+        val rows = readIndex()
+        (0 until rows.length()).flatMap { index ->
+            val row = rows.getJSONObject(index)
+            snapshots.load("history-index", row.getString("id")).map { film ->
+                val watched = prefs.getBoolean(row.optString("key") + ":watched", false)
+                val percent = if (watched) 100 else (100.0 * row.optLong("position") / row.optLong("duration", 1).coerceAtLeast(1)).toInt().coerceIn(0,100)
+                film.copy(subtitle = "第${row.optInt("logicalEpisode").takeIf { it > 0 } ?: row.optInt("episode")}集 · ${if (watched) "已看完" else "$percent%"}")
+            }
+        }
+    }.getOrDefault(emptyList())
+    fun indexedProgress(filmId: String): WatchPosition? {
+        val rows = readIndex()
+        val row = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }.firstOrNull { it.optString("id") == filmId } ?: return null
+        val duration = row.optLong("duration")
+        if (duration <= 0) return null
+        val completed = prefs.getBoolean(row.optString("key") + ":watched", false)
+        return WatchPosition(if (completed) duration else row.optLong("position"), duration, row.optLong("at"))
+    }
+
+    @Synchronized fun resolveIndexed(film: Film, scope: String): Pair<PlaybackRequest, Long>? {
+        val rows = readIndex()
+        val row = (0 until rows.length()).map { rows.getJSONObject(it) }.firstOrNull { it.optString("id") == film.id } ?: return null
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(scope.toByteArray()).joinToString("") { "%02x".format(it) }
+        val choices = film.playbackEpisodes.flatMap { ep -> ep.lines.map { ep to it } }.filter { (ep, line) ->
+            if (row.optBoolean("portable")) HerrinPlaybackCoordinate(row.optInt("season").takeIf { it > 0 }, row.optInt("logicalEpisode")).accepts(ep,line)
+            else row.optString("scope") == hash && ep.number == row.optInt("episode") && line.id == row.optString("line")
+        }
+        val selected = choices.firstOrNull { it.second.id == row.optString("line") } ?: choices.firstOrNull() ?: return null
+        val watched = prefs.getBoolean(row.optString("key") + ":watched", false)
+        return PlaybackRequest(film.id, selected.first.number, selected.second.id) to if (watched) 0L else row.optLong("position")
+    }
     private val activeWrites = mutableMapOf<String, Long>()
     private var generation = 0L
     private val prefs = context.getSharedPreferences("herrin-watch-history", Context.MODE_PRIVATE)

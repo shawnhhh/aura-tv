@@ -433,7 +433,9 @@ private fun AuthorizedPlaybackSession(
     // callbacks. A transition must never leave an observer holding a player
     // created by an outgoing or abandoned composition.
     SideEffect { onPlayer(player) }
-    fun requestBack(source: String) {
+    val backGate = remember { PlaybackBackGate() }
+    fun requestBack(source: String, physicalKey: Long? = null) {
+        if (!backGate.accept(physicalKey, android.os.SystemClock.uptimeMillis())) return
         if (!testDiagnostics && controlsVisible && !isLive) {
             controlsVisible = false
             advancedControlsVisible = false
@@ -469,7 +471,7 @@ private fun AuthorizedPlaybackSession(
         if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0)
             controlsInteractionEpoch++
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
-            if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview")
+            if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview", key.downTime)
             true
         } else if (!isLive && transportFocused && mainTransportRowFocused &&
             key.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
@@ -535,10 +537,10 @@ private fun AuthorizedPlaybackSession(
         AndroidView(
             factory = { ctx -> object : PlayerView(ctx) {
                 // Native PlayerView otherwise consumes the first Back to hide its controller.
-                // HERRIN treats Back as leaving playback, independent of controller visibility.
+                // The shared handler closes Compose controls before leaving playback.
                 override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                     if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                        if (event.action == KeyEvent.ACTION_UP) requestBack("native-player-view")
+                        if (event.action == KeyEvent.ACTION_UP) requestBack("native-player-view", event.downTime)
                         return true
                     }
                     if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||

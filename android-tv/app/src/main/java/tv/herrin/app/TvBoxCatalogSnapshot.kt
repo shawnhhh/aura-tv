@@ -8,7 +8,7 @@ import java.net.URI
 import java.security.MessageDigest
 
 /** Display-only snapshot; playback URLs and credentials are never persisted. */
-internal class TvBoxCatalogSnapshot(private val context: Context) {
+internal class TvBoxCatalogSnapshot(private val context: Context, private val maxAgeMs: Long = 7L * 24 * 3600 * 1000) {
     private fun file(root: String, site: String): File {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest((root + "\u0000" + site).toByteArray(Charsets.UTF_8))
@@ -61,7 +61,7 @@ internal class TvBoxCatalogSnapshot(private val context: Context) {
             if (!source.isFile || source.length() !in 1..250_000) return@runCatching emptyList()
             val json = JSONObject(source.readText())
             if (json.optInt("schema") != 1 ||
-                System.currentTimeMillis() - json.optLong("updated") !in 0..7L * 24 * 3600 * 1000)
+                System.currentTimeMillis() - json.optLong("updated") !in 0..maxAgeMs)
                 return@runCatching emptyList()
             val data = json.getJSONArray("films")
             (0 until minOf(100, data.length())).mapNotNull { i ->
