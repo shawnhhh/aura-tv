@@ -1,0 +1,195 @@
+{
+  "baseline": "2af99374ab44052bb8ab6c76daeed5e94d75bd3d",
+  "candidate": "c4a05606338992f66f684e8e0c261179b58bc671",
+  "device": "one Android TV API30 x86 tv_1080p AVD, SwiftShader",
+  "order": [
+    "A1",
+    "B1",
+    "B2",
+    "A2"
+  ],
+  "tests_per_leg": 5,
+  "physical_TCL_tested": false,
+  "display_refresh_hz": [
+    "60.000004"
+  ],
+  "observations": {
+    "A1": {
+      "horizontal": {
+        "events": 40,
+        "focus_success": 40,
+        "focus_draw_samples": 40,
+        "key_to_draw_p50_ms": 12.31,
+        "key_to_draw_p95_ms": 23.74,
+        "key_to_draw_p99_ms": 30.66,
+        "key_to_focus_p99_ms": 17.06,
+        "key_to_focus_p50_ms": 4.71,
+        "key_to_focus_p95_ms": 16.37,
+        "end_to_idle_p95_ms": 294,
+        "frame_p95_ms": 233.4,
+        "frames_total": 79,
+        "frames_over_16_67ms": 79,
+        "frames_over_33_33ms": 79,
+        "long_frame_pct": 100
+      },
+      "vertical": {
+        "events": 32,
+        "focus_success": 32,
+        "focus_draw_samples": 32,
+        "key_to_draw_p50_ms": 16.22,
+        "key_to_draw_p95_ms": 26.59,
+        "key_to_draw_p99_ms": 32.07,
+        "key_to_focus_p99_ms": 19.37,
+        "key_to_focus_p50_ms": 4.66,
+        "key_to_focus_p95_ms": 14.06,
+        "end_to_idle_p95_ms": 268
+      },
+      "frame_baseline": {
+        "redraw_frames": 24,
+        "navigation_frames": 47,
+        "redraw_p95_ms": 199.5,
+        "navigation_p95_ms": 203.93,
+        "navigation_to_redraw_ratio": 1.02
+      },
+      "burst": {
+        "events": 120,
+        "last_focus_correct": 1,
+        "burst_to_final_focus_ms": 5706
+      }
+    },
+    "B1": {
+      "horizontal": {
+        "events": 40,
+        "focus_success": 40,
+        "focus_draw_samples": 40,
+        "key_to_draw_p50_ms": 16.63,
+        "key_to_draw_p95_ms": 28.04,
+        "key_to_draw_p99_ms": 30.61,
+        "key_to_focus_p99_ms": 25.03,
+        "key_to_focus_p50_ms": 5.95,
+        "key_to_focus_p95_ms": 21.16,
+        "end_to_idle_p95_ms": 292,
+        "frame_p95_ms": 233.71,
+        "frames_total": 79,
+        "frames_over_16_67ms": 79,
+        "frames_over_33_33ms": 79,
+        "long_frame_pct": 100
+      },
+      "vertical": {
+        "events": 32,
+        "focus_success": 32,
+        "focus_draw_samples": 32,
+        "key_to_draw_p50_ms": 15.84,
+        "key_to_draw_p95_ms": 29.31,
+        "key_to_draw_p99_ms": 39.99,
+        "key_to_focus_p99_ms": 23.44,
+        "key_to_focus_p50_ms": 3.47,
+        "key_to_focus_p95_ms": 20.33,
+        "end_to_idle_p95_ms": 277
+      },
+      "frame_baseline": {
+        "redraw_frames": 24,
+        "navigation_frames": 48,
+        "redraw_p95_ms": 194.74,
+        "navigation_p95_ms": 262.65,
+        "navigation_to_redraw_ratio": 1.35
+      },
+      "burst": {
+        "events": 120,
+        "last_focus_correct": 1,
+        "burst_to_final_focus_ms": 6532
+      }
+    },
+    "B2": {
+      "horizontal": {
+        "events": 40,
+        "focus_success": 40,
+        "focus_draw_samples": 40,
+        "key_to_draw_p50_ms": 17.91,
+        "key_to_draw_p95_ms": 23.89,
+        "key_to_draw_p99_ms": 28.16,
+        "key_to_focus_p99_ms": 40.15,
+        "key_to_focus_p50_ms": 6.02,
+        "key_to_focus_p95_ms": 17.61,
+        "end_to_idle_p95_ms": 266,
+        "frame_p95_ms": 199.1,
+        "frames_total": 80,
+        "frames_over_16_67ms": 80,
+        "frames_over_33_33ms": 80,
+        "long_frame_pct": 100
+      },
+      "vertical": {
+        "events": 32,
+        "focus_success": 32,
+        "focus_draw_samples": 32,
+        "key_to_draw_p50_ms": 14.37,
+        "key_to_draw_p95_ms": 25.11,
+        "key_to_draw_p99_ms": 28.42,
+        "key_to_focus_p99_ms": 21.91,
+        "key_to_focus_p50_ms": 5.41,
+        "key_to_focus_p95_ms": 11.66,
+        "end_to_idle_p95_ms": 233
+      },
+      "frame_baseline": {
+        "redraw_frames": 24,
+        "navigation_frames": 47,
+        "redraw_p95_ms": 166.13,
+        "navigation_p95_ms": 199.43,
+        "navigation_to_redraw_ratio": 1.2
+      },
+      "burst": {
+        "events": 120,
+        "last_focus_correct": 1,
+        "burst_to_final_focus_ms": 6349
+      }
+    },
+    "A2": {
+      "horizontal": {
+        "events": 40,
+        "focus_success": 40,
+        "focus_draw_samples": 40,
+        "key_to_draw_p50_ms": 15.67,
+        "key_to_draw_p95_ms": 59.04,
+        "key_to_draw_p99_ms": 66.89,
+        "key_to_focus_p99_ms": 60.45,
+        "key_to_focus_p50_ms": 6.45,
+        "key_to_focus_p95_ms": 53.06,
+        "end_to_idle_p95_ms": 254,
+        "frame_p95_ms": 226.86,
+        "frames_total": 79,
+        "frames_over_16_67ms": 79,
+        "frames_over_33_33ms": 79,
+        "long_frame_pct": 100
+      },
+      "vertical": {
+        "events": 32,
+        "focus_success": 32,
+        "focus_draw_samples": 32,
+        "key_to_draw_p50_ms": 12.74,
+        "key_to_draw_p95_ms": 23.1,
+        "key_to_draw_p99_ms": 25.17,
+        "key_to_focus_p99_ms": 20.74,
+        "key_to_focus_p50_ms": 5.28,
+        "key_to_focus_p95_ms": 12.54,
+        "end_to_idle_p95_ms": 235
+      },
+      "frame_baseline": {
+        "redraw_frames": 24,
+        "navigation_frames": 47,
+        "redraw_p95_ms": 169.3,
+        "navigation_p95_ms": 193.96,
+        "navigation_to_redraw_ratio": 1.15
+      },
+      "burst": {
+        "events": 120,
+        "last_focus_correct": 1,
+        "burst_to_final_focus_ms": 5408
+      }
+    }
+  },
+  "execution_run": 42242155533,
+  "parse_recovery_run": 42244273996,
+  "execution_tests_passed": 20,
+  "execution_collection_failed": true,
+  "parse_recovery_passed": true
+}
