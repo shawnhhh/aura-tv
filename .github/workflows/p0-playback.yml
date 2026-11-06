@@ -1,7 +1,7 @@
 name: HERRIN P0 Serial Verification
 on:
   push:
-    branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102']
+    branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106']
     paths:
       - 'android-tv/**'
       - '.github/workflows/android-debug.yml'

@@ -50,7 +50,7 @@ internal class TmdbSeasonEpisodes(
             return TmdbSeasonParser.parse(file.readText(), season)
         }
         val response = runCatching {
-            fetcher.load("https://api.themoviedb.org/3/tv/$tvId/season/$season?language=zh-CN", token)
+            fetcher.load("${TmdbEndpoints.PRIMARY}/tv/$tvId/season/$season?language=zh-CN", token)
         }.getOrNull() ?: return emptyMap()
         if (response.length > 60_000) return emptyMap()
         val parsed = TmdbSeasonParser.parse(response, season)

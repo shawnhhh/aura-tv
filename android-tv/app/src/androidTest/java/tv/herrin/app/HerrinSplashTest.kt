@@ -45,8 +45,8 @@ class HerrinSplashTest {
         // There is never a single-letter H-only screen.
         compose.onNodeWithText("H").assertDoesNotExist()
         screenshot("splash-HERRIN")
-        compose.mainClock.advanceTimeBy(600)
-        compose.runOnIdle { assertTrue("No multi-second branding hold", completed) }
+        compose.mainClock.advanceTimeBy(2100)
+        compose.runOnIdle { assertTrue("Complete reveal precedes readiness callback", completed) }
         compose.onNodeWithContentDescription("HERRIN").assertExists()
     }
     @Test fun skipCompletesImmediately() {
@@ -89,8 +89,7 @@ class HerrinSplashTest {
         compose.onNodeWithTag("splash-curtain").assertExists()
         val shiftedLeft = compose.onNodeWithTag("splash-curtain")
             .fetchSemanticsNode().boundsInRoot.left
-        assertTrue("HERRIN launch must slide spatially, not simply fade",
-            shiftedLeft > initialLeft + 8f)
+        assertEquals("Wordmark remains fixed during fade", initialLeft, shiftedLeft, 0.1f)
         compose.runOnIdle { assertFalse(finished) }
         compose.mainClock.advanceTimeBy(700)
         compose.runOnIdle { assertTrue(finished) }

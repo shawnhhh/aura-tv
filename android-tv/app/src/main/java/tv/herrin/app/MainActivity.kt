@@ -86,7 +86,7 @@ import tv.herrin.app.nativeplayback.FongMiSessionAuthorization
 
 /** Only one branded wordmark fade; no fixed multi-second launch choreography. */
 internal object LaunchMotion {
-    const val WORDMARK_HOLD_MS = 100L
+    const val WORDMARK_HOLD_MS = 1800L
     const val FADE_MS = 340
     const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + FADE_MS
 }
@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
         val originalCallback = window.callback
         window.callback = object : android.view.Window.Callback by originalCallback {
             override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-                if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0)
+                if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount >= 0)
                     RemoteFocusLatencyProbe.keyDown(event.keyCode)
                 RemoteTrace.event { "ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}" }
                 val handled = originalCallback.dispatchKeyEvent(event)
@@ -867,7 +867,10 @@ private fun Herrin() {
             UiDisplayMode(it.physicalWidth, it.physicalHeight, it.refreshRate)
         }
         return deviceStatusSummary(current, preferredUiRefreshRate(current, supported),
-            profileStore.list().size, prefs.livePlaylistUrl.isNotBlank()) + MainExitDiagnostics.recent(context)
+            profileStore.list().size, prefs.livePlaylistUrl.isNotBlank()) +
+            "\n系统模式：${supported.joinToString()}\n窗口请求：${activity.window.attributes.preferredRefreshRate}Hz" +
+            "\nTMDB API：${TmdbEndpoints.current}（图片 CDN 独立）" +
+            MainExitDiagnostics.recent(context)
     }
     LaunchedEffect(catalogRefresh) {
         // Once a TVBox URL has been applied, the legacy/demo catalog must not
@@ -1539,7 +1542,7 @@ private fun Herrin() {
     // Keep the finished H mark above the first home frames while it dissolves;
     // removing it before the hero is drawn causes a visible black flash.
     var splashExiting by remember { mutableStateOf(false) }
-    val homeVisible = !splash || splashExiting
+    val homeVisible = true // Compose offline/cached home behind the curtain from the first frame.
     val sceneReveal = remember { Animatable(0f) }
     var hasEnteredHome by remember { mutableStateOf(false) }
     LaunchedEffect(homeVisible, screen, category, reduceMotion) {
@@ -1563,8 +1566,18 @@ private fun Herrin() {
     val facetResultState = rememberLazyListState()
     // M4.25: only the active, already-loaded catalog is grouped. This is a
     // display projection; Film.id and the licensed playback paths stay intact.
-    val showCatalog = remember(catalogScope, films) { ShowCatalog.build(films, catalogScope) }
-    val browseFilms = remember(showCatalog, films) { showCatalog.collapse(films) }
+    val projection by produceState(
+        initialValue = ShowCatalog.build(emptyList(), catalogScope) to emptyList<Film>(),
+        key1 = catalogScope, key2 = films
+    ) {
+        // Cancellation prevents an obsolete catalog from publishing after a fast source change.
+        value = withContext(Dispatchers.Default) {
+            val grouped = ShowCatalog.build(films, catalogScope)
+            grouped to grouped.collapse(films)
+        }
+    }
+    val showCatalog = projection.first
+    val browseFilms = projection.second
     LaunchedEffect(catalogFilms, catalogScope, screen) {
         if (screen != "player" && withContext(Dispatchers.IO) { watchHistory.importLegacy(catalogScope, catalogFilms) } > 0) recentIndexEpoch++
     }
@@ -4540,7 +4553,8 @@ private fun Herrin() {
         }
         if (splash) {
             SplashExitCurtain(reduceMotion, splashExiting,
-                onReady = { splashExiting = true }, onFinished = { splash = false })
+                onReady = { splashExiting = true }, onFinished = { splash = false },
+                homeReady = projection.second.isNotEmpty() || films.isEmpty())
         }
     }
 }
@@ -4635,30 +4649,26 @@ internal fun SeasonBrowser(
     }
 }
 
-/** The full HERRIN splash slides off-screen to reveal the composed home. */
+/** Fixed-position wordmark; only opacity changes during exit. */
 @Composable
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
-                               onReady: () -> Unit, onFinished: () -> Unit) {
-    val slide = remember { Animatable(0f) }
-    var curtainWidth by remember { mutableIntStateOf(0) }
+                               onReady: () -> Unit, onFinished: () -> Unit,
+                               homeReady: Boolean = true) {
+    val opacity = remember { Animatable(1f) }
+    val ready by rememberUpdatedState(homeReady)
     LaunchedEffect(exiting, reduced) {
         if (exiting) {
-            if (reduced) slide.snapTo(1f)
-            else slide.animateTo(1f, tween(LaunchMotion.FADE_MS,
-                easing = FastOutSlowInEasing))
+            if (reduced) opacity.snapTo(0f)
+            else opacity.animateTo(0f, tween(LaunchMotion.FADE_MS))
             StartupTiming.finish()
             onFinished()
         }
     }
-    // Offset the *laid-out* curtain, not just its render layer. The launcher
-    // now really leaves the viewport and its spatial position is observable
-    // to accessibility/UI tests on TV devices (including screen readers).
-    // The lambdas run at layout time, without recomposing the home per frame.
-    Box(Modifier.fillMaxSize()
-        .onSizeChanged { curtainWidth = it.width }
-        .offset { IntOffset((slide.value * curtainWidth).toInt(), 0) }
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
         .testTag("splash-curtain")) {
-        Splash(reduced, onReady)
+        Splash(reduced) {
+            if (ready) onReady()
+        }
     }
 }
 
@@ -4984,38 +4994,5 @@ private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: ()
 
 @Composable
 internal fun Splash(reduced: Boolean, done: () -> Unit) {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(reduced) {
-        runCatching { focus.requestFocus() }
-        // Let the underlying home compose on the very next frame. This is
-        // branding, not an artificial 2.7-second loading screen.
-        withFrameNanos { }
-        if (!reduced) delay(LaunchMotion.WORDMARK_HOLD_MS)
-        done()
-    }
-    Box(
-        Modifier.fillMaxSize().background(Color(0xFF080B10))
-            .testTag("splash").focusRequester(focus)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    event.nativeKeyEvent.keyCode in setOf(
-                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
-                        android.view.KeyEvent.KEYCODE_ENTER,
-                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
-                    )) {
-                    done()
-                    true
-                } else false
-            }.focusable(),
-        contentAlignment = Alignment.Center
-    ) {
-        // Same vector asset as the OS starting-window background. There is no
-        // interim H-only state, letter-by-letter collapse or font switching.
-        Image(
-            painterResource(R.drawable.launch_wordmark),
-            contentDescription = "HERRIN",
-            modifier = Modifier.width(420.dp).height(84.dp)
-                .testTag("splash-wordmark")
-        )
-    }
+    HerrinWordmarkSplash(reduced, done)
 }

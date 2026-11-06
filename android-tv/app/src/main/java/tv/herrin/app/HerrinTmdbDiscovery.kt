@@ -27,7 +27,7 @@ internal class HerrinTmdbDiscovery(
 ) {
     private data class Cached(val until: Long, val entries: List<Film>)
     private val cache = ConcurrentHashMap<String, Cached>()
-    private val base = "https://api.themoviedb.org/3"
+    private val base = "${TmdbEndpoints.PRIMARY}"
     private val safePoster = Regex("""^/[A-Za-z0-9_.-]{1,140}\.(?:jpg|jpeg|png|webp)$""")
 
     data class Section(val key: String, val title: String, val endpoint: String,

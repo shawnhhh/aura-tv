@@ -26,4 +26,12 @@ class DisplayRefreshTest {
         ))!!, 0.01f)
         assertNull(preferredUiRefreshRate(current, listOf(current)))
     }
+    @Test fun supports144AndFutureRatesWithoutLosing4k() {
+        val current = UiDisplayMode(3840, 2160, 60f)
+        for (hz in listOf(120f, 144f, 165f, 240f)) {
+            assertEquals(hz, preferredUiRefreshRate(current, listOf(current,
+                UiDisplayMode(3840, 2160, hz), UiDisplayMode(1920, 1080, 360f)))!!, 0.01f)
+        }
+        assertNull(preferredUiRefreshRate(current, listOf(UiDisplayMode(3840, 2160, Float.NaN))))
+    }
 }

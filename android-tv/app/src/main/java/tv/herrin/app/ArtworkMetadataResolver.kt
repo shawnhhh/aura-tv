@@ -300,8 +300,8 @@ internal class ArtworkMetadataResolver(
         try {
             if ((rejectedTokens[tokenKey] ?: 0L) > System.currentTimeMillis()) return null
             val searchUrl = if (manual != null) {
-                "https://api.themoviedb.org/3/$category/${manual.id}?append_to_response=credits&language=zh-CN"
-            } else "https://api.themoviedb.org/3/search/$category?query=" +
+                "${TmdbEndpoints.PRIMARY}/$category/${manual.id}?append_to_response=credits&language=zh-CN"
+            } else "${TmdbEndpoints.PRIMARY}/search/$category?query=" +
                 URLEncoder.encode(queryTitle, "UTF-8") + "&language=zh-CN&include_adult=false&page=1"
             val response = try { fetcher.load(searchUrl, token) }
                 catch (_: ArtworkAuthenticationFailure) {
@@ -336,7 +336,7 @@ internal class ArtworkMetadataResolver(
                     // was valid but produced no exact, year-consistent match.
                     // A fuzzy or ambiguous hit is never automatically accepted.
                     val other = if (category == "movie") "tv" else "movie"
-                    val url = "https://api.themoviedb.org/3/search/$other?query=" +
+                    val url = "${TmdbEndpoints.PRIMARY}/search/$other?query=" +
                         URLEncoder.encode(queryTitle, "UTF-8") +
                         "&language=zh-CN&include_adult=false&page=1"
                     val otherResponse = try { fetcher.load(url, token) }
@@ -367,7 +367,7 @@ internal class ArtworkMetadataResolver(
             // matched category's credits, never the original misclassified tab.
             val detail = if (manual != null) TmdbCreditsParser.parse(response, matchedCategory)
             else candidate.tmdbId?.let { tmdbId ->
-                val url = "https://api.themoviedb.org/3/$matchedCategory/$tmdbId" +
+                val url = "${TmdbEndpoints.PRIMARY}/$matchedCategory/$tmdbId" +
                     "?append_to_response=credits&language=zh-CN"
                 val creditResponse = runCatching { fetcher.load(url, token) }.getOrNull()
                 TmdbCreditsParser.parse(creditResponse, matchedCategory)
@@ -539,19 +539,10 @@ internal object NetworkArtworkFetcher : ArtworkJsonFetcher {
     }
 
     override fun load(url: String, readAccessToken: String): String? {
-        // Retry a transient GET transport/5xx failure just once. Never retry
-        // unauthorized, rate-limited or other 4xx responses automatically.
-        for (attempt in 0..1) {
+        return TmdbEndpoints.load(url) { endpoint ->
             paceRequest()
-            try {
-                return requestOnce(url, readAccessToken)
-            } catch (e: java.io.IOException) {
-                if (e is ArtworkHttpStatusFailure && e.status !in 500..599) throw e
-                if (attempt == 1) throw e
-                Thread.sleep(350L)
-            }
+            requestOnce(endpoint, readAccessToken)
         }
-        return null
     }
 
     private fun requestOnce(url: String, readAccessToken: String): String? {
