@@ -78,7 +78,6 @@ enum HerrinArtworkOrientation {
         self == .portrait ? 2.0 / 3.0 : 16.0 / 9.0
     }
 }
-}
 
 struct TMDBPage: Decodable {
     let results: [TMDBTitle]
