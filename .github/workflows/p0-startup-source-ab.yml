@@ -16,8 +16,8 @@ jobs:
     timeout-minutes: 60
     env:
       BASELINE_SHA: 20bf6fdb66a2874516c0a565ba38c9a153e03fc5
-      CANDIDATE_SHA: b04f59dea880c4787a1cfa411930fa753b605197
-      CANDIDATE_RUN: '42356866848'
+      CANDIDATE_SHA: f8a1bff29a2034fa64958ccec4c8900d078d458d
+      CANDIDATE_RUN: '42358016167'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
         with:
           script: |
             const runId=Number(process.env.CANDIDATE_RUN);
-            for(let i=0;i<90;i++){
+            for(let i=0;i<135;i++){
               const {data:run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:runId});
               if(run.head_sha!==process.env.CANDIDATE_SHA)throw new Error('Candidate SHA mismatch');
               if(run.status==='completed'){
@@ -43,7 +43,7 @@ jobs:
               core.info('Waiting for pinned full verification: '+run.status);
               await new Promise(resolve=>setTimeout(resolve,20000));
             }
-            throw new Error('Pinned full verification did not finish within 30 minutes');
+            throw new Error('Pinned full verification did not finish within 45 minutes');
       - uses: actions/download-artifact@v4
         with:
           name: HERRIN-debug-apk
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: HERRIN-emulator-evidence
-          run-id: 42356866848
+          run-id: 42358016167
           github-token: ${{ github.token }}
           path: candidate-apk
       - name: Enable Linux KVM
