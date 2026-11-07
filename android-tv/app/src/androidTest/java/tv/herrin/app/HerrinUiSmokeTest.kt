@@ -102,6 +102,13 @@ class HerrinUiSmokeTest {
             val inputMethod = compose.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             compose.waitUntil(5000) { !inputMethod.isAcceptingText }
         }
+        if (tag.startsWith("card-tmdb-") || tag.startsWith("search-")) {
+            // IME visibility/served editor can clear before Android finishes routing
+            // keys back to this window (CI trace: OK never reached Activity).
+            // Use the same OS readiness fence as dismissEditorIme, never retry OK.
+            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+            compose.onNodeWithTag(tag).assertIsFocused()
+        }
     }
     private fun key(code: Int) {
         RemoteTrace.event("TEST inject code=$code windowFocus=${compose.activity.hasWindowFocus()}")
