@@ -42,8 +42,8 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
             // Complete it here, never in the home composition.
             val profiles=CatalogProfiles(context)
             state.profiles=profiles;state.initialProfiles=profiles.list();state.initialProfileId=profiles.activeId()
-            // Predecode a bounded pair of original bundled images off the UI thread.
-            DemoCatalog().titles().take(2).forEach { BundledArtworkCache.load(context,it.artwork) }
+            // Brand-to-home must never wait for artwork decoding. Optional
+            // bundled cache warmup starts only after the splash has exited.
             Preferences(context).apply {
                 tmdbReadToken
                 state.reduced=reducedMotion ||android.provider.Settings.Global.getFloat(context.contentResolver,
@@ -56,6 +56,19 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
         if (!state.showing) {
             withFrameNanos { }; state.artworkReady=true;StartupTiming.artworkStart()
             withFrameNanos { }; state.networkReady=true;StartupTiming.networkStart()
+        }
+    }
+    LaunchedEffect(state.showing) {
+        if (!state.showing) {
+            // Optional IO work must never hold the first branded frame, first
+            // home composition, or dismissal of the splash curtain.
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    DemoCatalog().titles().take(2).forEach {
+                        BundledArtworkCache.load(context, it.artwork)
+                    }
+                }
+            }
         }
     }
     Box(Modifier.fillMaxSize().drawWithContent { StartupTiming.firstDraw(); drawContent() }) {
