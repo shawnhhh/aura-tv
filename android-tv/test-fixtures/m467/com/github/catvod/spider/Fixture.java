@@ -24,6 +24,15 @@ public final class Fixture extends Spider {
         return "{\"list\":[{\"vod_id\":\"fixture\",\"vod_name\":\"Original synthetic fixture\"}]}";
     }
     @Override public String searchContent(String keyword, boolean quick) {
+        if ("__HERRIN_TEST_BLOCK_MAIN__".equals(keyword)) {
+            // Original test-only plugin: the child cannot process CANCEL IPC.
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                try { new java.io.File(fixtureContext.getFilesDir(), "p0-fixture-main-blocked").createNewFile(); }
+                catch (java.io.IOException failure) { throw new IllegalStateException(failure); }
+                for (;;) { try { Thread.sleep(1000); } catch (InterruptedException ignored) {} }
+            });
+            for (;;) { try { Thread.sleep(1000); } catch (InterruptedException ignored) {} }
+        }
         if ("__HERRIN_TEST_IGNORE_INTERRUPT__".equals(keyword)) {
             try { new java.io.File(fixtureContext.getFilesDir(), "p0-fixture-hang-entered").createNewFile(); }
             catch (java.io.IOException failure) { throw new IllegalStateException(failure); }

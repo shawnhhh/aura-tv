@@ -22,5 +22,5 @@ internal object SourceSearchDiagnostics {
             android.util.Log.d(TAG,line)
         }
     }
-    @Synchronized fun summary()="SOURCE_SEARCH first_candidate_ms=$candidateAt first_media_ms=$mediaAt completed=$completed timeout_events=$timeouts\n"+events.takeLast(16).joinToString("\n")
+    @Synchronized fun summary()="SOURCE_SEARCH first_candidate_ms=$candidateAt first_media_ms=$mediaAt completed=$completed timeout_events=$timeouts host_retire_requests=${SpiderHostRetirement.requests.get()}\n"+events.takeLast(16).joinToString("\n")
 }

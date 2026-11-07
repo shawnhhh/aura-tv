@@ -44,7 +44,7 @@ focused=0
 for attempt in $(seq 1 20); do
     # API31's `windows` section omits display-level mCurrentFocus.
     adb shell dumpsys window > "$evidence/hot-window.txt"
-    if rg -q 'mCurrentFocus=.*tv.herrin.app/.*MainActivity' "$evidence/hot-window.txt"; then focused=1; break; fi
+    if grep -Eq 'mCurrentFocus=.*tv[.]herrin[.]app/.*MainActivity' "$evidence/hot-window.txt"; then focused=1; break; fi
     sleep 0.1
 done
 if [[ "$focused" != 1 ]]; then
@@ -62,7 +62,7 @@ python3 - "$evidence/hot-remote.xml" <<'PY'
 import pathlib,sys
 assert '精选电影' in pathlib.Path(sys.argv[1]).read_text(), 'Remote lost after startup/hot resume'
 PY
-if rg -q 'FATAL EXCEPTION' "$evidence/cold-diagnostics.txt"; then exit 1; fi
+if grep -q 'FATAL EXCEPTION' "$evidence/cold-diagnostics.txt"; then exit 1; fi
 # Separate visual pass: screen recording perturbs timing, so it is never the perf source.
 adb shell am force-stop tv.herrin.app
 adb shell screenrecord --time-limit 6 /sdcard/herrin-startup.mp4 > "$evidence/recording.log" 2>&1 &

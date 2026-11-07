@@ -101,4 +101,40 @@ class P0SpiderDeadlineRecoveryTest {
             Unit
         }finally{bridge.close();marker.delete();file.delete()}
     }
+    @Test fun blockedChildMessageLoopIsRetiredByHostBeforeItsOwnTenSecondWatchdog()=runBlocking {
+        val context=inst.targetContext
+        val (file,jar)=cacheJar(context)
+        val marker=File(context.filesDir,"p0-fixture-main-blocked").apply{delete()}
+        val sixth=TvBoxSite("blocked fixture",true,key="p0-blocked-sixth",spiderApi="csp_Fixture")
+        val seventh=sixth.copy(key="p0-blocked-seventh")
+        val config=TvBoxConfig.Single(listOf(sixth,seventh),emptyList(),true,spiderJar=jar)
+        val bridge=TvBoxSpiderBridge(context)
+        val manager=context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        fun child()=manager.runningAppProcesses.orEmpty().firstOrNull{it.processName==context.packageName+":spider"}?.pid
+        val mainPid=android.os.Process.myPid()
+        val before=SpiderHostRetirement.requests.get()
+        try {
+            assertTrue(bridge.browse(sixth,config,searchOnly=true) is SpiderResult.Ready)
+            val oldPid=requireNotNull(child());assertNotEquals(mainPid,oldPid)
+            val hung=async(Dispatchers.Default){withTimeoutOrNull(2000){withContext(SpiderRequestBudget(10_000)){
+                bridge.search(sixth,"__HERRIN_TEST_BLOCK_MAIN__")
+            }}}
+            withTimeout(1500){while(!marker.exists())delay(10)}
+            val mainCallback=CompletableDeferred<Unit>()
+            android.os.Handler(android.os.Looper.getMainLooper()).post{mainCallback.complete(Unit)}
+            withTimeout(1200){mainCallback.await()}
+            assertNull(hung.await())
+            val cancelledAt=android.os.SystemClock.elapsedRealtime()
+            withTimeout(2500){while(child()==oldPid)delay(20)}
+            val reapedMs=android.os.SystemClock.elapsedRealtime()-cancelledAt
+            assertTrue("Parent must retire the child before its 10s internal watchdog",SpiderHostRetirement.requests.get()>before)
+            assertEquals(mainPid,android.os.Process.myPid())
+            assertEquals(0,withContext(Dispatchers.Main.immediate){bridge.pendingSearchRequests()})
+            assertTrue(withTimeout(6000){bridge.browse(seventh,config,searchOnly=true)} is SpiderResult.Ready)
+            val fresh=(bridge.search(seventh,"Original synthetic fixture") as SpiderResult.Ready).value.single()
+            assertEquals(seventh.key,fresh.spiderOrigin?.site)
+            android.util.Log.i("HerrinSourceRecovery","blocked_child_main_reaped_by_host=1 main_callback_alive=1 pending=0 cancel_to_exit_ms=$reapedMs physical_tcl=0")
+            Unit
+        }finally{bridge.close();marker.delete();file.delete()}
+    }
 }

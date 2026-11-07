@@ -497,6 +497,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     private var retiringBinder:IBinder?=null
     private var retirement:CompletableDeferred<Boolean>?=null
     private var retirementId=-1
+    private var retirementReaper:Job?=null
     internal fun pendingSearchRequests(): Int = pending.size
     @Volatile private var generation = 0
     @Volatile private var hydratedGeneration = -1
@@ -604,12 +605,15 @@ internal class TvBoxSpiderBridge(context: Context) {
         if (remaining > 0) delay(remaining)
         val old=retiringBinder
         if(old!=null){
-            val retired=withTimeoutOrNull(600){retirement?.await()}
+            val signal=retirement
+            withTimeoutOrNull(600){while(signal?.isCompleted!=true &&old.isBinderAlive)delay(20)}
+            val retired=if(signal?.isCompleted==true)signal.await() else null
             if(retired!=false){
                 withTimeoutOrNull(800){while(old.isBinderAlive)delay(20)}
                 check(!old.isBinderAlive){"Spider 子进程仍在回收，未复用旧执行会话"}
             }
             retiringBinder=null;retirement=null
+            retirementReaper?.cancel();retirementReaper=null
         }
         remote?.let { return it }
         val waiter = CompletableDeferred<Messenger>()
@@ -759,8 +763,33 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     private fun retire(server:Messenger,id:Int){
-        retiringBinder=server.binder;retirementId=id;retirement=CompletableDeferred()
+        val old=server.binder
+        val signal=CompletableDeferred<Boolean>()
+        retiringBinder=old;retirementId=id;retirement=signal
         runCatching { server.send(Message.obtain(null,SpiderIpc.CANCEL_REQUEST).apply{arg1=id;replyTo=responses}) }
+        retirementReaper?.cancel()
+        retirementReaper=cleanupScope.launch {
+            // Give cooperative cancellation and the child's own 250ms reaper priority.
+            delay(650)
+            // A local test/host Binder must never authorize process retirement.
+            if(old is android.os.Binder ||retiringBinder!==old ||!old.isBinderAlive)return@launch
+            if(signal.isCompleted &&!signal.await())return@launch
+            val pid=withContext(Dispatchers.IO){
+                runCatching {
+                    val manager=app.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                    ownedSpiderPid(android.os.Process.myPid(),android.os.Process.myUid(),app.packageName,
+                        manager.runningAppProcesses.orEmpty().mapNotNull{info->info.processName?.let{
+                            OwnedSpiderProcess(info.pid,info.uid,it)}})
+                }.getOrNull()
+            }
+            // Recheck the exact retired Binder after the IO query. A new binding
+            // or completed cancellation must not be killed by an old watchdog.
+            if(pid!=null &&retiringBinder===old &&old.isBinderAlive &&
+                !(signal.isCompleted &&!signal.await())) {
+                SpiderHostRetirement.requests.incrementAndGet()
+                android.os.Process.killProcess(pid)
+            }
+        }
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single, searchOnly: Boolean = false): SpiderResult<List<Film>> {
