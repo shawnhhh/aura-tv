@@ -65,7 +65,7 @@ internal class SourceHealthIndex(private val file: File?, private val scope: Str
         return (if(e.mediaAt>0 &&clock()-e.mediaAt in 0..6*HOUR) 1_000_000 else 0) +
             (if(e.searchAt>0 &&clock()-e.searchAt in 0..HOUR)100_000 else 0) - e.latencyMs - e.failures*1000
     }
-    @Synchronized fun save(isCurrent:()->Boolean={true}) = synchronized(ioLock) {
+    @Synchronized fun save(isCurrent:()->Boolean={true}) { synchronized(ioLock) {
         val dest=file ?: return
         if(!isCurrent())return
         val values=JSONObject()
@@ -75,7 +75,7 @@ internal class SourceHealthIndex(private val file: File?, private val scope: Str
         val temp=File(dest.parentFile,dest.name+".tmp")
         try { dest.parentFile?.mkdirs();temp.writeText(JSONObject().put("scope",digest(scope)).put("entries",values).toString())
             if(!isCurrent() ||!temp.renameTo(dest))temp.delete() } catch (_: java.io.IOException){temp.delete()}
-    }
+    } }
     companion object {
         private val ioLock=Any()
         private const val HOUR=3_600_000L
@@ -97,4 +97,7 @@ internal class SourceHealthIndex(private val file: File?, private val scope: Str
 /** Inherited across dispatcher changes; never changes authorization or FongMi decode behavior. */
 internal class SpiderRequestBudget(val milliseconds: Long) : kotlin.coroutines.AbstractCoroutineContextElement(Key) {
     companion object Key : kotlin.coroutines.CoroutineContext.Key<SpiderRequestBudget>
+}
+internal class SpiderSearchAuthority(val configuration:Long):kotlin.coroutines.AbstractCoroutineContextElement(Key){
+    companion object Key:kotlin.coroutines.CoroutineContext.Key<SpiderSearchAuthority>
 }

@@ -17,6 +17,17 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Real Messenger/DEX/OS process recovery; the fixture deliberately ignores Thread.interrupt(). */
 class P0SpiderDeadlineRecoveryTest {
     private val inst=InstrumentationRegistry.getInstrumentation()
+    @Test fun revokedConfigurationCannotStartAnOldSearchUnderNewConsent()=runBlocking {
+        val bridge=TvBoxSpiderBridge(inst.targetContext)
+        val site=TvBoxSite("fixture",true,key="revoked",spiderApi="csp_Fixture")
+        val config=TvBoxConfig.Single(listOf(site),emptyList(),true)
+        val old=bridge.configurationTicket()
+        bridge.close()
+        val result=withContext(SpiderSearchAuthority(old)){bridge.browse(site,config,searchOnly=true)}
+        assertTrue(result is SpiderResult.Failure)
+        assertTrue((result as SpiderResult.Failure).message.contains("配置已改变"))
+        assertEquals(0,withContext(Dispatchers.Main.immediate){bridge.pendingSearchRequests()})
+    }
     private fun cacheJar(context:Context):Pair<File,String>{
         val bytes=inst.context.assets.open("m467-spider.jar").use{it.readBytes()}
         val hash=MessageDigest.getInstance("MD5").digest(bytes).joinToString(""){"%02x".format(it)}

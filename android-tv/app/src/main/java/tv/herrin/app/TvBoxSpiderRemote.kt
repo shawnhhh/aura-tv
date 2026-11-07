@@ -500,6 +500,8 @@ internal class TvBoxSpiderBridge(context: Context) {
     @Volatile private var generation = 0
     @Volatile private var hydratedGeneration = -1
     private val sourceSession = SpiderSourceSession()
+    private val configurationEpoch=java.util.concurrent.atomic.AtomicLong()
+    internal fun configurationTicket()=configurationEpoch.get()
     private val lastBrowse: String? get() = sourceSession.descriptor()
     /** A read-only hint, not execution authorization; worker verifies identity. */
     fun approvedActiveSiteKey(): String? = lastBrowse?.let { payload ->
@@ -639,8 +641,12 @@ internal class TvBoxSpiderBridge(context: Context) {
         // Capture the intent before waiting for another loader operation.
         // An explicit close/source change must retire queued work as well.
         return requests.withLock {
+            val authority=kotlinx.coroutines.currentCoroutineContext()[SpiderSearchAuthority]
+            if(authority!=null &&authority.configuration!=configurationEpoch.get())
+                return@withLock SpiderResult.Failure("来源配置已改变，已取消旧检索")
             if (operation == SpiderIpc.BROWSE) {
                 val started = withContext(Dispatchers.Main.immediate) {
+                    if(authority!=null &&authority.configuration!=configurationEpoch.get())return@withContext null
                     sourceSession.beginBrowse(invocation)?.let { ticket ->
                         hydratedGeneration = -1
                         ticket to generation
@@ -945,6 +951,7 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
 
     fun close() {
+        configurationEpoch.incrementAndGet()
         // Revoke immediately, even when main-thread cleanup is still queued.
         sourceSession.revoke()
         val release = Runnable {

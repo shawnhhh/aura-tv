@@ -1194,6 +1194,7 @@ private fun Herrin(startup: StartupPresentation) {
     LaunchedEffect(screen, filmId, lookupFilm?.title,lookupFilm?.subtitle,lookupFilm?.year,lookupFilm?.tmdbTvId,tvBoxSingle,
         tvBoxWarehouses, personalSourceConfigEpoch, tmdbLookupEpoch) {
         val searchTicket=tmdbSearchGeneration.incrementAndGet()
+        val consentAtStart=spiderBridge.configurationTicket()
         tmdbSearchRunning=false
         val recoveryRequest = automaticSearch?.takeIf { it.film == filmId && screen == "player" }
         if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
@@ -1248,7 +1249,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
             }
         }
-        val searchOutput=try { withTimeoutOrNull(budgetMs) { withContext(Dispatchers.IO) {
+        val searchOutput=try { withTimeoutOrNull(budgetMs) { withContext(Dispatchers.IO+SpiderSearchAuthority(consentAtStart)) {
             val adapters = mutableListOf<HerrinFilmSource>()
             for ((slot, url, insecure, kind) in listOf(
                 listOf("nas", nasUrl, allowNasHttp.toString(), "NAS"),
@@ -1811,12 +1812,13 @@ private fun Herrin(startup: StartupPresentation) {
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
     LaunchedEffect(screen, filmId, spiderActive, showGroup?.key, detailLoadEpoch) {
-        if (spiderActive && screen == "detail" && film.spiderVodId != null) {
+        if (spiderActive && screen == "detail" && !film.id.startsWith("tmdb-") &&film.spiderVodId != null) {
+            val selectionConsent=spiderBridge.configurationTicket()
             val current=withContext(Dispatchers.IO){spiderBridge.isApprovedSourceFilm(film)}
             if(current &&film.playbackEpisodes.isNotEmpty())return@LaunchedEffect
             spiderStatus = "正在读取当前授权来源的详情和选集…"
             val loaded=if(current)spiderBridge.details(film) else {
-                val refreshed=withTimeoutOrNull(6_000){withContext(Dispatchers.IO+SpiderRequestBudget(1_500)){
+                val refreshed=withTimeoutOrNull(6_000){withContext(Dispatchers.IO+SpiderRequestBudget(1_500)+SpiderSearchAuthority(selectionConsent)){
                     refreshSpiderSelection(film,tvBoxSingle,spiderBridge){site->
                         val runtime=site.jar?:tvBoxSingle?.spiderJar?:site.scriptApi.orEmpty()
                         TvBoxSpiderPolicy.mayRun(false,prefs.tvBoxWarehouseUrl,runtime,prefs.tvBoxTrustedSpiderRootUrl,prefs.tvBoxTrustedSpiderJarSpec)
@@ -1951,6 +1953,7 @@ private fun Herrin(startup: StartupPresentation) {
         spiderResolvedFor = HerrinAutomaticPlayback.Attempt(film.id, episode, line, playerRetryEpoch,
             tmdbFallbackIndex.selected(film.id) ?: catalogScope)
         if (spiderActive && screen == "player" && automaticSearch == null &&!playbackNeedsRefresh) {
+            val selectionConsent=spiderBridge.configurationTicket()
             val sourceFilm = if (film.id.startsWith("tmdb-")) tmdbPlaybackRoutes.sourceFilm(film.id) else film
             if (sourceFilm == null) {
                 spiderResolved = PlaybackResult.Unavailable("影片来源已失效，请重新查找片源")
@@ -1958,7 +1961,7 @@ private fun Herrin(startup: StartupPresentation) {
             }
             var playableFilm = sourceFilm
             if(!withContext(Dispatchers.IO){spiderBridge.isApprovedSourceFilm(playableFilm)}){
-                val fresh=withTimeoutOrNull(6_000){withContext(Dispatchers.IO+SpiderRequestBudget(1_500)){
+                val fresh=withTimeoutOrNull(6_000){withContext(Dispatchers.IO+SpiderRequestBudget(1_500)+SpiderSearchAuthority(selectionConsent)){
                     refreshSpiderSelection(playableFilm,tvBoxSingle,spiderBridge){site->
                         TvBoxSpiderPolicy.mayRun(false,prefs.tvBoxWarehouseUrl,site.jar?:tvBoxSingle?.spiderJar?:site.scriptApi.orEmpty(),
                             prefs.tvBoxTrustedSpiderRootUrl,prefs.tvBoxTrustedSpiderJarSpec)
@@ -1969,6 +1972,11 @@ private fun Herrin(startup: StartupPresentation) {
                     return@LaunchedEffect
                 }
                 playableFilm=fresh
+                if(film.id.startsWith("tmdb-")){
+                    tmdbPlaybackRoutes.spider(film.id,requireNotNull(fresh.spiderOrigin).site,fresh)
+                    tmdbResolved[film.id]?.let{metadata->tmdbResolved[film.id]=metadata.copy(
+                        spiderVodId=fresh.spiderVodId,playbackEpisodes=fresh.playbackEpisodes,episodes=fresh.playbackEpisodes.size)}
+                }else providerFilms=providerFilms?.map{if(it.id==film.id)FilmMetadataEnrichment.mergeSourceDetails(it,fresh) else it}
             }
             // Load missing episode metadata IN the full-screen loading surface.
             // Do not bounce a film-card click to a technical Spider detail page.
