@@ -1,4 +1,4 @@
-name: HERRIN P0 Retained Startup Failure Evidence
+name: HERRIN P0 Retained Controlled Failure Evidence
 on:
   push:
     branches: ['codex/herrin-startup-source-health-20261107']
@@ -13,70 +13,20 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: HERRIN-API31-startup-evidence
+          name: HERRIN-emulator-evidence
           github-token: ${{ github.token }}
-          run-id: 42355871486
-          path: evidence/api31
-      - uses: actions/download-artifact@v4
-        with:
-          name: HERRIN-debug-apk
-          github-token: ${{ github.token }}
-          run-id: 42354713886
-          path: evidence/apk
-      - name: Inspect the actual failing DEX instruction
-        run: |
-          unzip -p evidence/apk/app-debug.apk classes5.dex > /tmp/herrin.dex
-          dex_dump=$(find "$ANDROID_HOME/build-tools" -type f -name dexdump | sort -V | tail -n 1)
-          "$dex_dump" -d /tmp/herrin.dex > /tmp/herrin-dex.txt
-          python3 - <<'PY'
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-          for path in Path('evidence').rglob('hot-remote.xml'):
-              print('HOT_FOCUS_TREE '+str(path))
-              for node in ET.parse(path).iter('node'):
-                  if node.get('focusable')=='true' or node.get('focused')=='true':
-                      print({key:node.get(key) for key in ('text','content-desc','focused','selected','bounds')})
-          lines=Path('/tmp/herrin-dex.txt').read_text(errors='replace').splitlines()
-          for n,line in enumerate(lines):
-              if "name" in line and "'Herrin'" in line:print('\n'.join(lines[n:n+14]))
-              if '|2c8a:' in line.lower() or '|002c8a:' in line.lower():print('\n'.join(lines[max(0,n-28):n+22]))
-          PY
-      - name: Inspect only the controlled offline startup failure
+          run-id: 42358864061
+          path: evidence/tv
+      - name: Inspect controlled fixture recovery and cached home failures
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          for name in ('cold-diagnostics.txt','cold-launch.txt','launch.txt'):
-              for path in Path('evidence').rglob(name):
-                  print(str(path)+'\n'+path.read_text(errors='replace')[-20000:])
-          for path in Path('evidence').rglob('logcat.txt'):
+          for path in Path('evidence').rglob('*'):
+              if not path.is_file() or path.suffix not in ('.txt','.log'):continue
               rows=path.read_text(errors='replace').splitlines()
               shown=set()
               for n,row in enumerate(rows):
-                  if 'FATAL EXCEPTION' in row or 'Unable to start' in row:
-                      for index in range(max(0,n-2),min(len(rows),n+45)):
-                          if index not in shown:print(rows[index]);shown.add(index)
-          PY
-      - uses: actions/download-artifact@v4
-        with:
-          name: HERRIN-debug-apk
-          github-token: ${{ github.token }}
-          run-id: 42355871486
-          path: evidence/fixed-apk
-      - name: Record the candidate method size separately from the failing APK
-        run: |
-          dex_tool=$(find "$ANDROID_HOME/build-tools" -type f -name dexdump | sort -V | tail -n 1)
-          DEX_TOOL="$dex_tool" python3 - <<'PY'
-          import os,re,subprocess,tempfile,zipfile
-          from pathlib import Path
-          with zipfile.ZipFile('evidence/fixed-apk/app-debug.apk') as apk, tempfile.TemporaryDirectory() as tmp:
-              found=False
-              for name in sorted(apk.namelist()):
-                  if not re.fullmatch(r'classes\d*\.dex',name):continue
-                  path=Path(tmp)/name;path.write_bytes(apk.read(name))
-                  rows=subprocess.check_output([os.environ['DEX_TOOL'],'-d',str(path)]).decode(errors='replace').splitlines()
-                  for n,row in enumerate(rows):
-                      if re.search(r"\bname\s*:\s*'Herrin'",row):
-                          print('CANDIDATE c156b3d '+name+'\n'+'\n'.join(rows[n:n+14]));found=True;break
-                  if found:break
-              assert found,'Candidate Herrin method not found; cannot report generated method size'
+                  if any(tag in row for tag in ('P0SpiderDeadlineRecoveryTest','Spider transport','Spider service','Spider bind','HerrinSpider','P0CachedHomeHeroTest')):
+                      for i in range(max(0,n-2),min(len(rows),n+12)):
+                          if i not in shown:print(path.name+': '+rows[i]);shown.add(i)
           PY
