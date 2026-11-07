@@ -1,0 +1,108 @@
+{
+  "commit": "c4a05606338992f66f684e8e0c261179b58bc671",
+  "run": 42237672986,
+  "device": "Android TV API 30 x86 / tv_1080p",
+  "physical_TCL_tested": false,
+  "jvm": {
+    "tests": 587,
+    "failed": 0,
+    "skipped": 0
+  },
+  "android": {
+    "tests": 222,
+    "failed": 0,
+    "skipped": 0
+  },
+  "fatal_exception_present": false,
+  "launch": {
+    "cold": {
+      "total_ms": 1858,
+      "wait_ms": 1860
+    },
+    "hot": {
+      "total_ms": 326,
+      "wait_ms": 378
+    },
+    "warm": {
+      "total_ms": 484,
+      "wait_ms": 493
+    }
+  },
+  "startup": [
+    {
+      "process_to_activity_ms": 919,
+      "activity_to_first_draw_ms": 389,
+      "first_draw_to_wordmark_ms": 585,
+      "wordmark_complete_ms": 2567,
+      "activity_to_home_ms": 3415
+    },
+    {
+      "process_to_activity_ms": 28149,
+      "activity_to_first_draw_ms": 292,
+      "first_draw_to_wordmark_ms": 341,
+      "wordmark_complete_ms": 2245,
+      "activity_to_home_ms": 2810
+    }
+  ],
+  "remote_performance": {
+    "dense_catalog": {
+      "events": 16,
+      "focus_success": 16,
+      "frames_total": 45,
+      "key_to_focus_p50_ms": 3.747746,
+      "key_to_focus_p95_ms": 81.9,
+      "end_to_idle_p95_ms": 359,
+      "frame_p95_ms": 220
+    },
+    "horizontal": {
+      "events": 40,
+      "focus_success": 40,
+      "focus_draw_samples": 40,
+      "key_to_draw_p50_ms": 14.48,
+      "key_to_draw_p95_ms": 21.28,
+      "key_to_draw_p99_ms": 33.27,
+      "key_to_focus_p99_ms": 51.64,
+      "key_to_focus_p50_ms": 4.89,
+      "key_to_focus_p95_ms": 32.42,
+      "end_to_idle_p95_ms": 242,
+      "frame_p95_ms": 233.37,
+      "frames_total": 79,
+      "frames_over_16_67ms": 79,
+      "frames_over_33_33ms": 79,
+      "long_frame_pct": 100
+    },
+    "vertical": {
+      "events": 32,
+      "focus_success": 32,
+      "focus_draw_samples": 32,
+      "key_to_draw_p50_ms": 11.36,
+      "key_to_draw_p95_ms": 21.59,
+      "key_to_draw_p99_ms": 21.99,
+      "key_to_focus_p99_ms": 9.65,
+      "key_to_focus_p50_ms": 3.46,
+      "key_to_focus_p95_ms": 7.74,
+      "end_to_idle_p95_ms": 214
+    },
+    "burst": {
+      "events": 120,
+      "last_focus_correct": 1,
+      "burst_to_final_focus_ms": 4329
+    },
+    "frame_baseline": {
+      "redraw_frames": 24,
+      "navigation_frames": 47,
+      "redraw_p95_ms": 184.52,
+      "navigation_p95_ms": 187.72,
+      "navigation_to_redraw_ratio": 1.02
+    }
+  },
+  "apk": {
+    "sha": "c4a05606338992f66f684e8e0c261179b58bc671",
+    "version": "0.4.66-alpha",
+    "code": 70,
+    "size": 26426385,
+    "sha256": "9cf8f5ab0a1757df630b1798cdf50c4133386967059e46d9e4aa0986d11990bf",
+    "artifact": 13514885279,
+    "run": 42237672986
+  }
+}

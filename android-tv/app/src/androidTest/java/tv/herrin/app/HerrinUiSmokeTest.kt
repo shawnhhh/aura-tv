@@ -38,7 +38,10 @@ class HerrinUiSmokeTest {
     }
     @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
     @get:Rule(order = 2) val evidence = object : TestWatcher() {
-        override fun failed(e: Throwable?, d: Description) { capture("FAIL-${d.methodName}") }
+        override fun failed(e: Throwable?, d: Description) {
+            runCatching { capture("FAIL-${d.methodName}") }
+                .onFailure { android.util.Log.w("HerrinEvidence", "Screenshot unavailable; original assertion retained") }
+        }
     }
     @Before fun awaitHome() {
         compose.waitUntil(10000) {
@@ -111,7 +114,7 @@ class HerrinUiSmokeTest {
     }
     private fun capture(label: String) {
         // PixelCopy synchronizes the rendered root before the device screenshot (not just semantics).
-        compose.onRoot().captureToImage()
+        compose.onAllNodes(isRoot()).onFirst().captureToImage()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         fun shell(command: String) {
             instrumentation.uiAutomation.executeShellCommand(command).use { descriptor ->
@@ -121,7 +124,9 @@ class HerrinUiSmokeTest {
         val dir = "/data/local/tmp/herrin-test-evidence"
         shell("mkdir -p $dir")
         shell("screencap -p $dir/$label.png")
-        val tree = compose.onRoot().printToString()
+        val tree = compose.onAllNodes(isRoot()).fetchSemanticsNodes().indices.joinToString("\n") {
+            compose.onAllNodes(isRoot())[it].printToString()
+        }
         val encoded = android.util.Base64.encodeToString(tree.toByteArray(), android.util.Base64.NO_WRAP)
         val chunks = encoded.chunked(2800)
         chunks.forEachIndexed { index, chunk ->
@@ -555,6 +560,12 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("精选电影 · 演示片库").assertExists()
         key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("exit-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("exit-cancel").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithText("精选电影 · 演示片库").assertExists()
+        focus("nav-首页")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("精选首页 · 演示片库").assertExists()
         focus("card-orbit")
         key(KeyEvent.KEYCODE_DPAD_RIGHT)
@@ -852,6 +863,10 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("live-status").assertExists()
         compose.onNodeWithTag("live-config").assertExists()
         key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("exit-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("exit-cancel").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("live-status").assertExists()
         advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-live-url"))
         compose.onNodeWithTag("config-live-url").assertIsDisplayed()
@@ -891,6 +906,10 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("live-epg-status").assertTextContains("未配置 XMLTV", substring = true)
         key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("exit-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("exit-cancel").assertIsFocused()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("live-epg-status").assertTextContains("未配置 XMLTV", substring = true)
         advancedSettings()
         val settings = compose.onNodeWithTag("settings-list")
         settings.performScrollToNode(hasTestTag("config-epg-url"))

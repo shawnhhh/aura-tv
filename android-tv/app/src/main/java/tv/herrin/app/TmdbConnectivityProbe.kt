@@ -47,13 +47,13 @@ internal object TmdbConnectivityProbe {
             return TmdbProbeReport(TmdbProbeState.INVALID_FORMAT)
         var stage = "配置接口"
         return try {
-            val config = fetcher.load("https://api.themoviedb.org/3/configuration", trimmed)
+            val config = fetcher.load("${TmdbEndpoints.PRIMARY}/configuration", trimmed)
                 ?: return TmdbProbeReport(TmdbProbeState.SERVER_UNAVAILABLE, stage, "没有有效 JSON 响应")
             if (JSONObject(config).optJSONObject("images") == null)
                 return TmdbProbeReport(TmdbProbeState.SERVER_UNAVAILABLE, stage, "缺少 images 字段")
             stage = "搜索接口"
             val search = fetcher.load(
-                "https://api.themoviedb.org/3/search/movie?query=Inception&language=zh-CN&include_adult=false&page=1",
+                "${TmdbEndpoints.PRIMARY}/search/movie?query=Inception&language=zh-CN&include_adult=false&page=1",
                 trimmed
             ) ?: return TmdbProbeReport(TmdbProbeState.SEARCH_UNAVAILABLE, stage, "没有有效 JSON 响应")
             if (JSONObject(search).optJSONArray("results") == null)

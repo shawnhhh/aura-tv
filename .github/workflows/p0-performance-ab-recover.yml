@@ -1,0 +1,32 @@
+name: HERRIN P0 Parse Retained Same Device Evidence
+on:
+  push:
+    branches: ['codex/herrin-responsive-config-20261106']
+    paths: ['.github/workflows/p0-performance-ab-recover.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: c4a05606338992f66f684e8e0c261179b58bc671
+          path: candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-P0-same-device-ABBA
+          github-token: ${{ github.token }}
+          run-id: 42242155533
+          path: performance-ab
+      - name: Parse original logs and verify every instrumentation result
+        run: python3 .github/scripts/p0_performance_ab.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-P0-same-device-ABBA-parsed
+          path: performance-ab/
+          retention-days: 14

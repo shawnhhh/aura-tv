@@ -7,7 +7,7 @@ class RemotePerfReportTest(unittest.TestCase):
     def test_extracts_numbers_without_leaking_user_content(self):
         log = (
             "10-30 13:11:00.333 I HerrinPerf: m443_vertical_dpad_events=32 "
-            "focus_success=32 key_to_focus_p50_ms=12.50 key_to_focus_p95_ms=48.12 "
+            "focus_success=32 key_to_focus_p50_ms=12.50 key_to_focus_p95_ms=48.12 key_to_focus_p99_ms=59.21 "
             "end_to_idle_p95_ms=152 url=https://secret.invalid/token\n"
             "10-30 13:11:09.411 I HerrinPerf: m443_horizontal_dpad_events=40 "
             "focus_success=40 key_to_focus_p95_ms=39.20 "
@@ -20,6 +20,7 @@ class RemotePerfReportTest(unittest.TestCase):
         metrics = parse_remote_performance(log)
         self.assertEqual(32, metrics["vertical"]["focus_success"])
         self.assertEqual(12.5, metrics["vertical"]["key_to_focus_p50_ms"])
+        self.assertEqual(59.21, metrics["vertical"]["key_to_focus_p99_ms"])
         self.assertEqual(40, metrics["horizontal"]["events"])
         self.assertEqual(22, metrics["horizontal"]["frames_over_16_67ms"])
         self.assertEqual(22.0, metrics["horizontal"]["long_frame_pct"])

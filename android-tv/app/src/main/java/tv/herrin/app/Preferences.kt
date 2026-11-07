@@ -4,6 +4,8 @@ import android.content.Context
 import java.security.MessageDigest
 
 class Preferences(context: Context) : FavoritesStore {
+    @Volatile private var tokenCache: String? = null
+    private val tokenVault = HerrinPersonalCredentialStore(context, "tmdb")
     private val prefs = context.getSharedPreferences("herrin", Context.MODE_PRIVATE)
     // Retain the old offline-demo key and its contents; all remote favorites are
     // scoped to the canonical endpoint to avoid collisions between source IDs.
@@ -86,8 +88,24 @@ class Preferences(context: Context) : FavoritesStore {
     var cloudAllowHttp: Boolean
         get() = prefs.getBoolean("cloud_allow_http", false)
         set(value) { prefs.edit().putBoolean("cloud_allow_http", value).apply() }
+    internal fun acceptPersistedToken(value: String) { tokenCache = value }
+    fun invalidateTokenCache() { tokenCache = null }
     /** Optional personal TMDB API Read Access Token; empty disables metadata calls. */
     var tmdbReadToken: String
-        get() = prefs.getString("tmdb_read_token", "") ?: ""
-        set(value) { prefs.edit().putString("tmdb_read_token", value.trim()).apply() }
+        get() {
+            tokenCache?.let { return it }
+            val stored = if (prefs.getBoolean("tmdb_token_saved", false)) tokenVault.load().second else ""
+            val legacy = prefs.getString("tmdb_read_token", "").orEmpty()
+            if (legacy.isNotBlank() && tokenVault.save("", legacy)) {
+                prefs.edit().remove("tmdb_read_token").putBoolean("tmdb_token_saved", true).commit()
+                tokenCache = legacy
+                return legacy
+            }
+            return stored.ifBlank { legacy }.also { tokenCache = it }
+        }
+        set(value) {
+            check(tokenVault.save("", value.trim())) { "Credential storage unavailable" }
+            tokenCache = value.trim()
+            prefs.edit().remove("tmdb_read_token").putBoolean("tmdb_token_saved", true).apply()
+        }
 }

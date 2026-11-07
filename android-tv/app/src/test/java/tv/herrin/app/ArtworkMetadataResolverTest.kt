@@ -96,7 +96,7 @@ class ArtworkMetadataResolverTest {
         assertEquals(1, attempts)
         assertTrue(endpoint.single().contains("/search/tv?query="))
         assertTrue(endpoint.single().contains("language=zh-CN"))
-        assertTrue(endpoint.single().startsWith("https://api.themoviedb.org/3/"))
+        assertTrue(endpoint.single().startsWith("https://api.tmdb.org/3/"))
         val nextInstance = ArtworkMetadataResolver(cacheDir, ArtworkJsonFetcher { _, _ ->
             throw AssertionError("metadata should be cached")
         })

@@ -1,0 +1,52 @@
+name: HERRIN P0 Same Device Performance ABBA
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: c4a05606338992f66f684e8e0c261179b58bc671
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: 2af99374ab44052bb8ab6c76daeed5e94d75bd3d
+          path: baseline
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build both pinned versions with the same temporary debug signing key
+        run: |
+          gradle -p candidate/android-tv :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+          gradle -p baseline/android-tv :app:assembleDebug --stacktrace
+      - name: Enable Linux KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Compare A B B A on one Android TV AVD
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          ram-size: 3072M
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/p0_performance_ab.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HERRIN-P0-same-device-ABBA
+          path: performance-ab/
+          if-no-files-found: error
+          retention-days: 14

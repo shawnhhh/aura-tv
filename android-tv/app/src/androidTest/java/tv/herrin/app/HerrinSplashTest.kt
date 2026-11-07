@@ -45,10 +45,36 @@ class HerrinSplashTest {
         // There is never a single-letter H-only screen.
         compose.onNodeWithText("H").assertDoesNotExist()
         screenshot("splash-HERRIN")
-        compose.mainClock.advanceTimeBy(600)
-        compose.runOnIdle { assertTrue("No multi-second branding hold", completed) }
+        compose.mainClock.advanceTimeBy(2100)
+        compose.runOnIdle { assertTrue("Complete reveal precedes readiness callback", completed) }
         compose.onNodeWithContentDescription("HERRIN").assertExists()
     }
+    @Test fun homePreparationRunsOnceAndOnlyAfterCompleteWordmarkReveal() {
+        compose.mainClock.autoAdvance = false
+        var prepared = 0
+        var ready = 0
+        compose.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                HerrinWordmarkSplash(false, done = { ready++ }, onVisible = { prepared++ })
+            }
+        }
+        compose.mainClock.advanceTimeBy(850)
+        compose.runOnIdle {
+            assertEquals("Do not mount the heavy home halfway through the logo animation", 0, prepared)
+            assertEquals(0, ready)
+        }
+        compose.mainClock.advanceTimeBy(1_300)
+        compose.runOnIdle {
+            assertEquals(1, prepared)
+            assertEquals(1, ready)
+        }
+        compose.mainClock.advanceTimeBy(600)
+        compose.runOnIdle {
+            assertEquals("Repeated frame ticks must not restart heavy home creation", 1, prepared)
+            assertEquals(1, ready)
+        }
+    }
+
     @Test fun skipCompletesImmediately() {
         compose.mainClock.autoAdvance = false
         var completed = false
@@ -89,10 +115,20 @@ class HerrinSplashTest {
         compose.onNodeWithTag("splash-curtain").assertExists()
         val shiftedLeft = compose.onNodeWithTag("splash-curtain")
             .fetchSemanticsNode().boundsInRoot.left
-        assertTrue("HERRIN launch must slide spatially, not simply fade",
-            shiftedLeft > initialLeft + 8f)
+        assertEquals("Wordmark remains fixed during fade", initialLeft, shiftedLeft, 0.1f)
         compose.runOnIdle { assertFalse(finished) }
         compose.mainClock.advanceTimeBy(700)
         compose.runOnIdle { assertTrue(finished) }
+    }
+    @Test fun reducedMotionStillExitsWhenHomeBecomesReadyLater() {
+        var ready by mutableStateOf(false)
+        var released = false
+        compose.setContent {
+            MaterialTheme { SplashExitCurtain(true, false, onReady = { released = true },
+                onFinished = {}, homeReady = ready) }
+        }
+        compose.runOnIdle { assertFalse(released); ready = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue(released) }
     }
 }

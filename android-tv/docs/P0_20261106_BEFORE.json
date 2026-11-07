@@ -1,0 +1,64 @@
+{
+  "sha": "2af99374ab44052bb8ab6c76daeed5e94d75bd3d",
+  "run": 42186651485,
+  "device": "Android TV API 30 x86 / tv_1080p",
+  "physical_TCL_tested": false,
+  "startup": {
+    "am_start_launch_state": "COLD",
+    "am_start_total_ms": 1924,
+    "am_start_wait_ms": 1926,
+    "split_timings": "not collected in baseline"
+  },
+  "performance": {
+    "dense_catalog": {
+      "events": 16,
+      "focus_success": 16,
+      "frames_total": 40,
+      "key_to_focus_p50_ms": 5.163768,
+      "key_to_focus_p95_ms": 74.54,
+      "end_to_idle_p95_ms": 241,
+      "frame_p95_ms": 186
+    },
+    "horizontal": {
+      "events": 40,
+      "focus_success": 40,
+      "focus_draw_samples": 40,
+      "key_to_draw_p50_ms": 11.71,
+      "key_to_draw_p95_ms": 30.92,
+      "key_to_draw_p99_ms": 46.93,
+      "key_to_focus_p99_ms": 46.16,
+      "key_to_focus_p50_ms": 3.08,
+      "key_to_focus_p95_ms": 43.14,
+      "end_to_idle_p95_ms": 207,
+      "frame_p95_ms": 172.69,
+      "frames_total": 79,
+      "frames_over_16_67ms": 79,
+      "frames_over_33_33ms": 79,
+      "long_frame_pct": 100
+    },
+    "vertical": {
+      "events": 32,
+      "focus_success": 32,
+      "focus_draw_samples": 32,
+      "key_to_draw_p50_ms": 16.23,
+      "key_to_draw_p95_ms": 50.86,
+      "key_to_draw_p99_ms": 51.98,
+      "key_to_focus_p99_ms": 50.9,
+      "key_to_focus_p50_ms": 3.41,
+      "key_to_focus_p95_ms": 45.45,
+      "end_to_idle_p95_ms": 205
+    },
+    "burst": {
+      "events": 120,
+      "last_focus_correct": 1,
+      "burst_to_final_focus_ms": 1919
+    },
+    "frame_baseline": {
+      "redraw_frames": 24,
+      "navigation_frames": 47,
+      "redraw_p95_ms": 155.22,
+      "navigation_p95_ms": 182.36,
+      "navigation_to_redraw_ratio": 1.17
+    }
+  }
+}

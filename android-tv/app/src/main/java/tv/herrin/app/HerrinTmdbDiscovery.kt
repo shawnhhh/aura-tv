@@ -27,7 +27,7 @@ internal class HerrinTmdbDiscovery(
 ) {
     private data class Cached(val until: Long, val entries: List<Film>)
     private val cache = ConcurrentHashMap<String, Cached>()
-    private val base = "https://api.themoviedb.org/3"
+    private val base = "${TmdbEndpoints.PRIMARY}"
     private val safePoster = Regex("""^/[A-Za-z0-9_.-]{1,140}\.(?:jpg|jpeg|png|webp)$""")
 
     data class Section(val key: String, val title: String, val endpoint: String,
@@ -45,7 +45,7 @@ internal class HerrinTmdbDiscovery(
         Section("mystery", "悬疑电影", "/discover/movie?with_genres=9648&sort_by=popularity.desc", "movie"),
         Section("comedy", "喜剧电影", "/discover/movie?with_genres=35&sort_by=popularity.desc", "movie"),
         Section("animation", "动漫", "/discover/tv?with_genres=16&sort_by=popularity.desc", "tv"),
-        Section("variety", "综艺", "/discover/tv?with_genres=10764|10767&sort_by=popularity.desc", "tv"),
+        Section("variety", "综艺", "/discover/tv?with_genres=10764%7C10767&sort_by=popularity.desc", "tv"),
         Section("documentary", "纪录片", "/discover/movie?with_genres=99&sort_by=popularity.desc", "movie")
     )
 
@@ -163,7 +163,7 @@ internal class HerrinTmdbDiscovery(
         val url = base + "/" + type + "/" + id +
             "?language=zh-CN&append_to_response=credits,external_ids"
         val json = fetcher.load(url, token) ?: return@withContext film
-        val obj = JSONObject(json)
+        val obj = try { JSONObject(json) } catch (_: org.json.JSONException) { return@withContext film }
         if (obj.optInt("id") != id) return@withContext film
         val credits = TmdbCreditsParser.parse(json, type)
         val imdbId = obj.optJSONObject("external_ids")?.optString("imdb_id")

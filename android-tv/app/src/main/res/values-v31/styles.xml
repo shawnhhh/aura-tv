@@ -4,8 +4,8 @@
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowBackground">@drawable/launch_backdrop</item>
-        <item name="android:windowSplashScreenBackground">#080B10</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_wordmark_icon</item>
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_empty</item>
         <item name="android:colorAccent">#FFFFFF</item>
     </style>
 </resources>

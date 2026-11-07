@@ -16,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Failed decryption never silently falls back to plaintext persistence.
  */
 internal class HerrinPersonalCredentialStore(context: Context, private val slot: String = "nas") {
-    init { require(slot in setOf("nas", "cloud")) }
+    init { require(slot in setOf("nas", "cloud", "tmdb") || slot.matches(Regex("config-[a-f0-9-]{36}"))) }
     private val prefs = context.getSharedPreferences("herrin_personal_secrets", Context.MODE_PRIVATE)
     private val alias = "herrin-webdav-aes-gcm-v1-" + slot
 
@@ -47,7 +47,8 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
         val encoded = prefs.getString(slot, "").orEmpty()
         if (encoded.isBlank()) return@runCatching "" to ""
         val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-        require(bytes.size in 28..2400)
+        // Username/password limits are characters; UTF-8 may use four bytes each.
+        require(bytes.size in 28..10000)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(),
             GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
@@ -55,5 +56,8 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
         plain.substringBefore('\u0000') to plain.substringAfter('\u0000')
     }.getOrDefault("" to "")
 
-    fun clear() { prefs.edit().remove(slot).apply() }
+    fun clear() {
+        prefs.edit().remove(slot).commit()
+        runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias) }
+    }
 }

@@ -31,7 +31,7 @@ class M424TmdbSeasonTest {
         assertTrue(resolver.lookup(123, 3, "bad-token").isEmpty())
         assertTrue(requests.isEmpty())
         assertEquals(24, resolver.lookup(123, 3, token)[5]?.runtimeMinutes)
-        assertEquals(listOf("https://api.themoviedb.org/3/tv/123/season/3?language=zh-CN"), requests)
+        assertEquals(listOf("https://api.tmdb.org/3/tv/123/season/3?language=zh-CN"), requests)
         assertEquals(24, resolver.lookup(123, 3, token)[5]?.runtimeMinutes)
         assertEquals(1, requests.size) // Second call comes from the local bounded cache.
         cache.listFiles()?.forEach { it.delete() }

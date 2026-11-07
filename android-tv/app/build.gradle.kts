@@ -10,8 +10,8 @@ android {
         applicationId = "tv.herrin.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 68
-        versionName = "0.4.64-alpha"
+        versionCode = 71
+        versionName = "0.4.67-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
@@ -56,6 +56,7 @@ dependencies {
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("org.brotli:dec:0.1.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.google.code.gson:gson:2.14.0")

@@ -27,8 +27,10 @@ internal object HerrinApprovedSpiderBatch {
     data class Match(val site: TvBoxSite, val detailed: Film, val claim: Int,
                      val candidate: HerrinSourceMovie,
                      val episode: Int, val line: String)
+    enum class Outcome { VERIFIED, TIMEOUT, ACTIVATE_FAILED, NO_MATCH, INVALID_MEDIA, ERROR }
     data class Scan(val match: Match?, val checked: Int, val eligible: Int,
-                    val nextOffset: Int, val candidatesWithEpisodes: Int)
+                    val nextOffset: Int, val candidatesWithEpisodes: Int,
+                    val lastOutcome: Outcome? = null)
 
     /**
      * One tap scans successive bounded pages of the already approved JAR
@@ -100,9 +102,10 @@ internal object HerrinApprovedSpiderBatch {
         session: Session,
         offset: Int = 0,
         maxPages: Int = 17,
-        maxWallClockMs: Long = 240_000L,
+        maxWallClockMs: Long = 75_000L,
         stopAtFirstPlayable: Boolean = false,
-        onProgress: suspend (Scan) -> Unit = {}
+        onProgress: suspend (Scan) -> Unit = {},
+        onSiteProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val winners = mutableListOf<Match>()
         var checked = 0
@@ -115,11 +118,23 @@ internal object HerrinApprovedSpiderBatch {
         // 4.5-second bound and a total wall-clock deadline.
         kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(4_000L, 300_000L)) {
             repeat(maxPages.coerceIn(1, 17)) {
+                val completedBeforePage = checked
+                val episodesBeforePage = episodes
                 val page = scan(identity, sites, allowed, session, offset = next,
-                    timeoutPerSiteMs = 4_500L)
-                checked += page.checked
+                    timeoutPerSiteMs = 3_500L,
+                    stopAtFirstPlayable = stopAtFirstPlayable,
+                    onSiteProgress = { partial ->
+                        // Preserve the next unchecked site even on mid-page timeout.
+                        checked = completedBeforePage + partial.checked
+                        total = partial.eligible
+                        episodes = episodesBeforePage + partial.candidatesWithEpisodes
+                        next = partial.nextOffset
+                        onSiteProgress(Scan(partial.match,
+                            checked, total, next, episodes, partial.lastOutcome))
+                    })
+                checked = completedBeforePage + page.checked
                 total = page.eligible
-                episodes += page.candidatesWithEpisodes
+                episodes = episodesBeforePage + page.candidatesWithEpisodes
                 page.match?.let(winners::add)
                 next = page.nextOffset
                 onProgress(Scan(page.match, checked, total, next, episodes))
@@ -142,7 +157,9 @@ internal object HerrinApprovedSpiderBatch {
         allowed: (TvBoxSite) -> Boolean,
         session: Session,
         offset: Int = 0,
-        timeoutPerSiteMs: Long = 9_000L
+        timeoutPerSiteMs: Long = 9_000L,
+        stopAtFirstPlayable: Boolean = false,
+        onSiteProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val eligible = sites.filter { (it.spiderApi != null || it.scriptApi != null) && allowed(it) }
             .distinctBy { it.key }.take(100)
@@ -154,12 +171,24 @@ internal object HerrinApprovedSpiderBatch {
         val good = mutableListOf<Match>()
         for (site in page) {
             checked++
+            var finished = false
+            var failed = false
+            var outcome = Outcome.ACTIVATE_FAILED
             val found = try {
                 withTimeoutOrNull(timeoutPerSiteMs.coerceIn(1_000, 20_000)) {
-                    if (!session.activate(site)) return@withTimeoutOrNull null
+                    if (!session.activate(site)) {
+                        finished = true
+                        return@withTimeoutOrNull null
+                    }
+                    outcome = Outcome.NO_MATCH
                     val options = session.search(site, identity)
                         .filter { it.sourceType == HerrinSourceType.TVBOX_SPIDER }
                         .sortedByDescending { it.resolutionClaim ?: 0 }.take(3)
+                    if (options.isEmpty()) {
+                        finished = true
+                        return@withTimeoutOrNull null
+                    }
+                    outcome = Outcome.INVALID_MEDIA
                     // Search rank is only a catalog claim. Examine all at
                     // most three offers from this approved site and compare
                     // the line actually accepted by playerContent/media probe.
@@ -180,12 +209,27 @@ internal object HerrinApprovedSpiderBatch {
                             best = Match(site, film, quality, offer, chosen.first, chosen.second)
                         }
                     }
+                    finished = true
                     best
                 }
             } catch (cancel: CancellationException) {
                 throw cancel
-            } catch (_: Exception) { null }
+            } catch (_: Exception) { failed = true; null }
             if (found != null) good += found
+            val lastOutcome = when {
+                found != null -> Outcome.VERIFIED
+                failed -> Outcome.ERROR
+                !finished -> Outcome.TIMEOUT
+                else -> outcome
+            }
+            val nextUnchecked = if (start + checked >= eligible.size) 0 else start + checked
+            // No URLs, credentials or raw provider exceptions in UI diagnostics.
+            onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome))
+            if (stopAtFirstPlayable && found != null) {
+                // playerContent + bounded real media probe already succeeded
+                // in the currently active Spider session.
+                return Scan(found, checked, eligible.size, nextUnchecked, episodesFound)
+            }
         }
         // Multiple site activations invalidate the previous live proxy.
         // Revalidate candidates and compare their CURRENT selected line.

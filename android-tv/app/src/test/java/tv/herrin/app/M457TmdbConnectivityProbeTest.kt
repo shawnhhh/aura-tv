@@ -78,7 +78,7 @@ class M457TmdbConnectivityProbeTest {
                 .setBody("""{"status_code":25,"status_message":"Your request count is over the allowed limit."}"""))
             val status = TmdbConnectivityProbe.check(goodToken, ArtworkJsonFetcher { url, token ->
                 val uri = java.net.URI(url)
-                NetworkArtworkFetcher.load(server.url(uri.rawPath + (uri.rawQuery?.let { "?$it" } ?: "")).toString(), token)
+                TmdbEndpointRouter().load(url) { NetworkArtworkFetcher.requestOnce(server.url(uri.rawPath + (uri.rawQuery?.let { "?$it" } ?: "")).toString(), token) }
             })
             assertEquals(TmdbProbeState.RATE_LIMITED, status)
             assertEquals(2, server.requestCount)
@@ -116,7 +116,7 @@ class M457TmdbConnectivityProbeTest {
             server.enqueue(MockResponse().setResponseCode(403))
             val result = TmdbConnectivityProbe.checkDetailed(goodToken, ArtworkJsonFetcher { url, token ->
                 val uri = java.net.URI(url)
-                NetworkArtworkFetcher.load(server.url(uri.rawPath).toString(), token)
+                TmdbEndpointRouter().load(url) { NetworkArtworkFetcher.requestOnce(server.url(uri.rawPath).toString(), token) }
             })
             assertEquals(TmdbProbeState.UNAUTHORIZED, result.state)
             assertEquals("配置接口", result.stage)
@@ -131,7 +131,7 @@ class M457TmdbConnectivityProbeTest {
             repeat(2) { server.enqueue(MockResponse().setResponseCode(503)) }
             val result = TmdbConnectivityProbe.checkDetailed(goodToken, ArtworkJsonFetcher { url, token ->
                 val uri = java.net.URI(url)
-                NetworkArtworkFetcher.load(server.url(uri.rawPath).toString(), token)
+                TmdbEndpointRouter().load(url) { NetworkArtworkFetcher.requestOnce(server.url(uri.rawPath).toString(), token) }
             })
             assertEquals(TmdbProbeState.SERVER_UNAVAILABLE, result.state)
             assertEquals("配置接口", result.stage)

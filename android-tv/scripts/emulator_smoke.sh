@@ -48,10 +48,35 @@ adb shell input keyevent KEYCODE_BACK
 sleep 1
 adb exec-out screencap -p > "$evidence/after-back.png"
 dump_ui after-back
-if ! grep -q '精选首页' "$evidence/after-back.xml"; then
-    echo "FAIL: Back did not return to home category"
-    exit 1
+if ! grep -q '退出 HERRIN' "$evidence/after-back.xml" || ! grep -q '再逛逛' "$evidence/after-back.xml"; then
+    echo "FAIL: top-level Back did not show the exit confirmation"; exit 1
 fi
+# Default is cancel. Confirming it retains Movies instead of silently changing category.
+adb shell input keyevent KEYCODE_DPAD_CENTER
+sleep 1
+dump_ui after-cancel
+if ! grep -q '精选电影' "$evidence/after-cancel.xml"; then
+    echo "FAIL: cancelling exit did not preserve Movies"; exit 1
+fi
+adb shell input keyevent KEYCODE_HOME
+adb shell am start -W -n tv.herrin.app/.MainActivity | tee "$evidence/hot-resume.txt"
+sleep 1
+dump_ui hot-resume
+if ! grep -q '精选电影' "$evidence/hot-resume.xml"; then
+    echo "FAIL: background resume did not retain Movies"; exit 1
+fi
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+adb shell input keyevent KEYCODE_DPAD_LEFT
+adb shell input keyevent KEYCODE_DPAD_CENTER
+sleep 1
+adb shell dumpsys activity activities > "$evidence/after-exit-activities.txt"
+if grep -q 'mResumedActivity.*tv.herrin.app/.MainActivity' "$evidence/after-exit-activities.txt"; then
+    echo "FAIL: explicit Exit App did not finish Activity"; exit 1
+fi
+adb shell am start -W -n tv.herrin.app/.MainActivity | tee "$evidence/relaunch.txt"
+sleep 4
+adb logcat -d -s HerrinStartup:I > "$evidence/startup-smoke.log"
 adb logcat -d -s AndroidRuntime:E > "$evidence/android-runtime.log" || true
 if grep -q 'Process: tv.herrin.app' "$evidence/android-runtime.log"; then
     echo "FAIL: HERRIN uncaught Android exception"

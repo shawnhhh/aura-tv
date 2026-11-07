@@ -54,8 +54,8 @@ class M437MetadataScrapingTest {
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(search))
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(detail))
             val resolver = ArtworkMetadataResolver(temp.newFolder(), ArtworkJsonFetcher { url, credential ->
-                assertEquals("api.themoviedb.org", URI(url).host)
-                NetworkArtworkFetcher.load(server.url(URI(url).rawPath + "?" + URI(url).rawQuery).toString(), credential)
+                assertEquals("api.tmdb.org", URI(url).host)
+                NetworkArtworkFetcher.requestOnce(server.url(URI(url).rawPath + "?" + URI(url).rawQuery).toString(), credential)
             })
             val original = film()
             val enriched = FilmMetadataEnrichment.apply(original, resolver.lookup(original, token)!!)

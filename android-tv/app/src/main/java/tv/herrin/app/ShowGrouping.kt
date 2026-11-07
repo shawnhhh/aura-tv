@@ -51,6 +51,10 @@ internal class ShowCatalog private constructor(
         }
     }
 
+    /** Recents are raw source members; collapse by the exact identity used for lazy keys. */
+    fun recentRail(recent: List<Film>, watched: List<Film>): List<Film> =
+        collapse((recent + watched).distinctBy(Film::id))
+
     /** Search raw members first; a query for Season 3 still finds its Season 1 cover. */
     fun search(query: String, category: String, newestFirst: Boolean): List<Film> =
         collapse(SearchDiscovery.results(original, query, category, newestFirst))
