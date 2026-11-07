@@ -80,14 +80,18 @@
 
 ## 当前最终代码与 APK
 
-- 代码提交：`904b4651bf793dfbd06f73e1b581afb8d8542ff1`（Draft PR #84）。
-- Debug：https://github.com/shawnhhh/aura-tv/actions/runs/42389050662 ，成功，Gradle 8m19s。
+- 代码提交：`689f4da139fe04ca97c9a79aec96920f135f9c06`（Draft PR #84）。
+- Debug：https://github.com/shawnhhh/aura-tv/actions/runs/42390717788 ，成功，Gradle 6m05s。
 - JVM：630/630，通过；失败 0、错误 0、跳过 0。Lint 与 assembleDebug 通过。
-- APK：https://github.com/shawnhhh/aura-tv/actions/runs/42389050662/artifacts/13580358570 。APK 本体 26,576,599 字节。
-- APK 本体 SHA-256：`848581347d882afbceda0da81adfcb01c61eb2816d3c3a295707674b740638ca`。不是 ZIP 校验值。
-- JVM/Lint 报告：https://github.com/shawnhhh/aura-tv/actions/runs/42389050662/artifacts/13580154530 。
-- TV：https://github.com/shawnhhh/aura-tv/actions/runs/42389050691 ，目前执行中，尚未通过完整验收。
+- APK：https://github.com/shawnhhh/aura-tv/actions/runs/42390717788/artifacts/13581806196 。APK 本体 26,576,599 字节。
+- APK 本体 SHA-256：`76547f96282dc23f535d3fc9f98cdfc2b85964e057bf592270211749e6756120`。不是 ZIP 校验值。
+- JVM/Lint 报告：https://github.com/shawnhhh/aura-tv/actions/runs/42390717788/artifacts/13581706470 。
+- TV：https://github.com/shawnhhh/aura-tv/actions/runs/42390717793 ，目前执行中，尚未通过完整验收。
 
 报告在独立文档快照分支归档，避免文档更新改变已验证的 #84 应用提交。该分支不用于交付应用构建；应用源码与 CI 以上述提交为准。
 
 TCL 安装/升级、安装签名兼容性与设置保留尚未在本机验证；本轮没有对用户电视安装、卸载或清数据。不得以卸载清数据作为完成验收的手段。
+
+## 后续焦点回归与撤回
+
+`904b465` 的 JVM 630 项、Lint、Debug 通过；TV 232 项出现 5 项搜索控件失焦断言失败，单仓目录测试通过。该证据说明释放原生 view 会干扰 Compose 焦点，本轮没有将其交付为验收通过版本。`689f4da` 撤回该原生 view 操作，改为搜索框在失焦时 readOnly，以结束 Compose 编辑输入会话；重新获焦即恢复编辑。测试显式聚焦输入框再输入查询，保留全部焦点、筛选、详情和 D-pad 断言；最终 CI 仍须以该版本或之后为准。
