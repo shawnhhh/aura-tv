@@ -47,4 +47,42 @@ class P0GlobalTmdbSearchTest {
             assertTrue(state.status.contains(expected))
         }
     }
+    @Test fun cancelledOldQueryCannotOverwriteNewResults() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val discovery = HerrinTmdbDiscovery(ArtworkJsonFetcher { url, _ ->
+            if (url.contains("query=old")) {
+                started.complete(Unit)
+                Thread.sleep(10_000)
+                error("old call must be interrupted")
+            }
+            """{"page":1,"total_pages":1,"results":[{"media_type":"movie","id":2,"title":"new"}]}"""
+        })
+        val state = TmdbGlobalSearchState()
+        val old = launch { state.load(discovery, "old", "fixture-token") }
+        withTimeout(1000) { started.await() }
+        old.cancelAndJoin()
+        state.load(discovery, "new", "fixture-token")
+        assertEquals(listOf("tmdb-movie-2"), state.films.map { it.id })
+        assertFalse(state.loading)
+    }
+    @Test fun failedNextPageCanRetryWithoutSkippingOrDuplicatingFilms() = runBlocking {
+        var secondAttempts = 0
+        val discovery = HerrinTmdbDiscovery(ArtworkJsonFetcher { url, _ ->
+            if (url.contains("page=2")) {
+                if (++secondAttempts == 1) throw java.io.IOException("fixture offline")
+                """{"page":2,"total_pages":3,"results":[{"media_type":"movie","id":1,"title":"one"},{"media_type":"tv","id":1,"name":"series"}]}"""
+            } else """{"page":1,"total_pages":3,"results":[{"media_type":"movie","id":1,"title":"one"}]}"""
+        })
+        val state = TmdbGlobalSearchState()
+        state.load(discovery, "query", "fixture-token")
+        state.page = 2
+        state.load(discovery, "query", "fixture-token")
+        assertEquals(1, state.lastLoadedPage)
+        assertEquals(1, state.films.size)
+        assertTrue(state.status.contains("失败"))
+        state.load(discovery, "query", "fixture-token")
+        assertEquals(2, state.lastLoadedPage)
+        assertEquals(listOf("tmdb-movie-1", "tmdb-tv-1"), state.films.map { it.id })
+    }
+
 }

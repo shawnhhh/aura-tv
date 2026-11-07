@@ -2960,7 +2960,7 @@ private fun Herrin(startup: StartupPresentation) {
                         Text(tmdbState.globalSearch.status, Modifier.testTag("tmdb-online-search-status"))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TvButton("重试", reduced = reduceMotion, quiet = true) { tmdbState.globalSearch.retry++ }
-                            if (tmdbState.globalSearch.page < tmdbState.globalSearch.totalPages && !tmdbState.globalSearch.loading)
+                            if (tmdbState.globalSearch.page < tmdbState.globalSearch.totalPages && tmdbState.globalSearch.lastLoadedPage == tmdbState.globalSearch.page && !tmdbState.globalSearch.loading)
                                 TvButton("加载下一页", reduced = reduceMotion, quiet = true) { tmdbState.globalSearch.page++ }
                         }
                         Text("搜索结果 · ${filtered.size} 部 · ${searchCategory}" +

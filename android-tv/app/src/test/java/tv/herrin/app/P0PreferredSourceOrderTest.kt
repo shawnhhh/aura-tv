@@ -68,4 +68,17 @@ class P0PreferredSourceOrderTest {
         assertEquals(listOf("cms"), result.searchedSources)
     }
 
+    @Test fun explicitPreferenceOutranksHealthCooldownAndSuccessfulBackup() = runBlocking {
+        val health = SourceHealthIndex(null, "fixture", clock = { 100_000L })
+        health.record("chosen", SourceSearchStage.SEARCH, SourceSearchOutcome.TIMEOUT, 1000)
+        health.record("backup", SourceSearchStage.MEDIA, SourceSearchOutcome.VERIFIED, 10)
+        assertFalse(health.eligible("chosen"))
+        val calls = mutableListOf<String>()
+        val result = HerrinFilmRouter(listOf(source("backup", HerrinSourceType.TVBOX_CMS, calls),
+            source("chosen", HerrinSourceType.TVBOX_CMS, calls)), "chosen")
+            .find(identity, streaming = true, health = health) { it }
+        assertEquals(listOf("chosen"), calls)
+        assertEquals("chosen", result.options.single().sourceId)
+    }
+
 }
