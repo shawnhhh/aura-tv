@@ -14,6 +14,7 @@ internal object HerrinApprovedSpiderBatch {
     const val PAGE_SIZE = 6
 
     interface Session {
+        suspend fun eligible(site: TvBoxSite): Boolean = true
         suspend fun activate(site: TvBoxSite): Boolean
         suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity): List<HerrinSourceMovie>
         suspend fun details(candidate: HerrinSourceMovie): Film?
@@ -27,10 +28,11 @@ internal object HerrinApprovedSpiderBatch {
     data class Match(val site: TvBoxSite, val detailed: Film, val claim: Int,
                      val candidate: HerrinSourceMovie,
                      val episode: Int, val line: String)
-    enum class Outcome { VERIFIED, TIMEOUT, ACTIVATE_FAILED, NO_MATCH, INVALID_MEDIA, ERROR }
+    enum class Outcome { VERIFIED, TIMEOUT, ACTIVATE_FAILED, NO_MATCH, NO_EPISODES, PARSE_FAILED, INVALID_MEDIA, ERROR, DEFERRED }
     data class Scan(val match: Match?, val checked: Int, val eligible: Int,
                     val nextOffset: Int, val candidatesWithEpisodes: Int,
-                    val lastOutcome: Outcome? = null)
+                    val lastOutcome: Outcome? = null, val activeIndex: Int? = null,
+                    val stage: SourceSearchStage? = null, val elapsedMs: Long = 0)
 
     /**
      * One tap scans successive bounded pages of the already approved JAR
@@ -105,7 +107,10 @@ internal object HerrinApprovedSpiderBatch {
         maxWallClockMs: Long = 75_000L,
         stopAtFirstPlayable: Boolean = false,
         onProgress: suspend (Scan) -> Unit = {},
-        onSiteProgress: suspend (Scan) -> Unit = {}
+        onSiteProgress: suspend (Scan) -> Unit = {},
+        onEvent: suspend (SourceSearchEvent) -> Unit = {},
+        timeoutPerSiteMs: Long = 3_500L,
+        stageBudgetMs: Long = 1_200L
     ): Scan {
         val winners = mutableListOf<Match>()
         var checked = 0
@@ -116,13 +121,15 @@ internal object HerrinApprovedSpiderBatch {
         // 39/45 unchecked and requiring repeated remote-control presses.
         // Continue across finite six-site pages, still using each site's
         // 4.5-second bound and a total wall-clock deadline.
-        kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(4_000L, 300_000L)) {
+        kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(1L, 300_000L)) {
             repeat(maxPages.coerceIn(1, 17)) {
                 val completedBeforePage = checked
                 val episodesBeforePage = episodes
+                val offsetBeforePage = next
                 val page = scan(identity, sites, allowed, session, offset = next,
-                    timeoutPerSiteMs = 3_500L,
+                    timeoutPerSiteMs = timeoutPerSiteMs,
                     stopAtFirstPlayable = stopAtFirstPlayable,
+                    onEvent = onEvent, stageBudgetMs = stageBudgetMs,
                     onSiteProgress = { partial ->
                         // Preserve the next unchecked site even on mid-page timeout.
                         checked = completedBeforePage + partial.checked
@@ -130,7 +137,8 @@ internal object HerrinApprovedSpiderBatch {
                         episodes = episodesBeforePage + partial.candidatesWithEpisodes
                         next = partial.nextOffset
                         onSiteProgress(Scan(partial.match,
-                            checked, total, next, episodes, partial.lastOutcome))
+                            checked, total, next, episodes, partial.lastOutcome,
+                            partial.activeIndex,partial.stage,partial.elapsedMs))
                     })
                 checked = completedBeforePage + page.checked
                 total = page.eligible
@@ -140,7 +148,7 @@ internal object HerrinApprovedSpiderBatch {
                 onProgress(Scan(page.match, checked, total, next, episodes))
                 if (stopAtFirstPlayable && page.match != null)
                     return@withTimeoutOrNull
-                if (next == 0 || page.checked == 0 || winners.any { it.claim >= 2160 })
+                if (next == 0 || next == offsetBeforePage || winners.any { it.claim >= 2160 })
                     return@withTimeoutOrNull
             }
         }
@@ -159,7 +167,9 @@ internal object HerrinApprovedSpiderBatch {
         offset: Int = 0,
         timeoutPerSiteMs: Long = 9_000L,
         stopAtFirstPlayable: Boolean = false,
-        onSiteProgress: suspend (Scan) -> Unit = {}
+        onSiteProgress: suspend (Scan) -> Unit = {},
+        onEvent: suspend (SourceSearchEvent) -> Unit = {},
+        stageBudgetMs: Long = 1_200L
     ): Scan {
         val eligible = sites.filter { (it.spiderApi != null || it.scriptApi != null) && allowed(it) }
             .distinctBy { it.key }.take(100)
@@ -168,27 +178,60 @@ internal object HerrinApprovedSpiderBatch {
         val page = eligible.drop(start).take(PAGE_SIZE)
         var checked = 0
         var episodesFound = 0
+        var processed = 0
         val good = mutableListOf<Match>()
         for (site in page) {
-            checked++
+            if(!session.eligible(site)){
+                processed++
+                onSiteProgress(Scan(null,checked,eligible.size,if(start+processed>=eligible.size)0 else start+processed,
+                    episodesFound,Outcome.DEFERRED))
+                continue
+            }
+            val started = System.nanoTime()
+            var stage = SourceSearchStage.ACTIVATE
+            suspend fun publishActive() = onSiteProgress(Scan(null,checked,eligible.size,
+                start+processed,episodesFound,activeIndex=start+processed+1,stage=stage,
+                elapsedMs=(System.nanoTime()-started)/1_000_000))
+            suspend fun <T> phase(value: SourceSearchStage, block: suspend () -> T): T {
+                stage=value;publishActive()
+                onEvent(SourceSearchEvent("spider:"+site.key,value,SourceSearchOutcome.CHECKING))
+                val at=System.nanoTime()
+                data class Completed<T>(val value: T)
+                val result=if(stopAtFirstPlayable) withTimeoutOrNull(stageBudgetMs.coerceAtLeast(1)) {
+                    kotlinx.coroutines.withContext(SpiderRequestBudget(stageBudgetMs)) { Completed(block()) }
+                } else Completed(block())
+                if(result==null)throw NodeDeadline()
+                val ok=result.value!=null &&result.value!=false &&(result.value !is List<*> || (result.value as List<*>).isNotEmpty())
+                val code=if(ok)SourceSearchOutcome.VERIFIED else when(value){
+                    SourceSearchStage.ACTIVATE->SourceSearchOutcome.ACTIVATE_FAILED
+                    SourceSearchStage.SEARCH->SourceSearchOutcome.NO_MATCH
+                    SourceSearchStage.DETAILS->SourceSearchOutcome.NO_EPISODES
+                    SourceSearchStage.PARSE->SourceSearchOutcome.PARSE_FAILED
+                    else->SourceSearchOutcome.MEDIA_FAILED
+                }
+                onEvent(SourceSearchEvent("spider:"+site.key,value,code,
+                    (System.nanoTime()-at)/1_000_000))
+                return result.value
+            }
             var finished = false
             var failed = false
             var outcome = Outcome.ACTIVATE_FAILED
             val found = try {
                 withTimeoutOrNull(timeoutPerSiteMs.coerceIn(1_000, 20_000)) {
-                    if (!session.activate(site)) {
+                    if (!phase(SourceSearchStage.ACTIVATE) { session.activate(site) }) {
                         finished = true
                         return@withTimeoutOrNull null
                     }
                     outcome = Outcome.NO_MATCH
-                    val options = session.search(site, identity)
-                        .filter { it.sourceType == HerrinSourceType.TVBOX_SPIDER }
+                    val options = phase(SourceSearchStage.SEARCH) { session.search(site, identity) }
+                        .filter { it.sourceType == HerrinSourceType.TVBOX_SPIDER &&
+                            it.sourceId == "spider:"+site.key && HerrinFilmIdentityMatch.matches(identity,it) }
                         .sortedByDescending { it.resolutionClaim ?: 0 }.take(3)
                     if (options.isEmpty()) {
                         finished = true
                         return@withTimeoutOrNull null
                     }
-                    outcome = Outcome.INVALID_MEDIA
+                    outcome = Outcome.NO_EPISODES
                     // Search rank is only a catalog claim. Examine all at
                     // most three offers from this approved site and compare
                     // the line actually accepted by playerContent/media probe.
@@ -196,35 +239,55 @@ internal object HerrinApprovedSpiderBatch {
                     // winner under the current Spider session below.
                     var best: Match? = null
                     for (offer in options) {
-                        val film = session.details(offer) ?: continue
+                        val film = phase(SourceSearchStage.DETAILS) { session.details(offer) } ?: continue
+                        if (!HerrinFilmIdentityMatch.matches(identity,offer.copy(film=film))) continue
                         if (HerrinPlaybackEntry.firstPlayable(film) == null) continue
                         episodesFound++
                         // Spider playerContent must yield an actual authorized
                         // media route; broken PROXY_INVALID_ROUTE is rejected.
-                        val chosen = session.pick(film) ?: continue
+                        outcome = Outcome.INVALID_MEDIA
+                        val chosen = phase(SourceSearchStage.MEDIA) { session.pick(film) } ?: continue
                         // Do not let an advertised 4K filename outrank an
                         // actually validated 1080p episode/line.
                         val quality = selectedLineClaim(film, chosen, offer.resolutionClaim ?: 0)
                         if (quality > (best?.claim ?: -1)) {
                             best = Match(site, film, quality, offer, chosen.first, chosen.second)
                         }
+                        if (stopAtFirstPlayable && best != null) break
                     }
                     finished = true
                     best
                 }
+            } catch (_: NodeDeadline) { null
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (_: Exception) { failed = true; null }
             if (found != null) good += found
+            checked++
+            processed++
             val lastOutcome = when {
                 found != null -> Outcome.VERIFIED
                 failed -> Outcome.ERROR
                 !finished -> Outcome.TIMEOUT
                 else -> outcome
             }
-            val nextUnchecked = if (start + checked >= eligible.size) 0 else start + checked
+            val nextUnchecked = if (start + processed >= eligible.size) 0 else start + processed
+            val code=when(lastOutcome){
+                Outcome.VERIFIED->SourceSearchOutcome.VERIFIED
+                Outcome.TIMEOUT->SourceSearchOutcome.TIMEOUT
+                Outcome.ACTIVATE_FAILED->SourceSearchOutcome.ACTIVATE_FAILED
+                Outcome.NO_MATCH->SourceSearchOutcome.NO_MATCH
+                Outcome.NO_EPISODES->SourceSearchOutcome.NO_EPISODES
+                Outcome.PARSE_FAILED->SourceSearchOutcome.PARSE_FAILED
+                Outcome.INVALID_MEDIA->SourceSearchOutcome.MEDIA_FAILED
+                Outcome.ERROR->SourceSearchOutcome.ERROR
+                Outcome.DEFERRED->SourceSearchOutcome.RATE_LIMITED
+            }
+            onEvent(SourceSearchEvent("spider:"+site.key,stage,code,(System.nanoTime()-started)/1_000_000,
+                checked,eligible.size))
             // No URLs, credentials or raw provider exceptions in UI diagnostics.
-            onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome))
+            onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome,
+                stage=stage,elapsedMs=(System.nanoTime()-started)/1_000_000))
             if (stopAtFirstPlayable && found != null) {
                 // playerContent + bounded real media probe already succeeded
                 // in the currently active Spider session.
@@ -239,4 +302,5 @@ internal object HerrinApprovedSpiderBatch {
             if (start + page.size >= eligible.size) 0 else start + page.size,
             episodesFound)
     }
+    private class NodeDeadline : Exception()
 }

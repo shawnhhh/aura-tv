@@ -60,8 +60,9 @@ fun FilmArtwork(film: Film, modifier: Modifier, contentScale: ContentScale = Con
     // misleading demo movie photo. No preferences I/O during every frame.
     val hasExternalImage = !film.isOriginalDemo() ||
         film.artworkUrl != null || film.backdropUrl != null
+    val bundled=if(!hasExternalImage)rememberBundledArtwork(film.artwork) else null
     Box(modifier, contentAlignment = Alignment.CenterEnd) {
-        if (!hasExternalImage) Image(painterResource(film.artwork), film.title,
+        if (bundled!=null) Image(bundled.asImageBitmap(), film.title,
             Modifier.fillMaxSize(), contentScale = contentScale)
         else Box(Modifier.fillMaxSize().background(Brush.linearGradient(
             listOf(Color(0xFF1D2B40), Color(0xFF060910), Color(0xFF111827)))))
@@ -99,6 +100,7 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
     // Constant-time presentation identity. Avoid SharedPreferences lookups
     // during focus/scroll recompositions across dozens of poster cards.
     val remoteArtwork = !film.isOriginalDemo() || !film.artworkUrl.isNullOrBlank()
+    val bundled=if(!remoteArtwork)rememberBundledArtwork(film.artwork) else null
     val posterAlpha by animateFloatAsState(if (poster == null) 0f else 1f,
         animationSpec = if (reduced) snap() else tween(120), label = "card-poster-fade")
     Box(modifier, contentAlignment = Alignment.Center) {
@@ -114,7 +116,7 @@ fun PosterArtwork(film: Film, modifier: Modifier, reduced: Boolean = false) {
         } else {
             // Every small-card artwork viewport is edge-to-edge, including
             // bundled offline demo images. No fit/margin/dimmed letterbox.
-            Image(painterResource(film.artwork), film.title,
+            if(bundled!=null)Image(bundled.asImageBitmap(), film.title,
                 Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         if (poster != null) {
@@ -155,13 +157,15 @@ fun PersonPortrait(person: FilmPerson, modifier: Modifier = Modifier) {
 @Composable
 private fun rememberAuthorizedPoster(film: Film, hero: Boolean = false): Bitmap? {
     val context = LocalContext.current
+    val enabled=LocalArtworkReady.current
     val url = ArtworkRequestPolicy.url(film, hero)
     // TMDB matching is managed centrally by MainActivity's bounded catalogue
     // enrichment worker. Do NOT start another TMDB request per visible card:
     // that duplicated network, JSON parsing and image downloads during D-pad.
     // The resulting enriched Film updates the URL and triggers this effect.
     var poster by remember(film.id, hero) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(url, film.id, hero) {
+    LaunchedEffect(url, film.id, hero, enabled) {
+        if(!enabled)return@LaunchedEffect
         // Rapid cursor movement should not fetch high-res hero pictures for
         // titles that were only focused for a few milliseconds.
         if (hero) kotlinx.coroutines.yield()

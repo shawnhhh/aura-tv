@@ -15,6 +15,8 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import kotlin.math.cos
 
 internal object WordmarkMotion {
@@ -26,11 +28,12 @@ internal object WordmarkMotion {
 
 /** VSync clock. Draw state stays in this small layer, never recomposes the home per frame. */
 @Composable
-internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}) {
+internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}, widthDp: Float = 420f) {
     val focus = remember { FocusRequester() }
     val onDone by rememberUpdatedState(done)
     val visible by rememberUpdatedState(onVisible)
     val elapsed = remember { mutableFloatStateOf(0f) }
+    val renderer=remember{WordmarkRenderer()}
     LaunchedEffect(reduced) {
         runCatching { focus.requestFocus() }
         if (reduced) {
@@ -65,30 +68,11 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
                 onDone(); true
             } else false
         }.focusable(), contentAlignment = Alignment.Center) {
-        Image(painterResource(R.drawable.launch_wordmark), "HERRIN",
-            Modifier.width(420.dp).height(84.dp).testTag("splash-wordmark")
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    val time = if (reduced) WordmarkMotion.REVEAL_MS else elapsed.floatValue
-                    val progress = WordmarkMotion.reveal(time)
-                    if (progress < 1f) {
-                        // Seven stops: no 33-element map or draw-time Compose writes.
-                        val edge = progress * 1.35f
-                        val outside = ((1f - edge) / 2f).coerceIn(0f, 0.5f)
-                        val inside = ((1f - edge + 0.35f) / 2f).coerceIn(0f, 0.5f)
-                        val center = Color.White.copy(alpha = (edge / 0.35f).coerceIn(0f, 1f))
-                        val transparent = Color.Transparent
-                        drawRect(Brush.horizontalGradient(
-                            0f to transparent, outside to transparent,
-                            inside to center, 0.5f to center,
-                            (1f - inside) to center, (1f - outside) to transparent,
-                            1f to transparent
-                        ), blendMode = BlendMode.DstIn)
-                    } else {
-                        drawRect(Color.White.copy(alpha = WordmarkMotion.brightness(time)),
-                            blendMode = BlendMode.DstIn)
-                    }
-                })
+        androidx.compose.foundation.Canvas(Modifier.width(widthDp.dp).height((widthDp*.2f).dp)
+            .testTag("splash-wordmark").semantics { contentDescription="HERRIN" }) {
+            renderer.draw(drawContext.canvas.nativeCanvas,size.width,size.height,
+                if(reduced)WordmarkMotion.REVEAL_MS else elapsed.floatValue)
+            StartupTiming.wordmarkVisible()
+        }
     }
 }

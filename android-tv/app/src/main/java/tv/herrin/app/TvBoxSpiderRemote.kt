@@ -28,6 +28,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -46,6 +47,7 @@ internal object SpiderIpc {
     const val PLAY = 3
     const val PROXY_SELF_TEST = 20
     const val RELEASE_PLAYBACK = 21
+    const val CANCEL_REQUEST = 22
     const val AUTH_SHOW = 10
     const val AUTH_ACTION = 11
     const val AUTH_CLOSE = 12
@@ -258,6 +260,9 @@ class TvBoxSpiderService : Service() {
     private val lock = Mutex()
     private val watchdog = Executors.newSingleThreadScheduledExecutor()
     private val worker by lazy { TvBoxSpiderWorker(applicationContext) }
+    private val operations = java.util.concurrent.ConcurrentHashMap<Int, Job>()
+    @Volatile private var activeOperation = -1
+    @Volatile private var retiring = false
     // Debug-only smoke fixture, never registered as a user-configurable source.
     private var proxySelfTest: NativeFongMiProxy? = null
     @Volatile private var authCaller: Pair<Messenger, Int>? = null
@@ -271,6 +276,18 @@ class TvBoxSpiderService : Service() {
         }
     }
     private val incoming: Messenger = Messenger(Handler(Looper.getMainLooper()) { message ->
+        if (message.what == SpiderIpc.CANCEL_REQUEST) {
+            operations[message.arg1]?.cancel()
+            if (activeOperation == message.arg1) {
+                retiring = true
+                authorization.cancel()
+                // A coroutine cannot interrupt arbitrary JNI. Retire ONLY this
+                // manifest-verified :spider process; the UI process is untouched.
+                watchdog.schedule({ android.os.Process.killProcess(android.os.Process.myPid()) },
+                    250, TimeUnit.MILLISECONDS)
+            }
+            return@Handler true
+        }
         if (message.what == SpiderIpc.AUTH_ACTION) {
             if (authCaller?.second == message.arg1) authorization.action(message.arg2, message.data.getString("button"))
             return@Handler true
@@ -280,8 +297,11 @@ class TvBoxSpiderService : Service() {
         val operation = message.what
         val payload = message.data.getString("payload").orEmpty()
         if (reply != null) {
-            scope.launch {
+            val operationBudget = message.data.getLong("operationBudgetMs", 150_000L).coerceIn(200,150_000)
+            val task = scope.launch(start = CoroutineStart.LAZY) {
                 val response = lock.withLock {
+                    if (retiring) return@withLock SpiderIpc.error("Spider 会话正在回收")
+                    activeOperation = id
                     authCaller = reply to id
                     // Cancellation cannot stop a JNI call that ignores interruption.
                     // This watchdog belongs solely to the manifest's :spider process.
@@ -290,7 +310,7 @@ class TvBoxSpiderService : Service() {
                         // of a native SIGSEGV. Persist only this fixed stage string.
                         SpiderStartupTrace.mark(applicationContext, SpiderStartupTrace.Stage.WATCHDOG)
                         android.os.Process.killProcess(android.os.Process.myPid())
-                    }, 160, TimeUnit.SECONDS)
+                    }, if (operationBudget == 150_000L) 160_000L else operationBudget + 300, TimeUnit.MILLISECONDS)
                     try {
                         require(payload.length <= SpiderIpc.MAX_REQUEST_CHARS) { "Spider 请求超过进程通信限制" }
                         val request = JSONObject(payload)
@@ -312,7 +332,8 @@ class TvBoxSpiderService : Service() {
                                         request.optJSONArray("playbackParsers")))
                                 val secret = request.getString("originSecret")
                                 require(secret.matches(Regex("[a-f0-9-]{36}"))) { "Spider 授权会话无效" }
-                                when (val result = worker.browse(site, warehouse, secret)) {
+                                when (val result = worker.browse(site, warehouse, secret,
+                                    loadHome = !request.optBoolean("searchOnly"))) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("films", JSONArray().apply {
                                             result.value.take(80).forEach { put(SpiderIpc.film(it)) }
@@ -376,6 +397,7 @@ class TvBoxSpiderService : Service() {
                         Log.e("HerrinSpiderWorker", "Spider linkage failed: ${e.javaClass.simpleName}")
                         SpiderIpc.error(SpiderFailureDetails.message(e))
                     } finally {
+                        activeOperation = -1
                         authorization.cancel()
                         authCaller = null
                         terminate.cancel(false)
@@ -392,6 +414,9 @@ class TvBoxSpiderService : Service() {
                     Log.w("HerrinSpiderWorker", "Caller went away")
                 }
             }
+            operations[id] = task
+            task.invokeOnCompletion { operations.remove(id, task) }
+            task.start()
         }
         true
     })
@@ -461,6 +486,8 @@ internal class TvBoxSpiderBridge(context: Context) {
     private val requests = Mutex()
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var cleanupJob: Job? = null
+    private var retiredUntil = 0L
+    internal fun pendingSearchRequests(): Int = pending.size
     @Volatile private var generation = 0
     @Volatile private var hydratedGeneration = -1
     private val sourceSession = SpiderSourceSession()
@@ -558,6 +585,8 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     private suspend fun service(): Messenger {
         check(!closed) { "Spider 执行服务已关闭" }
+        val remaining = retiredUntil - android.os.SystemClock.uptimeMillis()
+        if (remaining > 0) delay(remaining)
         remote?.let { return it }
         val waiter = CompletableDeferred<Messenger>()
         waitingForBind += waiter
@@ -635,7 +664,8 @@ internal class TvBoxSpiderBridge(context: Context) {
                 if (startedGeneration == generation) return@withLock result
                 if (result is SpiderResult.Ready)
                     return@withLock SpiderResult.Failure("Spider 会话已变化，请重试")
-                if (attempt == 1 || lastTransportFault == null)
+                if (attempt == 1 || lastTransportFault == null ||
+                    kotlinx.coroutines.currentCoroutineContext()[SpiderRequestBudget] != null)
                     return@withLock result
                 delay(400L) // Cancellation propagates; leaving playback never rebinds later.
                 if (lastBrowse != remembered || closed || lastTransportFault == null)
@@ -655,17 +685,28 @@ internal class TvBoxSpiderBridge(context: Context) {
             check(sourceEpoch == null || sourceSession.isCurrent(sourceEpoch)) { "Spider 会话已结束或变化" }
             val id = nextId.incrementAndGet()
             val deferred = CompletableDeferred<String>()
+            val budget = kotlinx.coroutines.currentCoroutineContext()[SpiderRequestBudget]?.milliseconds
+                ?.coerceIn(200,150_000) ?: 150_000L
             pending[id] = deferred
             try {
                 server.send(Message.obtain(null, operation).apply {
                     arg1 = id
                     replyTo = responses
-                    data = Bundle().apply { putString("payload", encoded) }
+                    data = Bundle().apply { putString("payload", encoded); putLong("operationBudgetMs",budget) }
                 })
-                withTimeout(165_000) { deferred.await() }
+                withTimeout(if (budget == 150_000L) 165_000L else budget + 800) { deferred.await() }
             } catch (timeout: TimeoutCancellationException) {
+                runCatching { server.send(Message.obtain(null, SpiderIpc.CANCEL_REQUEST).apply { arg1=id }) }
+                retiredUntil = android.os.SystemClock.uptimeMillis() + 450
+                sourceSession.revoke()
                 invalidate("Spider 操作超时，请重新应用站点", TransportFault.TIMEOUT)
                 throw timeout
+            } catch (cancel: CancellationException) {
+                runCatching { server.send(Message.obtain(null, SpiderIpc.CANCEL_REQUEST).apply { arg1=id }) }
+                retiredUntil = android.os.SystemClock.uptimeMillis() + 450
+                sourceSession.revoke()
+                invalidate("Spider 旧请求已取消，正在回收执行会话")
+                throw cancel
             } catch (error: android.os.RemoteException) {
                 invalidate("Spider 服务已断开，请重试", TransportFault.DISCONNECTED)
                 throw error
@@ -679,6 +720,7 @@ internal class TvBoxSpiderBridge(context: Context) {
         if (result.optBoolean("ok")) SpiderResult.Ready(result)
         else SpiderResult.Failure(result.optString("message").ifBlank { "Spider 返回错误" })
     } catch (timeout: TimeoutCancellationException) {
+        kotlinx.coroutines.currentCoroutineContext().let { context -> context[Job]?.ensureActive() }
         SpiderResult.Failure("Spider 服务响应超时，请重新应用站点")
     } catch (cancel: CancellationException) {
         throw cancel
@@ -686,10 +728,11 @@ internal class TvBoxSpiderBridge(context: Context) {
         SpiderResult.Failure("Spider 服务错误：" + SpiderFailureDetails.message(error))
     }
 
-    suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> {
+    suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single, searchOnly: Boolean = false): SpiderResult<List<Film>> {
         val invocation = sourceSession.snapshot()
         withContext(Dispatchers.Main.immediate) { SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge) }
         val payload = JSONObject().put("site", SpiderIpc.site(site))
+            .put("searchOnly", searchOnly)
             .put("originSecret", sourceSession.filmSecret(invocation)
                 ?: return SpiderResult.Failure("Spider 会话已变化"))
             .put("defaultJar", config.spiderJar ?: "")

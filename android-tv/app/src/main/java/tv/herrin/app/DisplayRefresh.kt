@@ -24,7 +24,8 @@ internal fun Activity.preferSmoothTvUi() {
         UiDisplayMode(mode.physicalWidth, mode.physicalHeight, mode.refreshRate)
     }
     val preference = preferredUiRefreshRate(current, supported)
-    if (preference != null && kotlin.math.abs(window.attributes.preferredRefreshRate - preference) > 0.5f) {
+    if (preference != null && preference > current.hz + 0.5f &&
+        kotlin.math.abs(window.attributes.preferredRefreshRate - preference) > 0.5f) {
         val params = window.attributes
         params.preferredRefreshRate = preference
         // Pin geometry as well as rate: firmware must never choose a lower resolution.

@@ -11,12 +11,21 @@ internal class UiFrameDiagnostics(private val window: Window, private val refres
     private val samples = ArrayDeque<Sample>(600)
     private val thread = HandlerThread("herrin-frame-metrics").apply { start() }
     private var platformDropped = 0L
+    private val revealFrames=ArrayList<Long>(300)
+    private var revealReported=false
     private val initialGcTime = android.os.Debug.getRuntimeStat("art.gc.gc-time")?.toLongOrNull()
     private val listener = Window.OnFrameMetricsAvailableListener { _, metrics, dropped ->
         val rate = refreshRate().takeIf { it.isFinite() && it > 0 } ?: 60f
         val sample = Sample(metrics.getMetric(FrameMetrics.INTENDED_VSYNC_TIMESTAMP),
             metrics.getMetric(FrameMetrics.TOTAL_DURATION), 1_000_000_000.0 / rate)
         synchronized(samples) {
+            if(!StartupTiming.wordmarkIsComplete() &&revealFrames.size<600)revealFrames.add(sample.duration)
+            else if(!revealReported &&revealFrames.isNotEmpty()){
+                revealReported=true
+                val values=revealFrames.sorted()
+                fun p(n:Int)=values[(values.size-1)*n/100]/1_000_000.0
+                android.util.Log.i("HerrinStartupFrames","count=${values.size} p50_ms=${p(50)} p95_ms=${p(95)} p99_ms=${p(99)} over_budget=${values.count{it>sample.budget}}")
+            }
             if (samples.size == 600) samples.removeFirst()
             samples.addLast(sample)
             platformDropped += dropped

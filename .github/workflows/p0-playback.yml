@@ -1,7 +1,7 @@
 name: HERRIN P0 Serial Verification
 on:
   push:
-    branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106']
+    branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106', 'codex/herrin-startup-source-health-20261107']
     paths:
       - 'android-tv/**'
       - '!android-tv/docs/**'
@@ -13,7 +13,7 @@ permissions:
   contents: read
 concurrency:
   group: p0-playback-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' || github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' }}
 jobs:
   debug:
     uses: ./.github/workflows/android-debug.yml
