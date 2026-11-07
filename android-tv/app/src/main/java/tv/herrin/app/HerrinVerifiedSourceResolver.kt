@@ -116,11 +116,14 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
             } else {
                 // Read actual CMS/Spider episodes. Different same-name films
                 // can fail independently; do not stop after the first error.
+                val blockedSources=mutableSetOf<String>()
                 val playable = fairRemoteCandidates(ranked).firstOrNull { candidate ->
+                    if(candidate.sourceId in blockedSources)return@firstOrNull false
                     onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,SourceSearchOutcome.CHECKING))
                     val detailed = try { remoteDetails(candidate) }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch(error:SourceHttpFailure){
+                        if(error.code in setOf(401,403,429))blockedSources+=candidate.sourceId
                         val outcome=SourceHealthIndex.httpOutcome(error.code)
                         health?.record(candidate.sourceId,SourceSearchStage.DETAILS,outcome,0,error.retryAfterMs)
                         onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,outcome,retryAfterMs=error.retryAfterMs))
@@ -144,6 +147,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                             verifiedLine = choice
                         }
                         val result=terminalHttp?.let{SourceHealthIndex.httpOutcome(it.code)}?:validationFailure?.outcome?:if(choice!=null)SourceSearchOutcome.VERIFIED else SourceSearchOutcome.MEDIA_FAILED
+                        if(terminalHttp?.code in setOf(401,403,429))blockedSources+=candidate.sourceId
                         val phase=validationFailure?.stage?:SourceSearchStage.MEDIA
                         health?.record(candidate.sourceId,phase,result,(System.nanoTime()-began)/1_000_000,terminalHttp?.retryAfterMs)
                         onEvent(SourceSearchEvent(candidate.sourceId,phase,result,(System.nanoTime()-began)/1_000_000,retryAfterMs=terminalHttp?.retryAfterMs))

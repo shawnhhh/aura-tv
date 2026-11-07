@@ -131,4 +131,15 @@ class P0FastSourceSearchTest {
         }
         assertEquals(listOf(1,2,3),events.filter{it.nodeComplete}.map{it.completed})
     }
+    @Test fun authFailureDoesNotTryOtherVodCandidatesOnSameSource()=runBlocking {
+        var probes=0
+        val provider=object:HerrinFilmSource{
+            override val id="cms:fixture";override val type=HerrinSourceType.TVBOX_CMS
+            override suspend fun search(identity:HerrinFilmIdentity)=(1..3).map{n->
+                HerrinSourceMovie(id,type,movie().copy(id="vod$n",cmsVodId="$n"),"movie")}
+        }
+        val result=HerrinVerifiedSourceResolver(listOf(provider)).find(request,personalPlayback={PlaybackResult.Unavailable("unused")},
+            streaming=true,verifyRemote={_,_->probes++;throw SourceHttpFailure(401)},remoteDetails={it.film})
+        assertTrue(result.lookup.options.isEmpty());assertEquals(1,probes)
+    }
 }
