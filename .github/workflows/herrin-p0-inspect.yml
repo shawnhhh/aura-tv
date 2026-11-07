@@ -1,0 +1,40 @@
+name: HERRIN P0 Retained Startup Failure Evidence
+on:
+  push:
+    branches: ['codex/herrin-startup-source-health-20261107']
+    paths: ['.github/workflows/herrin-p0-inspect.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-API31-startup-evidence
+          github-token: ${{ github.token }}
+          run-id: 42336998570
+          path: evidence/api31
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          github-token: ${{ github.token }}
+          run-id: 42336998570
+          path: evidence/tv
+      - name: Inspect only the controlled offline startup failure
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ('cold-diagnostics.txt','cold-launch.txt','launch.txt'):
+              for path in Path('evidence').rglob(name):
+                  print(str(path)+'\n'+path.read_text(errors='replace')[-20000:])
+          for path in Path('evidence').rglob('logcat.txt'):
+              rows=path.read_text(errors='replace').splitlines()
+              shown=set()
+              for n,row in enumerate(rows):
+                  if 'FATAL EXCEPTION' in row or 'Unable to start' in row:
+                      for index in range(max(0,n-2),min(len(rows),n+45)):
+                          if index not in shown:print(rows[index]);shown.add(index)
+          PY
