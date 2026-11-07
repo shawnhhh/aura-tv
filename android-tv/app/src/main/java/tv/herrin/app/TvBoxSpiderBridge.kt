@@ -466,10 +466,13 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     } catch (cancel: CancellationException) {
         throw cancel
     } catch (exception: SpiderInitializationFailure) {
+        SpiderFailureTrace.record(context, exception)
         SpiderResult.Failure("Spider 初始化失败（SOURCE_SPIDER_INITIALIZATION）：${SpiderFailureDetails.message(exception)}")
     } catch (exception: Exception) {
+        SpiderFailureTrace.record(context, exception)
         SpiderResult.Failure("Spider ${SpiderFailureDetails.message(exception)}")
     } catch (error: LinkageError) {
+        SpiderFailureTrace.record(context, error)
         SpiderResult.Failure("Spider ${SpiderFailureDetails.message(error)}")
     }
 

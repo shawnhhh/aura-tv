@@ -2,11 +2,33 @@ package tv.herrin.app
 
 /** A cursor indexes an immutable, authorization-scoped plan, never a re-sorted live list. */
 internal class SourceSearchPlans {
-    data class Plan(val revision:String,val sites:List<TvBoxSite>,val completed:MutableSet<String> = mutableSetOf())
+    data class Plan(val revision:String,val sites:List<TvBoxSite>,val completed:MutableSet<String> = mutableSetOf(),
+        val nodes:MutableSet<String> = mutableSetOf(), val outcomes:MutableMap<String,SourceSearchOutcome> = mutableMapOf())
     private val plans=linkedMapOf<String,Plan>()
     @Synchronized fun reset(film:String){plans.remove(film)}
     @Synchronized fun complete(film:String,revision:String,source:String){
         plans[film]?.takeIf{it.revision==revision}?.completed?.add(source)
+    }
+    data class Progress(val total:Int,val checked:Int,val success:Int,val failed:Int,val timedOut:Int) {
+        val remaining get()=(total-checked).coerceAtLeast(0)
+        fun text()="已检查 $checked/$total · 成功 $success · 失败 $failed · 超时 $timedOut · 剩余 $remaining"
+    }
+    @Synchronized fun register(film:String,revision:String,nodes:Collection<String>) {
+        plans[film]?.takeIf{it.revision==revision}?.nodes?.addAll(nodes)
+    }
+    @Synchronized fun observe(film:String,revision:String,event:SourceSearchEvent) {
+        val plan=plans[film]?.takeIf{it.revision==revision}?:return
+        plan.nodes.add(event.source)
+        if(event.outcome!=SourceSearchOutcome.CHECKING &&
+            (event.outcome!=SourceSearchOutcome.VERIFIED ||event.stage==SourceSearchStage.MEDIA ||event.nodeComplete))
+            plan.outcomes[event.source]=event.outcome
+        if(event.nodeComplete)plan.completed.add(event.source)
+    }
+    @Synchronized fun progress(film:String,revision:String):Progress {
+        val plan=plans[film]?.takeIf{it.revision==revision}?:return Progress(0,0,0,0,0)
+        val success=plan.completed.count{plan.outcomes[it]==SourceSearchOutcome.VERIFIED}
+        val timedOut=plan.completed.count{plan.outcomes[it]==SourceSearchOutcome.TIMEOUT}
+        return Progress(plan.nodes.size,plan.completed.size,success,plan.completed.size-success-timedOut,timedOut)
     }
     @Synchronized fun completed(film:String,revision:String):Set<String> =
         plans[film]?.takeIf{it.revision==revision}?.completed?.toSet().orEmpty()

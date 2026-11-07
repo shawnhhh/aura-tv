@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicLong
  * below the problematic register pressure. No credentials or saved UI change. */
 @Stable
 internal class TmdbScreenState {
+    var searchReturnFocus:String?=null
+    var restoreSearchFocus by mutableStateOf(false)
     val globalSearch = TmdbGlobalSearchState()
     var sourceForeground by mutableStateOf(false)
     var sourceSearchJob:kotlinx.coroutines.Job?=null

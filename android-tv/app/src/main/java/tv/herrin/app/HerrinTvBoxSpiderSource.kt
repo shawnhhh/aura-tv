@@ -14,7 +14,7 @@ internal class HerrinTvBoxSpiderSource(
 
     override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> {
         if (activate != null && !activate.invoke())
-            throw SourceCandidateFailure(SourceSearchStage.ACTIVATE, SourceSearchOutcome.AUTH_REQUIRED)
+            throw SourceCandidateFailure(SourceSearchStage.ACTIVATE, SourceSearchOutcome.ACTIVATE_FAILED)
         val found = linkedMapOf<String, HerrinSourceMovie>()
         for (name in identity.names.filter { it.trim().length >= 2 }.distinct().take(2)) {
             val search = bridge.search(site, name)

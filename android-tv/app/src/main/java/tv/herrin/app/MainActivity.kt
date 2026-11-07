@@ -849,7 +849,11 @@ private fun Herrin(startup: StartupPresentation) {
                 tvBoxVodScope = "tvbox:pending:$address"
                 providerStatus = "已导入 ${config.sites.size} 个影视点；选择影视点后才加载影片目录"
                 if (spiderCrashed) {
-                    tvBoxStatus = "配置读取成功，但 Spider 子进程异常退出。已停止自动重试以保护电视；可打开「选择影视点」尝试其他站点。"
+                    val evidence = withContext(Dispatchers.IO) {
+                        listOfNotNull(SpiderStartupTrace.recent(context),SpiderExitDiagnostics.recent(context),
+                            SpiderFailureTrace.recent(context)).joinToString("；")
+                    }
+                    tvBoxStatus = "配置读取成功，Spider 子进程已退出；可选择其他站点。" + evidence.take(1400)
                     vodImportFeedback = "插件崩溃"
                 } else if (scanBudgetExceeded) {
                     tvBoxStatus = "配置读取成功，但自动检索已达到限时；请打开「选择影视点」手动尝试其他站点。" +
@@ -1272,16 +1276,10 @@ private fun Herrin(startup: StartupPresentation) {
             withContext(Dispatchers.Main.immediate){
                 if(searchTicket==tmdbState.tmdbSearchGeneration.get() &&filmId==targetId &&tmdbState.tmdbLookupEpoch==lookupEpoch &&personalSourceConfigEpoch==configEpoch &&tvBoxSingle===currentTvbox){
                     SourceSearchDiagnostics.record(event)
-                    if(event.total>0)totalNodesNow=maxOf(totalNodesNow,event.total)
-                    if(event.nodeComplete){
-                        completedNodesNow=maxOf(completedNodesNow,event.completed)
-                        tmdbState.tmdbSearchPlans.complete(targetId,planRevision,event.source)
-                        tmdbState.tmdbSourceStatus=tmdbState.tmdbSourceStatus.substringBefore(" · 已检查")+" · 已检查 ${priorNodes+event.completed}/${priorNodes+event.total}"
-                        return@withContext
-                    }
+                    tmdbState.tmdbSearchPlans.observe(targetId,planRevision,event)
+                    val progress=tmdbState.tmdbSearchPlans.progress(targetId,planRevision)
                     if(event.outcome==SourceSearchOutcome.CHECKING)tmdbState.tmdbStageStarted=System.nanoTime()
-                    tmdbState.tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()}"+
-                        (if(totalNodesNow>0)" · 已检查 ${priorNodes+completedNodesNow}/${priorNodes+totalNodesNow}" else "")+" · 本阶段已用 ${event.elapsedMs}ms"
+                    tmdbState.tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()} · ${progress.text()} · ${event.elapsedMs}ms"
                 }
             }
         }
@@ -1363,11 +1361,18 @@ private fun Herrin(startup: StartupPresentation) {
                 adapters.removeAll { it.id == "spider:" + site.key }
                 adapters += HerrinTvBoxSpiderSource(site, spiderBridge) {
                     sourceEvent(SourceSearchEvent("spider:" + site.key, SourceSearchStage.ACTIVATE, SourceSearchOutcome.CHECKING))
-                    withContext(SpiderRequestBudget(1_200L)) {
+                    withContext(SpiderRequestBudget(SourceSearchPolicy.ACTIVATION_MS)) {
                         spiderBridge.browse(site, requireNotNull(currentTvbox), searchOnly = true) is SpiderResult.Ready
                     }
                 }
             }
+            val authorizedBatchSites = plan.sites.filter { site ->
+                val runtime=site.jar ?: currentTvbox?.spiderJar.orEmpty()
+                site !== preferredSite && site.spiderApi!=null && runtime.isNotBlank() &&
+                    TvBoxSpiderPolicy.mayRun(false,approvedRoot,runtime,trustedSpiderRoot,trustedSpiderJar)
+            }
+            tmdbState.tmdbSearchPlans.register(targetId,planRevision,
+                adapters.map{it.id}+authorizedBatchSites.map{"spider:"+it.key})
             val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
             val remotes = adapters.associateBy { it.id }
             val reachability = HerrinPersonalMediaProbe(strictHttpFailure=true)
@@ -1447,7 +1452,7 @@ private fun Herrin(startup: StartupPresentation) {
                 currentTvbox != null && trustedSpiderJar.isNotBlank() &&
                 approvedRoot == trustedSpiderRoot) {
                 HerrinApprovedSpiderBatch.scanAcrossPages(
-                    searchIdentity, plan.sites.filter { it !== preferredSite },
+                    searchIdentity, authorizedBatchSites,
                     allowed = { site ->
                         val runtime = site.jar ?: currentTvbox.spiderJar ?: site.scriptApi.orEmpty()
                         // An approved Java JAR must not silently approve
@@ -1458,7 +1463,7 @@ private fun Herrin(startup: StartupPresentation) {
                             "spider:" + site.key !in tmdbState.tmdbFallbackIndex.rejected(targetId)
                     },
                     offset = spiderPageOffset,
-                    maxWallClockMs = budgetMs,
+                    maxWallClockMs = (budgetMs-(System.nanoTime()-tmdbState.tmdbSearchStarted)/1_000_000-150L).coerceAtLeast(1L),
                     stageBudgetMs=1_200L,
                     onEvent={event->
                         sourceEvent(event)
@@ -1477,7 +1482,7 @@ private fun Herrin(startup: StartupPresentation) {
                             tmdbState.tmdbSourceStatus = if (progress.match != null)
                                 "已验证可播放影视点，正在载入选集…"
                             else "正在自动检索授权 Spider 影视点：已检查 " +
-                                "$visited/${progress.eligible}，继续寻找可播放线路…"
+                                tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()
                         }
                     },
                     onStageProgress = { progress ->
@@ -1510,12 +1515,13 @@ private fun Herrin(startup: StartupPresentation) {
                             }
                             tmdbState.tmdbSourceStatus = if (progress.match != null)
                                 "已找到并验证播放线路，正在载入选集…"
-                            else "${progress.stage?.label().orEmpty()} · 已检查 $visited/${progress.eligible}；"+
+                            else "${progress.stage?.label().orEmpty()} · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}；"+
                                 (progress.activeIndex?.let{"第 $it 个节点检查中；"}?:"")+"最近结果：$outcome · ${progress.elapsedMs}ms"
                         }
                     },
                     session = object : HerrinApprovedSpiderBatch.Session {
-                        override suspend fun eligible(site:TvBoxSite)=index.eligible("spider:"+site.key)
+                        override suspend fun eligible(site:TvBoxSite)=
+                            "spider:"+site.key !in tmdbState.tmdbSearchPlans.completed(targetId,planRevision) && index.eligible("spider:"+site.key)
                         override suspend fun activate(site: TvBoxSite): Boolean =
                             spiderBridge.browse(site, currentTvbox,searchOnly=true) is SpiderResult.Ready
                         override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
@@ -1559,7 +1565,7 @@ private fun Herrin(startup: StartupPresentation) {
             if(searchTicket==tmdbState.tmdbSearchGeneration.get())tmdbState.tmdbSearchRunning=false
         }
         if(searchOutput==null){
-            tmdbState.tmdbSourceStatus="前台搜索预算结束（${budgetMs/1000}秒）；尚无已验证线路，可继续搜索剩余节点"
+            tmdbState.tmdbSourceStatus="前台搜索预算结束（${budgetMs/1000}秒） · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}；可继续搜索剩余节点"
             HerrinPlaybackDiagnosticJournal.record("LOOKUP","FOREGROUND_BUDGET_END")
             return@LaunchedEffect
         }
@@ -2122,7 +2128,7 @@ private fun Herrin(startup: StartupPresentation) {
                 delay(900)
                 val exitDetail=withContext(Dispatchers.IO){
                     listOfNotNull(SpiderStartupTrace.recent(context)?.let{"最后阶段：$it"},
-                        SpiderExitDiagnostics.recent(context)?.let{"系统原因：$it"}).joinToString("；")
+                        SpiderExitDiagnostics.recent(context)?.let{"系统原因：$it"}, SpiderFailureTrace.recent(context)).joinToString("；")
                 }
                 exitDetail.takeIf{it.isNotBlank()}?.let { reason ->
                     if (spiderStatus == failedStatus) spiderStatus =
@@ -2420,6 +2426,7 @@ private fun Herrin(startup: StartupPresentation) {
         screen = "detail"
     }
     fun openMovie(item: Film) {
+        if (screen == "search") tmdbState.searchReturnFocus = "card-${item.id}"
         // The user chooses a film first, then its real episode and source.
         // Never start playback merely because a poster was selected.
         if (tmdbDiscovery.identity(item) != null && item.id !in tmdbState.tmdbResolved) tmdbState.tmdbResolved[item.id] = item
@@ -2537,7 +2544,11 @@ private fun Herrin(startup: StartupPresentation) {
                 screen = playbackReturn.screen
             }
             "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
-            "detail" -> { bypassGroupFilmId = null; screen = returnScreen }
+            "detail" -> {
+                bypassGroupFilmId = null
+                if(returnScreen=="search") tmdbState.searchReturnFocus?.let{focusId=it;tmdbState.restoreSearchFocus=true}
+                screen = returnScreen
+            }
             "facets" -> {
                 focusId = "facets"
                 pendingToolbarFocus = "facets"
@@ -2604,6 +2615,19 @@ private fun Herrin(startup: StartupPresentation) {
                 RemoteTrace.event { "RESTORE target=$id completed" }
             }.onFailure {
                 if (screen == "browse") runCatching { requester("nav-$category").requestFocus() }
+            }
+        }
+    }
+    LaunchedEffect(screen,tmdbState.restoreSearchFocus,tmdbState.globalSearch.films) {
+        if(screen=="search" &&tmdbState.restoreSearchFocus) {
+            val target=tmdbState.searchReturnFocus?:return@LaunchedEffect
+            if(tmdbState.globalSearch.films.none{"card-${it.id}"==target})return@LaunchedEffect
+            repeat(8) {
+                withFrameNanos { }
+                if(runCatching{requester(target).requestFocus()}.isSuccess) {
+                    focusId=target;tmdbState.restoreSearchFocus=false
+                    return@LaunchedEffect
+                }
             }
         }
     }
