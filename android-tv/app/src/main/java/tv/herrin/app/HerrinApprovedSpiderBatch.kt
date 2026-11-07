@@ -27,8 +27,10 @@ internal object HerrinApprovedSpiderBatch {
     data class Match(val site: TvBoxSite, val detailed: Film, val claim: Int,
                      val candidate: HerrinSourceMovie,
                      val episode: Int, val line: String)
+    enum class Outcome { VERIFIED, TIMEOUT, ACTIVATE_FAILED, NO_MATCH, INVALID_MEDIA, ERROR }
     data class Scan(val match: Match?, val checked: Int, val eligible: Int,
-                    val nextOffset: Int, val candidatesWithEpisodes: Int)
+                    val nextOffset: Int, val candidatesWithEpisodes: Int,
+                    val lastOutcome: Outcome? = null)
 
     /**
      * One tap scans successive bounded pages of the already approved JAR
@@ -128,7 +130,7 @@ internal object HerrinApprovedSpiderBatch {
                         episodes = episodesBeforePage + partial.candidatesWithEpisodes
                         next = partial.nextOffset
                         onSiteProgress(Scan(partial.match,
-                            checked, total, next, episodes))
+                            checked, total, next, episodes, partial.lastOutcome))
                     })
                 checked = completedBeforePage + page.checked
                 total = page.eligible
@@ -169,12 +171,24 @@ internal object HerrinApprovedSpiderBatch {
         val good = mutableListOf<Match>()
         for (site in page) {
             checked++
+            var finished = false
+            var failed = false
+            var outcome = Outcome.ACTIVATE_FAILED
             val found = try {
                 withTimeoutOrNull(timeoutPerSiteMs.coerceIn(1_000, 20_000)) {
-                    if (!session.activate(site)) return@withTimeoutOrNull null
+                    if (!session.activate(site)) {
+                        finished = true
+                        return@withTimeoutOrNull null
+                    }
+                    outcome = Outcome.NO_MATCH
                     val options = session.search(site, identity)
                         .filter { it.sourceType == HerrinSourceType.TVBOX_SPIDER }
                         .sortedByDescending { it.resolutionClaim ?: 0 }.take(3)
+                    if (options.isEmpty()) {
+                        finished = true
+                        return@withTimeoutOrNull null
+                    }
+                    outcome = Outcome.INVALID_MEDIA
                     // Search rank is only a catalog claim. Examine all at
                     // most three offers from this approved site and compare
                     // the line actually accepted by playerContent/media probe.
@@ -195,15 +209,22 @@ internal object HerrinApprovedSpiderBatch {
                             best = Match(site, film, quality, offer, chosen.first, chosen.second)
                         }
                     }
+                    finished = true
                     best
                 }
             } catch (cancel: CancellationException) {
                 throw cancel
-            } catch (_: Exception) { null }
+            } catch (_: Exception) { failed = true; null }
             if (found != null) good += found
+            val lastOutcome = when {
+                found != null -> Outcome.VERIFIED
+                failed -> Outcome.ERROR
+                !finished -> Outcome.TIMEOUT
+                else -> outcome
+            }
             val nextUnchecked = if (start + checked >= eligible.size) 0 else start + checked
-            // Surface progress after every node; six-node page size is internal.
-            onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound))
+            // No URLs, credentials or raw provider exceptions in UI diagnostics.
+            onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome))
             if (stopAtFirstPlayable && found != null) {
                 // playerContent + bounded real media probe already succeeded
                 // in the currently active Spider session.
