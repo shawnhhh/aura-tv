@@ -82,8 +82,15 @@ class HerrinUiSmokeTest {
         compose.activityRule.scenario.recreate()
         compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("search").assertIsDisplayed(); compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
         focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("search-input").performTextReplacement(query)
+        enterSearchQuery(query)
         awaitProtocolResults(if (query == "协议测试") "6 部" else "1 部")
+    }
+    private fun enterSearchQuery(value: String) {
+        // TV editor owns an input connection only while focused. Keep text
+        // entry explicit, then exercise actual D-pad focus/key delivery below.
+        compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("search-input").performTextReplacement(value)
     }
     private fun awaitProtocolResults(count: String) {
         compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("search-filter-status").assertTextContains(count, substring = true) }.isSuccess }
@@ -677,10 +684,10 @@ http://example.org/live/channel.m3u8
     }
     @Test fun onlineSearchProtocolEmptyAndRemoteResult() {
         protocolSearch()
-        compose.onNodeWithTag("search-input").performTextReplacement("not-a-film")
+        enterSearchQuery("not-a-film")
         compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("tmdb-online-search-status").assertTextContains("无结果", substring = true) }.isSuccess }
         compose.onNodeWithText("没有找到匹配影片").assertExists()
-        compose.onNodeWithTag("search-input").performTextReplacement("Protocol 1")
+        enterSearchQuery("Protocol 1")
         awaitProtocolResults("1 部")
         focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("film-detail-list").assertExists()
@@ -693,7 +700,7 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-9001").assertIsFocused() }.isSuccess }
         capture("tmdb-protocol-search-detail-return")
-        compose.onNodeWithTag("search-input").performTextReplacement("Protocol 2")
+        enterSearchQuery("Protocol 2")
         awaitProtocolResults("1 部")
         compose.onNodeWithTag("card-tmdb-movie-9002").assertExists()
         // Return from an actionable result, not from an active text editor/IME.
