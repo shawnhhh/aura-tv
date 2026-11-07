@@ -15,7 +15,7 @@ jobs:
         with:
           name: HERRIN-emulator-evidence
           github-token: ${{ github.token }}
-          run-id: 42358864061
+          run-id: 42362418140
           path: evidence/tv
       - name: Inspect controlled fixture recovery and cached home failures
         run: |
@@ -26,7 +26,7 @@ jobs:
               rows=path.read_text(errors='replace').splitlines()
               shown=set()
               for n,row in enumerate(rows):
-                  if any(tag in row for tag in ('P0SpiderDeadlineRecoveryTest','Spider transport','Spider service','Spider bind','HerrinSpider','P0CachedHomeHeroTest')):
+                  if any(tag in row for tag in ('P0MetadataPublicationPressureTest','HerrinStartup','HerrinDisplay','FATAL EXCEPTION','HerrinSpider')):
                       for i in range(max(0,n-2),min(len(rows),n+12)):
                           if i not in shown:print(path.name+': '+rows[i]);shown.add(i)
           PY
