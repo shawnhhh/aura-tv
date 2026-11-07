@@ -281,6 +281,7 @@ class M472ApprovedSpiderBatchTest {
     @Test fun autoFindStopsAtFirstActuallyPlayableLaterSiteAndPreservesLiveSession() = runBlocking {
         val visited = mutableListOf<String>()
         val progress = mutableListOf<Int>()
+        val eachSite = mutableListOf<Int>()
         var active = ""
         val session = object : HerrinApprovedSpiderBatch.Session {
             override suspend fun activate(site: TvBoxSite): Boolean {
@@ -300,15 +301,17 @@ class M472ApprovedSpiderBatchTest {
         val result = HerrinApprovedSpiderBatch.scanAcrossPages(
             request, (1..45).map(::site), { true }, session,
             stopAtFirstPlayable = true,
-            onProgress = { progress += it.checked })
+            onProgress = { progress += it.checked },
+            onSiteProgress = { eachSite += it.checked })
         assertEquals("node-8", result.match?.site?.key)
         assertEquals("node-8", active)
-        assertEquals(12, result.checked)
+        assertEquals(8, result.checked)
         assertEquals(45, result.eligible)
-        assertEquals(12, result.nextOffset)
-        assertEquals(listOf(6, 12), progress)
-        assertFalse("Do not waste time looking for 4K after a byte-verified source",
-            visited.contains("node-13"))
+        assertEquals(8, result.nextOffset)
+        assertEquals(listOf(6, 8), progress)
+        assertEquals((1..8).toList(), eachSite)
+        assertFalse("Stop immediately at the first byte-verified source",
+            visited.contains("node-9"))
     }
 
     @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
