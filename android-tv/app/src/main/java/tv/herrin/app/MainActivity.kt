@@ -4894,7 +4894,12 @@ private fun Herrin(startup: StartupPresentation) {
         })
         SideEffect {
             startup.reduced = reduceMotion
-            startup.homeReady = tmdbState.cacheHydrated && (projection.second.isNotEmpty() || films.isEmpty())
+            // The navigation/home skeleton is already committed in this
+            // composition. Waiting for disk hydration or a non-empty grouped
+            // projection can deadlock the splash when prior tests/history leave
+            // a non-empty film list but the async projection has not published.
+            // TMDB/cache data is loaded progressively after the first home frame.
+            startup.homeReady = true
             startup.restoreBrowseFocus={
                 if(!startup.showing &&screen=="browse" &&!lanConfigOpen &&!exitConfirmation &&
                     !(category=="直播" &&liveSearchExpanded)) {
