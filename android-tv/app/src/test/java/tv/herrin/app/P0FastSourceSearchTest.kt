@@ -100,4 +100,35 @@ class P0FastSourceSearchTest {
         while(active.get()==0)yield()
         job.cancelAndJoin();assertEquals(0,active.get())
     }
+    @Test fun realEightAndFifteenSecondBudgetsLeaveNoCooperativeWorkAndPreserveCursor()=runBlocking {
+        val active=AtomicInteger()
+        val session=object:Session(0){override suspend fun search(site:TvBoxSite,identity:HerrinFilmIdentity):List<HerrinSourceMovie>{
+            active.incrementAndGet();try{delay(250);return emptyList()}finally{active.decrementAndGet()}
+        }}
+        var offset=0
+        for(budget in listOf(SourceSearchPolicy.FOREGROUND_MS,SourceSearchPolicy.EXTENDED_MS)){
+            val start=System.nanoTime()
+            val scan=HerrinApprovedSpiderBatch.scanAcrossPages(request,(1..100).map(::site),{true},session,
+                offset=offset,maxWallClockMs=budget,stageBudgetMs=SourceSearchPolicy.STAGE_MS,stopAtFirstPlayable=true)
+            val elapsed=(System.nanoTime()-start)/1_000_000
+            assertTrue("budget=$budget elapsed=$elapsed",elapsed in (budget-100)..(budget+2000))
+            assertNull(scan.match);assertEquals(offset+scan.checked,scan.nextOffset)
+            assertEquals(0,active.get());offset=scan.nextOffset
+        }
+    }
+    @Test fun onlyFinishedValidationMarksNodeCompleteAndSerialSpiderNeverOverlaps()=runBlocking {
+        val events=mutableListOf<SourceSearchEvent>();var validating=false
+        val providers=(1..3).map{n->object:HerrinFilmSource{
+            override val id="spider:$n";override val type=HerrinSourceType.TVBOX_SPIDER
+            override suspend fun search(identity:HerrinFilmIdentity):List<HerrinSourceMovie>{
+                assertFalse(validating);return listOf(HerrinSourceMovie(id,type,movie(),"movie"))
+            }
+        }}
+        HerrinFilmRouter(providers).find(request,streaming=true,onEvent={events+=it}){offers->
+            validating=true;delay(10)
+            assertFalse(events.any{it.source==offers.first().sourceId &&it.nodeComplete})
+            validating=false;emptyList()
+        }
+        assertEquals(listOf(1,2,3),events.filter{it.nodeComplete}.map{it.completed})
+    }
 }

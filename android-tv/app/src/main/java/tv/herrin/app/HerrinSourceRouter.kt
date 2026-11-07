@@ -169,10 +169,12 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                         val offers=try{source.search(identity).filter{it.sourceId==source.id &&it.sourceType==source.type &&HerrinFilmIdentityMatch.matches(identity,it)}}
                             catch(cancel:CancellationException){throw cancel}catch(_:Exception){emptyList()}
                         searched+=source.id
-                        completedCount.incrementAndGet()
                         onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,if(offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED,
                             completed=completedCount.get(),total=sources.size))
-                        accept(offers).filter{it in offers}
+                        val verified=accept(offers).filter{it in offers}
+                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.DISCOVER,SourceSearchOutcome.CHECKING,
+                            completed=completedCount.incrementAndGet(),total=sources.size,nodeComplete=true))
+                        verified
                     }.orEmpty()
                     if(accepted.isNotEmpty())return HerrinFilmLookupResult(accepted,tier,errors,searched)
                 }
@@ -203,16 +205,15 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                     try{
                         repeat(providers.size){
                             val result=channel.receive();searched+=result.source.id
-                            completedCount.incrementAndGet()
                             val outcome=result.failure?:if(result.offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED
-                            onEvent(SourceSearchEvent(result.source.id,SourceSearchStage.SEARCH,outcome,result.elapsed,searched.size,sources.size))
+                            onEvent(SourceSearchEvent(result.source.id,SourceSearchStage.SEARCH,outcome,result.elapsed,completedCount.get(),sources.size))
                             if(outcome!=SourceSearchOutcome.RATE_LIMITED && outcome!=SourceSearchOutcome.AUTH_REQUIRED)
                                 health?.record(result.source.id,SourceSearchStage.SEARCH,outcome,result.elapsed)
                             if(result.failure!=null)errors[result.source.id]=outcome.name
-                            if(result.offers.isNotEmpty()){
-                                val verified=accept(result.offers).filter{it in result.offers}
-                                if(verified.isNotEmpty())return@coroutineScope verified
-                            }
+                            val verified=if(result.offers.isEmpty())emptyList() else accept(result.offers).filter{it in result.offers}
+                            onEvent(SourceSearchEvent(result.source.id,SourceSearchStage.DISCOVER,SourceSearchOutcome.CHECKING,
+                                completed=completedCount.incrementAndGet(),total=sources.size,nodeComplete=true))
+                            if(verified.isNotEmpty())return@coroutineScope verified
                         }
                         emptyList()
                     }finally{jobs.forEach{it.cancel()};channel.cancel()}

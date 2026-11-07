@@ -120,6 +120,12 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                     onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,SourceSearchOutcome.CHECKING))
                     val detailed = try { remoteDetails(candidate) }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch(error:SourceHttpFailure){
+                        val outcome=SourceHealthIndex.httpOutcome(error.code)
+                        health?.record(candidate.sourceId,SourceSearchStage.DETAILS,outcome,0,error.retryAfterMs)
+                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,outcome,retryAfterMs=error.retryAfterMs))
+                        return@firstOrNull false
+                    }
                     catch (_: Exception) { null }
                     if (detailed != null && HerrinFilmIdentityMatch.matches(identity,candidate.copy(film=detailed)) && HerrinPlaybackEntry.firstPlayable(detailed) != null) {
                         val began=System.nanoTime()
@@ -143,7 +149,8 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                         onEvent(SourceSearchEvent(candidate.sourceId,phase,result,(System.nanoTime()-began)/1_000_000,retryAfterMs=terminalHttp?.retryAfterMs))
                         choice != null
                     } else {
-                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,SourceSearchOutcome.NO_EPISODES))
+                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,
+                            if(detailed!=null &&!HerrinFilmIdentityMatch.matches(identity,candidate.copy(film=detailed)))SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.NO_EPISODES))
                         false
                     }
                 }

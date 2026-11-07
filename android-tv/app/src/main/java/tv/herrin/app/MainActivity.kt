@@ -1211,6 +1211,7 @@ private fun Herrin(startup: StartupPresentation) {
         )
         val extended=tmdbExtendedRequest==targetId
         tmdbExtendedRequest=null
+        if(!extended){tmdbSearchPlans.reset(targetId);tmdbSpiderBatchOffsets.remove(targetId);tmdbSpiderBatchCompleted.remove(targetId)}
         val budgetMs=if(extended)SourceSearchPolicy.EXTENDED_MS else SourceSearchPolicy.FOREGROUND_MS
         val lookupEpoch=tmdbLookupEpoch
         val configEpoch=personalSourceConfigEpoch
@@ -1239,11 +1240,18 @@ private fun Herrin(startup: StartupPresentation) {
         val allowNasHttp = prefs.nasAllowHttp
         val allowCloudHttp = prefs.cloudAllowHttp
         var health:SourceHealthIndex?=null
+        var planRevision=""
+        var priorNodes=0
         suspend fun sourceEvent(event:SourceSearchEvent){
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             withContext(Dispatchers.Main.immediate){
                 if(searchTicket==tmdbSearchGeneration.get() &&filmId==targetId &&tmdbLookupEpoch==lookupEpoch &&personalSourceConfigEpoch==configEpoch &&tvBoxSingle===currentTvbox){
                     SourceSearchDiagnostics.record(event)
+                    if(event.nodeComplete){
+                        tmdbSearchPlans.complete(targetId,planRevision,event.source)
+                        tmdbSourceStatus=tmdbSourceStatus.substringBefore(" · 已检查")+" · 已检查 ${priorNodes+event.completed}/${priorNodes+event.total}"
+                        return@withContext
+                    }
                     if(event.outcome==SourceSearchOutcome.CHECKING)tmdbStageStarted=System.nanoTime()
                     tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()}"+
                         (if(event.total>0)" · 已检查 ${event.completed}/${event.total}" else "")+" · 本阶段已用 ${event.elapsedMs}ms"
@@ -1277,8 +1285,11 @@ private fun Herrin(startup: StartupPresentation) {
                 context.getSharedPreferences("herrin_personal_secrets",0).getString("_revision","legacy").orEmpty()).joinToString("|"))
             health=SourceHealthIndex(java.io.File(context.filesDir,"source-health-v1.json"),scope)
             val index=requireNotNull(health)
-            val (plan,replaced)=tmdbSearchPlans.get(targetId,scope,currentTvbox?.sites.orEmpty(),index::rank)
+            planRevision=scope+SourceHealthIndex.digest(searchIdentity.toString())
+            val (plan,replaced)=tmdbSearchPlans.get(targetId,planRevision,currentTvbox?.sites.orEmpty(),index::rank)
             if(replaced){spiderPageOffset=0;previousCompleted=0}
+            val completedNodes=tmdbSearchPlans.completed(targetId,planRevision)
+            priorNodes=completedNodes.size
             // Multiwarehouse configs are loaded as data (no JAR/JS execution).
             // Only user-imported root warehouse URLs are eligible for bounded
             // lookup; cap fan-out so a TV does not stall or scan the internet.
@@ -1310,7 +1321,7 @@ private fun Herrin(startup: StartupPresentation) {
             },strictHttpFailure=true)
             val verifiedRemoteLines = mutableMapOf<String, Pair<Int, String>>()
             val resolved = HerrinVerifiedSourceResolver(
-                adapters.filterNot { it.id in tmdbFallbackIndex.rejected(targetId) }
+                adapters.filterNot { it.id in tmdbFallbackIndex.rejected(targetId) ||it.id in completedNodes }
             ).find(
                 searchIdentity,
                 personalPlayback = { offer ->
@@ -1356,8 +1367,10 @@ private fun Herrin(startup: StartupPresentation) {
                 remoteDetails = { offer ->
                     withTimeoutOrNull(4_000L) {
                         when (val adapter = remotes[offer.sourceId]) {
-                            is HerrinTvBoxCmsSource ->
-                                (adapter.details(offer) as? TvBoxVodDetailResult.Ready)?.film
+                            is HerrinTvBoxCmsSource -> when(val result=adapter.details(offer)){
+                                is TvBoxVodDetailResult.Ready->result.film
+                                is TvBoxVodDetailResult.Error->{result.httpCode?.let{throw SourceHttpFailure(it,result.retryAfterMs)};null}
+                            }
                             is HerrinTvBoxSpiderSource ->
                                 (adapter.details(offer) as? SpiderResult.Ready)?.value
                             else -> null
@@ -4550,7 +4563,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     TvButton(if((tmdbSpiderBatchOffsets[film.id]?:0)>0 ||tmdbSourceStatus.contains("预算结束"))"继续搜索剩余节点" else "重新检索片源",
                                         modifier = Modifier.testTag("tmdb-source-retry"),
                                         reduced = reduceMotion) {
-                                        tmdbExtendedRequest=film.id
+                                        tmdbExtendedRequest=film.id.takeIf{(tmdbSpiderBatchOffsets[film.id]?:0)>0 ||tmdbSourceStatus.contains("预算结束")}
                                         tmdbFallbackIndex.reset(film.id)
                                         tmdbPlaybackRoutes.forget(film.id)
                                         tmdbResolved[film.id]?.let { current ->

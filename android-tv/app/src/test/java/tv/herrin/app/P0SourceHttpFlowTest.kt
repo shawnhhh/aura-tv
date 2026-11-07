@@ -88,7 +88,7 @@ class P0SourceHttpFlowTest {
             assertEquals(1,server.requestCount)
         }
     }
-    @Test fun strictMediaAuthenticationDoesNotTryAnotherSignedUrlAndExpiryIsClassified()=runBlocking {
+    @Test fun strictMediaHttpAuthenticationAndExpiryRemainTypedFailures()=runBlocking {
         for(code in listOf(401,403,404,410,429))MockWebServer().use{server->
             server.enqueue(MockResponse().setResponseCode(code).setHeader("Retry-After","90"));server.start()
             val probe=HerrinRemoteMediaProbe(authorizeLocal={it==server.url("/media").toString()},strictHttpFailure=true)

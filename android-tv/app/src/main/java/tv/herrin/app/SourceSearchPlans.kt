@@ -2,8 +2,14 @@ package tv.herrin.app
 
 /** A cursor indexes an immutable, authorization-scoped plan, never a re-sorted live list. */
 internal class SourceSearchPlans {
-    data class Plan(val revision:String,val sites:List<TvBoxSite>)
+    data class Plan(val revision:String,val sites:List<TvBoxSite>,val completed:MutableSet<String> = mutableSetOf())
     private val plans=linkedMapOf<String,Plan>()
+    @Synchronized fun reset(film:String){plans.remove(film)}
+    @Synchronized fun complete(film:String,revision:String,source:String){
+        plans[film]?.takeIf{it.revision==revision}?.completed?.add(source)
+    }
+    @Synchronized fun completed(film:String,revision:String):Set<String> =
+        plans[film]?.takeIf{it.revision==revision}?.completed?.toSet().orEmpty()
     @Synchronized fun get(film:String,revision:String,sites:List<TvBoxSite>,rank:(String)->Long):Pair<Plan,Boolean> {
         val old=plans[film]
         if(old?.revision==revision)return old to false

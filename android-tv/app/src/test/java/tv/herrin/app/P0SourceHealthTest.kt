@@ -5,6 +5,11 @@ import org.junit.Test
 import java.nio.file.Files
 
 class P0SourceHealthTest {
+    @Test fun equallyNamedNasServersHaveDifferentOpaqueIdentities(){
+        val a=HerrinWebDavSource(HerrinWebDavAccount("NAS","https://a.invalid/dav/",username="owner",password="private"))
+        val b=HerrinWebDavSource(HerrinWebDavAccount("NAS","https://b.invalid/dav/",username="owner",password="private"))
+        assertNotEquals(a.id,b.id);assertFalse(a.id.contains("private"));assertFalse(a.id.contains("a.invalid"))
+    }
     @Test fun indexPersistsOnlyOpaqueIdsAndNumbersAndNewConfigurationInvalidatesIt(){
         val file=Files.createTempDirectory("source-health").resolve("health.json").toFile()
         var now=1_000_000L
@@ -32,6 +37,9 @@ class P0SourceHealthTest {
         assertFalse(index.eligible("node-401"));assertFalse(index.eligible("node-403"))
         now+=300_000;assertTrue(index.eligible("node-401"))
         assertEquals(90_000L,SourceHealthIndex.retryAfter("90",now))
+        index.record("long-limit",SourceSearchStage.SEARCH,SourceSearchOutcome.RATE_LIMITED,0,3*24*3600_000L)
+        now+=2*24*3600_000L;assertFalse(index.eligible("long-limit"))
+        now+=24*3600_000L+1;assertTrue(index.eligible("long-limit"))
         assertEquals(SourceSearchOutcome.EXPIRED,SourceHealthIndex.httpOutcome(410))
     }
     @Test fun repeatedTimeoutsBackOffButEventuallyRecoverAndSuccessPromotesEntry(){
@@ -50,8 +58,14 @@ class P0SourceHealthTest {
         preferred="spider:n8"
         val same=plans.get("movie","v1",sites){if(it==preferred)100 else 0}
         assertFalse(same.second);assertEquals(first.first.sites,same.first.sites)
+        plans.complete("movie","v1","cms:a")
+        assertEquals(setOf("cms:a"),plans.completed("movie","v1"))
+        plans.complete("movie","stale-config","cms:b")
+        assertEquals(setOf("cms:a"),plans.completed("movie","v1"))
         val edited=plans.get("movie","v2",sites){if(it==preferred)100 else 0}
         assertTrue(edited.second);assertEquals("n8",edited.first.sites.first().key)
+        assertTrue(plans.completed("movie","v2").isEmpty())
+        plans.reset("movie");assertTrue(plans.completed("movie","v2").isEmpty())
     }
     @Test fun cachedRoutesAreHintsAndCannotAuthorizeExpiredOrDifferentSpiderSessions(){
         var now=1000L

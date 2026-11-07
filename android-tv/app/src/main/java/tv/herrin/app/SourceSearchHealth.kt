@@ -9,7 +9,7 @@ internal enum class SourceSearchOutcome { CHECKING, VERIFIED, NO_MATCH, NO_EPISO
     PARSE_FAILED, MEDIA_FAILED, AUTH_REQUIRED, RATE_LIMITED, EXPIRED, NETWORK, ERROR }
 internal data class SourceSearchEvent(val source: String, val stage: SourceSearchStage,
     val outcome: SourceSearchOutcome, val elapsedMs: Long = 0, val completed: Int = 0, val total: Int = 0,
-    val retryAfterMs: Long? = null)
+    val retryAfterMs: Long? = null, val nodeComplete: Boolean = false)
 internal class SourceCandidateFailure(val stage:SourceSearchStage,val outcome:SourceSearchOutcome):Exception()
 internal object SourceSearchPolicy {
     const val FOREGROUND_MS=8_000L
