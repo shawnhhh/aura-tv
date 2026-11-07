@@ -42,7 +42,8 @@ adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/hot-launch.txt
 # Require the real input target, then send exactly one Right and one OK.
 focused=0
 for attempt in $(seq 1 20); do
-    adb shell dumpsys window windows > "$evidence/hot-window.txt"
+    # API31's `windows` section omits display-level mCurrentFocus.
+    adb shell dumpsys window > "$evidence/hot-window.txt"
     if rg -q 'mCurrentFocus=.*tv.herrin.app/.*MainActivity' "$evidence/hot-window.txt"; then focused=1; break; fi
     sleep 0.1
 done
@@ -51,6 +52,7 @@ if [[ "$focused" != 1 ]]; then
     echo 'FAIL: WindowManager did not grant input to Herrin after resume'
     exit 1
 fi
+adb shell dumpsys input > "$evidence/hot-input-before.txt"
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 1
