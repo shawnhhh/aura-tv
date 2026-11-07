@@ -56,9 +56,11 @@ if [[ "$home_focused" != 1 ]]; then
     exit 1
 fi
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/hot-launch.txt"
-if grep -q 'Warning: Activity not started' "$evidence/hot-launch.txt"; then
+# "its current task has been brought to the front" is a VALID hot resume.
+# Only the explicit top-most intent-delivery warning proves HOME never won.
+if grep -q 'intent has been delivered to currently running top-most instance' "$evidence/hot-launch.txt"; then
     cat "$evidence/hot-launch.txt"
-    echo 'FAIL: Hot launch was delivered to an already top-most app; probe setup invalid'
+    echo 'FAIL: Hot launch was sent to an already top-most app; probe setup invalid'
     exit 1
 fi
 # am start -W can finish before WindowManager grants input to this window.
