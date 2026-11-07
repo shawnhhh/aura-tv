@@ -6,12 +6,15 @@ package tv.herrin.app
  */
 internal class HerrinTvBoxSpiderSource(
     internal val site: TvBoxSite,
-    private val bridge: TvBoxSpiderBridge
+    private val bridge: TvBoxSpiderBridge,
+    private val activate: (suspend () -> Boolean)? = null
 ) : HerrinFilmSource {
     override val id = "spider:" + site.key
     override val type = HerrinSourceType.TVBOX_SPIDER
 
     override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> {
+        if (activate != null && !activate.invoke())
+            throw SourceCandidateFailure(SourceSearchStage.ACTIVATE, SourceSearchOutcome.AUTH_REQUIRED)
         val found = linkedMapOf<String, HerrinSourceMovie>()
         for (name in identity.names.filter { it.trim().length >= 2 }.distinct().take(2)) {
             val search = bridge.search(site, name)
