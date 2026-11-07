@@ -6,6 +6,7 @@ import kotlinx.coroutines.CancellationException
 /** Request keys belong to Compose effects; cancelled requests never publish into a newer query. */
 @Stable
 internal class TmdbGlobalSearchState {
+    var requestKey = ""
     var films by mutableStateOf<List<Film>>(emptyList())
     var page by mutableIntStateOf(1)
     var totalPages by mutableIntStateOf(0)
@@ -13,7 +14,7 @@ internal class TmdbGlobalSearchState {
     var status by mutableStateOf("")
     var loading by mutableStateOf(false)
     suspend fun load(discovery: HerrinTmdbDiscovery, query: String, token: String) {
-        if (page == 1) films = emptyList()
+        if (page == 1) { films = emptyList(); totalPages = 0 }
         if (query.isBlank()) { totalPages = 0; status = "输入片名，在线搜索 TMDB 全库"; return }
         loading = true
         status = "正在查询 TMDB…"

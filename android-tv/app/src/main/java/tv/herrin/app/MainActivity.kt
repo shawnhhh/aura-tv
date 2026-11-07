@@ -1098,9 +1098,15 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
-    LaunchedEffect(query, metadataToken) { tmdbState.globalSearch.page = 1 }
     LaunchedEffect(screen, query, metadataToken, tmdbState.globalSearch.page, tmdbState.globalSearch.retry) {
         if (screen == "search") {
+            val key = SourceHealthIndex.digest(query + "|" + metadataToken)
+            if (key != tmdbState.globalSearch.requestKey) {
+                tmdbState.globalSearch.requestKey = key
+                tmdbState.globalSearch.page = 1
+                tmdbState.globalSearch.totalPages = 0
+                tmdbState.globalSearch.status = "正在查询 TMDB…"
+            }
             if (tmdbState.globalSearch.page == 1) {
                 tmdbState.globalSearch.films = emptyList()
                 delay(350)
@@ -1870,7 +1876,7 @@ private fun Herrin(startup: StartupPresentation) {
     // Freeze key policy with that provider instead of reading the new category midway through layout.
     val keyCategory = category
     val keysInBrowse = screen == "browse"
-    fun displayKey(item: Film): String = TvFocusRoutes.posterKey(keyCategory, keysInBrowse, item.id, showCatalog.groupFor(item.id)?.key)
+    fun displayKey(item: Film): String = if (screen == "search") item.id else TvFocusRoutes.posterKey(keyCategory, keysInBrowse, item.id, showCatalog.groupFor(item.id)?.key)
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
     LaunchedEffect(screen, filmId, spiderActive, showGroup?.key, detailLoadEpoch) {
