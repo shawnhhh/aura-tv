@@ -575,6 +575,7 @@ private fun Herrin(startup: StartupPresentation) {
     var cloudDavPasswordDraft by remember { mutableStateOf("") }
     var personalSourceFeedback by remember { mutableStateOf("") }
     val tmdbState=remember { TmdbScreenState() }
+    SourceSearchLifecycle(tmdbState)
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
     var filmId by rememberSaveable { mutableStateOf(demoFilms.first().id) }
@@ -1184,10 +1185,12 @@ private fun Herrin(startup: StartupPresentation) {
         (tmdbState.tmdbHomeFilms+tmdbState.tmdbTop250Films+recentIndexFilms).firstOrNull{it.id==filmId}
     }
     LaunchedEffect(screen, filmId, lookupFilm?.title,lookupFilm?.subtitle,lookupFilm?.year,lookupFilm?.tmdbTvId,tvBoxSingle,
-        tvBoxWarehouses, personalSourceConfigEpoch, tmdbState.tmdbLookupEpoch) {
+        tvBoxWarehouses, personalSourceConfigEpoch, tmdbState.tmdbLookupEpoch,tmdbState.sourceForeground) {
         val searchTicket=tmdbState.tmdbSearchGeneration.incrementAndGet()
         val consentAtStart=spiderBridge.configurationTicket()
         tmdbState.tmdbSearchRunning=false
+        if(!tmdbState.sourceForeground)return@LaunchedEffect
+        tmdbState.sourceSearchJob=kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val recoveryRequest = tmdbState.automaticSearch?.takeIf { it.film == filmId && screen == "player" }
         if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
             (tmdbState.tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true &&

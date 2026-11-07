@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicLong
  * below the problematic register pressure. No credentials or saved UI change. */
 @Stable
 internal class TmdbScreenState {
+    var sourceForeground by mutableStateOf(false)
+    var sourceSearchJob:kotlinx.coroutines.Job?=null
     var tmdbHomeFilms by mutableStateOf<List<Film>>(emptyList())
     var cacheHydrated by mutableStateOf(false)
     var tmdbTop250Films by mutableStateOf<List<Film>>(emptyList())
