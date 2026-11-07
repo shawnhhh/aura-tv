@@ -27,6 +27,7 @@ internal class TmdbScreenState {
     var tmdbSourceStatus by mutableStateOf("")
     var tmdbStatusFilm by mutableStateOf("")
     var tmdbStageStarted by mutableLongStateOf(0L)
+    var tmdbSearchStarted by mutableLongStateOf(0L)
     var tmdbSearchRunning by mutableStateOf(false)
     var tmdbExtendedRequest by mutableStateOf<String?>(null)
     val tmdbSearchPlans=SourceSearchPlans()

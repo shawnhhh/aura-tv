@@ -1214,8 +1214,8 @@ private fun Herrin(startup: StartupPresentation) {
         val lookupEpoch=tmdbState.tmdbLookupEpoch
         val configEpoch=personalSourceConfigEpoch
         tmdbState.tmdbStatusFilm=targetId
-        tmdbState.tmdbSearchRunning=true;tmdbState.tmdbStageStarted=System.nanoTime()
-        SourceSearchDiagnostics.begin()
+        tmdbState.tmdbSearchStarted=SourceSearchDiagnostics.begin()
+        tmdbState.tmdbSearchRunning=true;tmdbState.tmdbStageStarted=tmdbState.tmdbSearchStarted
         tmdbState.tmdbSourceStatus = "正在快速检索 NAS／云盘及已授权影视点…"
         HerrinPlaybackDiagnosticJournal.record("LOOKUP", "TMDB_SEARCH_STARTED")
         val currentTvbox = tvBoxSingle
@@ -4503,7 +4503,8 @@ private fun Herrin(startup: StartupPresentation) {
                             } }
                         if (film.id.startsWith("tmdb-") && screen == "detail") item {
                             SourceSearchStatus(if(tmdbState.tmdbStatusFilm==film.id)tmdbState.tmdbSourceStatus.ifBlank{"正在快速检索已配置来源…"} else "正在快速检索已配置来源…",
-                                tmdbState.tmdbStageStarted,tmdbState.tmdbSearchRunning &&tmdbState.tmdbStatusFilm==film.id)
+                                tmdbState.tmdbStageStarted,tmdbState.tmdbSearchRunning &&tmdbState.tmdbStatusFilm==film.id,
+                                if(tmdbState.tmdbStatusFilm==film.id)tmdbState.tmdbSearchStarted else 0L)
                         }
                         if (film.id.startsWith("tmdb-") && screen == "detail" &&
                             HerrinPlaybackEntry.firstPlayable(film) != null) item {

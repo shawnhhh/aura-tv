@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: android-debug-${{ github.ref }}
+  group: android-debug-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
   cancel-in-progress: true
 jobs:
   debug:

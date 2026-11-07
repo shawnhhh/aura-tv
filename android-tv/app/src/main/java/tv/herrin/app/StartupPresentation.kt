@@ -34,6 +34,7 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         state.preferences = withContext(Dispatchers.IO) {
+            prepareStartupText()
             CrashJournal.loadPrevious(context)
             // Keystore migration/decryption must not occupy the first input frame.
             context.getSharedPreferences("herrin-watch-history", 0).all
