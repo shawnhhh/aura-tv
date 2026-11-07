@@ -34,4 +34,33 @@ class P0NodeRecoveryTest {
         assertEquals(listOf("n1"), session.visited)
         assertEquals(HerrinApprovedSpiderBatch.Outcome.NO_MATCH, scan.lastOutcome)
     }
+    @Test fun continuationSkipsCompletedNodesEvenIfUiCursorWasReset() = runBlocking {
+        val completed=mutableSetOf<String>()
+        val session=object : Session() {
+            override suspend fun eligible(site:TvBoxSite)= "spider:"+site.key !in completed
+        }
+        val events:suspend (SourceSearchEvent)->Unit={if(it.nodeComplete)completed.add(it.source)}
+        val first=HerrinApprovedSpiderBatch.scanAcrossPages(identity,(1..7).map(::site),{true},session,
+            maxPages=1,stopAtFirstPlayable=true,onEvent=events)
+        assertEquals(6,first.checked)
+        val second=HerrinApprovedSpiderBatch.scanAcrossPages(identity,(1..7).map(::site),{true},session,
+            offset=0,stopAtFirstPlayable=true,onEvent=events)
+        assertEquals(1,second.checked)
+        assertEquals((1..7).map{"n$it"},session.visited)
+    }
+    @Test fun progressCountsOnlyMediaVerificationAsSuccessAndDoesNotDoubleCount() {
+        val plans=SourceSearchPlans()
+        plans.get("film","revision",emptyList()){0}
+        plans.register("film","revision",listOf("a","b","c","d"))
+        plans.observe("film","revision",SourceSearchEvent("a",SourceSearchStage.SEARCH,SourceSearchOutcome.VERIFIED))
+        assertEquals(0,plans.progress("film","revision").success)
+        val done=SourceSearchEvent("a",SourceSearchStage.MEDIA,SourceSearchOutcome.VERIFIED,nodeComplete=true)
+        plans.observe("film","revision",done);plans.observe("film","revision",done)
+        plans.observe("film","revision",SourceSearchEvent("b",SourceSearchStage.ACTIVATE,SourceSearchOutcome.TIMEOUT,nodeComplete=true))
+        plans.observe("film","revision",SourceSearchEvent("c",SourceSearchStage.SEARCH,SourceSearchOutcome.NO_MATCH,nodeComplete=true))
+        val progress=plans.progress("film","revision")
+        assertEquals(SourceSearchPlans.Progress(4,3,1,1,1),progress)
+        assertEquals(1,progress.remaining)
+    }
+
 }

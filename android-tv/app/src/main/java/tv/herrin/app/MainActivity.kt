@@ -1268,9 +1268,6 @@ private fun Herrin(startup: StartupPresentation) {
         val allowCloudHttp = prefs.cloudAllowHttp
         var health:SourceHealthIndex?=null
         var planRevision=""
-        var priorNodes=0
-        var completedNodesNow=0
-        var totalNodesNow=0
         suspend fun sourceEvent(event:SourceSearchEvent){
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             withContext(Dispatchers.Main.immediate){
@@ -1336,7 +1333,6 @@ private fun Herrin(startup: StartupPresentation) {
             val (plan,replaced)=tmdbState.tmdbSearchPlans.get(targetId,planRevision,currentTvbox?.sites.orEmpty(),index::rank)
             if(replaced){spiderPageOffset=0;previousCompleted=0}
             val completedNodes=tmdbState.tmdbSearchPlans.completed(targetId,planRevision)
-            priorNodes=completedNodes.size
             // Multiwarehouse configs are loaded as data (no JAR/JS execution).
             // Only user-imported root warehouse URLs are eligible for bounded
             // lookup; cap fan-out so a TV does not stall or scan the internet.
