@@ -677,9 +677,11 @@ http://example.org/live/channel.m3u8
         focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("film-detail-list").assertExists()
         compose.onNodeWithText("协议测试1").assertExists()
-        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasText("集数"))
-        compose.onNodeWithText("集数").assertExists()
-        compose.onNodeWithText("集数").assertIsDisplayed()
+        // Metadata-only TMDB results must expose unavailability instead of demo episodes.
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("tmdb-episodes-unavailable"))
+        compose.onNodeWithTag("tmdb-episodes-unavailable").assertExists()
+        compose.onNodeWithTag("tmdb-episodes-unavailable").assertIsDisplayed()
+        compose.onNodeWithText("播放演示").assertDoesNotExist()
         key(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-9001").assertIsFocused() }.isSuccess }
         capture("tmdb-protocol-search-detail-return")

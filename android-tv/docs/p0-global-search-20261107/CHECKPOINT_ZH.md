@@ -59,3 +59,14 @@ GRADLE_USER_HOME=/tmp/herrin-gradle ./gradlew :app:connectedDebugAndroidTest
 ```
 
 本文件是开发检查点，不能当作完整验收通过报告。
+
+## 已核实的构建与后续增量
+
+`58d84383386030688d6725e7672f70fd00878056`：
+- Debug CI **成功**：https://github.com/shawnhhh/aura-tv/actions/runs/42377405028 。JVM **623/623 通过，0 失败、0 错误、0 跳过**；Lint、assembleDebug 通过，Gradle 8m55s。
+- APK：https://github.com/shawnhhh/aura-tv/actions/runs/42377405028/artifacts/13576198231 。APK 本体 26,560,215 字节，SHA-256 `5ec6a87a322fcaae0506acdb4799d5bb91e93d6079189fe3e83ee968960e1785`；注意这不是后续增量的 APK，也未完成 TV/TCL 验收。
+- 报告：https://github.com/shawnhhh/aura-tv/actions/runs/42377405028/artifacts/13576537152 。
+- TV 模拟器：https://github.com/shawnhhh/aura-tv/actions/runs/42377405013 ，记录时仍运行，不能计为通过。
+- 179 个受保护文件未变；共享 HerrinLivePriority 实现与基线字节一致。
+
+后续提交 `167d9fe` 清除手动更换首选前的旧路由、取消旧任务和恢复已验证选集坐标；`8609ffa` 确保首选 CMS 不被前 100 个备用节点的上限排除。此后的最新 HEAD 必须重新验收；不得把 623 项结果自动归于后续提交。搜索详情测试把旧演示「集数」断言替换为明确的「尚无可播放授权选集」可见性断言，同时验证没有演示播放入口，保留导航、收藏和焦点断言。
