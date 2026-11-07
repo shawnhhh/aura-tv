@@ -104,23 +104,21 @@ internal object HerrinApprovedSpiderBatch {
         session: Session,
         offset: Int = 0,
         maxPages: Int = 17,
-        maxWallClockMs: Long = 75_000L,
+        maxWallClockMs: Long = SourceSearchPolicy.FOREGROUND_MS,
         stopAtFirstPlayable: Boolean = false,
         onProgress: suspend (Scan) -> Unit = {},
         onSiteProgress: suspend (Scan) -> Unit = {},
         onEvent: suspend (SourceSearchEvent) -> Unit = {},
-        timeoutPerSiteMs: Long = 3_500L,
-        stageBudgetMs: Long = 1_200L
+        timeoutPerSiteMs: Long = SourceSearchPolicy.NODE_MS,
+        stageBudgetMs: Long = SourceSearchPolicy.STAGE_MS
     ): Scan {
         val winners = mutableListOf<Match>()
         var checked = 0
         var total = 0
         var episodes = 0
         var next = offset
-        // The old 30-second budget could expire after just six sites, leaving
-        // 39/45 unchecked and requiring repeated remote-control presses.
-        // Continue across finite six-site pages, still using each site's
-        // 4.5-second bound and a total wall-clock deadline.
+        // Six is an internal cursor page, never a progress publication barrier.
+        // Foreground/explicit extension budgets are separate from each node's stages.
         kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(1L, 300_000L)) {
             repeat(maxPages.coerceIn(1, 17)) {
                 val completedBeforePage = checked

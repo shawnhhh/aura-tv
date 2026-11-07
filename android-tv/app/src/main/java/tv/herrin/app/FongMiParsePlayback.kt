@@ -30,6 +30,7 @@ internal object FongMiParsePlayback {
         Thread(task, "fongmi-parse-timeout").apply { isDaemon = true }
     }
     private data class Origin(val scheme: String?, val host: String?, val port: Int)
+    private class HttpOutcome(val callback:(Int,Long?)->Unit)
     private fun origin(url: String): Origin? = runCatching {
         val uri = URI(url)
         Origin(uri.scheme?.lowercase(), uri.host?.lowercase(),
@@ -44,7 +45,10 @@ internal object FongMiParsePlayback {
             val safe = if (first != null && first != origin(request.url.toString()))
                 request.newBuilder().removeHeader("Cookie").removeHeader("Authorization").build()
             else request
-            chain.proceed(safe)
+            chain.proceed(safe).also{response->
+                if(response.code>=400)safe.tag(HttpOutcome::class.java)?.callback?.invoke(response.code,
+                    SourceHealthIndex.retryAfter(response.header("Retry-After"),System.currentTimeMillis()))
+            }
         }.build()
 
     internal fun configuration(parser: TvBoxPlaybackParser): Parse = Parse.get(parser.type, parser.url).apply {
@@ -70,7 +74,8 @@ internal object FongMiParsePlayback {
         loader: ClassLoader? = null, siteClick: String = "",
         vipFlags: List<String> = emptyList(),
         videoCheck: ((String) -> Boolean)? = null,
-        normalizeMedia: ((String) -> String?)? = null
+        normalizeMedia: ((String) -> String?)? = null,
+        onHttpFailure: ((Int,Long?)->Unit)? = null
     ): PlaybackResult {
         val root = runCatching { JSONObject(playerContent) }.getOrNull()
             ?: return PlaybackResult.Unavailable("PARSE_INVALID_JSON：Spider 播放数据不是有效 JSON")
@@ -123,6 +128,7 @@ internal object FongMiParsePlayback {
                             val normalized = TvBoxUrl.normalize(url, allowHttp) ?: error("Invalid parser URL")
                             val request = Request.Builder().url(normalized)
                                 .tag(Origin::class.java, origin(normalized))
+                            if(onHttpFailure!=null)request.tag(HttpOutcome::class.java,HttpOutcome(onHttpFailure))
                             safeHeaders(headers, normalized, normalized).forEach { (key, value) -> request.header(key, value) }
                             return client.newCall(request.build())
                         }

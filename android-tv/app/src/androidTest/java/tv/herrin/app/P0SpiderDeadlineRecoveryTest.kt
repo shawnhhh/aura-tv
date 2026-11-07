@@ -72,8 +72,11 @@ class P0SpiderDeadlineRecoveryTest {
             }}}
             withTimeout(1000){while(!marker.exists())delay(10)}
             assertNull(hung.await())
+            val cancelledAt=android.os.SystemClock.elapsedRealtime()
+            val remainingChild=if(child()==oldPid)1 else 0
             assertEquals(0,withContext(Dispatchers.Main.immediate){bridge.pendingSearchRequests()})
             withTimeout(5000){while(child()==oldPid)delay(25)}
+            val reapedMs=android.os.SystemClock.elapsedRealtime()-cancelledAt
             assertEquals(mainPid,android.os.Process.myPid())
             assertTrue(withTimeout(6000){bridge.browse(seventh,config,searchOnly=true)} is SpiderResult.Ready)
             assertNotEquals(oldPid,child())
@@ -94,7 +97,7 @@ class P0SpiderDeadlineRecoveryTest {
                 }
                 assertNull(failure);assertTrue("Fresh seventh node must decode actual synthetic video",frames>=4)
             }
-            android.util.Log.i("HerrinSourceRecovery","uninterruptible_fixture_reaped=1 fresh_media_verified=1 old_proof_rejected=1 main_process_preserved=1 pending=0 physical_tcl=0")
+            android.util.Log.i("HerrinSourceRecovery","uninterruptible_fixture_reaped=1 fresh_media_verified=1 old_proof_rejected=1 main_process_preserved=1 pending=0 child_after_cancel=$remainingChild child_after_recovery=0 cancel_to_exit_ms=$reapedMs physical_tcl=0")
             Unit
         }finally{bridge.close();marker.delete();file.delete()}
     }

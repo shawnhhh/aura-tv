@@ -152,6 +152,7 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
         onEvent: suspend (SourceSearchEvent)->Unit,
         accept: suspend (List<HerrinSourceMovie>)->List<HerrinSourceMovie>): HerrinFilmLookupResult {
         val errors=linkedMapOf<String,String>();val searched=mutableListOf<String>()
+        val completedCount=java.util.concurrent.atomic.AtomicInteger()
         val stages=listOf(HerrinSourceType.NAS,HerrinSourceType.CLOUD,HerrinSourceType.TVBOX_CMS,HerrinSourceType.TVBOX_SPIDER)
         for(type in stages){
             val providers=sources.filter{it.type==type && health?.eligible(it.id)!=false}.distinctBy{it.id}
@@ -163,11 +164,14 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                 // not merely searchContent, before any other mutable session.
                 for(source in providers){
                     val accepted=withTimeoutOrNull(1_800L){
-                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING))
+                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING,
+                            completed=completedCount.get(),total=sources.size))
                         val offers=try{source.search(identity).filter{it.sourceId==source.id &&it.sourceType==source.type &&HerrinFilmIdentityMatch.matches(identity,it)}}
                             catch(cancel:CancellationException){throw cancel}catch(_:Exception){emptyList()}
                         searched+=source.id
-                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,if(offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED))
+                        completedCount.incrementAndGet()
+                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,if(offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED,
+                            completed=completedCount.get(),total=sources.size))
                         accept(offers).filter{it in offers}
                     }.orEmpty()
                     if(accepted.isNotEmpty())return HerrinFilmLookupResult(accepted,tier,errors,searched)
@@ -183,7 +187,8 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                         launch {
                             gate.acquire()
                             try {
-                                onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING))
+                                onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING,
+                                    completed=completedCount.get(),total=sources.size))
                                 val at=System.nanoTime()
                                 var failure:SourceSearchOutcome?=null
                                 val offers=try{
@@ -198,6 +203,7 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                     try{
                         repeat(providers.size){
                             val result=channel.receive();searched+=result.source.id
+                            completedCount.incrementAndGet()
                             val outcome=result.failure?:if(result.offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED
                             onEvent(SourceSearchEvent(result.source.id,SourceSearchStage.SEARCH,outcome,result.elapsed,searched.size,sources.size))
                             if(outcome!=SourceSearchOutcome.RATE_LIMITED && outcome!=SourceSearchOutcome.AUTH_REQUIRED)

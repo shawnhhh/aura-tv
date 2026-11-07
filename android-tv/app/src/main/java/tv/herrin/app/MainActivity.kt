@@ -1211,7 +1211,7 @@ private fun Herrin(startup: StartupPresentation) {
         )
         val extended=tmdbExtendedRequest==targetId
         tmdbExtendedRequest=null
-        val budgetMs=if(extended)15_000L else 8_000L
+        val budgetMs=if(extended)SourceSearchPolicy.EXTENDED_MS else SourceSearchPolicy.FOREGROUND_MS
         val lookupEpoch=tmdbLookupEpoch
         val configEpoch=personalSourceConfigEpoch
         tmdbStatusFilm=targetId
@@ -1245,7 +1245,8 @@ private fun Herrin(startup: StartupPresentation) {
                 if(searchTicket==tmdbSearchGeneration.get() &&filmId==targetId &&tmdbLookupEpoch==lookupEpoch &&personalSourceConfigEpoch==configEpoch &&tvBoxSingle===currentTvbox){
                     SourceSearchDiagnostics.record(event)
                     if(event.outcome==SourceSearchOutcome.CHECKING)tmdbStageStarted=System.nanoTime()
-                    tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()} · 本阶段已用 ${event.elapsedMs}ms"
+                    tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()}"+
+                        (if(event.total>0)" · 已检查 ${event.completed}/${event.total}" else "")+" · 本阶段已用 ${event.elapsedMs}ms"
                 }
             }
         }
@@ -1959,7 +1960,7 @@ private fun Herrin(startup: StartupPresentation) {
                 spiderResolved = PlaybackResult.Unavailable("影片来源已失效，请重新查找片源")
                 return@LaunchedEffect
             }
-            var playableFilm = sourceFilm
+            var playableFilm: Film = sourceFilm
             if(!withContext(Dispatchers.IO){spiderBridge.isApprovedSourceFilm(playableFilm)}){
                 val fresh=withTimeoutOrNull(6_000){withContext(Dispatchers.IO+SpiderRequestBudget(1_500)+SpiderSearchAuthority(selectionConsent)){
                     refreshSpiderSelection(playableFilm,tvBoxSingle,spiderBridge){site->
@@ -1980,8 +1981,8 @@ private fun Herrin(startup: StartupPresentation) {
             }
             // Load missing episode metadata IN the full-screen loading surface.
             // Do not bounce a film-card click to a technical Spider detail page.
-            if (sourceFilm.playbackEpisodes.isEmpty() && sourceFilm.spiderVodId != null) {
-                when (val detailed = spiderBridge.details(sourceFilm)) {
+            if (playableFilm.playbackEpisodes.isEmpty() && playableFilm.spiderVodId != null) {
+                when (val detailed = spiderBridge.details(playableFilm)) {
                     is SpiderResult.Ready -> {
                         playableFilm = detailed.value
                         providerFilms = providerFilms?.map {

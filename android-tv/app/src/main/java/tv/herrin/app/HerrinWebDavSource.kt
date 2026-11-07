@@ -49,7 +49,8 @@ internal class HerrinWebDavSource(
                 (account.allowInsecureHttp && root.scheme.equals("http", true))))
         require(account.name.isNotBlank() && account.rootUrl.length <= 2048)
     }
-    override val id: String = "webdav:" + account.name
+    override val id: String = "webdav:" + SourceHealthIndex.digest(
+        account.category.name+"\u0000"+account.rootUrl+"\u0000"+account.username+"\u0000"+account.name)
     override val type: HerrinSourceType = account.category
     // Normalize a user-pasted DAV collection without a trailing slash.
     // Relative XML hrefs resolve as children only when the base ends in '/'.

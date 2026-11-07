@@ -11,6 +11,12 @@ internal data class SourceSearchEvent(val source: String, val stage: SourceSearc
     val outcome: SourceSearchOutcome, val elapsedMs: Long = 0, val completed: Int = 0, val total: Int = 0,
     val retryAfterMs: Long? = null)
 internal class SourceCandidateFailure(val stage:SourceSearchStage,val outcome:SourceSearchOutcome):Exception()
+internal object SourceSearchPolicy {
+    const val FOREGROUND_MS=8_000L
+    const val EXTENDED_MS=15_000L
+    const val NODE_MS=3_500L
+    const val STAGE_MS=1_200L
+}
 
 /** Stores hashes, finite codes and numbers only. Never persists offers, headers or media URLs. */
 internal class SourceHealthIndex(private val file: File?, private val scope: String,

@@ -33,10 +33,12 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     val onDone by rememberUpdatedState(done)
     val visible by rememberUpdatedState(onVisible)
     val elapsed = remember { mutableFloatStateOf(0f) }
+    var skipped by remember { mutableStateOf(false) }
     val renderer=remember{WordmarkRenderer()}
-    LaunchedEffect(reduced) {
+    LaunchedEffect(reduced,skipped) {
         runCatching { focus.requestFocus() }
-        if (reduced) {
+        if (reduced ||skipped) {
+            elapsed.floatValue=WordmarkMotion.REVEAL_MS
             StartupTiming.wordmarkVisible()
             StartupTiming.wordmarkComplete()
             visible()
@@ -65,13 +67,13 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("splash")
         .focusRequester(focus).onPreviewKeyEvent {
             if (it.type == KeyEventType.KeyDown && it.key in listOf(Key.Enter, Key.DirectionCenter)) {
-                onDone(); true
+                skipped=true; true
             } else false
         }.focusable(), contentAlignment = Alignment.Center) {
         androidx.compose.foundation.Canvas(Modifier.width(widthDp.dp).height((widthDp*.2f).dp)
             .testTag("splash-wordmark").semantics { contentDescription="HERRIN" }) {
             renderer.draw(drawContext.canvas.nativeCanvas,size.width,size.height,
-                if(reduced)WordmarkMotion.REVEAL_MS else elapsed.floatValue)
+                if(reduced ||skipped)WordmarkMotion.REVEAL_MS else elapsed.floatValue)
             StartupTiming.wordmarkVisible()
         }
     }
