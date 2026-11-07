@@ -31,7 +31,7 @@ bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
 # Regression preflight for the failures discovered in run 42358864061. This
 # supplements the unfiltered suite below; it never makes failed cases optional.
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinSplashTest,tv.herrin.app.P0CachedHomeHeroTest,tv.herrin.app.P0CmsCandidateParserTest,tv.herrin.app.P0SpiderDeadlineRecoveryTest' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/p0-regression-preflight.txt
+adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinSplashTest,tv.herrin.app.P0CachedHomeHeroTest,tv.herrin.app.P0CmsCandidateParserTest,tv.herrin.app.P0SpiderDeadlineRecoveryTest,tv.herrin.app.P0SourceSearchLifecycleTest' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/p0-regression-preflight.txt
 python3 - <<'PY'
 from pathlib import Path
 text=Path('build/emulator-evidence/p0-regression-preflight.txt').read_text()

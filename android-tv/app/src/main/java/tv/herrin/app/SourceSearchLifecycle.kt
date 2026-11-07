@@ -15,6 +15,9 @@ internal fun SourceSearchLifecycle(state:TmdbScreenState) {
         fun update() {
             val started=lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
             if(!started) {
+                // Stop/Start can happen before Compose sees a frame. Keep an
+                // observable epoch so a cancelled effect is restarted even then.
+                if(state.sourceForeground)state.tmdbLookupEpoch++
                 state.tmdbSearchGeneration.incrementAndGet()
                 state.sourceSearchJob?.cancel()
             }
