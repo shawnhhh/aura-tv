@@ -1319,10 +1319,19 @@ private fun Herrin(startup: StartupPresentation) {
                             tmdbSpiderBatchOffsets[targetId] = progress.nextOffset
                             val visited = (spiderPageOffset + progress.checked)
                                 .coerceAtMost(progress.eligible)
+                            val outcome = when (progress.lastOutcome) {
+                                HerrinApprovedSpiderBatch.Outcome.VERIFIED -> "已验证媒体"
+                                HerrinApprovedSpiderBatch.Outcome.TIMEOUT -> "节点超时"
+                                HerrinApprovedSpiderBatch.Outcome.ACTIVATE_FAILED -> "插件激活失败"
+                                HerrinApprovedSpiderBatch.Outcome.NO_MATCH -> "没有匹配影片"
+                                HerrinApprovedSpiderBatch.Outcome.INVALID_MEDIA -> "没有可验证播放线路"
+                                HerrinApprovedSpiderBatch.Outcome.ERROR -> "插件执行异常"
+                                null -> "正在检查"
+                            }
                             tmdbSourceStatus = if (progress.match != null)
                                 "已找到并验证播放线路，正在载入选集…"
                             else "逐个检索授权 Spider 影视点：已检查 " +
-                                "$visited/${progress.eligible}，每节点限时；可继续浏览…"
+                                "$visited/${progress.eligible}；最近节点：$outcome，继续检索…"
                         }
                     },
                     session = object : HerrinApprovedSpiderBatch.Session {
@@ -1405,7 +1414,7 @@ private fun Herrin(startup: StartupPresentation) {
             automaticSearch = null
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "NO_VERIFIED_MEDIA")
             tmdbSourceStatus = if (batchScan != null && batchScan.nextOffset == 0)
-                "已自动检索全部 ${batchScan.eligible} 个授权 Spider 影视点，仍未找到通过播放地址验证的线路；请检查源的解析或代理兼容情况"
+                "已检索全部 ${batchScan.eligible} 个当前已授权 Spider 影视点，但没有真实可播放线路；其他站点可能未授权、不兼容或已失效，请检查插件状态和配置时效"
             else if (batchScan != null)
                 "已检查 ${(spiderPageOffset + batchScan.checked).coerceAtMost(batchScan.eligible)}/${batchScan.eligible} 个授权 Spider 影视点，本次达到检索时间上限；点击重新检索可继续剩余节点"
             else if (lookup.errors.isNotEmpty())
