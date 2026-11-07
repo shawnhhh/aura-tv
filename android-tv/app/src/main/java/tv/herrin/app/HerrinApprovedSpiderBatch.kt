@@ -111,6 +111,7 @@ internal object HerrinApprovedSpiderBatch {
         onEvent: suspend (SourceSearchEvent) -> Unit = {},
         timeoutPerSiteMs: Long = SourceSearchPolicy.NODE_MS,
         stageBudgetMs: Long = SourceSearchPolicy.STAGE_MS,
+        activationBudgetMs: Long = SourceSearchPolicy.ACTIVATION_MS,
         onStageProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val winners = mutableListOf<Match>()
@@ -118,6 +119,7 @@ internal object HerrinApprovedSpiderBatch {
         var total = 0
         var episodes = 0
         var next = offset
+        var last: Scan? = null
         // Six is an internal cursor page, never a progress publication barrier.
         // Foreground/explicit extension budgets are separate from each node's stages.
         kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(1L, 300_000L)) {
@@ -133,11 +135,12 @@ internal object HerrinApprovedSpiderBatch {
                 val page = scan(identity, sites, allowed, session, offset = next,
                     timeoutPerSiteMs = timeoutPerSiteMs,
                     stopAtFirstPlayable = stopAtFirstPlayable,
-                    onEvent = onEvent, stageBudgetMs = stageBudgetMs,
+                    onEvent = onEvent, stageBudgetMs = stageBudgetMs, activationBudgetMs = activationBudgetMs,
                     // Preserve the completion-only legacy contract. Live phase
                     // updates also save the unfinished cursor on a deadline.
                     onSiteProgress = {partial->onSiteProgress(accumulated(partial))},
                     onStageProgress = {partial->onStageProgress(accumulated(partial))})
+                last = page
                 checked = completedBeforePage + page.checked
                 total = page.eligible
                 episodes = episodesBeforePage + page.candidatesWithEpisodes
@@ -154,7 +157,7 @@ internal object HerrinApprovedSpiderBatch {
         // re-scan other sites just to chase 4K when first playback matters.
         val result = if (stopAtFirstPlayable) winners.firstOrNull()
             else restoreVerifiedBest(winners, session, 5_000L)
-        return Scan(result, checked, total, next, episodes)
+        return Scan(result, checked, total, next, episodes, lastOutcome = last?.lastOutcome)
     }
 
     suspend fun scan(
@@ -168,6 +171,7 @@ internal object HerrinApprovedSpiderBatch {
         onSiteProgress: suspend (Scan) -> Unit = {},
         onEvent: suspend (SourceSearchEvent) -> Unit = {},
         stageBudgetMs: Long = 1_200L,
+        activationBudgetMs: Long = SourceSearchPolicy.ACTIVATION_MS,
         onStageProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val eligible = sites.filter { (it.spiderApi != null || it.scriptApi != null) && allowed(it) }
@@ -178,6 +182,7 @@ internal object HerrinApprovedSpiderBatch {
         var checked = 0
         var episodesFound = 0
         var processed = 0
+        var terminal: Outcome? = null
         val good = mutableListOf<Match>()
         for (site in page) {
             if(!session.eligible(site)){
@@ -197,8 +202,13 @@ internal object HerrinApprovedSpiderBatch {
                 onEvent(SourceSearchEvent("spider:"+site.key,value,SourceSearchOutcome.CHECKING))
                 val at=System.nanoTime()
                 data class Completed<T>(val value: T)
-                val result=if(stopAtFirstPlayable) withTimeoutOrNull(stageBudgetMs.coerceAtLeast(1)) {
-                    kotlinx.coroutines.withContext(SpiderRequestBudget(stageBudgetMs)) { Completed(block()) }
+                val phaseBudget = when (value) {
+                    SourceSearchStage.ACTIVATE -> activationBudgetMs
+                    SourceSearchStage.MEDIA -> maxOf(stageBudgetMs, SourceSearchPolicy.MEDIA_MS)
+                    else -> stageBudgetMs
+                }.coerceAtLeast(1)
+                val result=if(stopAtFirstPlayable) withTimeoutOrNull(phaseBudget) {
+                    kotlinx.coroutines.withContext(SpiderRequestBudget(phaseBudget)) { Completed(block()) }
                 } else Completed(block())
                 if(result==null)throw NodeDeadline()
                 val ok=result.value!=null &&result.value!=false &&(result.value !is List<*> || (result.value as List<*>).isNotEmpty())
@@ -280,6 +290,7 @@ internal object HerrinApprovedSpiderBatch {
                 !finished -> Outcome.TIMEOUT
                 else -> outcome
             }
+            terminal = lastOutcome
             val nextUnchecked = if (start + processed >= eligible.size) 0 else start + processed
             val code=if(!finished &&!failed)SourceSearchOutcome.TIMEOUT else httpFailure?.let{SourceHealthIndex.httpOutcome(it.code)}?:validationFailure?.outcome?:when(lastOutcome){
                 Outcome.VERIFIED->SourceSearchOutcome.VERIFIED
@@ -294,7 +305,7 @@ internal object HerrinApprovedSpiderBatch {
             }
             val finalStage=if(code==SourceSearchOutcome.TIMEOUT)stage else validationFailure?.stage?:stage
             onEvent(SourceSearchEvent("spider:"+site.key,finalStage,code,(System.nanoTime()-started)/1_000_000,
-                checked,eligible.size,httpFailure?.retryAfterMs))
+                checked,eligible.size,httpFailure?.retryAfterMs,nodeComplete=true))
             // No URLs, credentials or raw provider exceptions in UI diagnostics.
             val progress=Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome,
                 stage=finalStage,elapsedMs=(System.nanoTime()-started)/1_000_000,httpCode=httpFailure?.code)
@@ -311,7 +322,7 @@ internal object HerrinApprovedSpiderBatch {
             timeoutPerSiteMs.coerceIn(1_000, 20_000))
         return Scan(restored, checked, eligible.size,
             if (start + page.size >= eligible.size) 0 else start + page.size,
-            episodesFound)
+            episodesFound, lastOutcome = terminal)
     }
     private class NodeDeadline : Exception()
 }

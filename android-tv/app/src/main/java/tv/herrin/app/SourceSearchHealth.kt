@@ -14,7 +14,9 @@ internal class SourceCandidateFailure(val stage:SourceSearchStage,val outcome:So
 internal object SourceSearchPolicy {
     const val FOREGROUND_MS=8_000L
     const val EXTENDED_MS=15_000L
-    const val NODE_MS=3_500L
+    const val NODE_MS=6_000L
+    const val ACTIVATION_MS=3_000L
+    const val MEDIA_MS=2_800L
     const val STAGE_MS=1_200L
 }
 

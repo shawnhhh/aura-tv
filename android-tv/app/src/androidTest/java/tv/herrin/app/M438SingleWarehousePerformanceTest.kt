@@ -88,8 +88,13 @@ class M438SingleWarehousePerformanceTest {
             val catalogStart = SystemClock.elapsedRealtime()
             compose.onNodeWithTag("site-select-0").performClick()
             val first = "card-tvbox-0-" + "performance-0".hashCode().toUInt().toString(16)
-            compose.waitUntil(15_000) {
-                runCatching { compose.onNodeWithTag(first).assertExists() }.isSuccess
+            try {
+                compose.waitUntil(15_000) {
+                    runCatching { compose.onNodeWithTag(first).assertExists() }.isSuccess
+                }
+            } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
+                throw AssertionError("Catalog did not attach; requests=${server.requestCount}\n" +
+                    compose.onRoot(useUnmergedTree=true).printToString(), failure)
             }
             val catalogMs = SystemClock.elapsedRealtime() - catalogStart
             assertEquals("Only selected CMS is requested", 2, server.requestCount)

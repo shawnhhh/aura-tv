@@ -282,6 +282,7 @@ class TvBoxSpiderService : Service() {
             val mustRetire=activeOperation == message.arg1 &&authCaller?.first==message.replyTo
             if (mustRetire) {
                 retiring = true
+                SpiderStartupTrace.mark(applicationContext,SpiderStartupTrace.Stage.WATCHDOG)
                 authorization.cancel()
                 // A coroutine cannot interrupt arbitrary JNI. Retire ONLY this
                 // manifest-verified :spider process; the UI process is untouched.
@@ -348,6 +349,7 @@ class TvBoxSpiderService : Service() {
                                 }
                             }
                             SpiderIpc.SEARCH -> {
+                                SpiderStartupTrace.mark(applicationContext,SpiderStartupTrace.Stage.SEARCH)
                                 val site = SpiderIpc.readSite(request.getJSONObject("site"))
                                 val keyword = request.optString("query").trim().take(120)
                                 when (val result = worker.search(site, keyword)) {
@@ -397,9 +399,11 @@ class TvBoxSpiderService : Service() {
                     } catch (cancel: CancellationException) {
                         throw cancel
                     } catch (e: Exception) {
+                        SpiderFailureTrace.record(applicationContext, e)
                         Log.e("HerrinSpiderWorker", "Spider operation failed: ${e.javaClass.simpleName}")
                         SpiderIpc.error(SpiderFailureDetails.message(e))
                     } catch (e: LinkageError) {
+                        SpiderFailureTrace.record(applicationContext, e)
                         Log.e("HerrinSpiderWorker", "Spider linkage failed: ${e.javaClass.simpleName}")
                         SpiderIpc.error(SpiderFailureDetails.message(e))
                     } finally {
@@ -429,6 +433,11 @@ class TvBoxSpiderService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        val previousHandler=Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            SpiderFailureTrace.record(applicationContext,error)
+            previousHandler?.uncaughtException(thread,error)
+        }
         // Chromium browser parser lives only in the :spider process.
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             runCatching { android.webkit.WebView.setDataDirectorySuffix("herrin-spider") }

@@ -91,6 +91,35 @@ internal class HerrinTmdbDiscovery(
             HerrinTmdbShelf(section.key, section.title, films, films.isNotEmpty())
         }
 
+    data class SearchPage(val films: List<Film>, val page: Int, val totalPages: Int)
+
+    /** Always online; an empty response is never substituted with home/demo data. */
+    suspend fun search(query: String, token: String, page: Int = 1): SearchPage {
+        require(page in 1..500)
+        if (query.isBlank()) return SearchPage(emptyList(), 1, 0)
+        if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
+        val url = base + "/search/multi?language=$language&include_adult=false&page=$page&query=" +
+            URLEncoder.encode(query.trim().take(200), "UTF-8")
+        val raw = if (fetcher === NetworkArtworkFetcher) TmdbSearchTransport.load(url, token)
+            else kotlinx.coroutines.runInterruptible(Dispatchers.IO) { fetcher.load(url, token) }
+            ?: throw java.io.IOException("TMDB_EMPTY_RESPONSE")
+        return parseSearchPage(raw, page)
+    }
+
+    internal fun parseSearchPage(raw: String, page: Int): SearchPage {
+        require(raw.toByteArray(Charsets.UTF_8).size <= 1_000_000)
+        val obj = JSONObject(raw)
+        require(obj.getInt("page") == page && obj.has("results"))
+        val rows = obj.getJSONArray("results")
+        val films = (0 until minOf(20, rows.length())).flatMap { index ->
+            val row = rows.optJSONObject(index) ?: return@flatMap emptyList()
+            val type = row.optString("media_type")
+            if (type !in listOf("movie", "tv")) emptyList()
+            else parsePage(JSONObject().put("results", JSONArray().put(row)).toString(), type)
+        }.distinctBy(Film::id)
+        return SearchPage(films, page, obj.optInt("total_pages", 0).coerceIn(0, 500))
+    }
+
     /** Persist the metadata projection, never arbitrary endpoint response fields. */
     private fun displayPage(raw: String): String {
         val rows = JSONObject(raw).optJSONArray("results") ?: JSONArray()

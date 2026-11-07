@@ -849,8 +849,16 @@ private fun Herrin(startup: StartupPresentation) {
                 tvBoxVodScope = "tvbox:pending:$address"
                 providerStatus = "已导入 ${config.sites.size} 个影视点；选择影视点后才加载影片目录"
                 if (spiderCrashed) {
-                    tvBoxStatus = "配置读取成功，但 Spider 子进程异常退出。已停止自动重试以保护电视；可打开「选择影视点」尝试其他站点。"
-                    vodImportFeedback = "插件崩溃"
+                    val evidence = withContext(Dispatchers.IO) {
+                        listOfNotNull(SpiderStartupTrace.recent(context),SpiderExitDiagnostics.recent(context),
+                            SpiderFailureTrace.recent(context)).joinToString("；")
+                    }
+                    tvBoxStatus = "配置读取成功，Spider 子进程已退出；可选择其他站点。" + evidence.take(1400)
+                    vodImportFeedback = when {
+                        evidence.contains(SpiderStartupTrace.Stage.WATCHDOG.display) -> "插件响应超时"
+                        evidence.contains("崩溃") ||evidence.contains("未捕获异常") -> "插件崩溃"
+                        else -> "插件进程退出"
+                    }
                 } else if (scanBudgetExceeded) {
                     tvBoxStatus = "配置读取成功，但自动检索已达到限时；请打开「选择影视点」手动尝试其他站点。" +
                         (if (spiderFailure.isNotBlank()) "最近失败：${spiderFailure.take(90)}" else "")
@@ -1098,12 +1106,30 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
+    LaunchedEffect(screen, query, metadataToken, tmdbState.globalSearch.page, tmdbState.globalSearch.retry) {
+        if (screen == "search") {
+            val key = SourceHealthIndex.digest(query + "|" + metadataToken)
+            if (key != tmdbState.globalSearch.requestKey) {
+                tmdbState.globalSearch.requestKey = key
+                tmdbState.globalSearch.page = 1
+                tmdbState.globalSearch.totalPages = 0
+                tmdbState.globalSearch.status = "正在查询 TMDB…"
+            }
+            if (tmdbState.globalSearch.page == 1) {
+                tmdbState.globalSearch.films = emptyList()
+                delay(350)
+            }
+            tmdbState.globalSearch.load(tmdbDiscovery, query, metadataToken)
+        }
+    }
     LaunchedEffect(metadataToken) {
         CrashJournal.stage("CACHE")
         tmdbState.cacheHydrated=false
         tmdbState.tmdbHomeFilms = emptyList()
         tmdbState.tmdbTop250Films = emptyList()
         if (metadataToken.isNotBlank()) {
+            val saved = withContext(Dispatchers.IO) { TvBoxCatalogSnapshot(context, Long.MAX_VALUE).load("tmdb-library", "selected") }
+            saved.filter { tmdbDiscovery.identity(it) != null }.forEach { tmdbState.tmdbResolved.putIfAbsent(it.id, it) }
             val cached = withContext(Dispatchers.IO) { tmdbDiscovery.cachedHome(metadataToken) }
             tmdbState.tmdbHomeFilms = cached
             tmdbState.tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
@@ -1181,9 +1207,16 @@ private fun Herrin(startup: StartupPresentation) {
     }
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
     // the scraped poster/title as an executable source or auto-plays a video.
-    val lookupFilm=remember(filmId,tmdbState.tmdbHomeFilms,tmdbState.tmdbTop250Films,recentIndexFilms){
-        (tmdbState.tmdbHomeFilms+tmdbState.tmdbTop250Films+recentIndexFilms).firstOrNull{it.id==filmId}
+    fun choosePreferredSite(site: TvBoxSite, defaultJar: String?) {
+        prefs.preferSite(prefs.tvBoxWarehouseUrl, site, defaultJar)
+        tmdbState.tmdbSearchGeneration.incrementAndGet()
+        tmdbState.sourceSearchJob?.cancel()
+        tmdbState.tmdbPlaybackRoutes.clear()
+        tmdbState.tmdbFallbackIndex.clear()
+        tmdbState.preferredSiteStatus = "首选影视点：${site.name}"
+        tmdbState.tmdbLookupEpoch++
     }
+    val lookupFilm = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbHomeFilms + tmdbState.tmdbTop250Films + recentIndexFilms).firstOrNull { it.id == filmId }
     // Capture the same value as the effect key. Lifecycle observers can publish
     // STARTED during apply, before the old (false-keyed) effect is launched.
     val sourceSearchForeground=tmdbState.sourceForeground
@@ -1196,7 +1229,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.sourceSearchJob=kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val recoveryRequest = tmdbState.automaticSearch?.takeIf { it.film == filmId && screen == "player" }
         if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
-            (tmdbState.tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true &&
+            (tmdbState.tmdbExtendedRequest != filmId && tmdbState.tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true &&
                 tmdbState.tmdbPlaybackRoutes.usable(filmId,spiderBridge.approvedActiveSiteKey())!=null)) return@LaunchedEffect
         val tmdbFilm = lookupFilm ?: return@LaunchedEffect
         val tmdbKey = tmdbDiscovery.identity(tmdbFilm) ?: return@LaunchedEffect
@@ -1209,7 +1242,8 @@ private fun Herrin(startup: StartupPresentation) {
         )
         val extended=tmdbState.tmdbExtendedRequest==targetId
         tmdbState.tmdbExtendedRequest=null
-        if(!extended){tmdbState.tmdbSearchPlans.reset(targetId);tmdbState.tmdbSpiderBatchOffsets.remove(targetId);tmdbState.tmdbSpiderBatchCompleted.remove(targetId)}
+        // Same film/config resumes the immutable plan after lifecycle cancellation.
+        // Explicit retry alone resets it; get() replaces it on identity/config changes.
         val budgetMs=if(extended)SourceSearchPolicy.EXTENDED_MS else SourceSearchPolicy.FOREGROUND_MS
         val lookupEpoch=tmdbState.tmdbLookupEpoch
         val configEpoch=personalSourceConfigEpoch
@@ -1239,24 +1273,15 @@ private fun Herrin(startup: StartupPresentation) {
         val allowCloudHttp = prefs.cloudAllowHttp
         var health:SourceHealthIndex?=null
         var planRevision=""
-        var priorNodes=0
-        var completedNodesNow=0
-        var totalNodesNow=0
         suspend fun sourceEvent(event:SourceSearchEvent){
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             withContext(Dispatchers.Main.immediate){
                 if(searchTicket==tmdbState.tmdbSearchGeneration.get() &&filmId==targetId &&tmdbState.tmdbLookupEpoch==lookupEpoch &&personalSourceConfigEpoch==configEpoch &&tvBoxSingle===currentTvbox){
                     SourceSearchDiagnostics.record(event)
-                    if(event.total>0)totalNodesNow=maxOf(totalNodesNow,event.total)
-                    if(event.nodeComplete){
-                        completedNodesNow=maxOf(completedNodesNow,event.completed)
-                        tmdbState.tmdbSearchPlans.complete(targetId,planRevision,event.source)
-                        tmdbState.tmdbSourceStatus=tmdbState.tmdbSourceStatus.substringBefore(" · 已检查")+" · 已检查 ${priorNodes+event.completed}/${priorNodes+event.total}"
-                        return@withContext
-                    }
+                    tmdbState.tmdbSearchPlans.observe(targetId,planRevision,event)
+                    val progress=tmdbState.tmdbSearchPlans.progress(targetId,planRevision)
                     if(event.outcome==SourceSearchOutcome.CHECKING)tmdbState.tmdbStageStarted=System.nanoTime()
-                    tmdbState.tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()}"+
-                        (if(totalNodesNow>0)" · 已检查 ${priorNodes+completedNodesNow}/${priorNodes+totalNodesNow}" else "")+" · 本阶段已用 ${event.elapsedMs}ms"
+                    tmdbState.tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()} · ${progress.text()} · ${event.elapsedMs}ms"
                 }
             }
         }
@@ -1279,10 +1304,32 @@ private fun Herrin(startup: StartupPresentation) {
             AdditionalServiceConfigs(context).nasAccounts().forEach { account ->
                 runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
             }
+            val preferredSite = currentTvbox?.sites?.firstOrNull {
+                prefs.tvBoxPreferredRootId == SourceHealthIndex.digest(approvedRoot) &&
+                    TvBoxAutoSites.identity(it, currentTvbox.spiderJar) == prefs.tvBoxPreferredSiteId
+            }
+            val preferenceStatus = when {
+                prefs.tvBoxPreferredSiteId.isBlank() -> "未设置首选影视点"
+                preferredSite == null -> "首选影视点已失效：影视仓或接口身份已变化，请在设置中重新选择"
+                preferredSite.apiUrl != null -> "首选影视点：${preferredSite.name}"
+                preferredSite.spiderApi == null -> "首选影视点暂不支持自动搜索，请选择 CMS 或已授权 Java Spider"
+                !TvBoxSpiderPolicy.mayRun(false, approvedRoot, preferredSite.jar ?: currentTvbox?.spiderJar.orEmpty(), trustedSpiderRoot, trustedSpiderJar) -> "首选 Spider 未获当前配置授权，请先在设置中授权"
+                else -> "首选影视点：${preferredSite.name}"
+            }
+            withContext(Dispatchers.Main.immediate) {
+                if (searchTicket == tmdbState.tmdbSearchGeneration.get()) tmdbState.preferredSiteStatus = preferenceStatus
+            }
+            if (prefs.tvBoxPreferredSiteId.isNotBlank() && preferredSite == null)
+                HerrinPlaybackDiagnosticJournal.record("LOOKUP", "PREFERRED_SITE_INVALID")
+            val preferredSourceId = preferredSite?.let {
+                if (it.apiUrl != null) "cms:" + it.apiUrl else "spider:" + it.key
+            }
             val directSites = mutableListOf<TvBoxSite>()
-            directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(100)
+            // A selected node remains eligible even beyond the fallback fan-out cap.
+            preferredSite?.takeIf { it.apiUrl != null }?.let(directSites::add)
+            directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(100-directSites.size)
             // Metadata cache first; explicit continuation alone may refresh missing warehouse data.
-            val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),nasUrl,cloudUrl,
+            val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),prefs.tvBoxPreferredRootId,prefs.tvBoxPreferredSiteId,nasUrl,cloudUrl,
                 AdditionalServiceConfigs(context).enabled("nas").toString(),importedWarehouses.toString(),
                 context.getSharedPreferences("herrin_personal_secrets",0).getString("_revision","legacy").orEmpty()).joinToString("|"))
             health=SourceHealthIndex(java.io.File(context.filesDir,"source-health-v1.json"),scope)
@@ -1291,7 +1338,6 @@ private fun Herrin(startup: StartupPresentation) {
             val (plan,replaced)=tmdbState.tmdbSearchPlans.get(targetId,planRevision,currentTvbox?.sites.orEmpty(),index::rank)
             if(replaced){spiderPageOffset=0;previousCompleted=0}
             val completedNodes=tmdbState.tmdbSearchPlans.completed(targetId,planRevision)
-            priorNodes=completedNodes.size
             // Multiwarehouse configs are loaded as data (no JAR/JS execution).
             // Only user-imported root warehouse URLs are eligible for bounded
             // lookup; cap fan-out so a TV does not stall or scan the internet.
@@ -1309,6 +1355,25 @@ private fun Herrin(startup: StartupPresentation) {
             // Java nodes use one serialized search batch; an explicitly active script keeps its own authorization.
             approvedSpiderSite?.takeIf{it.scriptApi!=null}?.let{adapters+=HerrinTvBoxSpiderSource(it,spiderBridge)}
 
+            // Selection grants no execution authority. Recheck the pinned JAR/root before activation.
+            preferredSite?.takeIf { it.spiderApi != null && approvedRoot == trustedSpiderRoot &&
+                TvBoxSpiderPolicy.mayRun(false, approvedRoot, it.jar ?: currentTvbox?.spiderJar.orEmpty(),
+                    trustedSpiderRoot, trustedSpiderJar) }?.let { site ->
+                adapters.removeAll { it.id == "spider:" + site.key }
+                adapters += HerrinTvBoxSpiderSource(site, spiderBridge) {
+                    sourceEvent(SourceSearchEvent("spider:" + site.key, SourceSearchStage.ACTIVATE, SourceSearchOutcome.CHECKING))
+                    withContext(SpiderRequestBudget(SourceSearchPolicy.ACTIVATION_MS)) {
+                        spiderBridge.browse(site, requireNotNull(currentTvbox), searchOnly = true) is SpiderResult.Ready
+                    }
+                }
+            }
+            val authorizedBatchSites = plan.sites.filter { site ->
+                val runtime=site.jar ?: currentTvbox?.spiderJar.orEmpty()
+                site !== preferredSite && site.spiderApi!=null && runtime.isNotBlank() &&
+                    TvBoxSpiderPolicy.mayRun(false,approvedRoot,runtime,trustedSpiderRoot,trustedSpiderJar)
+            }
+            tmdbState.tmdbSearchPlans.register(targetId,planRevision,
+                adapters.map{it.id}+authorizedBatchSites.map{"spider:"+it.key})
             val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
             val remotes = adapters.associateBy { it.id }
             val reachability = HerrinPersonalMediaProbe(strictHttpFailure=true)
@@ -1323,7 +1388,7 @@ private fun Herrin(startup: StartupPresentation) {
             },strictHttpFailure=true)
             val verifiedRemoteLines = mutableMapOf<String, Pair<Int, String>>()
             val resolved = HerrinVerifiedSourceResolver(
-                adapters.filterNot { it.id in tmdbState.tmdbFallbackIndex.rejected(targetId) ||it.id in completedNodes }
+                adapters.filterNot { (it.id != preferredSourceId && it.id in tmdbState.tmdbFallbackIndex.rejected(targetId)) || it.id in completedNodes }
             ).find(
                 searchIdentity,
                 personalPlayback = { offer ->
@@ -1332,7 +1397,7 @@ private fun Herrin(startup: StartupPresentation) {
                     (result as? PlaybackResult.Ready)?.media?.let{personalUris.add(it.uri)}
                     result
                 },
-                streaming=true,health=index,onEvent=::sourceEvent,
+                streaming=true,preferredSourceId=preferredSourceId,health=index,onEvent=::sourceEvent,
                 coordinate = recoveryRequest?.coordinate,
                 verifyPersonal = { media -> reachability.canRead(media) &&personalBytes.canRead(media) },
                 verifyRemote = { offer, detailed ->
@@ -1388,7 +1453,7 @@ private fun Herrin(startup: StartupPresentation) {
                 currentTvbox != null && trustedSpiderJar.isNotBlank() &&
                 approvedRoot == trustedSpiderRoot) {
                 HerrinApprovedSpiderBatch.scanAcrossPages(
-                    searchIdentity, plan.sites,
+                    searchIdentity, authorizedBatchSites,
                     allowed = { site ->
                         val runtime = site.jar ?: currentTvbox.spiderJar ?: site.scriptApi.orEmpty()
                         // An approved Java JAR must not silently approve
@@ -1399,7 +1464,7 @@ private fun Herrin(startup: StartupPresentation) {
                             "spider:" + site.key !in tmdbState.tmdbFallbackIndex.rejected(targetId)
                     },
                     offset = spiderPageOffset,
-                    maxWallClockMs = budgetMs,
+                    maxWallClockMs = (budgetMs-(System.nanoTime()-tmdbState.tmdbSearchStarted)/1_000_000-150L).coerceAtLeast(1L),
                     stageBudgetMs=1_200L,
                     onEvent={event->
                         sourceEvent(event)
@@ -1418,7 +1483,7 @@ private fun Herrin(startup: StartupPresentation) {
                             tmdbState.tmdbSourceStatus = if (progress.match != null)
                                 "已验证可播放影视点，正在载入选集…"
                             else "正在自动检索授权 Spider 影视点：已检查 " +
-                                "$visited/${progress.eligible}，继续寻找可播放线路…"
+                                tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()
                         }
                     },
                     onStageProgress = { progress ->
@@ -1451,12 +1516,13 @@ private fun Herrin(startup: StartupPresentation) {
                             }
                             tmdbState.tmdbSourceStatus = if (progress.match != null)
                                 "已找到并验证播放线路，正在载入选集…"
-                            else "${progress.stage?.label().orEmpty()} · 已检查 $visited/${progress.eligible}；"+
+                            else "${progress.stage?.label().orEmpty()} · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}；"+
                                 (progress.activeIndex?.let{"第 $it 个节点检查中；"}?:"")+"最近结果：$outcome · ${progress.elapsedMs}ms"
                         }
                     },
                     session = object : HerrinApprovedSpiderBatch.Session {
-                        override suspend fun eligible(site:TvBoxSite)=index.eligible("spider:"+site.key)
+                        override suspend fun eligible(site:TvBoxSite)=
+                            "spider:"+site.key !in tmdbState.tmdbSearchPlans.completed(targetId,planRevision) && index.eligible("spider:"+site.key)
                         override suspend fun activate(site: TvBoxSite): Boolean =
                             spiderBridge.browse(site, currentTvbox,searchOnly=true) is SpiderResult.Ready
                         override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
@@ -1500,7 +1566,7 @@ private fun Herrin(startup: StartupPresentation) {
             if(searchTicket==tmdbState.tmdbSearchGeneration.get())tmdbState.tmdbSearchRunning=false
         }
         if(searchOutput==null){
-            tmdbState.tmdbSourceStatus="前台搜索预算结束（${budgetMs/1000}秒）；尚无已验证线路，可继续搜索剩余节点"
+            tmdbState.tmdbSourceStatus="前台搜索预算结束（${budgetMs/1000}秒） · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}；可继续搜索剩余节点"
             HerrinPlaybackDiagnosticJournal.record("LOOKUP","FOREGROUND_BUDGET_END")
             return@LaunchedEffect
         }
@@ -1530,6 +1596,7 @@ private fun Herrin(startup: StartupPresentation) {
                 tmdbState.automaticSearch = null
             }
             tmdbState.tmdbSourceStatus = "已从 ${batchScan.checked} 个授权影视点中匹配并验证可播放线路：${batchMatch.site.name}；标称清晰度 ${if (batchMatch.claim >= 2160) "4K" else if (batchMatch.claim > 0) "${batchMatch.claim}p" else "未知"}，非实际解码画质"
+            tmdbState.tmdbSourceStatus += " · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}"
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "SPIDER_VERIFIED")
             return@LaunchedEffect
         }
@@ -1546,6 +1613,7 @@ private fun Herrin(startup: StartupPresentation) {
             else if (lookup.errors.isNotEmpty())
                 "部分资源源检索失败或超时，尚未找到可播放的授权选集；可重新检索"
             else "NAS／云盘／TVBox 均未找到可播放的授权选集；可重新检索"
+            tmdbState.tmdbSourceStatus += " · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}"
             return@LaunchedEffect
         }
         tmdbState.tmdbFallbackIndex.select(targetId, found.sourceId)
@@ -1618,9 +1686,9 @@ private fun Herrin(startup: StartupPresentation) {
     }
     LaunchedEffect(screen, filmId, metadataToken, imdbRatingsEpoch) {
         if (screen != "detail" || !filmId.startsWith("tmdb-") ||
-            metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED)
+            metadataToken.isBlank())
             return@LaunchedEffect
-        val filmToEnrich = (tmdbState.tmdbHomeFilms + tmdbState.tmdbTop250Films).firstOrNull { it.id == filmId }
+        val filmToEnrich = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbHomeFilms + tmdbState.tmdbTop250Films).firstOrNull { it.id == filmId }
             ?: return@LaunchedEffect
         CrashJournal.stage("DETAIL")
         val detailed = try { tmdbDiscovery.detail(filmToEnrich, metadataToken) }
@@ -1794,7 +1862,9 @@ private fun Herrin(startup: StartupPresentation) {
     LaunchedEffect(catalogFilms, catalogScope, screen) {
         if (screen != "player" && withContext(Dispatchers.IO) { watchHistory.importLegacy(catalogScope, catalogFilms) } > 0) recentIndexEpoch++
     }
-    val film = films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
+    val film = tmdbState.tmdbResolved[filmId] ?: films.firstOrNull { it.id == filmId }
+        ?: if (filmId.startsWith("tmdb-")) Film(filmId, "影视资料暂不可用", "", "", "", "请返回搜索并重新打开此条目", R.drawable.photofilm_orbit)
+        else films.firstOrNull() ?: demoFilms.first()
     // Single-source fallback is deliberately presentation-only: the original
     // Film remains the same, and legacy detail/selection paths stay usable.
     val showGroup = showCatalog.groupFor(film.id).takeUnless {
@@ -1826,7 +1896,7 @@ private fun Herrin(startup: StartupPresentation) {
     // Freeze key policy with that provider instead of reading the new category midway through layout.
     val keyCategory = category
     val keysInBrowse = screen == "browse"
-    fun displayKey(item: Film): String = TvFocusRoutes.posterKey(keyCategory, keysInBrowse, item.id, showCatalog.groupFor(item.id)?.key)
+    fun displayKey(item: Film): String = if (screen == "search") item.id else TvFocusRoutes.posterKey(keyCategory, keysInBrowse, item.id, showCatalog.groupFor(item.id)?.key)
     // Playback-specific, observed Media3 track formats. Never sourced from a movie title or TMDB.
     val verifiedStreams = remember { mutableStateMapOf<String, VerifiedStreamSpec>() }
     LaunchedEffect(screen, filmId, spiderActive, showGroup?.key, detailLoadEpoch) {
@@ -2061,7 +2131,7 @@ private fun Herrin(startup: StartupPresentation) {
                 delay(900)
                 val exitDetail=withContext(Dispatchers.IO){
                     listOfNotNull(SpiderStartupTrace.recent(context)?.let{"最后阶段：$it"},
-                        SpiderExitDiagnostics.recent(context)?.let{"系统原因：$it"}).joinToString("；")
+                        SpiderExitDiagnostics.recent(context)?.let{"系统原因：$it"}, SpiderFailureTrace.recent(context)).joinToString("；")
                 }
                 exitDetail.takeIf{it.isNotBlank()}?.let { reason ->
                     if (spiderStatus == failedStatus) spiderStatus =
@@ -2359,9 +2429,15 @@ private fun Herrin(startup: StartupPresentation) {
         screen = "detail"
     }
     fun openMovie(item: Film) {
+        if (screen == "search") tmdbState.searchReturnFocus = "card-${item.id}"
         // The user chooses a film first, then its real episode and source.
         // Never start playback merely because a poster was selected.
-        details(item)
+        if (tmdbDiscovery.identity(item) != null && item.id !in tmdbState.tmdbResolved) tmdbState.tmdbResolved[item.id] = item
+        if (tmdbDiscovery.identity(item) != null) uiScope.launch(Dispatchers.IO) {
+            val snapshots = TvBoxCatalogSnapshot(context, Long.MAX_VALUE)
+            snapshots.save("tmdb-library", "selected", (listOf(item) + snapshots.load("tmdb-library", "selected")).distinctBy(Film::id))
+        }
+        details(tmdbState.tmdbResolved[item.id] ?: item)
     }
     fun selectDetailSeason(seasonNumber: Int) {
         val section = seasonLayout?.sections?.firstOrNull { it.number == seasonNumber } ?: return
@@ -2436,7 +2512,7 @@ private fun Herrin(startup: StartupPresentation) {
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
     LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
         val leavingSearchEditor = screen == "search" && !searchInputFocused &&
-            focusId.startsWith("card-")
+            (focusId.startsWith("card-") || (focusId.startsWith("search-") && focusId != "search-input"))
         val leavingSettingsEditor = screen == "settings" && !configInputFocused
         if (leavingSearchEditor || leavingSettingsEditor) {
             keyboard?.hide()
@@ -2471,7 +2547,11 @@ private fun Herrin(startup: StartupPresentation) {
                 screen = playbackReturn.screen
             }
             "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
-            "detail" -> { bypassGroupFilmId = null; screen = returnScreen }
+            "detail" -> {
+                bypassGroupFilmId = null
+                if(returnScreen=="search") tmdbState.searchReturnFocus?.let{focusId=it;tmdbState.restoreSearchFocus=true}
+                screen = returnScreen
+            }
             "facets" -> {
                 focusId = "facets"
                 pendingToolbarFocus = "facets"
@@ -2528,7 +2608,7 @@ private fun Herrin(startup: StartupPresentation) {
             }
             // A lazy search result attaches after its parent. Its item effect restores focus below.
             if (screen == "search" && id.startsWith("card-") &&
-                showCatalog.search(query, searchCategory, searchNewestFirst).any {
+                tmdbState.globalSearch.films.any {
                     "card-${displayKey(it)}" == id
                 })
                 return@LaunchedEffect
@@ -2538,6 +2618,19 @@ private fun Herrin(startup: StartupPresentation) {
                 RemoteTrace.event { "RESTORE target=$id completed" }
             }.onFailure {
                 if (screen == "browse") runCatching { requester("nav-$category").requestFocus() }
+            }
+        }
+    }
+    LaunchedEffect(screen,tmdbState.restoreSearchFocus,tmdbState.globalSearch.films) {
+        if(screen=="search" &&tmdbState.restoreSearchFocus) {
+            val target=tmdbState.searchReturnFocus?:return@LaunchedEffect
+            if(tmdbState.globalSearch.films.none{"card-${it.id}"==target})return@LaunchedEffect
+            repeat(8) {
+                withFrameNanos { }
+                if(runCatching{requester(target).requestFocus()}.isSuccess) {
+                    focusId=target;tmdbState.restoreSearchFocus=false
+                    return@LaunchedEffect
+                }
             }
         }
     }
@@ -2667,6 +2760,7 @@ private fun Herrin(startup: StartupPresentation) {
                         }}", Modifier.testTag("site-select-$index"), reduceMotion) {
                             when {
                                 site.apiUrl != null -> uiScope.launch {
+                                    choosePreferredSite(site, selected?.spiderJar)
                                     tvBoxStatus = "正在读取 ${site.name}…"
                                     when (val result = tvBoxVodRepo.load(site, true)) {
                                         is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${result.reason}"
@@ -2686,6 +2780,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     }
                                 }
                                 (site.spiderApi != null || site.scriptApi != null) && selected != null -> uiScope.launch {
+                                    choosePreferredSite(site, selected.spiderJar)
                                     tvBoxStatus = "正在通过 ${site.name} 加载影片…"
                                     when (val result = spiderBridge.browse(site, selected)) {
                                         is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${result.message}"
@@ -2727,14 +2822,16 @@ private fun Herrin(startup: StartupPresentation) {
                 // regrouping and reading playback history must NOT run per frame.
                 val filtered = remember(showCatalog, films, category, isSearch,
                     query, searchCategory, searchNewestFirst, favorites, searchFavoritesOnly,
-                    facetSelection, tmdbState.tmdbTop250Films, screen, catalogScope,myRecent) {
+                    facetSelection, tmdbState.tmdbTop250Films, tmdbState.globalSearch.films, screen, catalogScope,myRecent) {
                     if (isSearch) {
-                        val queried = showCatalog.search(query, searchCategory, searchNewestFirst)
+                        val queried = tmdbState.globalSearch.films.filter {
+                            searchCategory == "全部" || it.category == searchCategory || searchCategory in it.genres
+                        }.let { if (searchNewestFirst) it.sortedByDescending(Film::year) else it }
                         val favoritesOnly = if (searchFavoritesOnly) {
-                            val liked = showCatalog.favorites(favorites).map { it.id }.toSet()
+                            val liked = favorites
                             queried.filter { it.id in liked }
                         } else queried
-                        showCatalog.collapse(FilmFacetFilters.results(favoritesOnly, facetSelection))
+                        FilmFacetFilters.results(favoritesOnly, facetSelection).distinctBy(Film::id)
                     }
                     else if (category == "Top 250")
                         // TMDB Top Rated identity and order are authoritative;
@@ -2743,7 +2840,7 @@ private fun Herrin(startup: StartupPresentation) {
                     else if (category == "我的") {
                         val recent = (recentIndexFilms.map { cached -> films.firstOrNull { it.id == cached.id } ?: cached } +
                             myRecent).distinctBy(Film::id)
-                        val saved = showCatalog.favorites(favorites)
+                        val saved = (showCatalog.favorites(favorites) + tmdbState.tmdbResolved.values.filter { it.id in favorites }).distinctBy(Film::id)
                         showCatalog.collapse(HerrinMyLibrary.combine(recent, saved))
                     }
                     else showCatalog.collapse(catalogFilms.filter {
@@ -2783,7 +2880,7 @@ private fun Herrin(startup: StartupPresentation) {
                         }
                     }
                 }
-                val suggestions = listOf("轨道", "潮汐", "群山", "星夜", "清空")
+                val suggestions = listOf("清空")
                 val headerDownTarget = when {
                     isSearch -> "search-input"
                     category == "直播" -> if (liveChannels.isEmpty()) "live-config" else "live-group-all"
@@ -2862,7 +2959,8 @@ private fun Herrin(startup: StartupPresentation) {
                             .focusRequester(requester("search-input"))
                             .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event { "INPUT focus=${it.isFocused}" } }
                             .fillMaxWidth().padding(vertical = 8.dp),
-                            label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true)
+                            label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true,
+                            readOnly = !searchInputFocused)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SearchDiscovery.categories.forEachIndexed { index, option ->
                                 TvButton(option,
@@ -2895,6 +2993,12 @@ private fun Herrin(startup: StartupPresentation) {
                                 quiet = true, onFocus = { focusId = "search-advanced-toggle" }) {
                                 showSearchAdvancedFilters = !showSearchAdvancedFilters
                             }
+                        }
+                        Text(tmdbState.globalSearch.status, Modifier.testTag("tmdb-online-search-status"))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TvButton("重试", reduced = reduceMotion, quiet = true) { tmdbState.globalSearch.retry++ }
+                            if (tmdbState.globalSearch.page < tmdbState.globalSearch.totalPages && tmdbState.globalSearch.lastLoadedPage == tmdbState.globalSearch.page && !tmdbState.globalSearch.loading)
+                                TvButton("加载下一页", reduced = reduceMotion, quiet = true) { tmdbState.globalSearch.page++ }
                         }
                         Text("搜索结果 · ${filtered.size} 部 · ${searchCategory}" +
                             (if (searchFavoritesOnly) " · 我的收藏" else "") +
@@ -4119,6 +4223,7 @@ private fun Herrin(startup: StartupPresentation) {
                             }
                         } }
                         if (!settingsTvBoxOnly) {
+                            item { Text(tmdbState.preferredSiteStatus, modifier = Modifier.testTag("preferred-site-status"), fontSize = 13.sp) }
                             item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
                                 color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
                         }
@@ -4189,6 +4294,7 @@ private fun Herrin(startup: StartupPresentation) {
                                             reduced = reduceMotion) {
                                             uiScope.launch {
                                                 tvBoxStatus = "正在读取 ${site.name} 的影视列表…"
+                                                choosePreferredSite(site, preview.spiderJar)
                                                 when (val loaded = tvBoxVodRepo.load(site, tvBoxAllowHttp)) {
                                                     is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${loaded.reason}"
                                                     is TvBoxVodResult.Ready -> {
@@ -4218,6 +4324,7 @@ private fun Herrin(startup: StartupPresentation) {
                                         TvButton("浏览 ${site.name}", modifier = Modifier.testTag("tvbox-spider-$index"),
                                             reduced = reduceMotion) {
                                             uiScope.launch {
+                                                choosePreferredSite(site, preview.spiderJar)
                                                 tvBoxStatus = "正在核验 JAR 并通过 ${site.name} 读取影视…"
                                                 when (val loaded = spiderBridge.browse(site, preview)) {
                                                     is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${loaded.message}"
@@ -4515,16 +4622,10 @@ private fun Herrin(startup: StartupPresentation) {
                                 // remote action excludes the chosen provider and
                                 // examines the next bounded group of trusted nodes.
                                 if (tmdbState.tmdbFallbackIndex.failSelected(film.id)) {
-                                    tmdbState.tmdbPlaybackRoutes.forget(film.id)
-                                    tmdbState.tmdbPersonalPlayback.remove(film.id)
-                                    tmdbState.tmdbResolved[film.id]?.let { old ->
-                                        tmdbState.tmdbResolved[film.id] = old.copy(
-                                            playbackEpisodes = emptyList(),
-                                            cmsVodId = null, spiderVodId = null)
-                                    }
-                                    activeCmsSite = null
-                                    spiderActive = false
-                                    tmdbState.tmdbSourceStatus = "正在检索下一批授权影视点；清晰度标签不等于真实解码规格"
+                                    // Keep discovered episodes and their provenance. Spider usability
+                                    // still requires the owning live session and refreshes before play.
+                                    tmdbState.tmdbExtendedRequest=film.id
+                                    tmdbState.tmdbSourceStatus = "正在检索其他授权影视点，保留已发现选集"
                                     tmdbState.tmdbLookupEpoch++
                                 }
                             }
@@ -4572,10 +4673,16 @@ private fun Herrin(startup: StartupPresentation) {
                                     Text("正在检索或尚未找到真实片源",
                                         modifier = Modifier.testTag("tmdb-playback-unavailable"),
                                         color = Color(0xFFD9B78A), fontSize = 14.sp)
-                                    TvButton(if((tmdbState.tmdbSpiderBatchOffsets[film.id]?:0)>0 ||tmdbState.tmdbSourceStatus.contains("预算结束"))"继续搜索剩余节点" else "重新检索片源",
+                                    TvButton(if(tmdbState.tmdbSearchPlans.hasRemaining(film.id))"继续搜索剩余节点" else "重新检索片源",
                                         modifier = Modifier.testTag("tmdb-source-retry"),
                                         reduced = reduceMotion) {
-                                        tmdbState.tmdbExtendedRequest=film.id.takeIf{(tmdbState.tmdbSpiderBatchOffsets[film.id]?:0)>0 ||tmdbState.tmdbSourceStatus.contains("预算结束")}
+                                        val continuing=tmdbState.tmdbSearchPlans.hasRemaining(film.id)
+                                        tmdbState.tmdbExtendedRequest=film.id.takeIf{continuing}
+                                        if(!continuing) {
+                                            tmdbState.tmdbSearchPlans.reset(film.id)
+                                            tmdbState.tmdbSpiderBatchOffsets.remove(film.id)
+                                            tmdbState.tmdbSpiderBatchCompleted.remove(film.id)
+                                        }
                                         tmdbState.tmdbFallbackIndex.reset(film.id)
                                         tmdbState.tmdbPlaybackRoutes.forget(film.id)
                                         tmdbState.tmdbResolved[film.id]?.let { current ->

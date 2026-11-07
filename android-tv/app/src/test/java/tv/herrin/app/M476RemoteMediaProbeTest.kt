@@ -201,4 +201,15 @@ class M476RemoteMediaProbeTest {
             assertEquals(1, source.requestCount)
         }
     }
+    @Test fun fragmentedHlsHeaderIsReadAsBytesNotRejectedAfterFirstPacket() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl")
+                .setBody("#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:1,\nchunk.ts\n")
+                .throttleBody(1, 2, java.util.concurrent.TimeUnit.MILLISECONDS))
+            server.start()
+            assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
+                probe().probe(PlaybackMedia(server.url("/fragmented.m3u8").toString())))
+        }
+    }
+
 }
