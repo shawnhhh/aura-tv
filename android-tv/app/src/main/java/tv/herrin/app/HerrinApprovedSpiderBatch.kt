@@ -264,7 +264,7 @@ internal object HerrinApprovedSpiderBatch {
                 }
             } catch (error:SourceHttpFailure) { finished=true;httpFailure=error;null
             } catch(error:SourceCandidateFailure){finished=true;stage=error.stage;validationFailure=error
-                outcome=if(error.outcome==SourceSearchOutcome.PARSE_FAILED)Outcome.PARSE_FAILED else Outcome.INVALID_MEDIA;null
+                outcome=when(error.outcome){SourceSearchOutcome.PARSE_FAILED->Outcome.PARSE_FAILED;SourceSearchOutcome.ERROR->Outcome.ERROR;else->Outcome.INVALID_MEDIA};null
             } catch (_: NodeDeadline) { null
             } catch (cancel: CancellationException) {
                 throw cancel
@@ -279,7 +279,7 @@ internal object HerrinApprovedSpiderBatch {
                 else -> outcome
             }
             val nextUnchecked = if (start + processed >= eligible.size) 0 else start + processed
-            val code=httpFailure?.let{SourceHealthIndex.httpOutcome(it.code)}?:validationFailure?.outcome?:when(lastOutcome){
+            val code=if(!finished &&!failed)SourceSearchOutcome.TIMEOUT else httpFailure?.let{SourceHealthIndex.httpOutcome(it.code)}?:validationFailure?.outcome?:when(lastOutcome){
                 Outcome.VERIFIED->SourceSearchOutcome.VERIFIED
                 Outcome.TIMEOUT->SourceSearchOutcome.TIMEOUT
                 Outcome.ACTIVATE_FAILED->SourceSearchOutcome.ACTIVATE_FAILED
@@ -290,11 +290,12 @@ internal object HerrinApprovedSpiderBatch {
                 Outcome.ERROR->SourceSearchOutcome.ERROR
                 Outcome.DEFERRED->SourceSearchOutcome.RATE_LIMITED
             }
-            onEvent(SourceSearchEvent("spider:"+site.key,stage,code,(System.nanoTime()-started)/1_000_000,
+            val finalStage=if(code==SourceSearchOutcome.TIMEOUT)stage else validationFailure?.stage?:stage
+            onEvent(SourceSearchEvent("spider:"+site.key,finalStage,code,(System.nanoTime()-started)/1_000_000,
                 checked,eligible.size,httpFailure?.retryAfterMs))
             // No URLs, credentials or raw provider exceptions in UI diagnostics.
             onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome,
-                stage=stage,elapsedMs=(System.nanoTime()-started)/1_000_000,httpCode=httpFailure?.code))
+                stage=finalStage,elapsedMs=(System.nanoTime()-started)/1_000_000,httpCode=httpFailure?.code))
             if (stopAtFirstPlayable && found != null) {
                 // playerContent + bounded real media probe already succeeded
                 // in the currently active Spider session.

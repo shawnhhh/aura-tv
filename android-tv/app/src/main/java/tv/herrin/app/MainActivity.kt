@@ -1242,19 +1242,23 @@ private fun Herrin(startup: StartupPresentation) {
         var health:SourceHealthIndex?=null
         var planRevision=""
         var priorNodes=0
+        var completedNodesNow=0
+        var totalNodesNow=0
         suspend fun sourceEvent(event:SourceSearchEvent){
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             withContext(Dispatchers.Main.immediate){
                 if(searchTicket==tmdbSearchGeneration.get() &&filmId==targetId &&tmdbLookupEpoch==lookupEpoch &&personalSourceConfigEpoch==configEpoch &&tvBoxSingle===currentTvbox){
                     SourceSearchDiagnostics.record(event)
+                    if(event.total>0)totalNodesNow=maxOf(totalNodesNow,event.total)
                     if(event.nodeComplete){
+                        completedNodesNow=maxOf(completedNodesNow,event.completed)
                         tmdbSearchPlans.complete(targetId,planRevision,event.source)
                         tmdbSourceStatus=tmdbSourceStatus.substringBefore(" · 已检查")+" · 已检查 ${priorNodes+event.completed}/${priorNodes+event.total}"
                         return@withContext
                     }
                     if(event.outcome==SourceSearchOutcome.CHECKING)tmdbStageStarted=System.nanoTime()
                     tmdbSourceStatus="${event.stage.label()} · ${event.outcome.label()}"+
-                        (if(event.total>0)" · 已检查 ${event.completed}/${event.total}" else "")+" · 本阶段已用 ${event.elapsedMs}ms"
+                        (if(totalNodesNow>0)" · 已检查 ${priorNodes+completedNodesNow}/${priorNodes+totalNodesNow}" else "")+" · 本阶段已用 ${event.elapsedMs}ms"
                 }
             }
         }
@@ -1339,6 +1343,7 @@ private fun Herrin(startup: StartupPresentation) {
                     // bounded to six, and inspect actual media response bytes.
                     val verifiedLine = HerrinPlayableSourceSelector.find(
                         detailed, coordinate = recoveryRequest?.coordinate,diagnose=true,
+                        onStage={phase->sourceEvent(SourceSearchEvent(offer.sourceId,phase,SourceSearchOutcome.CHECKING))},
                         resolve = { number, lineId ->
                             when (val adapter = remotes[offer.sourceId]) {
                                 is HerrinTvBoxSpiderSource ->
@@ -1465,6 +1470,7 @@ private fun Herrin(startup: StartupPresentation) {
                         override suspend fun pick(detailed: Film): Pair<Int, String>? =
                             HerrinPlayableSourceSelector.find(
                                 detailed, coordinate = recoveryRequest?.coordinate,diagnose=true,
+                                onStage={phase->sourceEvent(SourceSearchEvent("spider:"+spiderBridge.approvedActiveSiteKey(),phase,SourceSearchOutcome.CHECKING))},
                                 resolve = { number, lineId ->
                                     spiderBridge.play(detailed, number, lineId, tvBoxAllowHttp)
                                 },

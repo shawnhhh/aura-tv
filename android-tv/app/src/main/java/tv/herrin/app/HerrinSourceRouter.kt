@@ -197,6 +197,7 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                                     withTimeoutOrNull(1_200L){source.search(identity)}.also{if(it==null)failure=SourceSearchOutcome.TIMEOUT}.orEmpty()
                                 }catch(cancel:CancellationException){throw cancel}
                                 catch(error:SourceHttpFailure){failure=SourceHealthIndex.httpOutcome(error.code);health?.record(source.id,SourceSearchStage.SEARCH,failure!!,0,error.retryAfterMs);emptyList()}
+                                catch(error:SourceCandidateFailure){failure=error.outcome;emptyList()}
                                 catch(_:Exception){failure=SourceSearchOutcome.NETWORK;emptyList()}
                                 channel.send(Found(source,offers.take(80).filter{it.sourceId==source.id &&it.sourceType==source.type &&HerrinFilmIdentityMatch.matches(identity,it)},failure,(System.nanoTime()-at)/1_000_000))
                             }finally{gate.release()}

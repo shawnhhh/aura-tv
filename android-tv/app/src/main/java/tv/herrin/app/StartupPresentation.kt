@@ -55,7 +55,7 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
             withFrameNanos { }; state.networkReady=true;StartupTiming.networkStart()
         }
     }
-    Box(Modifier.fillMaxSize().drawWithContent { drawContent(); StartupTiming.firstDraw() }) {
+    Box(Modifier.fillMaxSize().drawWithContent { StartupTiming.firstDraw(); drawContent() }) {
         if (state.prepareHome && state.preferences != null) {
             StartupTiming.homeStart()
             CompositionLocalProvider(LocalArtworkReady provides state.artworkReady) { home(state) }
