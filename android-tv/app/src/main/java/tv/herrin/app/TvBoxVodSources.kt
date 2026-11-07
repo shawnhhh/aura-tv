@@ -11,12 +11,12 @@ import java.net.URLEncoder
 
 internal sealed interface TvBoxVodResult {
     data class Ready(val films: List<Film>) : TvBoxVodResult
-    data class Error(val reason: String) : TvBoxVodResult
+    data class Error(val reason: String, val httpCode: Int? = null, val retryAfterMs: Long? = null) : TvBoxVodResult
 }
 
 internal sealed interface TvBoxVodDetailResult {
     data class Ready(val film: Film) : TvBoxVodDetailResult
-    data class Error(val reason: String) : TvBoxVodDetailResult
+    data class Error(val reason: String, val httpCode: Int? = null, val retryAfterMs: Long? = null) : TvBoxVodDetailResult
 }
 
 /** The catalog call is not the detail call: TVBox CMS often omits play URLs on list pages. */
@@ -158,10 +158,11 @@ internal class TvBoxVodRepository {
         val endpoint = TvBoxCmsEndpoint.address(site.apiUrl.orEmpty(), allowHttp = allowHttp)
             ?: return@withContext TvBoxVodResult.Error("该站点不是可识别的 HTTP(S) CMS，或尚未授权 HTTP")
         try {
-            val films = TvBoxVodCodec.decode(fetchJson(endpoint), allowHttp)
+            val films = TvBoxVodCodec.decode(fetchJson(endpoint,site.headers), allowHttp)
             if (films.isEmpty()) TvBoxVodResult.Error("接口没有返回可识别的影视条目")
             else TvBoxVodResult.Ready(films)
         } catch (error: Exception) {
+            if(error is kotlinx.coroutines.CancellationException)throw error
             TvBoxVodResult.Error("CMS 列表读取失败：${error.message.orEmpty().take(110)}")
         }
     }
@@ -172,9 +173,10 @@ internal class TvBoxVodRepository {
             val endpoint = TvBoxCmsEndpoint.searchAddress(site.apiUrl.orEmpty(), title, allowHttp)
                 ?: return@withContext TvBoxVodResult.Error("CMS 不支持该搜索地址")
             try {
-                TvBoxVodResult.Ready(TvBoxVodCodec.decode(fetchJson(endpoint), allowHttp))
-            } catch (_: Exception) {
-                TvBoxVodResult.Error("CMS 片名搜索失败")
+                TvBoxVodResult.Ready(TvBoxVodCodec.decode(fetchJson(endpoint,site.headers), allowHttp))
+            } catch (error: Exception) {
+                if(error is kotlinx.coroutines.CancellationException)throw error
+                TvBoxVodResult.Error("CMS 片名搜索失败",(error as? SourceHttpFailure)?.code,(error as? SourceHttpFailure)?.retryAfterMs)
             }
         }
 
@@ -185,30 +187,28 @@ internal class TvBoxVodRepository {
         val endpoint = TvBoxCmsEndpoint.address(site.apiUrl.orEmpty(), id, allowHttp)
             ?: return@withContext TvBoxVodDetailResult.Error("CMS 详情地址无效")
         try {
-            val updated = TvBoxVodCodec.detail(fetchJson(endpoint), film, allowHttp)
+            val updated = TvBoxVodCodec.detail(fetchJson(endpoint,site.headers), film, allowHttp)
             if (updated.playbackEpisodes.isEmpty())
                 TvBoxVodDetailResult.Error("CMS 详情未提供直链播放源；此站点可能需要 TVBox 外部解析器")
             else TvBoxVodDetailResult.Ready(updated)
         } catch (error: Exception) {
-            TvBoxVodDetailResult.Error("CMS 详情读取失败：${error.message.orEmpty().take(110)}")
+            if(error is kotlinx.coroutines.CancellationException)throw error
+            TvBoxVodDetailResult.Error("CMS 详情读取失败：${error.javaClass.simpleName}",(error as? SourceHttpFailure)?.code,(error as? SourceHttpFailure)?.retryAfterMs)
         }
     }
 
-    private fun fetchJson(endpoint: String): String {
-        val connection = try { URL(endpoint).openConnection() as HttpURLConnection }
-        catch (error: Exception) { throw IllegalStateException("无法连接影视接口", error) }
-        try {
-            connection.connectTimeout = 9_000
-            connection.readTimeout = 9_000
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/json, text/plain")
-            check(connection.responseCode == 200) { "影视接口 HTTP ${connection.responseCode}" }
-            val mime = connection.contentType.orEmpty().lowercase()
+    private suspend fun fetchJson(endpoint: String, headers: Map<String,String>): String {
+        val request=okhttp3.Request.Builder().url(endpoint).apply{headers.forEach{(k,v)->header(k,v)}}
+            .header("Accept","application/json, text/plain").build()
+        return readSourceResponse(client,request) { response ->
+            if(response.code!=200)throw SourceHttpFailure(response.code,SourceHealthIndex.retryAfter(response.header("Retry-After"),System.currentTimeMillis()))
+            val mime = response.header("Content-Type").orEmpty().lowercase()
             check(!mime.startsWith("image/") && !mime.startsWith("text/html") &&
                 !mime.startsWith("video/")) { "影视接口未返回 JSON" }
-            check(connection.contentLengthLong <= 1_048_576) { "影视结果超过 1 MB" }
+            val body=requireNotNull(response.body)
+            check(body.contentLength() <= 1_048_576) { "影视结果超过 1 MB" }
             val output = ByteArrayOutputStream()
-            connection.inputStream.use { stream ->
+            body.byteStream().use { stream ->
                 val buffer = ByteArray(8192)
                 while (true) {
                     val count = stream.read(buffer)
@@ -217,7 +217,10 @@ internal class TvBoxVodRepository {
                     output.write(buffer, 0, count)
                 }
             }
-            return output.toString(Charsets.UTF_8.name())
-        } finally { connection.disconnect() }
+            output.toString(Charsets.UTF_8.name())
+        }
     }
+    companion object { private val client=okhttp3.OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+        .connectTimeout(9,java.util.concurrent.TimeUnit.SECONDS).readTimeout(9,java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(10,java.util.concurrent.TimeUnit.SECONDS).build() }
 }

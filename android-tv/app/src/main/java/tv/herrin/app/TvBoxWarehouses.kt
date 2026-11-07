@@ -277,6 +277,30 @@ internal object TvBoxHeaderCodec {
 }
 
 internal class TvBoxConfigRepository(private val context: Context? = null) {
+    /** Search never spends the fast budget serially refreshing every warehouse. */
+    suspend fun forSearch(input:String,allowHttp:Boolean,allowNetwork:Boolean):TvBoxConfig?=withContext(Dispatchers.IO){
+        val address=TvBoxUrl.normalize(input,allowHttp)?:return@withContext null
+        cached(address)?.let{return@withContext it}
+        if(!allowNetwork)return@withContext null
+        try{
+            readSourceResponse(searchClient,okhttp3.Request.Builder().url(address).build()){response->
+                if(response.code !in 200..299)throw SourceHttpFailure(response.code)
+                val body=requireNotNull(response.body)
+                check(body.contentLength()<=1_048_576)
+                val output=ByteArrayOutputStream()
+                body.byteStream().use{stream->val buf=ByteArray(8192);while(true){val n=stream.read(buf);if(n<0)break
+                    check(output.size()+n<=1_048_576);output.write(buf,0,n)}}
+                val data=output.toByteArray()
+                val text=TvBoxWrappedConfig.stripComments(TvBoxWrappedConfig.extract(data)?:String(data,Charsets.UTF_8))
+                when(val parsed=TvBoxConfigParser.parse(text,address)){
+                    is TvBoxConfig.Single,is TvBoxConfig.Warehouses->{save(address,text);parsed}
+                    else->null
+                }
+            }
+        }catch(cancel:kotlinx.coroutines.CancellationException){throw cancel}catch(_:Exception){null}
+    }
+    private val searchClient by lazy { okhttp3.OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+        .callTimeout(1500,java.util.concurrent.TimeUnit.MILLISECONDS).build() }
     private fun cacheFile(url: String): File? {
         val directory = context?.filesDir ?: return null
         val digest = MessageDigest.getInstance("SHA-256").digest(url.toByteArray(Charsets.UTF_8))

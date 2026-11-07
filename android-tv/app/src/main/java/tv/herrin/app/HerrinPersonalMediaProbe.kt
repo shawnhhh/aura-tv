@@ -41,25 +41,23 @@ internal class HerrinPersonalMediaProbe(
             return@withContext false
         }
         try {
-            runInterruptible {
-                client.newCall(request).execute().use { response ->
-                    if (response.code !in setOf(200, 206)) return@use false
+            readSourceResponse(client,request) { response ->
+                    if (response.code !in setOf(200, 206)) return@readSourceResponse false
                     val contentType = response.header("Content-Type").orEmpty()
                         .substringBefore(';').trim().lowercase()
                     if (contentType in setOf("text/html", "application/xhtml+xml",
                             "application/json", "text/json", "application/xml",
-                            "text/xml", "text/plain")) return@use false
+                            "text/xml", "text/plain")) return@readSourceResponse false
                     if (response.code == 206) {
                         // Range claims must include the requested first byte,
                         // not a malformed/unrelated Partial Content response.
                         val range = response.header("Content-Range").orEmpty()
-                        if (!range.startsWith("bytes 0-0/")) return@use false
+                        if (!range.startsWith("bytes 0-0/")) return@readSourceResponse false
                     }
                     response.header("Content-Length")?.toLongOrNull()
-                        ?.let { if (it <= 0L) return@use false }
+                        ?.let { if (it <= 0L) return@readSourceResponse false }
                     true
                 }
-            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

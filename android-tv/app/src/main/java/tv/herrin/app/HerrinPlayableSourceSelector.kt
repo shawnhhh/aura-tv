@@ -29,7 +29,8 @@ internal object HerrinPlayableSourceSelector {
         resolve: suspend (Int, String) -> PlaybackResult,
         verifyMedia: suspend (PlaybackMedia) -> Boolean,
         limit: Int = 6,
-        coordinate: HerrinPlaybackCoordinate? = null
+        coordinate: HerrinPlaybackCoordinate? = null,
+        onStage: suspend (SourceSearchStage) -> Unit = {}
     ): Selected? {
         val attempts = film.playbackEpisodes.flatMapIndexed { index, episode ->
             episode.lines.filter { it.uri.isNotBlank() && coordinate?.accepts(episode, it) != false }.map { line ->
@@ -39,6 +40,7 @@ internal object HerrinPlayableSourceSelector {
             .thenByDescending { HerrinFilmIdentityMatch.resolutionClaim(it.third.title) ?: 0 })
             .take(limit.coerceIn(1, 12))
         for ((_, episode, line) in attempts) {
+            onStage(SourceSearchStage.PARSE)
             val ready = try { resolve(episode.number, line.id) }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { null }
@@ -57,6 +59,7 @@ internal object HerrinPlayableSourceSelector {
                 if (candidate != media.uri && hasSensitiveHeaders &&
                     (primaryOrigin == null || origin(candidate) != primaryOrigin)) continue
                 val single = media.copy(uri = candidate, alternateUris = emptyList())
+                onStage(SourceSearchStage.MEDIA)
                 val verified = try { verifyMedia(single) }
                 catch (cancel: CancellationException) { throw cancel }
                 catch (_: Exception) { false }

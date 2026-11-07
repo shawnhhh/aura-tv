@@ -37,12 +37,15 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
         selectRemote: suspend (HerrinSourceMovie, Film) -> Pair<Int, String>? =
             { _, film -> HerrinPlaybackEntry.firstPlayable(film) },
         coordinate: HerrinPlaybackCoordinate? = null,
+        streaming: Boolean = false,
+        health: SourceHealthIndex? = null,
+        onEvent: suspend (SourceSearchEvent) -> Unit = {},
         remoteDetails: suspend (HerrinSourceMovie) -> Film?
     ): HerrinVerifiedSource {
         var personalPlaylist: HerrinPersonalPlaylist? = null
         var detailedFilm: Film? = null
         var verifiedLine: Pair<Int, String>? = null
-        val result = HerrinFilmRouter(adapters).find(identity) { ranked ->
+        val result = HerrinFilmRouter(adapters).find(identity,streaming,health,onEvent) { ranked ->
             if (ranked.firstOrNull()?.tier == HerrinSourceTier.PERSONAL) {
                 // Use exactly the same source-specific permission check as
                 // actual playback. Never accept an unauthorized WebDAV file.
@@ -60,7 +63,10 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                 // each chosen file during real playback.
                 val knownUnavailable = mutableSetOf<HerrinSourceMovie>()
                 var verifiedOne = false
+                var verifiedMedia:PlaybackMedia?=null
                 for ((candidate, media) in prepared.take(8)) {
+                    onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.CHECKING))
+                    val began=System.nanoTime()
                     val valid = try {
                         kotlinx.coroutines.withTimeoutOrNull(2_500L) {
                             verifyPersonal(media)
@@ -69,10 +75,14 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                         throw cancelled
                     } catch (_: Exception) { false }
                     if (valid) {
+                        health?.record(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.VERIFIED,(System.nanoTime()-began)/1_000_000)
+                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.VERIFIED,(System.nanoTime()-began)/1_000_000))
                         verifiedOne = true
+                        verifiedMedia=media
                         break
                     }
                     knownUnavailable += candidate
+                    health?.record(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.MEDIA_FAILED,(System.nanoTime()-began)/1_000_000)
                 }
                 if (!verifiedOne) emptyList()
                 else {
@@ -84,7 +94,8 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                             ?: PlaybackResult.Unavailable("个人片源已失效")
                     }
                     val chosen = built.episodes.firstNotNullOfOrNull { ep ->
-                        ep.lines.firstOrNull { coordinate?.accepts(ep, it) != false }?.let { ep.number to it.id }
+                        ep.lines.firstOrNull { coordinate?.accepts(ep, it) != false &&
+                            built.mediaByLine[it.id]==verifiedMedia }?.let { ep.number to it.id }
                     }
                     if (chosen == null) emptyList()
                     else {
@@ -97,10 +108,13 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                 // Read actual CMS/Spider episodes. Different same-name films
                 // can fail independently; do not stop after the first error.
                 val playable = fairRemoteCandidates(ranked).firstOrNull { candidate ->
+                    onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,SourceSearchOutcome.CHECKING))
                     val detailed = try { remoteDetails(candidate) }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch (_: Exception) { null }
-                    if (detailed != null && HerrinPlaybackEntry.firstPlayable(detailed) != null) {
+                    if (detailed != null && HerrinFilmIdentityMatch.matches(identity,candidate.copy(film=detailed)) && HerrinPlaybackEntry.firstPlayable(detailed) != null) {
+                        val began=System.nanoTime()
+                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.CHECKING))
                         val verified = try { verifyRemote(candidate, detailed) }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { false }
@@ -110,8 +124,14 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                             detailedFilm = detailed
                             verifiedLine = choice
                         }
+                        val result=if(choice!=null)SourceSearchOutcome.VERIFIED else SourceSearchOutcome.MEDIA_FAILED
+                        health?.record(candidate.sourceId,SourceSearchStage.MEDIA,result,(System.nanoTime()-began)/1_000_000)
+                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,result,(System.nanoTime()-began)/1_000_000))
                         choice != null
-                    } else false
+                    } else {
+                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,SourceSearchOutcome.NO_EPISODES))
+                        false
+                    }
                 }
                 listOfNotNull(playable)
             }

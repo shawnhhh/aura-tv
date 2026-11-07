@@ -30,7 +30,8 @@ internal class HerrinRemoteMediaProbe(
     // A token embedded in an untrusted URL is not user authorization.
     // Global TMDB source lookup explicitly supplies FongMiSessionAuthorization
     // for its current approved Spider site; all other callers fail closed.
-    private val authorizeLocal: suspend (String) -> Boolean = { false }
+    private val authorizeLocal: suspend (String) -> Boolean = { false },
+    private val onHttpFailure: (Int, Long?) -> Unit = { _, _ -> }
 ) {
     enum class Result {
         MEDIA, INVALID_URL, UNAUTHORIZED_LOCAL, HTTP_ERROR, LOGIN_OR_TEXT,
@@ -57,25 +58,16 @@ internal class HerrinRemoteMediaProbe(
             } catch (_: IllegalArgumentException) {
                 return Result.INVALID_URL
             }
-            val response = try {
-                withContext(Dispatchers.IO) {
-                    runInterruptible { client.newCall(request).execute() }
-                }
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (_: Exception) {
-                return Result.NETWORK_ERROR
-            }
-            response.use { reply ->
+            val result = try { readSourceResponse(client,request) { reply ->
                 if (reply.code in setOf(301, 302, 303, 307, 308)) {
-                    if (hop >= 2) return Result.HTTP_ERROR
-                    val location = reply.header("Location") ?: return Result.HTTP_ERROR
+                    if (hop >= 2) return@readSourceResponse Result.HTTP_ERROR
+                    val location = reply.header("Location") ?: return@readSourceResponse Result.HTTP_ERROR
                     val redirected = runCatching { target.resolve(location) }.getOrNull()
-                        ?: return Result.INVALID_URL
+                        ?: return@readSourceResponse Result.INVALID_URL
                     if (redirected.scheme?.lowercase() !in setOf("http", "https") ||
                         redirected.host.isNullOrBlank() || redirected.rawUserInfo != null ||
                         redirected.fragment != null || isLoopback(redirected))
-                        return Result.INVALID_URL
+                        return@readSourceResponse Result.INVALID_URL
                     // Never propagate a NAS/Spider/CMS cookie, token, or signed
                     // source-specific request header to a new CDN origin.
                     if (!sameOrigin(target, redirected)) {
@@ -83,30 +75,29 @@ internal class HerrinRemoteMediaProbe(
                             setOf("user-agent", "accept", "accept-language") }
                     }
                     url = redirected.toString()
-                    return@use
+                    return@readSourceResponse null
                 }
-                if (reply.code !in setOf(200, 206)) return Result.HTTP_ERROR
+                if (reply.code !in setOf(200, 206)) {
+                    onHttpFailure(reply.code,SourceHealthIndex.retryAfter(reply.header("Retry-After"),System.currentTimeMillis()))
+                    return@readSourceResponse Result.HTTP_ERROR
+                }
                 if (reply.code == 206 &&
                     !validPartialContentRange(reply.header("Content-Range")))
-                    return Result.INVALID_RANGE
+                    return@readSourceResponse Result.INVALID_RANGE
                 val contentType = reply.header("Content-Type").orEmpty()
                     .substringBefore(';').trim().lowercase()
                 if (contentType in setOf("text/html", "application/xhtml+xml",
                         "application/json", "text/json"))
-                    return Result.LOGIN_OR_TEXT
+                    return@readSourceResponse Result.LOGIN_OR_TEXT
                 val buffer = ByteArray(2048)
                 val size = try {
-                    withContext(Dispatchers.IO) {
-                        runInterruptible {
-                            reply.body?.byteStream()?.read(buffer) ?: -1
-                        }
-                    }
+                    reply.body?.byteStream()?.read(buffer) ?: -1
                 } catch (cancel: CancellationException) {
                     throw cancel
                 } catch (_: Exception) {
-                    return Result.NETWORK_ERROR
+                    return@readSourceResponse Result.NETWORK_ERROR
                 }
-                if (size <= 0) return Result.EMPTY_BODY
+                if (size <= 0) return@readSourceResponse Result.EMPTY_BODY
                 val beginning = buffer.copyOf(size).toString(Charsets.UTF_8).trimStart('\uFEFF',' ','\n','\r','\t')
                 // An expired media URL can return a JSON status/player
                 // envelope with a misleading binary/video Content-Type.
@@ -115,21 +106,22 @@ internal class HerrinRemoteMediaProbe(
                     beginning.drop(1).trimStart().startsWith("\"")
                 if (beginning.startsWith("<!DOCTYPE html", true) ||
                     beginning.startsWith("<html", true) || jsonEnvelope)
-                    return Result.LOGIN_OR_TEXT
+                    return@readSourceResponse Result.LOGIN_OR_TEXT
                 val looksHls = contentType.contains("mpegurl") ||
                     url.substringBefore('?').lowercase().endsWith(".m3u8") ||
                     beginning.startsWith("#EXTM3U")
-                if (looksHls) return if (beginning.startsWith("#EXTM3U"))
+                if (looksHls) return@readSourceResponse if (beginning.startsWith("#EXTM3U"))
                     Result.MEDIA else Result.INVALID_MANIFEST
                 val looksDash = contentType.contains("dash+xml") ||
                     url.substringBefore('?').lowercase().endsWith(".mpd")
-                if (looksDash) return if ("<MPD" in beginning ||
+                if (looksDash) return@readSourceResponse if ("<MPD" in beginning ||
                     ("<?xml" in beginning && "<MPD" in beginning))
                     Result.MEDIA else Result.INVALID_MANIFEST
                 if (contentType.startsWith("text/") || contentType.contains("xml"))
-                    return Result.LOGIN_OR_TEXT
-                return Result.MEDIA
-            }
+                    return@readSourceResponse Result.LOGIN_OR_TEXT
+                Result.MEDIA
+            } } catch(cancel:CancellationException){throw cancel} catch(_:Exception){return Result.NETWORK_ERROR}
+            if(result!=null)return result
         }
         return Result.HTTP_ERROR
     }

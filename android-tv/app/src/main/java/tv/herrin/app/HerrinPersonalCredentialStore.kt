@@ -40,7 +40,8 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val bytes = cipher.iv + cipher.doFinal(value)
-        prefs.edit().putString(slot, Base64.encodeToString(bytes, Base64.NO_WRAP)).commit()
+        prefs.edit().putString(slot, Base64.encodeToString(bytes, Base64.NO_WRAP))
+            .putString("_revision",java.util.UUID.randomUUID().toString()).commit()
     }.getOrDefault(false)
 
     fun load(): Pair<String, String> = runCatching {
@@ -57,7 +58,7 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
     }.getOrDefault("" to "")
 
     fun clear() {
-        prefs.edit().remove(slot).commit()
+        prefs.edit().remove(slot).putString("_revision",java.util.UUID.randomUUID().toString()).commit()
         runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias) }
     }
 }
