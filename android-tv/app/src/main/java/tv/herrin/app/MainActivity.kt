@@ -1297,14 +1297,11 @@ private fun Herrin(startup: StartupPresentation) {
                             "spider:" + site.key !in tmdbFallbackIndex.rejected(targetId)
                     },
                     offset = spiderPageOffset,
-                    maxWallClockMs = if (recoveryRequest != null) 30_000L else 240_000L,
+                    maxWallClockMs = if (recoveryRequest != null) 20_000L else 75_000L,
                     // Playback first: stop on the first media-byte-verified
                     // source rather than waiting for a hypothetical 4K claim.
                     stopAtFirstPlayable = true,
                     onProgress = { progress ->
-                        // The Spider worker is scanned off the UI thread.
-                        // Publish a truthful cumulative count after each page
-                        // and persist the cursor for resume on cancellation.
                         withContext(Dispatchers.Main) {
                             tmdbSpiderBatchOffsets[targetId] = progress.nextOffset
                             val visited = (spiderPageOffset + progress.checked)
@@ -1313,6 +1310,19 @@ private fun Herrin(startup: StartupPresentation) {
                                 "已验证可播放影视点，正在载入选集…"
                             else "正在自动检索授权 Spider 影视点：已检查 " +
                                 "$visited/${progress.eligible}，继续寻找可播放线路…"
+                        }
+                    },
+                    onSiteProgress = { progress ->
+                        // Do not hide all of nodes 7..12 behind a six-site page.
+                        // Also persist the mid-page cursor on a deadline.
+                        withContext(Dispatchers.Main) {
+                            tmdbSpiderBatchOffsets[targetId] = progress.nextOffset
+                            val visited = (spiderPageOffset + progress.checked)
+                                .coerceAtMost(progress.eligible)
+                            tmdbSourceStatus = if (progress.match != null)
+                                "已找到并验证播放线路，正在载入选集…"
+                            else "逐个检索授权 Spider 影视点：已检查 " +
+                                "$visited/${progress.eligible}，每节点限时；可继续浏览…"
                         }
                     },
                     session = object : HerrinApprovedSpiderBatch.Session {
