@@ -100,9 +100,10 @@ internal object HerrinApprovedSpiderBatch {
         session: Session,
         offset: Int = 0,
         maxPages: Int = 17,
-        maxWallClockMs: Long = 240_000L,
+        maxWallClockMs: Long = 75_000L,
         stopAtFirstPlayable: Boolean = false,
-        onProgress: suspend (Scan) -> Unit = {}
+        onProgress: suspend (Scan) -> Unit = {},
+        onSiteProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val winners = mutableListOf<Match>()
         var checked = 0
@@ -115,8 +116,18 @@ internal object HerrinApprovedSpiderBatch {
         // 4.5-second bound and a total wall-clock deadline.
         kotlinx.coroutines.withTimeoutOrNull(maxWallClockMs.coerceIn(4_000L, 300_000L)) {
             repeat(maxPages.coerceIn(1, 17)) {
+                val completedBeforePage = checked
+                val episodesBeforePage = episodes
                 val page = scan(identity, sites, allowed, session, offset = next,
-                    timeoutPerSiteMs = 4_500L)
+                    timeoutPerSiteMs = 3_500L,
+                    stopAtFirstPlayable = stopAtFirstPlayable,
+                    onSiteProgress = { partial ->
+                        // Preserve the next unchecked site even on mid-page timeout.
+                        next = partial.nextOffset
+                        onSiteProgress(Scan(partial.match,
+                            completedBeforePage + partial.checked, partial.eligible,
+                            partial.nextOffset, episodesBeforePage + partial.candidatesWithEpisodes))
+                    })
                 checked += page.checked
                 total = page.eligible
                 episodes += page.candidatesWithEpisodes
@@ -142,7 +153,9 @@ internal object HerrinApprovedSpiderBatch {
         allowed: (TvBoxSite) -> Boolean,
         session: Session,
         offset: Int = 0,
-        timeoutPerSiteMs: Long = 9_000L
+        timeoutPerSiteMs: Long = 9_000L,
+        stopAtFirstPlayable: Boolean = false,
+        onSiteProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val eligible = sites.filter { (it.spiderApi != null || it.scriptApi != null) && allowed(it) }
             .distinctBy { it.key }.take(100)
@@ -186,6 +199,14 @@ internal object HerrinApprovedSpiderBatch {
                 throw cancel
             } catch (_: Exception) { null }
             if (found != null) good += found
+            val nextUnchecked = if (start + checked >= eligible.size) 0 else start + checked
+            // Surface progress after every node; six-node page size is internal.
+            onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound))
+            if (stopAtFirstPlayable && found != null) {
+                // playerContent + bounded real media probe already succeeded
+                // in the currently active Spider session.
+                return Scan(found, checked, eligible.size, nextUnchecked, episodesFound)
+            }
         }
         // Multiple site activations invalidate the previous live proxy.
         // Revalidate candidates and compare their CURRENT selected line.
