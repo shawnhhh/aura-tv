@@ -16,8 +16,8 @@ jobs:
     timeout-minutes: 60
     env:
       BASELINE_SHA: 20bf6fdb66a2874516c0a565ba38c9a153e03fc5
-      CANDIDATE_SHA: 92bd777604ea1c68361bd7d677a6c4ac7372c5b7
-      CANDIDATE_RUN: '42363299465'
+      CANDIDATE_SHA: 72ef2fffcc629251b5ce5cbacc6b987d96ee4186
+      CANDIDATE_RUN: '42367532066'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: HERRIN-emulator-evidence
-          run-id: 42363299465
+          run-id: 42367532066
           github-token: ${{ github.token }}
           path: candidate-apk
       - name: Enable Linux KVM
