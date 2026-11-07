@@ -25,6 +25,7 @@ internal class TmdbScreenState {
     val tmdbSpiderBatchOffsets=mutableStateMapOf<String,Int>()
     val tmdbSpiderBatchCompleted=mutableStateMapOf<String,Int>()
     var tmdbDiscoveryStatus by mutableStateOf("")
+    var preferredSiteStatus by mutableStateOf("")
     var tmdbSourceStatus by mutableStateOf("")
     var tmdbStatusFilm by mutableStateOf("")
     var tmdbStageStarted by mutableLongStateOf(0L)

@@ -1114,6 +1114,8 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.tmdbHomeFilms = emptyList()
         tmdbState.tmdbTop250Films = emptyList()
         if (metadataToken.isNotBlank()) {
+            val saved = withContext(Dispatchers.IO) { TvBoxCatalogSnapshot(context, Long.MAX_VALUE).load("tmdb-library", "selected") }
+            saved.filter { tmdbDiscovery.identity(it) != null }.forEach { tmdbState.tmdbResolved.putIfAbsent(it.id, it) }
             val cached = withContext(Dispatchers.IO) { tmdbDiscovery.cachedHome(metadataToken) }
             tmdbState.tmdbHomeFilms = cached
             tmdbState.tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
@@ -1291,6 +1293,17 @@ private fun Herrin(startup: StartupPresentation) {
                 prefs.tvBoxPreferredRootId == SourceHealthIndex.digest(approvedRoot) &&
                     TvBoxAutoSites.identity(it, currentTvbox.spiderJar) == prefs.tvBoxPreferredSiteId
             }
+            val preferenceStatus = when {
+                prefs.tvBoxPreferredSiteId.isBlank() -> "未设置首选影视点"
+                preferredSite == null -> "首选影视点已失效：影视仓或接口身份已变化，请在设置中重新选择"
+                preferredSite.apiUrl != null -> "首选影视点：${preferredSite.name}"
+                preferredSite.spiderApi == null -> "首选影视点暂不支持自动搜索，请选择 CMS 或已授权 Java Spider"
+                !TvBoxSpiderPolicy.mayRun(false, approvedRoot, preferredSite.jar ?: currentTvbox?.spiderJar.orEmpty(), trustedSpiderRoot, trustedSpiderJar) -> "首选 Spider 未获当前配置授权，请先在设置中授权"
+                else -> "首选影视点：${preferredSite.name}"
+            }
+            withContext(Dispatchers.Main.immediate) {
+                if (searchTicket == tmdbState.tmdbSearchGeneration.get()) tmdbState.preferredSiteStatus = preferenceStatus
+            }
             if (prefs.tvBoxPreferredSiteId.isNotBlank() && preferredSite == null)
                 HerrinPlaybackDiagnosticJournal.record("LOOKUP", "PREFERRED_SITE_INVALID")
             val preferredSourceId = preferredSite?.let {
@@ -1352,7 +1365,7 @@ private fun Herrin(startup: StartupPresentation) {
             },strictHttpFailure=true)
             val verifiedRemoteLines = mutableMapOf<String, Pair<Int, String>>()
             val resolved = HerrinVerifiedSourceResolver(
-                adapters.filterNot { it.id in tmdbState.tmdbFallbackIndex.rejected(targetId) ||it.id in completedNodes }
+                adapters.filterNot { (it.id != preferredSourceId && it.id in tmdbState.tmdbFallbackIndex.rejected(targetId)) || it.id in completedNodes }
             ).find(
                 searchIdentity,
                 personalPlayback = { offer ->
@@ -1417,7 +1430,7 @@ private fun Herrin(startup: StartupPresentation) {
                 currentTvbox != null && trustedSpiderJar.isNotBlank() &&
                 approvedRoot == trustedSpiderRoot) {
                 HerrinApprovedSpiderBatch.scanAcrossPages(
-                    searchIdentity, plan.sites,
+                    searchIdentity, plan.sites.filter { it !== preferredSite },
                     allowed = { site ->
                         val runtime = site.jar ?: currentTvbox.spiderJar ?: site.scriptApi.orEmpty()
                         // An approved Java JAR must not silently approve
@@ -1823,7 +1836,9 @@ private fun Herrin(startup: StartupPresentation) {
     LaunchedEffect(catalogFilms, catalogScope, screen) {
         if (screen != "player" && withContext(Dispatchers.IO) { watchHistory.importLegacy(catalogScope, catalogFilms) } > 0) recentIndexEpoch++
     }
-    val film = tmdbState.tmdbResolved[filmId] ?: films.firstOrNull { it.id == filmId } ?: films.firstOrNull() ?: demoFilms.first()
+    val film = tmdbState.tmdbResolved[filmId] ?: films.firstOrNull { it.id == filmId }
+        ?: if (filmId.startsWith("tmdb-")) Film(filmId, "影视资料暂不可用", "", "", "", "请返回搜索并重新打开此条目", R.drawable.photofilm_orbit)
+        else films.firstOrNull() ?: demoFilms.first()
     // Single-source fallback is deliberately presentation-only: the original
     // Film remains the same, and legacy detail/selection paths stay usable.
     val showGroup = showCatalog.groupFor(film.id).takeUnless {
@@ -2391,6 +2406,10 @@ private fun Herrin(startup: StartupPresentation) {
         // The user chooses a film first, then its real episode and source.
         // Never start playback merely because a poster was selected.
         if (tmdbDiscovery.identity(item) != null && item.id !in tmdbState.tmdbResolved) tmdbState.tmdbResolved[item.id] = item
+        if (tmdbDiscovery.identity(item) != null) uiScope.launch(Dispatchers.IO) {
+            val snapshots = TvBoxCatalogSnapshot(context, Long.MAX_VALUE)
+            snapshots.save("tmdb-library", "selected", (listOf(item) + snapshots.load("tmdb-library", "selected")).distinctBy(Film::id))
+        }
         details(item)
     }
     fun selectDetailSeason(seasonNumber: Int) {
@@ -2767,10 +2786,10 @@ private fun Herrin(startup: StartupPresentation) {
                             searchCategory == "全部" || it.category == searchCategory || searchCategory in it.genres
                         }.let { if (searchNewestFirst) it.sortedByDescending(Film::year) else it }
                         val favoritesOnly = if (searchFavoritesOnly) {
-                            val liked = showCatalog.favorites(favorites).map { it.id }.toSet()
+                            val liked = favorites
                             queried.filter { it.id in liked }
                         } else queried
-                        showCatalog.collapse(FilmFacetFilters.results(favoritesOnly, facetSelection))
+                        FilmFacetFilters.results(favoritesOnly, facetSelection).distinctBy(Film::id)
                     }
                     else if (category == "Top 250")
                         // TMDB Top Rated identity and order are authoritative;
@@ -2779,7 +2798,7 @@ private fun Herrin(startup: StartupPresentation) {
                     else if (category == "我的") {
                         val recent = (recentIndexFilms.map { cached -> films.firstOrNull { it.id == cached.id } ?: cached } +
                             myRecent).distinctBy(Film::id)
-                        val saved = showCatalog.favorites(favorites)
+                        val saved = (showCatalog.favorites(favorites) + tmdbState.tmdbResolved.values.filter { it.id in favorites }).distinctBy(Film::id)
                         showCatalog.collapse(HerrinMyLibrary.combine(recent, saved))
                     }
                     else showCatalog.collapse(catalogFilms.filter {
@@ -4161,6 +4180,7 @@ private fun Herrin(startup: StartupPresentation) {
                             }
                         } }
                         if (!settingsTvBoxOnly) {
+                            item { Text(tmdbState.preferredSiteStatus, modifier = Modifier.testTag("preferred-site-status"), fontSize = 13.sp) }
                             item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
                                 color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
                         }
