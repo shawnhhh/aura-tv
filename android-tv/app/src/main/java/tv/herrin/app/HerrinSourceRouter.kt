@@ -166,10 +166,17 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                     val accepted=withTimeoutOrNull(1_800L){
                         onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING,
                             completed=completedCount.get(),total=sources.size))
+                        var failure:SourceSearchOutcome?=null
+                        val began=System.nanoTime()
                         val offers=try{source.search(identity).filter{it.sourceId==source.id &&it.sourceType==source.type &&HerrinFilmIdentityMatch.matches(identity,it)}}
-                            catch(cancel:CancellationException){throw cancel}catch(_:Exception){emptyList()}
+                            catch(cancel:CancellationException){throw cancel}
+                            catch(error:SourceCandidateFailure){failure=error.outcome;emptyList()}
+                            catch(_:Exception){failure=SourceSearchOutcome.ERROR;emptyList()}
                         searched+=source.id
-                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,if(offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED,
+                        val outcome=failure?:if(offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED
+                        health?.record(source.id,SourceSearchStage.SEARCH,outcome,(System.nanoTime()-began)/1_000_000)
+                        if(failure!=null)errors[source.id]=outcome.name
+                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,outcome,
                             completed=completedCount.get(),total=sources.size))
                         val verified=accept(offers).filter{it in offers}
                         onEvent(SourceSearchEvent(source.id,SourceSearchStage.DISCOVER,SourceSearchOutcome.CHECKING,
