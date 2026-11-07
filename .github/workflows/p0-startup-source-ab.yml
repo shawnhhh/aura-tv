@@ -1,4 +1,4 @@
-name: HERRIN Startup Source Same AVD ABBA
+name: HERRIN Startup Source Same AVD ABBA and Phases
 on:
   push:
     branches: ['codex/herrin-startup-source-health-20261107']
