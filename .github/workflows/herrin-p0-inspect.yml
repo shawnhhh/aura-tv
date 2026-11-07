@@ -50,3 +50,27 @@ jobs:
                       for index in range(max(0,n-2),min(len(rows),n+45)):
                           if index not in shown:print(rows[index]);shown.add(index)
           PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-debug-apk
+          github-token: ${{ github.token }}
+          run-id: 42355871486
+          path: evidence/fixed-apk
+      - name: Record the candidate method size separately from the failing APK
+        run: |
+          dex_tool=$(find "$ANDROID_HOME/build-tools" -type f -name dexdump | sort -V | tail -n 1)
+          DEX_TOOL="$dex_tool" python3 - <<'PY'
+          import os,re,subprocess,tempfile,zipfile
+          from pathlib import Path
+          with zipfile.ZipFile('evidence/fixed-apk/app-debug.apk') as apk, tempfile.TemporaryDirectory() as tmp:
+              found=False
+              for name in sorted(apk.namelist()):
+                  if not re.fullmatch(r'classes\d*\.dex',name):continue
+                  path=Path(tmp)/name;path.write_bytes(apk.read(name))
+                  rows=subprocess.check_output([os.environ['DEX_TOOL'],'-d',str(path)]).decode(errors='replace').splitlines()
+                  for n,row in enumerate(rows):
+                      if re.search(r"\bname\s*:\s*'Herrin'",row):
+                          print('CANDIDATE c156b3d '+name+'\n'+'\n'.join(rows[n:n+14]));found=True;break
+                  if found:break
+              assert found,'Candidate Herrin method not found; cannot report generated method size'
+          PY
