@@ -173,6 +173,8 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
                 // Hold the whole discovery -> details -> verification sequence,
                 // not merely searchContent, before any other mutable session.
                 for(source in providers){
+                    var nodeFinished = false
+                    val nodeStarted = System.nanoTime()
                     val accepted=withTimeoutOrNull(if(isPreferred)3_000L else 1_800L){
                         onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING,
                             completed=completedCount.get(),total=sources.size))
@@ -191,8 +193,16 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
                         val verified=accept(offers).filter{it in offers}
                         onEvent(SourceSearchEvent(source.id,SourceSearchStage.DISCOVER,SourceSearchOutcome.CHECKING,
                             completed=completedCount.incrementAndGet(),total=sources.size,nodeComplete=true))
+                        nodeFinished = true
                         verified
                     }.orEmpty()
+                    if (!nodeFinished) {
+                        if (source.id !in searched) searched += source.id
+                        errors[source.id] = SourceSearchOutcome.TIMEOUT.name
+                        health?.record(source.id, SourceSearchStage.SEARCH, SourceSearchOutcome.TIMEOUT, (System.nanoTime()-nodeStarted)/1_000_000)
+                        onEvent(SourceSearchEvent(source.id, SourceSearchStage.SEARCH, SourceSearchOutcome.TIMEOUT,
+                            (System.nanoTime()-nodeStarted)/1_000_000, completedCount.incrementAndGet(), sources.size, nodeComplete=true))
+                    }
                     if(accepted.isNotEmpty())return HerrinFilmLookupResult(accepted,tier,errors,searched)
                 }
                 continue
@@ -201,7 +211,7 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
                 coroutineScope {
                     data class Found(val source:HerrinFilmSource,val offers:List<HerrinSourceMovie>,val failure:SourceSearchOutcome?,val elapsed:Long)
                     val channel=kotlinx.coroutines.channels.Channel<Found>(4)
-                    val gate=kotlinx.coroutines.sync.Semaphore(if(type==HerrinSourceType.TVBOX_SPIDER)1 else 4)
+                    val gate=kotlinx.coroutines.sync.Semaphore(if(type in listOf(HerrinSourceType.NAS, HerrinSourceType.CLOUD, HerrinSourceType.TVBOX_SPIDER))1 else 4)
                     val jobs=providers.map{source->
                         launch {
                             gate.acquire()

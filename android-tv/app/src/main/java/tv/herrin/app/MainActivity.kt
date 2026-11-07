@@ -1333,7 +1333,9 @@ private fun Herrin(startup: StartupPresentation) {
                 adapters.removeAll { it.id == "spider:" + site.key }
                 adapters += HerrinTvBoxSpiderSource(site, spiderBridge) {
                     sourceEvent(SourceSearchEvent("spider:" + site.key, SourceSearchStage.ACTIVATE, SourceSearchOutcome.CHECKING))
-                    spiderBridge.browse(site, requireNotNull(currentTvbox), searchOnly = true) is SpiderResult.Ready
+                    withContext(SpiderRequestBudget(1_200L)) {
+                        spiderBridge.browse(site, requireNotNull(currentTvbox), searchOnly = true) is SpiderResult.Ready
+                    }
                 }
             }
             val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
