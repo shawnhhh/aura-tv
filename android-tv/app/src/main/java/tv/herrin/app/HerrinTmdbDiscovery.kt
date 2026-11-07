@@ -100,7 +100,8 @@ internal class HerrinTmdbDiscovery(
         if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
         val url = base + "/search/multi?language=$language&include_adult=false&page=$page&query=" +
             URLEncoder.encode(query.trim().take(200), "UTF-8")
-        val raw = kotlinx.coroutines.runInterruptible(Dispatchers.IO) { fetcher.load(url, token) }
+        val raw = if (fetcher === NetworkArtworkFetcher) TmdbSearchTransport.load(url, token)
+            else kotlinx.coroutines.runInterruptible(Dispatchers.IO) { fetcher.load(url, token) }
             ?: throw java.io.IOException("TMDB_EMPTY_RESPONSE")
         return parseSearchPage(raw, page)
     }
