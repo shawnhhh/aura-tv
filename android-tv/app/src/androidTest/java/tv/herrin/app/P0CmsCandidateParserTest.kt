@@ -21,7 +21,8 @@ class P0CmsCandidateParserTest {
         MockWebServer().use{server->
             server.dispatcher=object:Dispatcher(){override fun dispatch(request:RecordedRequest)=when{
                 request.path?.startsWith("/parse?url=https://watch.example.test/movie.html")==true->
-                    MockResponse().setHeader("Content-Type","application/json").setBody("""{"url":"http://127.0.0.1:${server.port}/media.mp4"}""")
+                    MockResponse().setHeader("Content-Type","application/json").setBody(
+                        org.json.JSONObject().put("url",server.url("/media.mp4").toString()).toString())
                 request.path?.startsWith("/media.mp4")==true->MockResponse().setHeader("Content-Type","video/mp4").setBody(Buffer().write(bytes))
                 else->MockResponse().setResponseCode(404)
             }}

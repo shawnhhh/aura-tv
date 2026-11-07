@@ -37,14 +37,22 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     val elapsed = remember { mutableFloatStateOf(0f) }
     var skipped by remember { mutableStateOf(false) }
     val renderer=remember{WordmarkRenderer()}
+    // Input callbacks must complete in the same dispatch, even when a test or
+    // the system pauses the animation clock. Effects and held OK share one gate.
+    val ready=remember { booleanArrayOf(false) }
+    fun completeOnce() {
+        if(ready[0])return
+        ready[0]=true
+        StartupTiming.wordmarkVisible()
+        StartupTiming.wordmarkComplete()
+        visible()
+        onDone()
+    }
     LaunchedEffect(reduced,skipped) {
         runCatching { focus.requestFocus() }
         if (reduced ||skipped) {
             elapsed.floatValue=WordmarkMotion.REVEAL_MS
-            StartupTiming.wordmarkVisible()
-            StartupTiming.wordmarkComplete()
-            visible()
-            onDone()
+            completeOnce()
             return@LaunchedEffect
         }
         val start = withFrameNanos { it }
@@ -59,17 +67,18 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             }
             if (!reportedReady && elapsed.floatValue >= WordmarkMotion.REVEAL_MS) {
                 reportedReady = true
-                StartupTiming.wordmarkComplete()
                 // No home UI mutation from the draw phase or before full reveal.
-                visible()
-                onDone()
+                completeOnce()
             }
         }
     }
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("splash")
         .focusRequester(focus).onPreviewKeyEvent {
             if (it.type == KeyEventType.KeyDown && it.key in listOf(Key.Enter, Key.DirectionCenter)) {
-                skipped=true; true
+                skipped=true
+                elapsed.floatValue=WordmarkMotion.REVEAL_MS
+                completeOnce()
+                true
             } else false
         }.focusable(), contentAlignment = Alignment.Center) {
         androidx.compose.foundation.Canvas(Modifier.width(widthDp.dp).height((widthDp*.2f).dp)

@@ -78,7 +78,8 @@ class P0SpiderDeadlineRecoveryTest {
             withTimeout(5000){while(child()==oldPid)delay(25)}
             val reapedMs=android.os.SystemClock.elapsedRealtime()-cancelledAt
             assertEquals(mainPid,android.os.Process.myPid())
-            assertTrue(withTimeout(6000){bridge.browse(seventh,config,searchOnly=true)} is SpiderResult.Ready)
+            val recovered=withTimeout(6000){bridge.browse(seventh,config,searchOnly=true)}
+            assertTrue("Fresh seventh node activation: $recovered",recovered is SpiderResult.Ready)
             assertNotEquals(oldPid,child())
             assertTrue(bridge.details(oldDetail) is SpiderResult.Failure)
             assertTrue(bridge.play(oldDetail,1,"spider-0",true) is PlaybackResult.Unavailable)
@@ -130,7 +131,8 @@ class P0SpiderDeadlineRecoveryTest {
             assertTrue("Parent must retire the child before its 10s internal watchdog",SpiderHostRetirement.requests.get()>before)
             assertEquals(mainPid,android.os.Process.myPid())
             assertEquals(0,withContext(Dispatchers.Main.immediate){bridge.pendingSearchRequests()})
-            assertTrue(withTimeout(6000){bridge.browse(seventh,config,searchOnly=true)} is SpiderResult.Ready)
+            val recovered=withTimeout(6000){bridge.browse(seventh,config,searchOnly=true)}
+            assertTrue("Fresh node after blocked child: $recovered",recovered is SpiderResult.Ready)
             val fresh=(bridge.search(seventh,"Original synthetic fixture") as SpiderResult.Ready).value.single()
             assertEquals(seventh.key,fresh.spiderOrigin?.site)
             android.util.Log.i("HerrinSourceRecovery","blocked_child_main_reaped_by_host=1 main_callback_alive=1 pending=0 cancel_to_exit_ms=$reapedMs physical_tcl=0")

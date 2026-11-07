@@ -46,6 +46,7 @@ class P0CachedHomeHeroTest {
             "首页" to "tmdb-movie-11", "电影" to "tmdb-movie-11", "剧集" to "tmdb-tv-21", "电影" to "tmdb-movie-11")
         for ((category,id) in expected) {
             compose.onNodeWithTag("nav-$category").performClick()
+            android.util.Log.i("HerrinCachedHero","asserting_category=$category expected=$id")
             compose.onNodeWithTag("hero-title-$id").assertTextEquals("Original ${id.substringAfterLast('-')}")
             compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("hero-art-$id").assertExists() }.isSuccess }
             if (category == "Top 250") {

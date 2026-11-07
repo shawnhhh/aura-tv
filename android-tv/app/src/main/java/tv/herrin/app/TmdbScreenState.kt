@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 @Stable
 internal class TmdbScreenState {
     var tmdbHomeFilms by mutableStateOf<List<Film>>(emptyList())
+    var cacheHydrated by mutableStateOf(false)
     var tmdbTop250Films by mutableStateOf<List<Film>>(emptyList())
     var tmdbTop250Status by mutableStateOf("")
     var tmdbTop250RetryEpoch by mutableIntStateOf(0)

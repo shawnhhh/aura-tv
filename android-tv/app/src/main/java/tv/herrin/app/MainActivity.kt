@@ -1099,6 +1099,7 @@ private fun Herrin(startup: StartupPresentation) {
     val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
     LaunchedEffect(metadataToken) {
         CrashJournal.stage("CACHE")
+        tmdbState.cacheHydrated=false
         tmdbState.tmdbHomeFilms = emptyList()
         tmdbState.tmdbTop250Films = emptyList()
         if (metadataToken.isNotBlank()) {
@@ -1106,6 +1107,9 @@ private fun Herrin(startup: StartupPresentation) {
             tmdbState.tmdbHomeFilms = cached
             tmdbState.tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
         }
+        // Empty is a valid offline result only after the bounded local read;
+        // before that it cannot signal that the cached homepage is ready.
+        tmdbState.cacheHydrated=true
     }
     // TMDB is the authoritative discovery index. No video-site homepage is
     // consulted to build the hero, ratings or poster rails.
@@ -4883,7 +4887,7 @@ private fun Herrin(startup: StartupPresentation) {
         })
         SideEffect {
             startup.reduced = reduceMotion
-            startup.homeReady = projection.second.isNotEmpty() || films.isEmpty()
+            startup.homeReady = tmdbState.cacheHydrated && (projection.second.isNotEmpty() || films.isEmpty())
             startup.restoreBrowseFocus={
                 if(!startup.showing &&screen=="browse" &&!lanConfigOpen &&!exitConfirmation &&
                     !(category=="直播" &&liveSearchExpanded)) {
