@@ -123,14 +123,16 @@ internal object HerrinApprovedSpiderBatch {
                     stopAtFirstPlayable = stopAtFirstPlayable,
                     onSiteProgress = { partial ->
                         // Preserve the next unchecked site even on mid-page timeout.
+                        checked = completedBeforePage + partial.checked
+                        total = partial.eligible
+                        episodes = episodesBeforePage + partial.candidatesWithEpisodes
                         next = partial.nextOffset
                         onSiteProgress(Scan(partial.match,
-                            completedBeforePage + partial.checked, partial.eligible,
-                            partial.nextOffset, episodesBeforePage + partial.candidatesWithEpisodes))
+                            checked, total, next, episodes))
                     })
-                checked += page.checked
+                checked = completedBeforePage + page.checked
                 total = page.eligible
-                episodes += page.candidatesWithEpisodes
+                episodes = episodesBeforePage + page.candidatesWithEpisodes
                 page.match?.let(winners::add)
                 next = page.nextOffset
                 onProgress(Scan(page.match, checked, total, next, episodes))
