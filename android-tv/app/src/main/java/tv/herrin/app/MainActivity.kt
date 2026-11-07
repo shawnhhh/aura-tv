@@ -427,9 +427,9 @@ private fun Herrin(startup: StartupPresentation) {
     var lanConfigOpen by remember { mutableStateOf(false) }
     val phoneTokenReload = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     var exitConfirmation by remember { mutableStateOf(false) }
-    var lastExitDismissedAt by remember { mutableLongStateOf(0L) }
+    var lastExitDismissedAt by remember { zeroLongState() }
     val personalImdbRatings = remember(context) { HerrinImdbRatings(context) }
-    var imdbRatingsEpoch by remember { mutableIntStateOf(0) }
+    var imdbRatingsEpoch by remember { zeroIntState() }
     var imdbImportStatus by remember { mutableStateOf("IMDb 数据需用户自行导入；不随开源 APK 分发") }
     val imdbImportPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -474,14 +474,14 @@ private fun Herrin(startup: StartupPresentation) {
     var liveSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var liveSearchQuery by rememberSaveable { mutableStateOf("") }
     val liveChannelRailState = rememberLazyListState()
-    var liveFavoriteEpoch by remember { mutableIntStateOf(0) }
+    var liveFavoriteEpoch by remember { zeroIntState() }
     var liveStatus by remember { mutableStateOf("请在设置中配置自己的授权 HTTPS M3U 直播列表") }
     var epgProgrammes by remember { mutableStateOf<List<LiveProgramme>>(emptyList()) }
     var epgStatus by remember { mutableStateOf("未配置 XMLTV 节目单") }
     var highlightedLiveUrl by remember { mutableStateOf<String?>(null) }
-    var epgRefresh by remember { mutableIntStateOf(0) }
+    var epgRefresh by remember { zeroIntState() }
     var liveClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var liveRefresh by remember { mutableIntStateOf(0) }
+    var liveRefresh by remember { zeroIntState() }
     val extraLiveCache = remember { mutableMapOf<String, List<LiveChannel>>() }
     val liveFavoriteScope = if (prefs.livePlaylistUrl.isNotBlank()) prefs.livePlaylistUrl else "tvbox-selected-live"
     LaunchedEffect(epgRefresh, startup.networkReady) {
@@ -552,7 +552,7 @@ private fun Herrin(startup: StartupPresentation) {
             liveStatus += "；附加直播源 ${extra.size} 个"
         }
     }
-    var personalSourceConfigEpoch by remember { mutableIntStateOf(0) }
+    var personalSourceConfigEpoch by remember { zeroIntState() }
     var nasDavUrlDraft by remember { mutableStateOf(prefs.nasWebDavUrl) }
     var cloudDavUrlDraft by remember { mutableStateOf(prefs.cloudWebDavUrl) }
     var nasDavUserDraft by remember { mutableStateOf("") }
@@ -621,13 +621,13 @@ private fun Herrin(startup: StartupPresentation) {
     var tvBoxColdStartRequest by remember { mutableStateOf(false) }
     var spiderActive by remember { mutableStateOf(false) }
     var spiderStatus by remember { mutableStateOf("尚未选择 Spider 站点") }
-    var playerRetryEpoch by remember { mutableIntStateOf(0) }
+    var playerRetryEpoch by remember { zeroIntState() }
     var spiderResolved by remember { mutableStateOf<PlaybackResult?>(null) }
     var spiderResolvedFor by remember { mutableStateOf<HerrinAutomaticPlayback.Attempt?>(null) }
     var tvBoxVodScope by remember { mutableStateOf<String?>(null) }
     var activeCmsSite by remember { mutableStateOf<TvBoxSite?>(null) }
     var cmsDetailStatus by remember { mutableStateOf("") }
-    var detailLoadEpoch by remember { mutableIntStateOf(0) }
+    var detailLoadEpoch by remember { zeroIntState() }
     // Only the selected CMS title may resolve its missing episodes inside
     // the regular player loading surface. No catalog-wide eager scans.
     var cmsPlaybackPendingId by remember { mutableStateOf<String?>(null) }
@@ -641,7 +641,7 @@ private fun Herrin(startup: StartupPresentation) {
     var tvBoxAllowHttp by remember { mutableStateOf(true) }
     var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
-    var tvBoxLoadEpoch by remember { mutableIntStateOf(0) }
+    var tvBoxLoadEpoch by remember { zeroIntState() }
     var tvBoxStatus by remember { mutableStateOf("TVBox 多仓仅读取配置元数据，需手动输入并点击读取") }
     var vodImportFeedback by remember { mutableStateOf("") }
     var liveImportFeedback by remember { mutableStateOf("") }
@@ -888,12 +888,12 @@ private fun Herrin(startup: StartupPresentation) {
     }
     var mediaUrlDraft by rememberSaveable { mutableStateOf(prefs.testMediaUrl) }
     var configStatus by rememberSaveable { mutableStateOf("可配置自己有权访问的 HTTPS 目录或测试流") }
-    var catalogRefresh by remember { mutableIntStateOf(0) }
+    var catalogRefresh by remember { zeroIntState() }
     val tmdbPrimary = prefs.tmdbReadToken.isNotBlank()
     val extraNasConfigured = remember(personalSourceConfigEpoch) { AdditionalServiceConfigs(context).enabled("nas").isNotEmpty() }
     val sourceConfigured = extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbHomeFilms.isNotEmpty() ||
         prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
-    var recentIndexEpoch by remember { mutableIntStateOf(0) }
+    var recentIndexEpoch by remember { zeroIntState() }
     var recentIndexFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
     LaunchedEffect(recentIndexEpoch) { recentIndexFilms = withContext(Dispatchers.IO) { watchHistory.indexedFilms() } }
     val resolvedSnapshot = tmdbState.tmdbResolved.toMap()
@@ -1032,7 +1032,7 @@ private fun Herrin(startup: StartupPresentation) {
     var showSearchAdvancedFilters by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
-    var detailSelectedSeason by rememberSaveable { mutableIntStateOf(0) }
+    var detailSelectedSeason by rememberSaveable { zeroIntState() }
     var restoreSeasonFocus by remember { mutableStateOf(false) }
     var restoreGroupFocus by remember { mutableStateOf(false) }
     var groupFocusedCoordinates by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -1059,12 +1059,12 @@ private fun Herrin(startup: StartupPresentation) {
     }
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
-    var metadataRescanEpoch by remember { mutableIntStateOf(0) }
+    var metadataRescanEpoch by remember { zeroIntState() }
     var tmdbConnectivity by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED) }
     var tmdbProbeMessage by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED.text) }
     // Must not be tied to metadataRescanEpoch: a successful probe increments
     // that epoch, which otherwise causes an endless configuration/search loop.
-    var tmdbProbeEpoch by remember { mutableIntStateOf(0) }
+    var tmdbProbeEpoch by remember { zeroIntState() }
     LaunchedEffect(metadataToken, tmdbProbeEpoch, startup.networkReady) {
         if(!startup.networkReady)return@LaunchedEffect
         tmdbConnectivity = if (metadataToken.isBlank()) TmdbProbeState.NOT_CONFIGURED
@@ -1626,10 +1626,10 @@ private fun Herrin(startup: StartupPresentation) {
     }
     var metadataForceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var metadataCorrection by remember { mutableStateOf<Film?>(null) }
-    var metadataScanDone by remember { mutableIntStateOf(0) }
-    var metadataScanTotal by remember { mutableIntStateOf(0) }
-    var metadataScanNoMatch by remember { mutableIntStateOf(0) }
-    var metadataScanFailures by remember { mutableIntStateOf(0) }
+    var metadataScanDone by remember { zeroIntState() }
+    var metadataScanTotal by remember { zeroIntState() }
+    var metadataScanNoMatch by remember { zeroIntState() }
+    var metadataScanFailures by remember { zeroIntState() }
     LaunchedEffect(catalogScope) {
         facetActor = null; facetDirector = null; facetRegion = null
         facetYear = null; facetCategory = null; facetRating = null
@@ -2514,7 +2514,7 @@ private fun Herrin(startup: StartupPresentation) {
             }
         }
     }
-    Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
+    HerrinScreenCanvas {
         // Compose the lightweight home structure behind the fading logo, but
         // defer the large image decode until the logo is completely gone.
         // On resource-limited TVs this avoids competing with first-frame UI.
@@ -4974,13 +4974,13 @@ private fun LiveTvSurface(
 ) {
     var drawerOpen by remember { mutableStateOf(false) }
     var linePicker by remember { mutableStateOf<LiveChannelChoice?>(null) }
-    var playerFocusEpoch by remember { mutableIntStateOf(0) }
+    var playerFocusEpoch by remember { zeroIntState() }
     fun closeDrawer() { linePicker = null; drawerOpen = false; playerFocusEpoch++ }
     var drawerGroup by remember { mutableStateOf<String?>(null) }
     var favoriteOnly by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
-    var favoriteVersion by remember { mutableIntStateOf(0) }
+    var favoriteVersion by remember { zeroIntState() }
     // Manual line choices are optional. OK on a programme always starts playback
     // immediately with its first source, or a previously chosen line this session.
     val preferredLineUrls = remember(channels) { mutableStateMapOf<String, String>() }
