@@ -30,17 +30,33 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     val focus = remember { FocusRequester() }
     val onDone by rememberUpdatedState(done)
     val visible by rememberUpdatedState(onVisible)
-    val firstVisible = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val elapsed = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(reduced) {
         runCatching { focus.requestFocus() }
-        if (reduced) { visible(); onDone(); return@LaunchedEffect }
+        if (reduced) {
+            StartupTiming.wordmarkVisible()
+            StartupTiming.wordmarkComplete()
+            visible()
+            onDone()
+            return@LaunchedEffect
+        }
         val start = withFrameNanos { it }
+        var reportedVisible = false
+        var reportedReady = false
         while (true) {
-            withFrameNanos { elapsed.floatValue = (it - start) / 1_000_000f }
-            // Home readiness is checked each frame after the complete reveal.
-            // A local offline home is always available; never wait for TMDB/network.
-            if (elapsed.floatValue >= WordmarkMotion.REVEAL_MS) onDone()
+            val now = withFrameNanos { it }
+            elapsed.floatValue = (now - start) / 1_000_000f
+            if (!reportedVisible && elapsed.floatValue >= WordmarkMotion.REVEAL_MS * 0.08f) {
+                reportedVisible = true
+                StartupTiming.wordmarkVisible()
+            }
+            if (!reportedReady && elapsed.floatValue >= WordmarkMotion.REVEAL_MS) {
+                reportedReady = true
+                StartupTiming.wordmarkComplete()
+                // No home UI mutation from the draw phase or before full reveal.
+                visible()
+                onDone()
+            }
         }
     }
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("splash")
@@ -56,20 +72,19 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
                     drawContent()
                     val time = if (reduced) WordmarkMotion.REVEAL_MS else elapsed.floatValue
                     val progress = WordmarkMotion.reveal(time)
-                    if (progress >= 0.08f && firstVisible.compareAndSet(false, true)) {
-                        StartupTiming.wordmarkVisible()
-                        visible()
-                    }
-                    if (progress >= 1f) StartupTiming.wordmarkComplete()
                     if (progress < 1f) {
-                        // Symmetric soft alpha wave, fixed glyph geometry and crisp edges.
+                        // Seven stops: no 33-element map or draw-time Compose writes.
                         val edge = progress * 1.35f
-                        val stops = (0..32).map { i ->
-                            val x = i / 32f
-                            val distance = kotlin.math.abs(x - 0.5f) * 2f
-                            x to Color.White.copy(alpha = ((edge - distance) / 0.35f).coerceIn(0f, 1f))
-                        }.toTypedArray()
-                        drawRect(Brush.horizontalGradient(*stops), blendMode = BlendMode.DstIn)
+                        val outside = ((1f - edge) / 2f).coerceIn(0f, 0.5f)
+                        val inside = ((1f - edge + 0.35f) / 2f).coerceIn(0f, 0.5f)
+                        val center = Color.White.copy(alpha = (edge / 0.35f).coerceIn(0f, 1f))
+                        val transparent = Color.Transparent
+                        drawRect(Brush.horizontalGradient(
+                            0f to transparent, outside to transparent,
+                            inside to center, 0.5f to center,
+                            (1f - inside) to center, (1f - outside) to transparent,
+                            1f to transparent
+                        ), blendMode = BlendMode.DstIn)
                     } else {
                         drawRect(Color.White.copy(alpha = WordmarkMotion.brightness(time)),
                             blendMode = BlendMode.DstIn)
