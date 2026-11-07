@@ -49,6 +49,32 @@ class HerrinSplashTest {
         compose.runOnIdle { assertTrue("Complete reveal precedes readiness callback", completed) }
         compose.onNodeWithContentDescription("HERRIN").assertExists()
     }
+    @Test fun homePreparationRunsOnceAndOnlyAfterCompleteWordmarkReveal() {
+        compose.mainClock.autoAdvance = false
+        var prepared = 0
+        var ready = 0
+        compose.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                HerrinWordmarkSplash(false, done = { ready++ }, onVisible = { prepared++ })
+            }
+        }
+        compose.mainClock.advanceTimeBy(850)
+        compose.runOnIdle {
+            assertEquals("Do not mount the heavy home halfway through the logo animation", 0, prepared)
+            assertEquals(0, ready)
+        }
+        compose.mainClock.advanceTimeBy(1_300)
+        compose.runOnIdle {
+            assertEquals(1, prepared)
+            assertEquals(1, ready)
+        }
+        compose.mainClock.advanceTimeBy(600)
+        compose.runOnIdle {
+            assertEquals("Repeated frame ticks must not restart heavy home creation", 1, prepared)
+            assertEquals(1, ready)
+        }
+    }
+
     @Test fun skipCompletesImmediately() {
         compose.mainClock.autoAdvance = false
         var completed = false
