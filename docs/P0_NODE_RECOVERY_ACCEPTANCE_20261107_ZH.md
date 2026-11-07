@@ -86,7 +86,7 @@
 - APK：https://github.com/shawnhhh/aura-tv/actions/runs/42390717788/artifacts/13581806196 。APK 本体 26,576,599 字节。
 - APK 本体 SHA-256：`76547f96282dc23f535d3fc9f98cdfc2b85964e057bf592270211749e6756120`。不是 ZIP 校验值。
 - JVM/Lint 报告：https://github.com/shawnhhh/aura-tv/actions/runs/42390717788/artifacts/13581706470 。
-- TV：https://github.com/shawnhhh/aura-tv/actions/runs/42390717793 ，目前执行中，尚未通过完整验收。
+- TV：https://github.com/shawnhhh/aura-tv/actions/runs/42390717793 ，成功；232/232 通过，失败 0、错误 0、跳过 0（Android TV API30 x86）。
 
 报告在独立文档快照分支归档，避免文档更新改变已验证的 #84 应用提交。该分支不用于交付应用构建；应用源码与 CI 以上述提交为准。
 
@@ -95,3 +95,29 @@ TCL 安装/升级、安装签名兼容性与设置保留尚未在本机验证；
 ## 后续焦点回归与撤回
 
 `904b465` 的 JVM 630 项、Lint、Debug 通过；TV 232 项出现 5 项搜索控件失焦断言失败，单仓目录测试通过。该证据说明释放原生 view 会干扰 Compose 焦点，本轮没有将其交付为验收通过版本。`689f4da` 撤回该原生 view 操作，改为搜索框在失焦时 readOnly，以结束 Compose 编辑输入会话；重新获焦即恢复编辑。测试显式聚焦输入框再输入查询，保留全部焦点、筛选、详情和 D-pad 断言；最终 CI 仍须以该版本或之后为准。
+
+## 最终验收结论
+
+代码提交 `689f4da139fe04ca97c9a79aec96920f135f9c06` 的两个完整工作流均成功。
+
+| 层级 | 结果 | 边界 |
+| --- | --- | --- |
+| 代码 | 已提交 #84，仍为 Draft | 没有合并 master、强推或重置设置 |
+| JVM/Lint/Debug | 630/630，0 失败/错误/跳过；Lint/构建通过 | 日志与 APK 对应该同一代码提交 |
+| Android TV | 232/232，0 失败/错误/跳过 | API30 x86 模拟器，未跳过原失败断言或性能门禁 |
+| 真实媒体字节与出帧 | 本地原创 TLS/HTTP/DEX 用例通过 | 不代表第三方互联网源、DRM 或 TCL |
+| 饭太硬真实源 / TCL | 未完成 | 无设备、故障日志和用户授权配置/JAR 身份，不能宣称已定位该 JAR 的真正异常或已恢复播放 |
+
+以下关键测试均实际通过：
+- `onlineSearchProtocolEmptyAndRemoteResult`、`advancedMetadataFiltersOpenInsideSearchAndWorkWithDpad`；
+- `singleWarehouseLoadsAllSitesAndDpadHasNoSevereStall`（保留先前失败记录与新增诊断，不能据一次未复现宣称已证实其唯一根因）；
+- `fragmentedTlsHlsPassesSourceGateAndActuallyRendersFrames`、`tlsHlsActuallyRendersFrames`、`tlsMp4ActuallyRendersFrames`；
+- `configuredJsonParserToMedia3RendersActualVideoFrames`、`browserType0SniffsRealMediaThenMedia3RendersFrames`；
+- `originalSignedSourceBehindTmdbDetailProducesVideoAndDecodedAudio`，覆盖原始签名来源与 Proxy/Media3 实际视频帧和音频。
+
+TV 截图、日志、结构化测试和性能证据：
+https://github.com/shawnhhh/aura-tv/actions/runs/42390717793/artifacts/13581737666 。
+
+最终方案保留 Compose/原生 view 焦点，在搜索框失焦时用 readOnly 结束编辑会话，重新获焦后恢复编辑；不是释放原生 view。先前 5 项焦点回归方案已撤回，失败记录完整保留。
+
+工程自动化验收已收敛。用户指定的最终实机标准——饭太硬节点能加载、真实选集返回、TCL 实际出帧——仍必须用用户授权源和 TCL 按上面的清单补验，当前不声明通过。
