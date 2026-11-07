@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
@@ -67,6 +68,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -428,6 +430,7 @@ private fun Herrin(startup: StartupPresentation) {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val view = LocalView.current
+    val inputModes=LocalInputModeManager.current
     val inputMethod = remember(context) { context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager }
     var searchInputFocused by remember { mutableStateOf(false) }
     var configInputFocused by remember { mutableStateOf(false) }
@@ -2502,6 +2505,9 @@ private fun Herrin(startup: StartupPresentation) {
         CrashJournal.location(screen, category)
         RemoteTrace.event { "ROUTE screen=$screen category=$category focusId=$focusId" }
         if (!splash) {
+            // TV navigation starts with an actual D-pad focus, even when the
+            // platform last used touch mode before launching this window.
+            inputModes.requestInputMode(InputMode.Keyboard)
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
             val id = when (screen) {
@@ -4881,6 +4887,8 @@ private fun Herrin(startup: StartupPresentation) {
             startup.restoreBrowseFocus={
                 if(!startup.showing &&screen=="browse" &&!lanConfigOpen &&!exitConfirmation &&
                     !(category=="直播" &&liveSearchExpanded)) {
+                    inputModes.requestInputMode(InputMode.Keyboard)
+                    RemoteTrace.event { "BROWSE_WINDOW_FOCUS input_mode=${inputModes.inputMode}" }
                     // Restore synchronously when the OS grants this window input.
                     // Waiting for another key would consume the first direction.
                     runCatching{requester(pendingToolbarFocus?:focusId).requestFocus();true}.getOrElse{
