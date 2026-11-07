@@ -1242,7 +1242,8 @@ private fun Herrin(startup: StartupPresentation) {
         )
         val extended=tmdbState.tmdbExtendedRequest==targetId
         tmdbState.tmdbExtendedRequest=null
-        if(!extended){tmdbState.tmdbSearchPlans.reset(targetId);tmdbState.tmdbSpiderBatchOffsets.remove(targetId);tmdbState.tmdbSpiderBatchCompleted.remove(targetId)}
+        // Same film/config resumes the immutable plan after lifecycle cancellation.
+        // Explicit retry alone resets it; get() replaces it on identity/config changes.
         val budgetMs=if(extended)SourceSearchPolicy.EXTENDED_MS else SourceSearchPolicy.FOREGROUND_MS
         val lookupEpoch=tmdbState.tmdbLookupEpoch
         val configEpoch=personalSourceConfigEpoch
@@ -4671,10 +4672,16 @@ private fun Herrin(startup: StartupPresentation) {
                                     Text("正在检索或尚未找到真实片源",
                                         modifier = Modifier.testTag("tmdb-playback-unavailable"),
                                         color = Color(0xFFD9B78A), fontSize = 14.sp)
-                                    TvButton(if((tmdbState.tmdbSpiderBatchOffsets[film.id]?:0)>0 ||tmdbState.tmdbSourceStatus.contains("预算结束"))"继续搜索剩余节点" else "重新检索片源",
+                                    TvButton(if(tmdbState.tmdbSearchPlans.hasRemaining(film.id))"继续搜索剩余节点" else "重新检索片源",
                                         modifier = Modifier.testTag("tmdb-source-retry"),
                                         reduced = reduceMotion) {
-                                        tmdbState.tmdbExtendedRequest=film.id.takeIf{(tmdbState.tmdbSpiderBatchOffsets[film.id]?:0)>0 ||tmdbState.tmdbSourceStatus.contains("预算结束")}
+                                        val continuing=tmdbState.tmdbSearchPlans.hasRemaining(film.id)
+                                        tmdbState.tmdbExtendedRequest=film.id.takeIf{continuing}
+                                        if(!continuing) {
+                                            tmdbState.tmdbSearchPlans.reset(film.id)
+                                            tmdbState.tmdbSpiderBatchOffsets.remove(film.id)
+                                            tmdbState.tmdbSpiderBatchCompleted.remove(film.id)
+                                        }
                                         tmdbState.tmdbFallbackIndex.reset(film.id)
                                         tmdbState.tmdbPlaybackRoutes.forget(film.id)
                                         tmdbState.tmdbResolved[film.id]?.let { current ->

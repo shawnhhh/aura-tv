@@ -30,6 +30,9 @@ internal class SourceSearchPlans {
         val timedOut=plan.completed.count{plan.outcomes[it]==SourceSearchOutcome.TIMEOUT}
         return Progress(plan.nodes.size,plan.completed.size,success,plan.completed.size-success-timedOut,timedOut)
     }
+    @Synchronized fun hasRemaining(film:String):Boolean = plans[film]?.let { plan ->
+        plan.nodes.any { it !in plan.completed }
+    } ?: false
     @Synchronized fun completed(film:String,revision:String):Set<String> =
         plans[film]?.takeIf{it.revision==revision}?.completed?.toSet().orEmpty()
     @Synchronized fun get(film:String,revision:String,sites:List<TvBoxSite>,rank:(String)->Long):Pair<Plan,Boolean> {

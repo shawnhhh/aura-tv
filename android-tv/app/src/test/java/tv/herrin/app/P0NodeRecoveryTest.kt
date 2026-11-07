@@ -63,4 +63,20 @@ class P0NodeRecoveryTest {
         assertEquals(1,progress.remaining)
     }
 
+    @Test fun remainingPlanSurvivesResumeUntilExplicitRetryEvenWithZeroUiOffset() {
+        val plans=SourceSearchPlans()
+        val first=plans.get("film","revision",(1..7).map(::site)){0}.first
+        plans.register("film","revision",(1..7).map{"spider:n$it"})
+        plans.complete("film","revision","spider:n1")
+        assertTrue(plans.hasRemaining("film"))
+        val resumed=plans.get("film","revision",(1..7).map(::site)){100}.first
+        assertSame(first,resumed)
+        assertEquals(setOf("spider:n1"),plans.completed("film","revision"))
+        for(n in 2..7)plans.complete("film","revision","spider:n$n")
+        assertFalse(plans.hasRemaining("film"))
+        plans.reset("film")
+        assertTrue(plans.get("film","revision",(1..7).map(::site)){0}.second)
+        assertTrue(plans.completed("film","revision").isEmpty())
+    }
+
 }
