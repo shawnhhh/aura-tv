@@ -1420,7 +1420,9 @@ private fun Herrin(startup: StartupPresentation) {
         if (found == null) {
             automaticSearch = null
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "NO_VERIFIED_MEDIA")
-            tmdbSourceStatus = if (batchScan != null && batchScan.nextOffset == 0)
+            tmdbSourceStatus = if (batchScan != null && batchScan.eligible == 0)
+                "当前没有可自动检索的已授权 Spider 节点；请确认影视仓已加载、所需 JAR 已明确批准，不能仅凭 TMDB 海报推断有片源"
+            else if (batchScan != null && batchScan.nextOffset == 0)
                 "已检索全部 ${batchScan.eligible} 个当前已授权 Spider 影视点，但没有真实可播放线路；其他站点可能未授权、不兼容或已失效，请检查插件状态和配置时效"
             else if (batchScan != null)
                 "已检查 ${(spiderPageOffset + batchScan.checked).coerceAtMost(batchScan.eligible)}/${batchScan.eligible} 个授权 Spider 影视点，本次达到检索时间上限；点击重新检索可继续剩余节点"
