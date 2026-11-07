@@ -3,6 +3,15 @@ set -euo pipefail
 apk="$1"
 evidence="$2"
 mkdir -p "$evidence"
+collect_startup() {
+    code=$?
+    trap - EXIT
+    adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/final-diagnostics.txt" 2>&1 || true
+    # This job starts only the original offline demo, with no private services configured.
+    cat "$evidence/final-diagnostics.txt"
+    exit "$code"
+}
+trap collect_startup EXIT
 adb wait-for-device
 adb shell wm size 1920x1080
 adb shell wm density 240

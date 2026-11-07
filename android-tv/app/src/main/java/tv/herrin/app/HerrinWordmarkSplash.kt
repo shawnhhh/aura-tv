@@ -1,5 +1,7 @@
 package tv.herrin.app
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -77,4 +79,34 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             StartupTiming.wordmarkVisible()
         }
     }
+}
+
+
+/** Fixed-position wordmark; only opacity changes during exit. */
+@Composable
+internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
+                               onReady: () -> Unit, onFinished: () -> Unit,
+                               homeReady: Boolean = true, onVisible: () -> Unit = {}, wordmarkWidthDp: Float = 420f) {
+    val opacity = remember { Animatable(1f) }
+    var revealed by remember { mutableStateOf(false) }
+    LaunchedEffect(revealed, homeReady) {
+        if (revealed && homeReady) onReady()
+    }
+    LaunchedEffect(exiting, reduced) {
+        if (exiting) {
+            if (reduced) opacity.snapTo(0f)
+            else opacity.animateTo(0f, tween(LaunchMotion.FADE_MS))
+            onFinished()
+        }
+    }
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
+        .testTag("splash-curtain")) {
+        HerrinWordmarkSplash(reduced, done = { revealed = true }, onVisible = onVisible,widthDp=wordmarkWidthDp)
+    }
+}
+
+
+@Composable
+internal fun Splash(reduced: Boolean, done: () -> Unit) {
+    HerrinWordmarkSplash(reduced, done)
 }
