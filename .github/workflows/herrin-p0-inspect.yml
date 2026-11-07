@@ -30,3 +30,19 @@ jobs:
                       for i in range(max(0,n-2),min(len(rows),n+12)):
                           if i not in shown:print(path.name+': '+rows[i]);shown.add(i)
           PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-API31-startup-evidence
+          github-token: ${{ github.token }}
+          run-id: 42358864061
+          path: evidence/api31
+      - name: Review recorded branding geometry separately from timing metrics
+        run: |
+          video=$(find evidence/api31 -name visual-only-startup.mp4 -type f | head -n 1)
+          test -s "$video"
+          ffmpeg -v error -i "$video" -vf 'fps=1,scale=384:216,tile=3x2' -frames:v 1 /tmp/herrin-visual.jpg
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          print('HERRIN_VISUAL_ONLY_JPEG='+base64.b64encode(Path('/tmp/herrin-visual.jpg').read_bytes()).decode())
+          PY
