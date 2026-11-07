@@ -35,7 +35,7 @@ class P0FastSourceSearchTest {
             if(site.key=="n6")awaitCancellation();return super.search(site,identity)
         }}
         val result=HerrinApprovedSpiderBatch.scanAcrossPages(request,(1..12).map(::site),{true},session,
-            stopAtFirstPlayable=true,stageBudgetMs=25,maxWallClockMs=1000,onSiteProgress={
+            stopAtFirstPlayable=true,stageBudgetMs=25,maxWallClockMs=1000,onStageProgress={
                 it.activeIndex?.let(starts::add)
                 if(it.activeIndex==null)completed+=it.checked
                 if(it.activeIndex==6)assertEquals(5,it.checked)

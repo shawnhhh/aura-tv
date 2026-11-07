@@ -110,7 +110,8 @@ internal object HerrinApprovedSpiderBatch {
         onSiteProgress: suspend (Scan) -> Unit = {},
         onEvent: suspend (SourceSearchEvent) -> Unit = {},
         timeoutPerSiteMs: Long = SourceSearchPolicy.NODE_MS,
-        stageBudgetMs: Long = SourceSearchPolicy.STAGE_MS
+        stageBudgetMs: Long = SourceSearchPolicy.STAGE_MS,
+        onStageProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val winners = mutableListOf<Match>()
         var checked = 0
@@ -124,20 +125,19 @@ internal object HerrinApprovedSpiderBatch {
                 val completedBeforePage = checked
                 val episodesBeforePage = episodes
                 val offsetBeforePage = next
+                fun accumulated(partial:Scan):Scan {
+                    checked=completedBeforePage+partial.checked;total=partial.eligible
+                    episodes=episodesBeforePage+partial.candidatesWithEpisodes;next=partial.nextOffset
+                    return partial.copy(checked=checked,candidatesWithEpisodes=episodes)
+                }
                 val page = scan(identity, sites, allowed, session, offset = next,
                     timeoutPerSiteMs = timeoutPerSiteMs,
                     stopAtFirstPlayable = stopAtFirstPlayable,
                     onEvent = onEvent, stageBudgetMs = stageBudgetMs,
-                    onSiteProgress = { partial ->
-                        // Preserve the next unchecked site even on mid-page timeout.
-                        checked = completedBeforePage + partial.checked
-                        total = partial.eligible
-                        episodes = episodesBeforePage + partial.candidatesWithEpisodes
-                        next = partial.nextOffset
-                        onSiteProgress(Scan(partial.match,
-                            checked, total, next, episodes, partial.lastOutcome,
-                            partial.activeIndex,partial.stage,partial.elapsedMs,partial.httpCode))
-                    })
+                    // Preserve the completion-only legacy contract. Live phase
+                    // updates also save the unfinished cursor on a deadline.
+                    onSiteProgress = {partial->onSiteProgress(accumulated(partial))},
+                    onStageProgress = {partial->onStageProgress(accumulated(partial))})
                 checked = completedBeforePage + page.checked
                 total = page.eligible
                 episodes = episodesBeforePage + page.candidatesWithEpisodes
@@ -167,7 +167,8 @@ internal object HerrinApprovedSpiderBatch {
         stopAtFirstPlayable: Boolean = false,
         onSiteProgress: suspend (Scan) -> Unit = {},
         onEvent: suspend (SourceSearchEvent) -> Unit = {},
-        stageBudgetMs: Long = 1_200L
+        stageBudgetMs: Long = 1_200L,
+        onStageProgress: suspend (Scan) -> Unit = {}
     ): Scan {
         val eligible = sites.filter { (it.spiderApi != null || it.scriptApi != null) && allowed(it) }
             .distinctBy { it.key }.take(100)
@@ -181,13 +182,14 @@ internal object HerrinApprovedSpiderBatch {
         for (site in page) {
             if(!session.eligible(site)){
                 processed++
-                onSiteProgress(Scan(null,checked,eligible.size,if(start+processed>=eligible.size)0 else start+processed,
-                    episodesFound,Outcome.DEFERRED))
+                val progress=Scan(null,checked,eligible.size,if(start+processed>=eligible.size)0 else start+processed,
+                    episodesFound,Outcome.DEFERRED)
+                onSiteProgress(progress);onStageProgress(progress)
                 continue
             }
             val started = System.nanoTime()
             var stage = SourceSearchStage.ACTIVATE
-            suspend fun publishActive() = onSiteProgress(Scan(null,checked,eligible.size,
+            suspend fun publishActive() = onStageProgress(Scan(null,checked,eligible.size,
                 start+processed,episodesFound,activeIndex=start+processed+1,stage=stage,
                 elapsedMs=(System.nanoTime()-started)/1_000_000))
             suspend fun <T> phase(value: SourceSearchStage, block: suspend () -> T): T {
@@ -294,8 +296,9 @@ internal object HerrinApprovedSpiderBatch {
             onEvent(SourceSearchEvent("spider:"+site.key,finalStage,code,(System.nanoTime()-started)/1_000_000,
                 checked,eligible.size,httpFailure?.retryAfterMs))
             // No URLs, credentials or raw provider exceptions in UI diagnostics.
-            onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome,
-                stage=finalStage,elapsedMs=(System.nanoTime()-started)/1_000_000,httpCode=httpFailure?.code))
+            val progress=Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome,
+                stage=finalStage,elapsedMs=(System.nanoTime()-started)/1_000_000,httpCode=httpFailure?.code)
+            onSiteProgress(progress);onStageProgress(progress)
             if (stopAtFirstPlayable && found != null) {
                 // playerContent + bounded real media probe already succeeded
                 // in the currently active Spider session.

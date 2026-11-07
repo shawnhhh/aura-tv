@@ -1423,7 +1423,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 "$visited/${progress.eligible}，继续寻找可播放线路…"
                         }
                     },
-                    onSiteProgress = { progress ->
+                    onStageProgress = { progress ->
                         // Do not hide all of nodes 7..12 behind a six-site page.
                         // Also persist the mid-page cursor on a deadline.
                         withContext(Dispatchers.Main) {
