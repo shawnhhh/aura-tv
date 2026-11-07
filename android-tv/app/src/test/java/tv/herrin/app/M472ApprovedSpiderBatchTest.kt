@@ -317,6 +317,7 @@ class M472ApprovedSpiderBatchTest {
     @Test fun nextSiteContinuesWhenPreviousApprovedSiteExceedsItsTimeout() = runBlocking {
         val visited = mutableListOf<String>()
         val progress = mutableListOf<Int>()
+        val eachSite = mutableListOf<Int>()
         var active = ""
         val session = object : HerrinApprovedSpiderBatch.Session {
             override suspend fun activate(site: TvBoxSite): Boolean {
@@ -342,6 +343,24 @@ class M472ApprovedSpiderBatchTest {
         assertEquals(listOf(1, 2), progress)
         assertEquals(listOf("node-1", "node-2"), visited)
         assertTrue("A cancellable slow provider must not hold up a working one", durationMs < 1_900L)
+    }
+
+    @Test fun reportsSafePerNodeOutcomeRatherThanClaimingNoSourcesFound() = runBlocking {
+        val outcomes = mutableListOf<HerrinApprovedSpiderBatch.Outcome?>()
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite) = site.key != "node-1"
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                emptyList<HerrinSourceMovie>()
+            override suspend fun details(candidate: HerrinSourceMovie): Film? = null
+            override suspend fun canPlay(detailed: Film) = false
+        }
+        HerrinApprovedSpiderBatch.scan(
+            request, listOf(site(1), site(2)), { true }, session,
+            onSiteProgress = { outcomes += it.lastOutcome })
+        assertEquals(listOf(
+            HerrinApprovedSpiderBatch.Outcome.ACTIVATE_FAILED,
+            HerrinApprovedSpiderBatch.Outcome.NO_MATCH
+        ), outcomes)
     }
 
     @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
