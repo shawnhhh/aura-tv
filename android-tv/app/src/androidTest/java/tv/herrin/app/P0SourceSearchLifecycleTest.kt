@@ -28,8 +28,9 @@ class P0SourceSearchLifecycleTest {
         compose.setContent {
             CompositionLocalProvider(LocalLifecycleOwner provides owner) {
                 SourceSearchLifecycle(state)
-                LaunchedEffect(state.sourceForeground,state.tmdbLookupEpoch) {
-                    if(state.sourceForeground) {
+                val foreground=state.sourceForeground
+                LaunchedEffect(foreground,state.tmdbLookupEpoch) {
+                    if(foreground) {
                         state.sourceSearchJob=currentCoroutineContext()[Job]
                         starts.incrementAndGet();active.incrementAndGet()
                         try{awaitCancellation()}finally{active.decrementAndGet()}

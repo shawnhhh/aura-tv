@@ -35,7 +35,7 @@ adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinSplashTest,tv.herrin
 python3 - <<'PY'
 from pathlib import Path
 text=Path('build/emulator-evidence/p0-regression-preflight.txt').read_text()
-assert 'OK (' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+assert 'OK (14 tests)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
 assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
 PY
 # Shell-owned evidence survives the package uninstall performed by AGP.

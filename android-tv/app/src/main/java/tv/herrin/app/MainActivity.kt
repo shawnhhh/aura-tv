@@ -1184,12 +1184,15 @@ private fun Herrin(startup: StartupPresentation) {
     val lookupFilm=remember(filmId,tmdbState.tmdbHomeFilms,tmdbState.tmdbTop250Films,recentIndexFilms){
         (tmdbState.tmdbHomeFilms+tmdbState.tmdbTop250Films+recentIndexFilms).firstOrNull{it.id==filmId}
     }
+    // Capture the same value as the effect key. Lifecycle observers can publish
+    // STARTED during apply, before the old (false-keyed) effect is launched.
+    val sourceSearchForeground=tmdbState.sourceForeground
     LaunchedEffect(screen, filmId, lookupFilm?.title,lookupFilm?.subtitle,lookupFilm?.year,lookupFilm?.tmdbTvId,tvBoxSingle,
-        tvBoxWarehouses, personalSourceConfigEpoch, tmdbState.tmdbLookupEpoch,tmdbState.sourceForeground) {
+        tvBoxWarehouses, personalSourceConfigEpoch, tmdbState.tmdbLookupEpoch,sourceSearchForeground) {
         val searchTicket=tmdbState.tmdbSearchGeneration.incrementAndGet()
         val consentAtStart=spiderBridge.configurationTicket()
         tmdbState.tmdbSearchRunning=false
-        if(!tmdbState.sourceForeground)return@LaunchedEffect
+        if(!sourceSearchForeground)return@LaunchedEffect
         tmdbState.sourceSearchJob=kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val recoveryRequest = tmdbState.automaticSearch?.takeIf { it.film == filmId && screen == "player" }
         if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
