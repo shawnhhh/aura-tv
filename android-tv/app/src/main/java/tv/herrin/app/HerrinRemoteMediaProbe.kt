@@ -31,7 +31,8 @@ internal class HerrinRemoteMediaProbe(
     // Global TMDB source lookup explicitly supplies FongMiSessionAuthorization
     // for its current approved Spider site; all other callers fail closed.
     private val authorizeLocal: suspend (String) -> Boolean = { false },
-    private val onHttpFailure: (Int, Long?) -> Unit = { _, _ -> }
+    private val onHttpFailure: (Int, Long?) -> Unit = { _, _ -> },
+    private val strictHttpFailure: Boolean = false
 ) {
     enum class Result {
         MEDIA, INVALID_URL, UNAUTHORIZED_LOCAL, HTTP_ERROR, LOGIN_OR_TEXT,
@@ -78,7 +79,9 @@ internal class HerrinRemoteMediaProbe(
                     return@readSourceResponse null
                 }
                 if (reply.code !in setOf(200, 206)) {
-                    onHttpFailure(reply.code,SourceHealthIndex.retryAfter(reply.header("Retry-After"),System.currentTimeMillis()))
+                    val retry=SourceHealthIndex.retryAfter(reply.header("Retry-After"),System.currentTimeMillis())
+                    onHttpFailure(reply.code,retry)
+                    if(strictHttpFailure)throw SourceHttpFailure(reply.code,retry)
                     return@readSourceResponse Result.HTTP_ERROR
                 }
                 if (reply.code == 206 &&
@@ -120,7 +123,10 @@ internal class HerrinRemoteMediaProbe(
                 if (contentType.startsWith("text/") || contentType.contains("xml"))
                     return@readSourceResponse Result.LOGIN_OR_TEXT
                 Result.MEDIA
-            } } catch(cancel:CancellationException){throw cancel} catch(_:Exception){return Result.NETWORK_ERROR}
+            } } catch(cancel:CancellationException){throw cancel} catch(error:Exception){
+                if(strictHttpFailure &&error is SourceHttpFailure)throw error
+                return Result.NETWORK_ERROR
+            }
             if(result!=null)return result
         }
         return Result.HTTP_ERROR

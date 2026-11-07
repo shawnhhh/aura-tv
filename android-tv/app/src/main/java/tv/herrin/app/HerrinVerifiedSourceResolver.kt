@@ -65,6 +65,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                 var verifiedOne = false
                 var verifiedMedia:PlaybackMedia?=null
                 for ((candidate, media) in prepared.take(8)) {
+                    var terminalHttp:SourceHttpFailure?=null
                     onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.CHECKING))
                     val began=System.nanoTime()
                     val valid = try {
@@ -73,7 +74,14 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                         } == true
                     } catch (cancelled: kotlinx.coroutines.CancellationException) {
                         throw cancelled
+                    } catch(error:SourceHttpFailure){
+                        terminalHttp=error
+                        val outcome=SourceHealthIndex.httpOutcome(error.code)
+                        health?.record(candidate.sourceId,SourceSearchStage.MEDIA,outcome,(System.nanoTime()-began)/1_000_000,error.retryAfterMs)
+                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,outcome,retryAfterMs=error.retryAfterMs))
+                        false
                     } catch (_: Exception) { false }
+                    if(terminalHttp?.code in setOf(401,403,429))break
                     if (valid) {
                         health?.record(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.VERIFIED,(System.nanoTime()-began)/1_000_000)
                         onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.VERIFIED,(System.nanoTime()-began)/1_000_000))
@@ -95,7 +103,8 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                     }
                     val chosen = built.episodes.firstNotNullOfOrNull { ep ->
                         ep.lines.firstOrNull { coordinate?.accepts(ep, it) != false &&
-                            built.mediaByLine[it.id]==verifiedMedia }?.let { ep.number to it.id }
+                            built.mediaByLine[it.id]?.let{candidate->candidate.uri==verifiedMedia?.uri &&
+                                candidate.headers==verifiedMedia?.headers &&candidate.allowHttpRedirects==verifiedMedia?.allowHttpRedirects}==true }?.let { ep.number to it.id }
                     }
                     if (chosen == null) emptyList()
                     else {
@@ -115,8 +124,12 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                     if (detailed != null && HerrinFilmIdentityMatch.matches(identity,candidate.copy(film=detailed)) && HerrinPlaybackEntry.firstPlayable(detailed) != null) {
                         val began=System.nanoTime()
                         onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.CHECKING))
+                        var terminalHttp:SourceHttpFailure?=null
+                        var validationFailure:SourceCandidateFailure?=null
                         val verified = try { verifyRemote(candidate, detailed) }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                        catch(error:SourceHttpFailure){terminalHttp=error;false}
+                        catch(error:SourceCandidateFailure){validationFailure=error;false}
                         catch (_: Exception) { false }
                         val choice = if (verified) selectRemote(candidate, detailed)
                             else null
@@ -124,9 +137,10 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                             detailedFilm = detailed
                             verifiedLine = choice
                         }
-                        val result=if(choice!=null)SourceSearchOutcome.VERIFIED else SourceSearchOutcome.MEDIA_FAILED
-                        health?.record(candidate.sourceId,SourceSearchStage.MEDIA,result,(System.nanoTime()-began)/1_000_000)
-                        onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,result,(System.nanoTime()-began)/1_000_000))
+                        val result=terminalHttp?.let{SourceHealthIndex.httpOutcome(it.code)}?:validationFailure?.outcome?:if(choice!=null)SourceSearchOutcome.VERIFIED else SourceSearchOutcome.MEDIA_FAILED
+                        val phase=validationFailure?.stage?:SourceSearchStage.MEDIA
+                        health?.record(candidate.sourceId,phase,result,(System.nanoTime()-began)/1_000_000,terminalHttp?.retryAfterMs)
+                        onEvent(SourceSearchEvent(candidate.sourceId,phase,result,(System.nanoTime()-began)/1_000_000,retryAfterMs=terminalHttp?.retryAfterMs))
                         choice != null
                     } else {
                         onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.DETAILS,SourceSearchOutcome.NO_EPISODES))

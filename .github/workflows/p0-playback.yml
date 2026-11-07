@@ -8,6 +8,7 @@ on:
       - '.github/workflows/android-debug.yml'
       - '.github/workflows/android-emulator.yml'
       - '.github/workflows/p0-playback.yml'
+      - '.github/workflows/android-startup.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,3 +21,7 @@ jobs:
   emulator:
     needs: debug
     uses: ./.github/workflows/android-emulator.yml
+  startup-api31:
+    if: github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107'
+    needs: debug
+    uses: ./.github/workflows/android-startup.yml

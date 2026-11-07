@@ -36,7 +36,8 @@ internal fun Activity.preferSmoothTvUi() {
         window.attributes = params
     }
     Log.i("HerrinDisplay", "output=${current.width}x${current.height}@${current.hz}Hz " +
-        "uiPreference=${preference ?: "system"} supported=${supported.joinToString()}")
+        "uiCandidate=${preference ?: "system"} windowRequest=${window.attributes.preferredRefreshRate} " +
+        "requestedModeId=${window.attributes.preferredDisplayModeId} supported=${supported.joinToString()}")
 }
 
 /** Yield window hints on a scene boundary so the video surface/core owns frame matching. */

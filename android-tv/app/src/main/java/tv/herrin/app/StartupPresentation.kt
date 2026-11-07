@@ -17,6 +17,9 @@ internal class StartupPresentation {
     var prepareHome by mutableStateOf(false)
     var reduced by mutableStateOf(false)
     var preferences by mutableStateOf<Preferences?>(null)
+    var profiles:CatalogProfiles?=null
+    var initialProfiles:List<CatalogProfile> = emptyList()
+    var initialProfileId:String?=null
     var artworkReady by mutableStateOf(false)
     var networkReady by mutableStateOf(false)
     var wordmarkWidthDp by mutableFloatStateOf(420f)
@@ -32,9 +35,17 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
             CrashJournal.loadPrevious(context)
             // Keystore migration/decryption must not occupy the first input frame.
             context.getSharedPreferences("herrin-watch-history", 0).all
+            // CatalogProfiles performs a one-time synchronous migration/commit.
+            // Complete it here, never in the home composition.
+            val profiles=CatalogProfiles(context)
+            state.profiles=profiles;state.initialProfiles=profiles.list();state.initialProfileId=profiles.activeId()
             // Predecode a bounded pair of original bundled images off the UI thread.
             DemoCatalog().titles().take(2).forEach { BundledArtworkCache.load(context,it.artwork) }
-            Preferences(context).apply { tmdbReadToken }
+            Preferences(context).apply {
+                tmdbReadToken
+                state.reduced=reducedMotion ||android.provider.Settings.Global.getFloat(context.contentResolver,
+                    android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,1f)==0f
+            }
         }
         while (true) { withContext(Dispatchers.IO) { CrashJournal.sampleMemory(); CrashJournal.checkpoint(context) }; delay(5000) }
     }

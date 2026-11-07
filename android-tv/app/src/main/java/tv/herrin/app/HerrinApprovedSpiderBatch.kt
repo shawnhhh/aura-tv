@@ -32,7 +32,7 @@ internal object HerrinApprovedSpiderBatch {
     data class Scan(val match: Match?, val checked: Int, val eligible: Int,
                     val nextOffset: Int, val candidatesWithEpisodes: Int,
                     val lastOutcome: Outcome? = null, val activeIndex: Int? = null,
-                    val stage: SourceSearchStage? = null, val elapsedMs: Long = 0)
+                    val stage: SourceSearchStage? = null, val elapsedMs: Long = 0, val httpCode:Int?=null)
 
     /**
      * One tap scans successive bounded pages of the already approved JAR
@@ -138,7 +138,7 @@ internal object HerrinApprovedSpiderBatch {
                         next = partial.nextOffset
                         onSiteProgress(Scan(partial.match,
                             checked, total, next, episodes, partial.lastOutcome,
-                            partial.activeIndex,partial.stage,partial.elapsedMs))
+                            partial.activeIndex,partial.stage,partial.elapsedMs,partial.httpCode))
                     })
                 checked = completedBeforePage + page.checked
                 total = page.eligible
@@ -215,6 +215,8 @@ internal object HerrinApprovedSpiderBatch {
             }
             var finished = false
             var failed = false
+            var httpFailure:SourceHttpFailure?=null
+            var validationFailure:SourceCandidateFailure?=null
             var outcome = Outcome.ACTIVATE_FAILED
             val found = try {
                 withTimeoutOrNull(timeoutPerSiteMs.coerceIn(1_000, 20_000)) {
@@ -246,7 +248,11 @@ internal object HerrinApprovedSpiderBatch {
                         // Spider playerContent must yield an actual authorized
                         // media route; broken PROXY_INVALID_ROUTE is rejected.
                         outcome = Outcome.INVALID_MEDIA
-                        val chosen = phase(SourceSearchStage.MEDIA) { session.pick(film) } ?: continue
+                        val chosen = try { phase(SourceSearchStage.MEDIA) { session.pick(film) } }
+                            catch(error:SourceCandidateFailure){validationFailure=error
+                                outcome=if(error.outcome==SourceSearchOutcome.PARSE_FAILED)Outcome.PARSE_FAILED else Outcome.INVALID_MEDIA;null}
+                            ?: continue
+                        validationFailure=null
                         // Do not let an advertised 4K filename outrank an
                         // actually validated 1080p episode/line.
                         val quality = selectedLineClaim(film, chosen, offer.resolutionClaim ?: 0)
@@ -258,6 +264,9 @@ internal object HerrinApprovedSpiderBatch {
                     finished = true
                     best
                 }
+            } catch (error:SourceHttpFailure) { finished=true;httpFailure=error;null
+            } catch(error:SourceCandidateFailure){finished=true;stage=error.stage;validationFailure=error
+                outcome=if(error.outcome==SourceSearchOutcome.PARSE_FAILED)Outcome.PARSE_FAILED else Outcome.INVALID_MEDIA;null
             } catch (_: NodeDeadline) { null
             } catch (cancel: CancellationException) {
                 throw cancel
@@ -272,7 +281,7 @@ internal object HerrinApprovedSpiderBatch {
                 else -> outcome
             }
             val nextUnchecked = if (start + processed >= eligible.size) 0 else start + processed
-            val code=when(lastOutcome){
+            val code=httpFailure?.let{SourceHealthIndex.httpOutcome(it.code)}?:validationFailure?.outcome?:when(lastOutcome){
                 Outcome.VERIFIED->SourceSearchOutcome.VERIFIED
                 Outcome.TIMEOUT->SourceSearchOutcome.TIMEOUT
                 Outcome.ACTIVATE_FAILED->SourceSearchOutcome.ACTIVATE_FAILED
@@ -284,10 +293,10 @@ internal object HerrinApprovedSpiderBatch {
                 Outcome.DEFERRED->SourceSearchOutcome.RATE_LIMITED
             }
             onEvent(SourceSearchEvent("spider:"+site.key,stage,code,(System.nanoTime()-started)/1_000_000,
-                checked,eligible.size))
+                checked,eligible.size,httpFailure?.retryAfterMs))
             // No URLs, credentials or raw provider exceptions in UI diagnostics.
             onSiteProgress(Scan(found, checked, eligible.size, nextUnchecked, episodesFound, lastOutcome,
-                stage=stage,elapsedMs=(System.nanoTime()-started)/1_000_000))
+                stage=stage,elapsedMs=(System.nanoTime()-started)/1_000_000,httpCode=httpFailure?.code))
             if (stopAtFirstPlayable && found != null) {
                 // playerContent + bounded real media probe already succeeded
                 // in the currently active Spider session.

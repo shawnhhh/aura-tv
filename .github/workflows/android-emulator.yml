@@ -71,5 +71,6 @@ jobs:
             android-tv/app/build/reports/androidTests/
             android-tv/app/build/outputs/androidTest-results/
             android-tv/app/build/outputs/apk/debug/*.apk
+            android-tv/app/build/outputs/apk/androidTest/debug/*.apk
           if-no-files-found: warn
           retention-days: 14

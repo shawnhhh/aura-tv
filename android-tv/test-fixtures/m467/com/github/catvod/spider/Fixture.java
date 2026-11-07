@@ -8,8 +8,10 @@ import java.util.Map;
 import java.util.HashMap;
 public final class Fixture extends Spider {
     private Map<String, Object> lifecycle;
+    private Context fixtureContext;
     @Override public void init(Context context, String extend) {
         if (!Init.initialized) throw new IllegalStateException("JAR Init was not invoked");
+        fixtureContext = context;
         lifecycle = LifecycleGate.state(context);
         LifecycleGate.count(lifecycle, "inits");
         LifecycleGate.pause(lifecycle, "init", this);
@@ -22,6 +24,12 @@ public final class Fixture extends Spider {
         return "{\"list\":[{\"vod_id\":\"fixture\",\"vod_name\":\"Original synthetic fixture\"}]}";
     }
     @Override public String searchContent(String keyword, boolean quick) {
+        if ("__HERRIN_TEST_IGNORE_INTERRUPT__".equals(keyword)) {
+            try { new java.io.File(fixtureContext.getFilesDir(), "p0-fixture-hang-entered").createNewFile(); }
+            catch (java.io.IOException failure) { throw new IllegalStateException(failure); }
+            // Test-only original DEX fixture, not production provider code/JNI.
+            for (;;) { try { Thread.sleep(1000); } catch (InterruptedException ignored) {} }
+        }
         LifecycleGate.count(lifecycle, "searches");
         return homeContent(false);
     }

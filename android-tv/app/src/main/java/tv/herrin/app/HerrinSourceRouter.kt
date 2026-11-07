@@ -158,6 +158,22 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
                 .sortedByDescending{health?.rank(it.id)?:0}.take(100)
             if(providers.isEmpty())continue
             val tier=if(type==HerrinSourceType.NAS||type==HerrinSourceType.CLOUD)HerrinSourceTier.PERSONAL else HerrinSourceTier.TVBOX
+            if(type==HerrinSourceType.TVBOX_SPIDER){
+                // Hold the whole discovery -> details -> verification sequence,
+                // not merely searchContent, before any other mutable session.
+                for(source in providers){
+                    val accepted=withTimeoutOrNull(1_800L){
+                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING))
+                        val offers=try{source.search(identity).filter{it.sourceId==source.id &&it.sourceType==source.type &&HerrinFilmIdentityMatch.matches(identity,it)}}
+                            catch(cancel:CancellationException){throw cancel}catch(_:Exception){emptyList()}
+                        searched+=source.id
+                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,if(offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED))
+                        accept(offers).filter{it in offers}
+                    }.orEmpty()
+                    if(accepted.isNotEmpty())return HerrinFilmLookupResult(accepted,tier,errors,searched)
+                }
+                continue
+            }
             val accepted=withTimeoutOrNull(if(type==HerrinSourceType.TVBOX_CMS)2_800L else 1_800L){
                 coroutineScope {
                     data class Found(val source:HerrinFilmSource,val offers:List<HerrinSourceMovie>,val failure:SourceSearchOutcome?,val elapsed:Long)

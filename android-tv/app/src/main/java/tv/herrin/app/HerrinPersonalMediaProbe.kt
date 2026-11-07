@@ -23,7 +23,8 @@ internal class HerrinPersonalMediaProbe(
         .connectTimeout(1_500, TimeUnit.MILLISECONDS)
         .readTimeout(1_500, TimeUnit.MILLISECONDS)
         .callTimeout(2_000, TimeUnit.MILLISECONDS)
-        .build()
+        .build(),
+    private val strictHttpFailure:Boolean=false
 ) {
     suspend fun canRead(media: PlaybackMedia): Boolean = withContext(Dispatchers.IO) {
         val url = runCatching { URI(media.uri) }.getOrNull() ?: return@withContext false
@@ -42,7 +43,10 @@ internal class HerrinPersonalMediaProbe(
         }
         try {
             readSourceResponse(client,request) { response ->
-                    if (response.code !in setOf(200, 206)) return@readSourceResponse false
+                    if (response.code !in setOf(200, 206)) {
+                        if(strictHttpFailure)throw SourceHttpFailure(response.code,SourceHealthIndex.retryAfter(response.header("Retry-After"),System.currentTimeMillis()))
+                        return@readSourceResponse false
+                    }
                     val contentType = response.header("Content-Type").orEmpty()
                         .substringBefore(';').trim().lowercase()
                     if (contentType in setOf("text/html", "application/xhtml+xml",
@@ -60,7 +64,8 @@ internal class HerrinPersonalMediaProbe(
                 }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if(strictHttpFailure &&error is SourceHttpFailure)throw error
             false
         }
     }
