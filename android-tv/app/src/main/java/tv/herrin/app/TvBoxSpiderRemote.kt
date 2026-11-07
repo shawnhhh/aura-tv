@@ -495,6 +495,8 @@ internal class TvBoxSpiderBridge(context: Context) {
     private var cleanupJob: Job? = null
     private var retiredUntil = 0L
     private var retiringBinder:IBinder?=null
+    private var retirementDeath:CompletableDeferred<Unit>?=null
+    private var retirementDeathRecipient:IBinder.DeathRecipient?=null
     private var retirement:CompletableDeferred<Boolean>?=null
     private var retirementId=-1
     private var retirementReaper:Job?=null
@@ -606,12 +608,15 @@ internal class TvBoxSpiderBridge(context: Context) {
         val old=retiringBinder
         if(old!=null){
             val signal=retirement
-            withTimeoutOrNull(600){while(signal?.isCompleted!=true &&old.isBinderAlive)delay(20)}
+            fun gone()=retirementDeath?.isCompleted==true ||!old.isBinderAlive
+            withTimeoutOrNull(600){while(signal?.isCompleted!=true &&!gone())delay(20)}
             val retired=if(signal?.isCompleted==true)signal.await() else null
             if(retired!=false){
-                withTimeoutOrNull(800){while(old.isBinderAlive)delay(20)}
-                check(!old.isBinderAlive){"Spider 子进程仍在回收，未复用旧执行会话"}
+                withTimeoutOrNull(800){while(!gone())delay(20)}
+                check(gone()){"Spider 子进程仍在回收，未复用旧执行会话"}
             }
+            retirementDeathRecipient?.let { runCatching { old.unlinkToDeath(it,0) } }
+            retirementDeathRecipient=null;retirementDeath=null
             retiringBinder=null;retirement=null
             retirementReaper?.cancel();retirementReaper=null
         }
@@ -765,6 +770,15 @@ internal class TvBoxSpiderBridge(context: Context) {
     private fun retire(server:Messenger,id:Int){
         val old=server.binder
         val signal=CompletableDeferred<Boolean>()
+        val previous=retiringBinder
+        retirementDeathRecipient?.let { recipient->runCatching{previous?.unlinkToDeath(recipient,0)} }
+        // isBinderAlive is only the last known state. After unbind, no service
+        // callback is guaranteed; explicitly observe this exact Binder's death
+        // before releasing its authority and binding a fresh child.
+        val died=CompletableDeferred<Unit>()
+        val deathRecipient=IBinder.DeathRecipient { died.complete(Unit) }
+        retirementDeath=died;retirementDeathRecipient=deathRecipient
+        try{old.linkToDeath(deathRecipient,0)}catch(_:android.os.RemoteException){died.complete(Unit)}
         retiringBinder=old;retirementId=id;retirement=signal
         runCatching { server.send(Message.obtain(null,SpiderIpc.CANCEL_REQUEST).apply{arg1=id;replyTo=responses}) }
         retirementReaper?.cancel()
@@ -772,7 +786,7 @@ internal class TvBoxSpiderBridge(context: Context) {
             // Give cooperative cancellation and the child's own 250ms reaper priority.
             delay(650)
             // A local test/host Binder must never authorize process retirement.
-            if(old is android.os.Binder ||retiringBinder!==old ||!old.isBinderAlive)return@launch
+            if(old is android.os.Binder ||retiringBinder!==old ||died.isCompleted ||!old.isBinderAlive)return@launch
             if(signal.isCompleted &&!signal.await())return@launch
             val pid=withContext(Dispatchers.IO){
                 runCatching {
@@ -784,7 +798,7 @@ internal class TvBoxSpiderBridge(context: Context) {
             }
             // Recheck the exact retired Binder after the IO query. A new binding
             // or completed cancellation must not be killed by an old watchdog.
-            if(pid!=null &&retiringBinder===old &&old.isBinderAlive &&
+            if(pid!=null &&retiringBinder===old &&!died.isCompleted &&old.isBinderAlive &&
                 !(signal.isCompleted &&!signal.await())) {
                 SpiderHostRetirement.requests.incrementAndGet()
                 android.os.Process.killProcess(pid)
