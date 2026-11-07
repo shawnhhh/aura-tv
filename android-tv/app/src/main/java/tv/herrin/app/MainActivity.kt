@@ -2061,9 +2061,13 @@ private fun Herrin(startup: StartupPresentation) {
             if (failedStatus.contains("Spider 子进程异常退出") &&
                 !failedStatus.contains("系统原因：")) {
                 delay(900)
-                SpiderExitDiagnostics.recent(context)?.let { reason ->
+                val exitDetail=withContext(Dispatchers.IO){
+                    listOfNotNull(SpiderStartupTrace.recent(context)?.let{"最后阶段：$it"},
+                        SpiderExitDiagnostics.recent(context)?.let{"系统原因：$it"}).joinToString("；")
+                }
+                exitDetail.takeIf{it.isNotBlank()}?.let { reason ->
                     if (spiderStatus == failedStatus) spiderStatus =
-                        "$failedStatus；系统原因：$reason"
+                        "$failedStatus；$reason"
                 }
             }
         }

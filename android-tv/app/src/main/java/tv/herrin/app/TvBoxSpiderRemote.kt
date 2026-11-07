@@ -563,12 +563,10 @@ internal class TvBoxSpiderBridge(context: Context) {
             // Invalidate IMMEDIATELY so the next user action can bind a fresh
             // service; never hold dead Messenger references while waiting for
             // the OS to publish a diagnostic record.
-            val stage = SpiderStartupTrace.recent(app)
-            val cause = SpiderExitDiagnostics.recent(app)
-            invalidate("Spider 子进程异常退出" +
-                (stage?.let { "，最后阶段：$it" } ?: "") +
-                (cause?.let { "，系统原因：$it" } ?: "") +
-                "；可换一条直链或重新应用站点", TransportFault.PROCESS_EXITED)
+            // HistoricalProcessExitReasons is a Binder query and recent()
+            // reads disk. Playback enriches this diagnosis asynchronously;
+            // neither belongs in the main-thread service-death callback.
+            invalidate("Spider 子进程异常退出；可换一条直链或重新应用站点", TransportFault.PROCESS_EXITED)
         }
 
         override fun onBindingDied(name: ComponentName?) {
