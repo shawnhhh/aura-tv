@@ -1,0 +1,64 @@
+name: HERRIN P0 Launcher Intent Startup
+on:
+  push:
+    branches: ['codex/herrin-startup-source-health-20261107']
+    paths: ['.github/workflows/p0-system-launch-probe.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  launcher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require the actual pinned candidate Debug build
+        uses: actions/github-script@v7
+        with:
+          script: |
+            for(let attempt=0;attempt<90;attempt++){
+              const {data:run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:42363299465});
+              if(run.head_sha!=='92bd777604ea1c68361bd7d677a6c4ac7372c5b7')throw new Error('Candidate SHA mismatch');
+              const {data}=await github.rest.actions.listJobsForWorkflowRun({...context.repo,run_id:run.id});
+              const debug=data.jobs.find(job=>job.name==='debug / debug');
+              if(debug?.status==='completed'){
+                if(debug.conclusion!=='success')throw new Error('Candidate Debug build failed');
+                return;
+              }
+              await new Promise(resolve=>setTimeout(resolve,10000));
+            }
+            throw new Error('Candidate Debug build did not complete');
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-debug-apk
+          github-token: ${{ github.token }}
+          run-id: 42363299465
+          path: startup-apk
+      - name: Enable Linux KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android 12 launcher intent (phone image, no physical TV claim)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 31
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            sed 's/am start -W -n/am start -W -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER -n/g' android-tv/scripts/startup_probe.sh > /tmp/herrin-launcher-probe.sh
+            bash /tmp/herrin-launcher-probe.sh startup-apk/app-debug.apk android-tv/build/launcher-api31
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HERRIN-API31-launcher-intent-evidence
+          path: android-tv/build/launcher-api31/
+          retention-days: 14

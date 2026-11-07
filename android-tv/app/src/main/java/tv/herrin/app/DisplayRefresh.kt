@@ -24,7 +24,8 @@ internal fun Activity.preferSmoothTvUi() {
         UiDisplayMode(mode.physicalWidth, mode.physicalHeight, mode.refreshRate)
     }
     val preference = preferredUiRefreshRate(current, supported)
-    if (preference != null && kotlin.math.abs(window.attributes.preferredRefreshRate - preference) > 0.5f) {
+    if (preference != null && preference > current.hz + 0.5f &&
+        kotlin.math.abs(window.attributes.preferredRefreshRate - preference) > 0.5f) {
         val params = window.attributes
         params.preferredRefreshRate = preference
         // Pin geometry as well as rate: firmware must never choose a lower resolution.
@@ -35,7 +36,8 @@ internal fun Activity.preferSmoothTvUi() {
         window.attributes = params
     }
     Log.i("HerrinDisplay", "output=${current.width}x${current.height}@${current.hz}Hz " +
-        "uiPreference=${preference ?: "system"} supported=${supported.joinToString()}")
+        "uiCandidate=${preference ?: "system"} windowRequest=${window.attributes.preferredRefreshRate} " +
+        "requestedModeId=${window.attributes.preferredDisplayModeId} supported=${supported.joinToString()}")
 }
 
 /** Yield window hints on a scene boundary so the video surface/core owns frame matching. */

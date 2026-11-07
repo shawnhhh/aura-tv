@@ -23,7 +23,8 @@ internal class HerrinPersonalMediaProbe(
         .connectTimeout(1_500, TimeUnit.MILLISECONDS)
         .readTimeout(1_500, TimeUnit.MILLISECONDS)
         .callTimeout(2_000, TimeUnit.MILLISECONDS)
-        .build()
+        .build(),
+    private val strictHttpFailure:Boolean=false
 ) {
     suspend fun canRead(media: PlaybackMedia): Boolean = withContext(Dispatchers.IO) {
         val url = runCatching { URI(media.uri) }.getOrNull() ?: return@withContext false
@@ -41,28 +42,30 @@ internal class HerrinPersonalMediaProbe(
             return@withContext false
         }
         try {
-            runInterruptible {
-                client.newCall(request).execute().use { response ->
-                    if (response.code !in setOf(200, 206)) return@use false
+            readSourceResponse(client,request) { response ->
+                    if (response.code !in setOf(200, 206)) {
+                        if(strictHttpFailure)throw SourceHttpFailure(response.code,SourceHealthIndex.retryAfter(response.header("Retry-After"),System.currentTimeMillis()))
+                        return@readSourceResponse false
+                    }
                     val contentType = response.header("Content-Type").orEmpty()
                         .substringBefore(';').trim().lowercase()
                     if (contentType in setOf("text/html", "application/xhtml+xml",
                             "application/json", "text/json", "application/xml",
-                            "text/xml", "text/plain")) return@use false
+                            "text/xml", "text/plain")) return@readSourceResponse false
                     if (response.code == 206) {
                         // Range claims must include the requested first byte,
                         // not a malformed/unrelated Partial Content response.
                         val range = response.header("Content-Range").orEmpty()
-                        if (!range.startsWith("bytes 0-0/")) return@use false
+                        if (!range.startsWith("bytes 0-0/")) return@readSourceResponse false
                     }
                     response.header("Content-Length")?.toLongOrNull()
-                        ?.let { if (it <= 0L) return@use false }
+                        ?.let { if (it <= 0L) return@readSourceResponse false }
                     true
                 }
-            }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if(strictHttpFailure &&error is SourceHttpFailure)throw error
             false
         }
     }

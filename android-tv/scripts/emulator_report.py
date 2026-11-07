@@ -50,11 +50,27 @@ summary['remote_performance'] = parse_remote_performance(metric_log)
 startup_log = out / 'startup-smoke.log'
 startup_source = startup_log.read_text(errors='replace') if startup_log.exists() else ''
 startup_fields = ('process_to_activity_ms', 'activity_to_first_draw_ms', 'first_draw_to_wordmark_ms',
-                  'wordmark_complete_ms', 'activity_to_home_ms')
+                  'wordmark_complete_ms', 'activity_to_home_ms', 'home_init_ms', 'artwork_start_ms',
+                  'network_start_ms', 'system_brand_exit_ms')
 summary['startup_samples'] = [
     {key: int(value) for key, value in re.findall(r'([a-z_]+)=(-?\d+)', line) if key in startup_fields}
     for line in startup_source.splitlines() if 'process_to_activity_ms=' in line
 ]
+summary['startup_phases'] = [
+    {'phase': phase, 'activity_to_phase_ms': int(value)}
+    for phase, value in re.findall(r'HerrinStartupPhase[^\n]*phase=(home_init|artwork|network|system_brand_exit|first_cpu_draw|wordmark_visible|wordmark_complete) activity_to_phase_ms=(\d+)', startup_source)
+]
+summary['startup_window_probes'] = []
+for payload in re.findall(r'HerrinStartupProbe[^\n]*?(\{[^\n]+\})', log):
+    probe = json.loads(payload)
+    summary['startup_window_probes'].append({
+        'version': probe['version'], 'refresh_hz': probe['refresh_hz'],
+        'warm_process_activity_start': True, 'physical_tcl': False,
+        **{stage: {field: probe[stage][field] for field in ('count', 'p50_ms', 'p95_ms', 'p99_ms', 'over_budget')}
+           for stage in ('reveal', 'handoff')}
+    })
+summary['source_recovery_evidence'] = re.findall(r'HerrinSourceRecovery[^\n]*', log)
+summary['source_feedback_evidence'] = re.findall(r'HerrinSourceFeedback[^\n]*', log)
 (out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',
          '| Instrumentation test | Result |', '| --- | --- |']

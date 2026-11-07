@@ -22,6 +22,7 @@ internal class HerrinTvBoxCmsSource(
         val matches = linkedMapOf<String, HerrinSourceMovie>()
         for (name in titles) {
             val result = repo.search(site, name, allowHttp)
+            if(result is TvBoxVodResult.Error && result.httpCode!=null)throw SourceHttpFailure(result.httpCode,result.retryAfterMs)
             if (result !is TvBoxVodResult.Ready) continue
             for (film in result.films) {
                 val categoryType = ArtworkTitle.identify(film).mediaType ?: identity.mediaType

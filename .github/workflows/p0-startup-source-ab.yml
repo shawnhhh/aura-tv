@@ -1,0 +1,83 @@
+name: HERRIN Startup Source Same AVD ABBA and Phases
+on:
+  push:
+    branches: ['codex/herrin-startup-source-health-20261107']
+    paths: ['.github/workflows/p0-startup-source-ab.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: p0-startup-source-ab-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BASELINE_SHA: 20bf6fdb66a2874516c0a565ba38c9a153e03fc5
+      CANDIDATE_SHA: e3e1b7baa4b81c667130234e4685ad638dc9140f
+      CANDIDATE_RUN: '42369123073'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 20bf6fdb66a2874516c0a565ba38c9a153e03fc5
+          path: baseline
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Require the pinned candidate full verification before comparing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId=Number(process.env.CANDIDATE_RUN);
+            for(let i=0;i<135;i++){
+              const {data:run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:runId});
+              if(run.head_sha!==process.env.CANDIDATE_SHA)throw new Error('Candidate SHA mismatch');
+              if(run.status==='completed'){
+                if(run.conclusion!=='success')throw new Error('Pinned full verification failed: '+run.conclusion);
+                return;
+              }
+              core.info('Waiting for pinned full verification: '+run.status);
+              await new Promise(resolve=>setTimeout(resolve,20000));
+            }
+            throw new Error('Pinned full verification did not finish within 45 minutes');
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-debug-apk
+          run-id: 42324895101
+          github-token: ${{ github.token }}
+          path: baseline-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          run-id: 42369123073
+          github-token: ${{ github.token }}
+          path: candidate-apk
+      - name: Enable Linux KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Measure startup and D-pad on the same Android TV AVD
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          ram-size: 3072M
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/p0_startup_source_ab.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HERRIN-startup-source-ABBA
+          path: |
+            startup-ab/*.txt
+            startup-ab/*.json
+          if-no-files-found: warn
+          retention-days: 14

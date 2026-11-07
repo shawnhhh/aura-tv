@@ -29,7 +29,9 @@ internal object HerrinPlayableSourceSelector {
         resolve: suspend (Int, String) -> PlaybackResult,
         verifyMedia: suspend (PlaybackMedia) -> Boolean,
         limit: Int = 6,
-        coordinate: HerrinPlaybackCoordinate? = null
+        coordinate: HerrinPlaybackCoordinate? = null,
+        onStage: suspend (SourceSearchStage) -> Unit = {},
+        diagnose: Boolean = false
     ): Selected? {
         val attempts = film.playbackEpisodes.flatMapIndexed { index, episode ->
             episode.lines.filter { it.uri.isNotBlank() && coordinate?.accepts(episode, it) != false }.map { line ->
@@ -38,11 +40,18 @@ internal object HerrinPlayableSourceSelector {
         }.sortedWith(compareBy<Triple<Int, PlaybackEpisode, PlaybackLine>> { it.first }
             .thenByDescending { HerrinFilmIdentityMatch.resolutionClaim(it.third.title) ?: 0 })
             .take(limit.coerceIn(1, 12))
+        var failure=SourceCandidateFailure(SourceSearchStage.DETAILS,SourceSearchOutcome.NO_EPISODES)
         for ((_, episode, line) in attempts) {
+            onStage(SourceSearchStage.PARSE)
             val ready = try { resolve(episode.number, line.id) }
             catch (cancel: CancellationException) { throw cancel }
+            catch (error:SourceHttpFailure) { if(error.code in setOf(401,403,429))throw error else null }
             catch (_: Exception) { null }
-            val media = (ready as? PlaybackResult.Ready)?.media ?: continue
+            val media = (ready as? PlaybackResult.Ready)?.media ?: run {
+                failure=SourceCandidateFailure(SourceSearchStage.PARSE,SourceSearchOutcome.PARSE_FAILED)
+                null
+            }
+            if(media==null)continue
             // A provider can return a dead primary and working alternate. Verify each
             // candidate before handing it to Media3; never retain unverified fallbacks.
             // Authenticated media must not forward credentials to a different origin.
@@ -57,14 +66,20 @@ internal object HerrinPlayableSourceSelector {
                 if (candidate != media.uri && hasSensitiveHeaders &&
                     (primaryOrigin == null || origin(candidate) != primaryOrigin)) continue
                 val single = media.copy(uri = candidate, alternateUris = emptyList())
+                onStage(SourceSearchStage.MEDIA)
                 val verified = try { verifyMedia(single) }
                 catch (cancel: CancellationException) { throw cancel }
+                catch (error:SourceHttpFailure) { if(error.code in setOf(401,403,429))throw error else {
+                    failure=SourceCandidateFailure(SourceSearchStage.MEDIA,SourceHealthIndex.httpOutcome(error.code));false
+                } }
                 catch (_: Exception) { false }
                 if (verified) return Selected(
                     episode.number, line.id, single,
                     HerrinFilmIdentityMatch.resolutionClaim(line.title) ?: 0)
+                if(failure.stage!=SourceSearchStage.MEDIA)failure=SourceCandidateFailure(SourceSearchStage.MEDIA,SourceSearchOutcome.MEDIA_FAILED)
             }
         }
+        if(diagnose)throw failure
         return null
     }
 }

@@ -1,0 +1,82 @@
+name: HERRIN P0 Retained Controlled Failure Evidence
+on:
+  push:
+    branches: ['codex/herrin-startup-source-health-20261107']
+    paths: ['.github/workflows/herrin-p0-inspect.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          github-token: ${{ github.token }}
+          run-id: 42362418140
+          path: evidence/tv
+      - name: Inspect controlled fixture recovery and cached home failures
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in Path('evidence').rglob('*'):
+              if not path.is_file() or path.suffix not in ('.txt','.log'):continue
+              rows=path.read_text(errors='replace').splitlines()
+              shown=set()
+              for n,row in enumerate(rows):
+                  if any(tag in row for tag in ('P0MetadataPublicationPressureTest','HerrinStartup','HerrinDisplay','FATAL EXCEPTION','HerrinSpider')):
+                      for i in range(max(0,n-2),min(len(rows),n+12)):
+                          if i not in shown:print(path.name+': '+rows[i]);shown.add(i)
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-API31-startup-evidence
+          github-token: ${{ github.token }}
+          run-id: 42361229841
+          path: evidence/api31
+      - name: Review recorded branding geometry separately from timing metrics
+        run: |
+          video=$(find evidence/api31 -name visual-only-startup.mp4 -type f | head -n 1)
+          test -s "$video"
+          python3 -m pip install --quiet imageio-ffmpeg==0.6.0
+          ffmpeg=$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')
+          "$ffmpeg" -v error -i "$video" -vf 'fps=1,scale=384:216,tile=3x2' -frames:v 1 /tmp/herrin-visual.jpg
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          print('HERRIN_VISUAL_ONLY_JPEG='+base64.b64encode(Path('/tmp/herrin-visual.jpg').read_bytes()).decode())
+          PY
+      - name: Check official trace availability and bounded main/render slices
+        run: |
+          python3 - <<'TRACEPY'
+          import re,zlib
+          from pathlib import Path
+          root=Path('evidence/api31')
+          for p in root.rglob('atrace-start.txt'):print('ATRACE_START '+p.read_text(errors='replace')[:2000])
+          logs=''.join(p.read_text(errors='replace') for p in root.rglob('cold-diagnostics.txt'))
+          match=re.search(r'\s(\d+)\s+\1\s+I HerrinStartupPhase:',logs)
+          pid=int(match[1]) if match else None
+          for path in root.rglob('startup.atrace'):
+              raw=path.read_bytes();index=raw.find(b'TRACE:\n')
+              if index>=0:raw=raw[index+7:]
+              try:decoded=zlib.decompress(raw).decode(errors='replace')
+              except zlib.error:decoded=raw.decode(errors='replace')
+              stacks={};spans=[];app=0
+              for line in decoded.splitlines():
+                  m=re.search(r'-(\d+)\s+(?:\(\s*\d+\))?\s*\[\d+\].*?\s(\d+\.\d+):\s+tracing_mark_write:\s*(.*)',line)
+                  if not m:continue
+                  tid,t,event=int(m[1]),float(m[2]),m[3]
+                  if event.startswith('B|'):
+                      parts=event.split('|',2)
+                      if len(parts)!=3 or not parts[1].isdigit() or int(parts[1])!=pid:continue
+                      app+=1;stacks.setdefault(tid,[]).append((t,parts[2],line.startswith('    RenderThread')))
+                  elif event.startswith('E') and stacks.get(tid):
+                      start,name,render=stacks[tid].pop()
+                      if name.startswith('VerifyClass androidx.compose.ui.text.SaversKt'):
+                          print('ATRACE_SAVER_SCOPE',round((t-start)*1000,3),'main',tid==pid,'parents',[item[1] for item in stacks[tid] if re.fullmatch(r'[A-Za-z0-9_#()<> .$:=-]{1,180}',item[1])])
+                      if re.fullmatch(r'[A-Za-z0-9_#()<> .$:=-]{1,180}',name):spans.append((round((t-start)*1000,3),tid==pid,render,name))
+              print('ATRACE_APP_MARKERS',app,'decoded_bytes',len(decoded),'main_pid_found',pid is not None)
+              print('ATRACE_LONGEST_SAFE_SLICES',sorted(spans,reverse=True)[:16])
+          TRACEPY

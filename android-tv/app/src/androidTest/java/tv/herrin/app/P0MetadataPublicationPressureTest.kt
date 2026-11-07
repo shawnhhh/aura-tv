@@ -82,8 +82,12 @@ class P0MetadataPublicationPressureTest {
         compose.onNodeWithTag("nav-电影").performClick()
         compose.onNodeWithTag("catalog-film-rail").performScrollToIndex(0)
         val posters=compose.onAllNodes(SemanticsMatcher("source card"){it.config.getOrElse(SemanticsProperties.TestTag){""}.startsWith("card-tmdb-movie-")})
+        val previousSearch=SourceSearchDiagnostics.currentStart()
         posters.onFirst().performClick()
         compose.onNodeWithTag("film-detail-list").assertExists()
+        compose.onNodeWithTag("tmdb-source-lookup-status").assertIsDisplayed()
+        compose.waitUntil(3000){SourceSearchDiagnostics.currentStart()!=previousSearch &&SourceSearchDiagnostics.firstFeedbackMs()>=0}
+        android.util.Log.i("HerrinSourceFeedbackTest","controlled_metadata_no_private_provider_first_status_cpu_draw_ms=${SourceSearchDiagnostics.firstFeedbackMs()} physical_tcl=0")
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitForIdle();compose.onNodeWithTag("exit-dialog").assertDoesNotExist()
         offline.set(true)

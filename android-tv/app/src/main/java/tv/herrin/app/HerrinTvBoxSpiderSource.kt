@@ -15,6 +15,7 @@ internal class HerrinTvBoxSpiderSource(
         val found = linkedMapOf<String, HerrinSourceMovie>()
         for (name in identity.names.filter { it.trim().length >= 2 }.distinct().take(2)) {
             val search = bridge.search(site, name)
+            if(search is SpiderResult.Failure)throw SourceCandidateFailure(SourceSearchStage.SEARCH,SourceSearchOutcome.ERROR)
             val films = (search as? SpiderResult.Ready)?.value.orEmpty()
             for (film in films) {
                 val kind = ArtworkTitle.identify(film).mediaType ?: identity.mediaType

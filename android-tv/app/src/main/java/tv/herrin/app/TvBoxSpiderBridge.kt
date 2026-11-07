@@ -474,15 +474,15 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single,
-            originSecret: String = localOriginSecret): SpiderResult<List<Film>> {
+            originSecret: String = localOriginSecret, loadHome: Boolean = true): SpiderResult<List<Film>> {
         // Capture before dispatching to IO: a queued old browse cannot reopen
         // the worker after close. A fresh explicit browse receives a new epoch.
         val invocation = synchronized(lifecycle) { epoch }
-        return attempt { browseInSession(invocation, site, config, originSecret) }
+        return attempt { browseInSession(invocation, site, config, originSecret, loadHome) }
     }
 
     private fun browseInSession(invocation: Long, site: TvBoxSite,
-            config: TvBoxConfig.Single, originSecret: String): List<Film> {
+            config: TvBoxConfig.Single, originSecret: String, loadHome: Boolean): List<Film> {
         val spiderApi = site.spiderApi
         val scriptApi = site.scriptApi
         if (spiderApi == null && scriptApi == null) error("站点没有可执行的 CatVod API")
@@ -616,8 +616,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             activeAuthority = SpiderFilmAuthority(site.key, key, originSecret)
             activeGrant = originSecret
         }
-        SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
-        val films = SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
+        if (loadHome) SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
+        val films = if (!loadHome) emptyList() else SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
             spider.categoryContent(id, "1", false, hashMapOf())
         }
         checkOpen(ticket)

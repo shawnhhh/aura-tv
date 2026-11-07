@@ -30,6 +30,22 @@ for name, folder in [('JVM', 'app/build/test-results/testDebugUnitTest'),
     lines.append(f"| {name} | {' | '.join(map(str, counts))} |")
 lines += ['', '当前作业未执行的测试组显示 0；完整结论须联合 Debug 和 Emulator 两个作业。', '',
           '## 可安装 APK', '', '在 Debug 工作流的 Artifacts 中下载 `HERRIN-debug-apk`，解压后通过 Android TV 安装或 `adb install -r app-debug.apk` 安装。']
+controlled=[]
+for path in (root / 'app/build/test-results/testDebugUnitTest').rglob('TEST-*.xml'):
+    for node in ET.parse(path).getroot().iter('system-out'):
+        for raw in (node.text or '').splitlines():
+            if raw.startswith('HERRIN_CONTROLLED_SOURCE='):
+                controlled.append(json.loads(raw.partition('=')[2]))
+if controlled:
+    metrics={}
+    for name in ('search_callback_ms','candidate_ms','verified_ms','total_ms'):
+        data=sorted(row[name] for row in controlled)
+        metrics[name]={f'p{q}':round(data[(len(data)-1)*q//100],3) for q in (50,95,99)}
+    record={'scope':'controlled_loopback_not_live_provider','samples':controlled,'percentiles_ms':metrics}
+    (out/'controlled-source.json').write_text(json.dumps(record,indent=2))
+    print('HERRIN_CONTROLLED_SOURCE_SUMMARY='+json.dumps(record))
+    lines+=['','## 可控 HTTP 媒体验证实验','','仅为本机 MockWebServer 与原创 MP4 字节校验，不能代表真实影视源速度、成功率或详情页绘制延迟。','',
+            '```json',json.dumps(metrics,ensure_ascii=False,indent=2),'```']
 for apk in (root / 'app/build/outputs/apk/debug').glob('*.apk'):
     lines.append(f'- `{apk.name}`：{apk.stat().st_size} 字节；SHA-256 `{hashlib.sha256(apk.read_bytes()).hexdigest()}`')
 performance_summary = root / 'build/emulator-evidence/summary.json'

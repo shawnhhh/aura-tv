@@ -11,6 +11,10 @@ import xml.etree.ElementTree as ET
 
 REQUIRED_CLASSES = (
     "HerrinSplashTest",
+    "P0StartupFrameProbeTest",
+    "P0SpiderDeadlineRecoveryTest",
+    "P0SourceSearchLifecycleTest",
+    "P0CmsCandidateParserTest",
     "HerrinUiSmokeTest",
     "M438SingleWarehousePerformanceTest",
     "M442RemoteBurstPerformanceTest",

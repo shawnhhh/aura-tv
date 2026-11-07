@@ -830,6 +830,16 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-site-capabilities").assertTextContains("49 个站点需要 Spider", substring = true)
             settings.performScrollToNode(hasTestTag("tvbox-sites-toggle"))
             compose.onNodeWithTag("tvbox-sites-toggle").performClick()
+            // Expanding 49 LazyColumn items is asynchronous. Do not race a
+            // test-thread semantics traversal against the layout/draw observer.
+            // This is a positive assertion, not a skipped or weakened check.
+            compose.waitUntil(5000) {
+                runCatching {
+                    compose.onNodeWithTag("tvbox-sites-toggle")
+                        .assertTextContains("收起完整站点列表", substring = true)
+                }.isSuccess
+            }
+            compose.waitForIdle()
             settings.performScrollToNode(hasTestTag("tvbox-site-48"))
             compose.onNodeWithTag("tvbox-site-48").assertTextContains("站点48", substring = true)
             compose.onNodeWithTag("tvbox-site-48").performClick()

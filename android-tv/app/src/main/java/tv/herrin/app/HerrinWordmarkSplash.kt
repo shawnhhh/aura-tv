@@ -1,5 +1,7 @@
 package tv.herrin.app
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -15,6 +17,8 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import kotlin.math.cos
 
 internal object WordmarkMotion {
@@ -26,18 +30,29 @@ internal object WordmarkMotion {
 
 /** VSync clock. Draw state stays in this small layer, never recomposes the home per frame. */
 @Composable
-internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}) {
+internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}, widthDp: Float = 420f) {
     val focus = remember { FocusRequester() }
     val onDone by rememberUpdatedState(done)
     val visible by rememberUpdatedState(onVisible)
     val elapsed = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(reduced) {
+    var skipped by remember { mutableStateOf(false) }
+    val renderer=remember{WordmarkRenderer()}
+    // Input callbacks must complete in the same dispatch, even when a test or
+    // the system pauses the animation clock. Effects and held OK share one gate.
+    val ready=remember { booleanArrayOf(false) }
+    fun completeOnce() {
+        if(ready[0])return
+        ready[0]=true
+        StartupTiming.wordmarkVisible()
+        StartupTiming.wordmarkComplete()
+        visible()
+        onDone()
+    }
+    LaunchedEffect(reduced,skipped) {
         runCatching { focus.requestFocus() }
-        if (reduced) {
-            StartupTiming.wordmarkVisible()
-            StartupTiming.wordmarkComplete()
-            visible()
-            onDone()
+        if (reduced ||skipped) {
+            elapsed.floatValue=WordmarkMotion.REVEAL_MS
+            completeOnce()
             return@LaunchedEffect
         }
         val start = withFrameNanos { it }
@@ -52,43 +67,55 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             }
             if (!reportedReady && elapsed.floatValue >= WordmarkMotion.REVEAL_MS) {
                 reportedReady = true
-                StartupTiming.wordmarkComplete()
                 // No home UI mutation from the draw phase or before full reveal.
-                visible()
-                onDone()
+                completeOnce()
             }
         }
     }
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("splash")
         .focusRequester(focus).onPreviewKeyEvent {
             if (it.type == KeyEventType.KeyDown && it.key in listOf(Key.Enter, Key.DirectionCenter)) {
-                onDone(); true
+                skipped=true
+                elapsed.floatValue=WordmarkMotion.REVEAL_MS
+                completeOnce()
+                true
             } else false
         }.focusable(), contentAlignment = Alignment.Center) {
-        Image(painterResource(R.drawable.launch_wordmark), "HERRIN",
-            Modifier.width(420.dp).height(84.dp).testTag("splash-wordmark")
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    val time = if (reduced) WordmarkMotion.REVEAL_MS else elapsed.floatValue
-                    val progress = WordmarkMotion.reveal(time)
-                    if (progress < 1f) {
-                        // Seven stops: no 33-element map or draw-time Compose writes.
-                        val edge = progress * 1.35f
-                        val outside = ((1f - edge) / 2f).coerceIn(0f, 0.5f)
-                        val inside = ((1f - edge + 0.35f) / 2f).coerceIn(0f, 0.5f)
-                        val center = Color.White.copy(alpha = (edge / 0.35f).coerceIn(0f, 1f))
-                        val transparent = Color.Transparent
-                        drawRect(Brush.horizontalGradient(
-                            0f to transparent, outside to transparent,
-                            inside to center, 0.5f to center,
-                            (1f - inside) to center, (1f - outside) to transparent,
-                            1f to transparent
-                        ), blendMode = BlendMode.DstIn)
-                    } else {
-                        drawRect(Color.White.copy(alpha = WordmarkMotion.brightness(time)),
-                            blendMode = BlendMode.DstIn)
-                    }
-                })
+        androidx.compose.foundation.Canvas(Modifier.width(widthDp.dp).height((widthDp*.2f).dp)
+            .testTag("splash-wordmark").semantics { contentDescription="HERRIN" }) {
+            renderer.draw(drawContext.canvas.nativeCanvas,size.width,size.height,
+                if(reduced ||skipped)WordmarkMotion.REVEAL_MS else elapsed.floatValue)
+            StartupTiming.wordmarkVisible()
+        }
     }
+}
+
+
+/** Fixed-position wordmark; only opacity changes during exit. */
+@Composable
+internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
+                               onReady: () -> Unit, onFinished: () -> Unit,
+                               homeReady: Boolean = true, onVisible: () -> Unit = {}, wordmarkWidthDp: Float = 420f) {
+    val opacity = remember { Animatable(1f) }
+    var revealed by remember { mutableStateOf(false) }
+    LaunchedEffect(revealed, homeReady) {
+        if (revealed && homeReady) onReady()
+    }
+    LaunchedEffect(exiting, reduced) {
+        if (exiting) {
+            if (reduced) opacity.snapTo(0f)
+            else opacity.animateTo(0f, tween(LaunchMotion.FADE_MS))
+            onFinished()
+        }
+    }
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
+        .testTag("splash-curtain")) {
+        HerrinWordmarkSplash(reduced, done = { revealed = true }, onVisible = onVisible,widthDp=wordmarkWidthDp)
+    }
+}
+
+
+@Composable
+internal fun Splash(reduced: Boolean, done: () -> Unit) {
+    HerrinWordmarkSplash(reduced, done)
 }

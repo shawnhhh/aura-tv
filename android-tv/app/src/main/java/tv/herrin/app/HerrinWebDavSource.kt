@@ -49,7 +49,8 @@ internal class HerrinWebDavSource(
                 (account.allowInsecureHttp && root.scheme.equals("http", true))))
         require(account.name.isNotBlank() && account.rootUrl.length <= 2048)
     }
-    override val id: String = "webdav:" + account.name
+    override val id: String = "webdav:" + SourceHealthIndex.digest(
+        account.category.name+"\u0000"+account.rootUrl+"\u0000"+account.username+"\u0000"+account.name)
     override val type: HerrinSourceType = account.category
     // Normalize a user-pasted DAV collection without a trailing slash.
     // Relative XML hrefs resolve as children only when the base ends in '/'.
@@ -85,8 +86,9 @@ internal class HerrinWebDavSource(
                 currentCoroutineContext().ensureActive()
                 // Cancellation of the selected TMDB title must interrupt
                 // an old blocking NAS PROPFIND instead of stalling next title.
-                val children = try { runInterruptible { list(directory) } }
+                val children = try { list(directory) }
                 catch (cancelled: CancellationException) { throw cancelled }
+                catch (error:SourceHttpFailure){throw error}
                 catch (_: Exception) { emptyList() }
                 for (child in children.take(250)) {
                     if (child.isCollection) {
@@ -159,7 +161,7 @@ internal class HerrinWebDavSource(
     }.getOrDefault(false)
 
     /** Depth:1 with strict 256 KiB response limit, same-origin hrefs and no redirects. */
-    private fun list(directory: String): List<DavEntry> {
+    private suspend fun list(directory: String): List<DavEntry> {
         if (!sameOriginUnderRoot(directory) && directory != root.toString()) return emptyList()
         val xml = """<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>"""
         val request = Request.Builder().url(directory)
@@ -169,16 +171,16 @@ internal class HerrinWebDavSource(
                 if (account.username.isNotBlank())
                     header("Authorization", Credentials.basic(account.username, account.password))
             }.build()
-        client.newCall(request).execute().use { response ->
-            if (response.code != 207) return emptyList()
-            val body = response.body ?: return emptyList()
+        return readSourceResponse(client,request) { response ->
+            if (response.code != 207) throw SourceHttpFailure(response.code,SourceHealthIndex.retryAfter(response.header("Retry-After"),System.currentTimeMillis()))
+            val body = response.body ?: return@readSourceResponse emptyList()
             val input = body.byteStream()
             val buffer = ByteArray(8192)
             val output = java.io.ByteArrayOutputStream()
             while (true) {
                 val n = input.read(buffer)
                 if (n < 0) break
-                if (output.size() + n > 262144) return emptyList()
+                if (output.size() + n > 262144) return@readSourceResponse emptyList()
                 output.write(buffer, 0, n)
             }
             // Android's platform DOM parser does not implement every Xerces
@@ -187,7 +189,7 @@ internal class HerrinWebDavSource(
             // as desktop JVM without silently treating valid DAV as empty.
             val xmlText = output.toString(Charsets.UTF_8.name())
             if (Regex("""<!\s*(?:DOCTYPE|ENTITY)\b""", RegexOption.IGNORE_CASE)
-                    .containsMatchIn(xmlText)) return emptyList()
+                    .containsMatchIn(xmlText)) return@readSourceResponse emptyList()
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
             // Some Android API levels throw ParserConfigurationException for
@@ -207,7 +209,7 @@ internal class HerrinWebDavSource(
             val document = factory.newDocumentBuilder()
                 .parse(InputSource(StringReader(xmlText)))
             val results = document.getElementsByTagNameNS("DAV:", "response")
-            return (0 until minOf(250, results.length)).mapNotNull { index ->
+            (0 until minOf(250, results.length)).mapNotNull { index ->
                 val element = results.item(index) as? Element ?: return@mapNotNull null
                 val href = element.getElementsByTagNameNS("DAV:", "href").item(0)
                     ?.textContent?.trim() ?: return@mapNotNull null

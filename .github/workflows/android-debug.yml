@@ -10,12 +10,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: android-debug-${{ github.ref }}
+  group: android-debug-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
   cancel-in-progress: true
 jobs:
   debug:
     # P0 pushes use the serial caller, including when its PR becomes mergeable.
-    if: github.event_name != 'pull_request' || (github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102' && github.head_ref != 'codex/herrin-responsive-config-20261106')
+    if: github.event_name != 'pull_request' || (github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102' && github.head_ref != 'codex/herrin-responsive-config-20261106' && github.head_ref != 'codex/herrin-startup-source-health-20261107')
     runs-on: ubuntu-latest
     defaults:
       run:

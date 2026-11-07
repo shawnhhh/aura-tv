@@ -10,12 +10,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: android-emulator-${{ github.ref }}
+  group: android-emulator-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
   cancel-in-progress: true
 jobs:
   emulator:
     # P0 pushes use the serial caller, including when its PR becomes mergeable.
-    if: github.event_name != 'pull_request' || (github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102' && github.head_ref != 'codex/herrin-responsive-config-20261106')
+    if: github.event_name != 'pull_request' || (github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102' && github.head_ref != 'codex/herrin-responsive-config-20261106' && github.head_ref != 'codex/herrin-startup-source-health-20261107')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -71,5 +71,6 @@ jobs:
             android-tv/app/build/reports/androidTests/
             android-tv/app/build/outputs/androidTest-results/
             android-tv/app/build/outputs/apk/debug/*.apk
+            android-tv/app/build/outputs/apk/androidTest/debug/*.apk
           if-no-files-found: warn
           retention-days: 14
