@@ -46,7 +46,11 @@ for attempt in $(seq 1 20); do
     if rg -q 'mCurrentFocus=.*tv.herrin.app/.*MainActivity' "$evidence/hot-window.txt"; then focused=1; break; fi
     sleep 0.1
 done
-test "$focused" == 1
+if [[ "$focused" != 1 ]]; then
+    cat "$evidence/hot-window.txt"
+    echo 'FAIL: WindowManager did not grant input to Herrin after resume'
+    exit 1
+fi
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 1

@@ -154,8 +154,8 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus:Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if(hasFocus) {
-            val restored=presentation?.restoreBrowseFocus?.invoke()==true
-            RemoteTrace.event { "WINDOW_FOCUS_READY browse_restored=$restored" }
+            val requested=presentation?.restoreBrowseFocus?.invoke()==true
+            RemoteTrace.event { "WINDOW_FOCUS_READY browse_request_issued=$requested" }
         }
     }
     override fun onDestroy() {
@@ -4883,8 +4883,8 @@ private fun Herrin(startup: StartupPresentation) {
                     !(category=="直播" &&liveSearchExpanded)) {
                     // Restore synchronously when the OS grants this window input.
                     // Waiting for another key would consume the first direction.
-                    runCatching{requester(pendingToolbarFocus?:focusId).requestFocus()}.getOrElse{
-                        runCatching{requester("nav-$category").requestFocus()}.getOrDefault(false)
+                    runCatching{requester(pendingToolbarFocus?:focusId).requestFocus();true}.getOrElse{
+                        runCatching{requester("nav-$category").requestFocus();true}.getOrDefault(false)
                     }
                 }else false
             }
