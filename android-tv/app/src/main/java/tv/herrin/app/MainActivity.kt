@@ -920,7 +920,7 @@ private fun Herrin(startup: StartupPresentation) {
             profileStore.list().size, prefs.livePlaylistUrl.isNotBlank()) +
             "\n系统模式：${supported.joinToString()}\n窗口请求：${activity.window.attributes.preferredRefreshRate}Hz" +
             "\nTMDB API：${TmdbEndpoints.current}（图片 CDN 独立）" +
-            "\n" + (activity as? MainActivity)?.frameSummary().orEmpty() + MainExitDiagnostics.recent(context) + "\n" + CrashJournal.previous + "\n" + StartupTiming.summary()
+            "\n" + (activity as? MainActivity)?.frameSummary().orEmpty() + MainExitDiagnostics.recent(context) + "\n" + CrashJournal.previous + "\n" + StartupTiming.summary() + "\n" + HerrinPlaybackDiagnosticJournal.export()
     }
     LaunchedEffect(catalogRefresh) {
         // Once a TVBox URL has been applied, the legacy/demo catalog must not
@@ -1319,6 +1319,13 @@ private fun Herrin(startup: StartupPresentation) {
                             tmdbSpiderBatchOffsets[targetId] = progress.nextOffset
                             val visited = (spiderPageOffset + progress.checked)
                                 .coerceAtMost(progress.eligible)
+                            progress.lastOutcome?.let { outcomeCode ->
+                                // Fixed host codes only. No third-party URLs or
+                                // search terms are written to device diagnostics.
+                                HerrinPlaybackDiagnosticJournal.record("LOOKUP",
+                                    "SPIDER_NODE_" + outcomeCode.name,
+                                    "COUNT=$visited")
+                            }
                             val outcome = when (progress.lastOutcome) {
                                 HerrinApprovedSpiderBatch.Outcome.VERIFIED -> "已验证媒体"
                                 HerrinApprovedSpiderBatch.Outcome.TIMEOUT -> "节点超时"
