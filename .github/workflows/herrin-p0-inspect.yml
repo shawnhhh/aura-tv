@@ -30,7 +30,7 @@ jobs:
           "$dex_dump" -d /tmp/herrin.dex > /tmp/herrin-dex.txt
           python3 - <<'PY'
           from pathlib import Path
-          lines=Path('/tmp/herrin-dex.txt').read_text().splitlines()
+          lines=Path('/tmp/herrin-dex.txt').read_text(errors='replace').splitlines()
           for n,line in enumerate(lines):
               if "name" in line and "'Herrin'" in line:print('\n'.join(lines[n:n+14]))
               if '|2c8a:' in line.lower() or '|002c8a:' in line.lower():print('\n'.join(lines[max(0,n-28):n+22]))
