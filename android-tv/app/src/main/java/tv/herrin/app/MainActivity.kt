@@ -854,7 +854,11 @@ private fun Herrin(startup: StartupPresentation) {
                             SpiderFailureTrace.recent(context)).joinToString("；")
                     }
                     tvBoxStatus = "配置读取成功，Spider 子进程已退出；可选择其他站点。" + evidence.take(1400)
-                    vodImportFeedback = "插件崩溃"
+                    vodImportFeedback = when {
+                        evidence.contains(SpiderStartupTrace.Stage.WATCHDOG.display) -> "插件响应超时"
+                        evidence.contains("崩溃") ||evidence.contains("未捕获异常") -> "插件崩溃"
+                        else -> "插件进程退出"
+                    }
                 } else if (scanBudgetExceeded) {
                     tvBoxStatus = "配置读取成功，但自动检索已达到限时；请打开「选择影视点」手动尝试其他站点。" +
                         (if (spiderFailure.isNotBlank()) "最近失败：${spiderFailure.take(90)}" else "")
@@ -1225,7 +1229,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.sourceSearchJob=kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val recoveryRequest = tmdbState.automaticSearch?.takeIf { it.film == filmId && screen == "player" }
         if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
-            (tmdbState.tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true &&
+            (tmdbState.tmdbExtendedRequest != filmId && tmdbState.tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true &&
                 tmdbState.tmdbPlaybackRoutes.usable(filmId,spiderBridge.approvedActiveSiteKey())!=null)) return@LaunchedEffect
         val tmdbFilm = lookupFilm ?: return@LaunchedEffect
         val tmdbKey = tmdbDiscovery.identity(tmdbFilm) ?: return@LaunchedEffect
@@ -1591,6 +1595,7 @@ private fun Herrin(startup: StartupPresentation) {
                 tmdbState.automaticSearch = null
             }
             tmdbState.tmdbSourceStatus = "已从 ${batchScan.checked} 个授权影视点中匹配并验证可播放线路：${batchMatch.site.name}；标称清晰度 ${if (batchMatch.claim >= 2160) "4K" else if (batchMatch.claim > 0) "${batchMatch.claim}p" else "未知"}，非实际解码画质"
+            tmdbState.tmdbSourceStatus += " · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}"
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "SPIDER_VERIFIED")
             return@LaunchedEffect
         }
@@ -1607,6 +1612,7 @@ private fun Herrin(startup: StartupPresentation) {
             else if (lookup.errors.isNotEmpty())
                 "部分资源源检索失败或超时，尚未找到可播放的授权选集；可重新检索"
             else "NAS／云盘／TVBox 均未找到可播放的授权选集；可重新检索"
+            tmdbState.tmdbSourceStatus += " · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}"
             return@LaunchedEffect
         }
         tmdbState.tmdbFallbackIndex.select(targetId, found.sourceId)
@@ -4614,16 +4620,10 @@ private fun Herrin(startup: StartupPresentation) {
                                 // remote action excludes the chosen provider and
                                 // examines the next bounded group of trusted nodes.
                                 if (tmdbState.tmdbFallbackIndex.failSelected(film.id)) {
-                                    tmdbState.tmdbPlaybackRoutes.forget(film.id)
-                                    tmdbState.tmdbPersonalPlayback.remove(film.id)
-                                    tmdbState.tmdbResolved[film.id]?.let { old ->
-                                        tmdbState.tmdbResolved[film.id] = old.copy(
-                                            playbackEpisodes = emptyList(),
-                                            cmsVodId = null, spiderVodId = null)
-                                    }
-                                    activeCmsSite = null
-                                    spiderActive = false
-                                    tmdbState.tmdbSourceStatus = "正在检索下一批授权影视点；清晰度标签不等于真实解码规格"
+                                    // Keep discovered episodes and their provenance. Spider usability
+                                    // still requires the owning live session and refreshes before play.
+                                    tmdbState.tmdbExtendedRequest=film.id
+                                    tmdbState.tmdbSourceStatus = "正在检索其他授权影视点，保留已发现选集"
                                     tmdbState.tmdbLookupEpoch++
                                 }
                             }

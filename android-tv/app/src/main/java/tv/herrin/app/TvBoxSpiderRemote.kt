@@ -349,6 +349,7 @@ class TvBoxSpiderService : Service() {
                                 }
                             }
                             SpiderIpc.SEARCH -> {
+                                SpiderStartupTrace.mark(applicationContext,SpiderStartupTrace.Stage.SEARCH)
                                 val site = SpiderIpc.readSite(request.getJSONObject("site"))
                                 val keyword = request.optString("query").trim().take(120)
                                 when (val result = worker.search(site, keyword)) {
