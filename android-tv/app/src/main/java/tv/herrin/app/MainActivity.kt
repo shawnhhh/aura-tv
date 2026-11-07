@@ -1325,7 +1325,9 @@ private fun Herrin(startup: StartupPresentation) {
                 if (it.apiUrl != null) "cms:" + it.apiUrl else "spider:" + it.key
             }
             val directSites = mutableListOf<TvBoxSite>()
-            directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(100)
+            // A selected node remains eligible even beyond the fallback fan-out cap.
+            preferredSite?.takeIf { it.apiUrl != null }?.let(directSites::add)
+            directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(100-directSites.size)
             // Metadata cache first; explicit continuation alone may refresh missing warehouse data.
             val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),prefs.tvBoxPreferredRootId,prefs.tvBoxPreferredSiteId,nasUrl,cloudUrl,
                 AdditionalServiceConfigs(context).enabled("nas").toString(),importedWarehouses.toString(),
