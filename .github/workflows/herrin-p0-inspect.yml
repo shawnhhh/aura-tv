@@ -34,7 +34,7 @@ jobs:
         with:
           name: HERRIN-API31-startup-evidence
           github-token: ${{ github.token }}
-          run-id: 42358864061
+          run-id: 42361229841
           path: evidence/api31
       - name: Review recorded branding geometry separately from timing metrics
         run: |
@@ -48,3 +48,33 @@ jobs:
           from pathlib import Path
           print('HERRIN_VISUAL_ONLY_JPEG='+base64.b64encode(Path('/tmp/herrin-visual.jpg').read_bytes()).decode())
           PY
+      - name: Check official trace availability and bounded main/render slices
+        run: |
+          python3 - <<'TRACEPY'
+          import re,zlib
+          from pathlib import Path
+          root=Path('evidence/api31')
+          for p in root.rglob('atrace-start.txt'):print('ATRACE_START '+p.read_text(errors='replace')[:2000])
+          logs=''.join(p.read_text(errors='replace') for p in root.rglob('cold-diagnostics.txt'))
+          match=re.search(r'\s(\d+)\s+\1\s+I HerrinStartupPhase:',logs)
+          pid=int(match[1]) if match else None
+          for path in root.rglob('startup.atrace'):
+              raw=path.read_bytes();index=raw.find(b'TRACE:\n')
+              if index>=0:raw=raw[index+7:]
+              try:decoded=zlib.decompress(raw).decode(errors='replace')
+              except zlib.error:decoded=raw.decode(errors='replace')
+              stacks={};spans=[];app=0
+              for line in decoded.splitlines():
+                  m=re.search(r'-(\d+)\s+(?:\(\s*\d+\))?\s*\[\d+\].*?\s(\d+\.\d+):\s+tracing_mark_write:\s*(.*)',line)
+                  if not m:continue
+                  tid,t,event=int(m[1]),float(m[2]),m[3]
+                  if event.startswith('B|'):
+                      parts=event.split('|',2)
+                      if len(parts)!=3 or not parts[1].isdigit() or int(parts[1])!=pid:continue
+                      app+=1;stacks.setdefault(tid,[]).append((t,parts[2],line.startswith('    RenderThread')))
+                  elif event.startswith('E') and stacks.get(tid):
+                      start,name,render=stacks[tid].pop()
+                      if re.fullmatch(r'[A-Za-z0-9_#()<> .$:=-]{1,180}',name):spans.append((round((t-start)*1000,3),tid==pid,render,name))
+              print('ATRACE_APP_MARKERS',app,'decoded_bytes',len(decoded),'main_pid_found',pid is not None)
+              print('ATRACE_LONGEST_SAFE_SLICES',sorted(spans,reverse=True)[:16])
+          TRACEPY
