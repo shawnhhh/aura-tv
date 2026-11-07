@@ -15,14 +15,32 @@ jobs:
         with:
           name: HERRIN-API31-startup-evidence
           github-token: ${{ github.token }}
-          run-id: 42336998570
+          run-id: 42354713886
           path: evidence/api31
       - uses: actions/download-artifact@v4
         with:
           name: HERRIN-emulator-evidence
           github-token: ${{ github.token }}
-          run-id: 42336998570
+          run-id: 42354713886
           path: evidence/tv
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-debug-apk
+          github-token: ${{ github.token }}
+          run-id: 42354713886
+          path: evidence/apk
+      - name: Inspect the actual failing DEX instruction
+        run: |
+          unzip -p evidence/apk/app-debug.apk classes5.dex > /tmp/herrin.dex
+          dex_dump=$(find "$ANDROID_HOME/build-tools" -type f -name dexdump | sort -V | tail -n 1)
+          "$dex_dump" -d /tmp/herrin.dex > /tmp/herrin-dex.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          lines=Path('/tmp/herrin-dex.txt').read_text().splitlines()
+          for n,line in enumerate(lines):
+              if "name" in line and "'Herrin'" in line:print('\n'.join(lines[n:n+14]))
+              if '|2c8a:' in line.lower() or '|002c8a:' in line.lower():print('\n'.join(lines[max(0,n-28):n+22]))
+          PY
       - name: Inspect only the controlled offline startup failure
         run: |
           python3 - <<'PY'
