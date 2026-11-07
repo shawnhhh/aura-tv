@@ -677,9 +677,17 @@ http://example.org/live/channel.m3u8
         focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("film-detail-list").assertExists()
         compose.onNodeWithText("协议测试1").assertExists()
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasText("集数"))
+        compose.onNodeWithText("集数").assertExists()
+        compose.onNodeWithText("集数").assertIsDisplayed()
         key(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-9001").assertIsFocused() }.isSuccess }
         capture("tmdb-protocol-search-detail-return")
+        compose.onNodeWithTag("search-input").performTextReplacement("Protocol 2")
+        awaitProtocolResults("1 部")
+        compose.onNodeWithTag("card-tmdb-movie-9002").assertExists()
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("search").assertIsFocused()
     }
     @Test fun favoritesRemainAvailableUnderSearchAfterRestartAndCanBeRemoved() {
         protocolSearch("Protocol 1")
@@ -689,8 +697,14 @@ http://example.org/live/channel.m3u8
         key(KeyEvent.KEYCODE_BACK)
         focus("search-favorites"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("card-tmdb-movie-9001").assertIsDisplayed()
+        compose.onNodeWithTag("nav-我的").assertExists()
         compose.activityRule.scenario.recreate()
-        compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-9001").assertIsDisplayed() }.isSuccess }
+        compose.waitUntil(15_000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithTag("card-tmdb-movie-9001").assertIsDisplayed()
+        }.isSuccess }
+        compose.waitForIdle()
+        capture("favorites-online-search-persisted")
         focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         activate("♥ 已收藏 · 取消")
         key(KeyEvent.KEYCODE_BACK)

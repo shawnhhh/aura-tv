@@ -1199,6 +1199,15 @@ private fun Herrin(startup: StartupPresentation) {
     }
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
     // the scraped poster/title as an executable source or auto-plays a video.
+    fun choosePreferredSite(site: TvBoxSite, defaultJar: String?) {
+        prefs.preferSite(prefs.tvBoxWarehouseUrl, site, defaultJar)
+        tmdbState.tmdbSearchGeneration.incrementAndGet()
+        tmdbState.sourceSearchJob?.cancel()
+        tmdbState.tmdbPlaybackRoutes.clear()
+        tmdbState.tmdbFallbackIndex.clear()
+        tmdbState.preferredSiteStatus = "首选影视点：${site.name}"
+        tmdbState.tmdbLookupEpoch++
+    }
     val lookupFilm = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbHomeFilms + tmdbState.tmdbTop250Films + recentIndexFilms).firstOrNull { it.id == filmId }
     // Capture the same value as the effect key. Lifecycle observers can publish
     // STARTED during apply, before the old (false-keyed) effect is launched.
@@ -2416,7 +2425,7 @@ private fun Herrin(startup: StartupPresentation) {
             val snapshots = TvBoxCatalogSnapshot(context, Long.MAX_VALUE)
             snapshots.save("tmdb-library", "selected", (listOf(item) + snapshots.load("tmdb-library", "selected")).distinctBy(Film::id))
         }
-        details(item)
+        details(tmdbState.tmdbResolved[item.id] ?: item)
     }
     fun selectDetailSeason(seasonNumber: Int) {
         val section = seasonLayout?.sections?.firstOrNull { it.number == seasonNumber } ?: return
@@ -2722,8 +2731,7 @@ private fun Herrin(startup: StartupPresentation) {
                         }}", Modifier.testTag("site-select-$index"), reduceMotion) {
                             when {
                                 site.apiUrl != null -> uiScope.launch {
-                                    prefs.preferSite(prefs.tvBoxWarehouseUrl, site, selected?.spiderJar)
-                                    tmdbState.tmdbLookupEpoch++
+                                    choosePreferredSite(site, selected?.spiderJar)
                                     tvBoxStatus = "正在读取 ${site.name}…"
                                     when (val result = tvBoxVodRepo.load(site, true)) {
                                         is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${result.reason}"
@@ -2743,8 +2751,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     }
                                 }
                                 (site.spiderApi != null || site.scriptApi != null) && selected != null -> uiScope.launch {
-                                    prefs.preferSite(prefs.tvBoxWarehouseUrl, site, selected.spiderJar)
-                                    tmdbState.tmdbLookupEpoch++
+                                    choosePreferredSite(site, selected.spiderJar)
                                     tvBoxStatus = "正在通过 ${site.name} 加载影片…"
                                     when (val result = spiderBridge.browse(site, selected)) {
                                         is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${result.message}"
@@ -4257,8 +4264,7 @@ private fun Herrin(startup: StartupPresentation) {
                                             reduced = reduceMotion) {
                                             uiScope.launch {
                                                 tvBoxStatus = "正在读取 ${site.name} 的影视列表…"
-                                                prefs.preferSite(prefs.tvBoxWarehouseUrl, site, preview.spiderJar)
-                                                tmdbState.tmdbLookupEpoch++
+                                                choosePreferredSite(site, preview.spiderJar)
                                                 when (val loaded = tvBoxVodRepo.load(site, tvBoxAllowHttp)) {
                                                     is TvBoxVodResult.Error -> tvBoxStatus = "${site.name}：${loaded.reason}"
                                                     is TvBoxVodResult.Ready -> {
@@ -4288,8 +4294,7 @@ private fun Herrin(startup: StartupPresentation) {
                                         TvButton("浏览 ${site.name}", modifier = Modifier.testTag("tvbox-spider-$index"),
                                             reduced = reduceMotion) {
                                             uiScope.launch {
-                                                prefs.preferSite(prefs.tvBoxWarehouseUrl, site, preview.spiderJar)
-                                                tmdbState.tmdbLookupEpoch++
+                                                choosePreferredSite(site, preview.spiderJar)
                                                 tvBoxStatus = "正在核验 JAR 并通过 ${site.name} 读取影视…"
                                                 when (val loaded = spiderBridge.browse(site, preview)) {
                                                     is SpiderResult.Failure -> tvBoxStatus = "${site.name}：${loaded.message}"
