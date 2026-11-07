@@ -11,6 +11,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 internal class StartupPresentation {
+    // Activity owns this transient callback; no cache/network work on window focus.
+    var restoreBrowseFocus:(()->Boolean)?=null
     var showing by mutableStateOf(true)
     var exiting by mutableStateOf(false)
     var homeReady by mutableStateOf(false)

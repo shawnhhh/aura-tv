@@ -6,7 +6,7 @@ mkdir -p "$evidence"
 collect_startup() {
     code=$?
     trap - EXIT
-    adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/final-diagnostics.txt" 2>&1 || true
+    adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I HerrinRemote:D AndroidRuntime:E > "$evidence/final-diagnostics.txt" 2>&1 || true
     # This job starts only the original offline demo, with no private services configured.
     cat "$evidence/final-diagnostics.txt"
     exit "$code"
@@ -19,6 +19,7 @@ adb install -r "$apk"
 # Disposable CI emulator only. Never run this data reset on a user's television.
 adb shell pm clear tv.herrin.app
 adb logcat -G 16M
+adb shell setprop log.tag.HerrinRemote DEBUG
 adb logcat -c
 adb shell dumpsys display > "$evidence/display.txt"
 adb shell atrace --list_categories > "$evidence/atrace-categories.txt"
@@ -37,6 +38,15 @@ PY
 if [[ "$tracing" == 1 ]]; then adb shell atrace --async_stop -z > "$evidence/startup.atrace"; fi
 adb shell input keyevent KEYCODE_HOME
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/hot-launch.txt"
+# am start -W can finish before WindowManager grants input to this window.
+# Require the real input target, then send exactly one Right and one OK.
+focused=0
+for attempt in $(seq 1 20); do
+    adb shell dumpsys window windows > "$evidence/hot-window.txt"
+    if rg -q 'mCurrentFocus=.*tv.herrin.app/.*MainActivity' "$evidence/hot-window.txt"; then focused=1; break; fi
+    sleep 0.1
+done
+test "$focused" == 1
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 1

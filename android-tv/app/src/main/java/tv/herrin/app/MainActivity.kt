@@ -149,16 +149,27 @@ internal object RemoteTrace {
 
 class MainActivity : ComponentActivity() {
     private var frameDiagnostics: UiFrameDiagnostics? = null
+    private var presentation:StartupPresentation?=null
     internal fun frameSummary(): String = frameDiagnostics?.summary() ?: "渲染指标未采集"
+    override fun onWindowFocusChanged(hasFocus:Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if(hasFocus) {
+            val restored=presentation?.restoreBrowseFocus?.invoke()==true
+            RemoteTrace.event { "WINDOW_FOCUS_READY browse_restored=$restored" }
+        }
+    }
     override fun onDestroy() {
         frameDiagnostics?.close()
         frameDiagnostics = null
         super.onDestroy()
+        presentation?.restoreBrowseFocus=null
+        presentation=null
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         StartupTiming.start()
         super.onCreate(savedInstanceState)
         val startup=StartupPresentation()
+        presentation=startup
         if(android.os.Build.VERSION.SDK_INT>=31) {
             splashScreen.setOnExitAnimationListener { native ->
                 val icon=native.iconView
@@ -4867,6 +4878,16 @@ private fun Herrin(startup: StartupPresentation) {
         SideEffect {
             startup.reduced = reduceMotion
             startup.homeReady = projection.second.isNotEmpty() || films.isEmpty()
+            startup.restoreBrowseFocus={
+                if(!startup.showing &&screen=="browse" &&!lanConfigOpen &&!exitConfirmation &&
+                    !(category=="直播" &&liveSearchExpanded)) {
+                    // Restore synchronously when the OS grants this window input.
+                    // Waiting for another key would consume the first direction.
+                    runCatching{requester(pendingToolbarFocus?:focusId).requestFocus()}.getOrElse{
+                        runCatching{requester("nav-$category").requestFocus()}.getOrDefault(false)
+                    }
+                }else false
+            }
         }
     }
 }
