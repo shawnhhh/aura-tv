@@ -33,7 +33,7 @@ class HttpsPlaybackTest {
     private val inst = InstrumentationRegistry.getInstrumentation()
     private fun asset(name: String) = inst.context.assets.open(name).use { it.readBytes() }
 
-    private fun runPlayback(hls: Boolean) {
+    private fun runPlayback(hls: Boolean, fragmentedManifest: Boolean = false) {
         val certificate = HeldCertificate.Builder()
             .commonName("localhost").addSubjectAlternativeName("localhost").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
@@ -69,12 +69,24 @@ class HttpsPlaybackTest {
                     return MockResponse().setResponseCode(200)
                         .setHeader("Content-Type", type)
                         .setHeader("Cache-Control", "no-store")
-                        .setBody(Buffer().write(bytes))
+                        .setBody(Buffer().write(bytes)).apply {
+                            if(fragmentedManifest &&path=="/sample.m3u8") throttleBody(1,1,TimeUnit.MILLISECONDS)
+                        }
                 }
             }
             server.start()
             val url = server.url(if (hls) "/sample.m3u8" else "/sample.mp4").toString()
             assertNotNull(AuthorizedUrls.https(url))
+            if(fragmentedManifest) {
+                val probeClient=okhttp3.OkHttpClient.Builder()
+                    .sslSocketFactory(clientTls.sslSocketFactory(),clientTls.trustManager)
+                    .followRedirects(false).build()
+                kotlinx.coroutines.runBlocking {
+                    assertEquals("Production gate must accept a split manifest before decoding",
+                        HerrinRemoteMediaProbe.Result.MEDIA,
+                        HerrinRemoteMediaProbe(probeClient,authorizeLocal={it==url}).probe(PlaybackMedia(url)))
+                }
+            }
 
             HttpsURLConnection.setDefaultSSLSocketFactory(clientTls.sslSocketFactory())
             val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
@@ -177,6 +189,7 @@ class HttpsPlaybackTest {
         return observed
     }
 
+    @Test fun fragmentedTlsHlsPassesSourceGateAndActuallyRendersFrames() = runPlayback(hls = true, fragmentedManifest = true)
     @Test fun tlsMp4ActuallyRendersFrames() = runPlayback(hls = false)
     @Test fun tlsHlsActuallyRendersFrames() = runPlayback(hls = true)
 }
