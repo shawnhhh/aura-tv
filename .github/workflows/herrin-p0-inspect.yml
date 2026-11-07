@@ -15,7 +15,7 @@ jobs:
         with:
           name: HERRIN-API31-startup-evidence
           github-token: ${{ github.token }}
-          run-id: 42354713886
+          run-id: 42355871486
           path: evidence/api31
       - uses: actions/download-artifact@v4
         with:
@@ -30,6 +30,12 @@ jobs:
           "$dex_dump" -d /tmp/herrin.dex > /tmp/herrin-dex.txt
           python3 - <<'PY'
           from pathlib import Path
+          import xml.etree.ElementTree as ET
+          for path in Path('evidence').rglob('hot-remote.xml'):
+              print('HOT_FOCUS_TREE '+str(path))
+              for node in ET.parse(path).iter('node'):
+                  if node.get('focusable')=='true' or node.get('focused')=='true':
+                      print({key:node.get(key) for key in ('text','content-desc','focused','selected','bounds')})
           lines=Path('/tmp/herrin-dex.txt').read_text(errors='replace').splitlines()
           for n,line in enumerate(lines):
               if "name" in line and "'Herrin'" in line:print('\n'.join(lines[n:n+14]))
