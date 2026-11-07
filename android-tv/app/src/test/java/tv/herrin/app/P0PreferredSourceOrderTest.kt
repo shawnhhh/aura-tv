@@ -56,4 +56,16 @@ class P0PreferredSourceOrderTest {
         assertEquals("backup", result.options.single().sourceId)
         assertTrue(events.any { it.source == "chosen" && it.nodeComplete && it.outcome == SourceSearchOutcome.TIMEOUT })
     }
+    @Test fun deadlineDuringCmsValidationIsCompletedForContinuationCursor() = runBlocking {
+        val calls = mutableListOf<String>()
+        val events = mutableListOf<SourceSearchEvent>()
+        val result = withTimeout(2_500) {
+            HerrinFilmRouter(listOf(source("cms", HerrinSourceType.TVBOX_CMS, calls)))
+                .find(identity, streaming = true, onEvent = { events += it }) { awaitCancellation() }
+        }
+        assertTrue(result.options.isEmpty())
+        assertTrue(events.any { it.source == "cms" && it.nodeComplete && it.outcome == SourceSearchOutcome.TIMEOUT })
+        assertEquals(listOf("cms"), result.searchedSources)
+    }
+
 }

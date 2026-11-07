@@ -207,6 +207,8 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
                 }
                 continue
             }
+            var validatingSource: String? = null
+            var validatingStarted = 0L
             val accepted=withTimeoutOrNull(if(isPreferred)3_000L else if(type==HerrinSourceType.TVBOX_CMS)1_800L else 1_500L){
                 coroutineScope {
                     data class Found(val source:HerrinFilmSource,val offers:List<HerrinSourceMovie>,val failure:SourceSearchOutcome?,val elapsed:Long)
@@ -238,15 +240,25 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
                             if(outcome!=SourceSearchOutcome.RATE_LIMITED && outcome!=SourceSearchOutcome.AUTH_REQUIRED)
                                 health?.record(result.source.id,SourceSearchStage.SEARCH,outcome,result.elapsed)
                             if(result.failure!=null)errors[result.source.id]=outcome.name
+                            validatingSource = result.source.id
+                            validatingStarted = System.nanoTime()
                             val verified=if(result.offers.isEmpty())emptyList() else accept(result.offers).filter{it in result.offers}
                             onEvent(SourceSearchEvent(result.source.id,SourceSearchStage.DISCOVER,SourceSearchOutcome.CHECKING,
                                 completed=completedCount.incrementAndGet(),total=sources.size,nodeComplete=true))
+                            validatingSource = null
                             if(verified.isNotEmpty())return@coroutineScope verified
                         }
                         emptyList()
                     }finally{jobs.forEach{it.cancel()};channel.cancel()}
                 }
             }.orEmpty()
+            validatingSource?.let { source ->
+                val elapsed = (System.nanoTime()-validatingStarted)/1_000_000
+                errors[source] = SourceSearchOutcome.TIMEOUT.name
+                health?.record(source, SourceSearchStage.MEDIA, SourceSearchOutcome.TIMEOUT, elapsed)
+                onEvent(SourceSearchEvent(source, SourceSearchStage.MEDIA, SourceSearchOutcome.TIMEOUT,
+                    elapsed, completedCount.incrementAndGet(), sources.size, nodeComplete=true))
+            }
             if(accepted.isNotEmpty())return HerrinFilmLookupResult(accepted,tier,errors,searched)
         }
         return HerrinFilmLookupResult(emptyList(),null,errors,searched)
