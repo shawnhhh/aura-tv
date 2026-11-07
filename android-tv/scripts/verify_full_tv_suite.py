@@ -13,6 +13,7 @@ REQUIRED_CLASSES = (
     "HerrinSplashTest",
     "P0StartupFrameProbeTest",
     "P0SpiderDeadlineRecoveryTest",
+    "P0CmsCandidateParserTest",
     "HerrinUiSmokeTest",
     "M438SingleWarehousePerformanceTest",
     "M442RemoteBurstPerformanceTest",

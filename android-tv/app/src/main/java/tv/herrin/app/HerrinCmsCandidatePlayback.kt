@@ -10,7 +10,8 @@ internal suspend fun resolveCmsCandidate(context:android.content.Context,source:
     if(parser!=null){
         val safe=FongMiParsePlayback.safeHeaders(source.site.headers,source.site.apiUrl.orEmpty(),parser.prefix)
         val failure=java.util.concurrent.atomic.AtomicReference<SourceHttpFailure?>()
-        val result=FongMiParsePlayback.resolve(context,org.json.JSONObject().put("parse",1).put("url",line.uri)
+        val result=FongMiParsePlayback.resolve(context,org.json.JSONObject().put("parse",1)
+            .put("playUrl","parse:"+parser.name).put("url",line.uri)
             .put("header",org.json.JSONObject(safe)).toString(),line.title,listOf(parser),allowHttp,siteHeaders=safe,
             onHttpFailure={code,retry->failure.set(SourceHttpFailure(code,retry))})
         failure.get()?.let{if(result is PlaybackResult.Unavailable ||it.code in setOf(401,403,429))throw it}
