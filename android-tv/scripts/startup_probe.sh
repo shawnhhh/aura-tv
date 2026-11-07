@@ -37,7 +37,30 @@ assert 'HERRIN' in text and '影片详情' in text, 'Interactive offline home wa
 PY
 if [[ "$tracing" == 1 ]]; then adb shell atrace --async_stop -z > "$evidence/startup.atrace"; fi
 adb shell input keyevent KEYCODE_HOME
+# The HOME key is asynchronous. Starting Herrin before the launcher actually
+# owns the focused window returns "Activity not started, intent delivered to
+# top-most instance"; HOME then wins and leaves Launcher focused. That measures
+# a shell race, not an application hot-resume regression.
+home_focused=0
+for attempt in $(seq 1 60); do
+    adb shell dumpsys window > "$evidence/home-before-hot-window.txt"
+    if grep -Eiq 'mCurrentFocus=.*launcher' "$evidence/home-before-hot-window.txt"; then
+        home_focused=1
+        break
+    fi
+    sleep 0.1
+done
+if [[ "$home_focused" != 1 ]]; then
+    cat "$evidence/home-before-hot-window.txt"
+    echo 'FAIL: Android launcher never acquired window focus after HOME'
+    exit 1
+fi
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/hot-launch.txt"
+if grep -q 'Warning: Activity not started' "$evidence/hot-launch.txt"; then
+    cat "$evidence/hot-launch.txt"
+    echo 'FAIL: Hot launch was delivered to an already top-most app; probe setup invalid'
+    exit 1
+fi
 # am start -W can finish before WindowManager grants input to this window.
 # Require the real input target, then send exactly one Right and one OK.
 focused=0
