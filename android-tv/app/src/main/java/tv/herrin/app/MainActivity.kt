@@ -2521,7 +2521,18 @@ private fun Herrin(startup: StartupPresentation) {
             // Restarting the input connection while a TV settings button has focus
             // reopens some television IMEs and swallows its first D-pad CENTER key.
             // The search result path needs restartInput for its older IME handoff fix.
-            if (leavingSearchEditor) inputMethod.restartInput(view)
+            if (leavingSearchEditor) {
+                val target=focusId
+                // Hide/restart alone can leave TV IME dispatch serving the old
+                // editor (real key trace never reached Activity). Release the
+                // native served view, then restore the same Compose target.
+                view.clearFocus()
+                view.requestFocus()
+                withFrameNanos { }
+                runCatching { requester(target).requestFocus() }
+                inputMethod.restartInput(view)
+                inputMethod.hideSoftInputFromWindow(view.windowToken,0)
+            }
             RemoteTrace.event { "IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}" }
         }
     }
