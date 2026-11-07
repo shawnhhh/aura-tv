@@ -314,6 +314,36 @@ class M472ApprovedSpiderBatchTest {
             visited.contains("node-9"))
     }
 
+    @Test fun nextSiteContinuesWhenPreviousApprovedSiteExceedsItsTimeout() = runBlocking {
+        val visited = mutableListOf<String>()
+        val progress = mutableListOf<Int>()
+        var active = ""
+        val session = object : HerrinApprovedSpiderBatch.Session {
+            override suspend fun activate(site: TvBoxSite): Boolean {
+                visited += site.key
+                active = site.key
+                if (site.key == "node-1") {
+                    kotlinx.coroutines.delay(2_000L) // bounded by scan's >= 1s floor
+                }
+                return true
+            }
+            override suspend fun search(site: TvBoxSite, identity: HerrinFilmIdentity) =
+                if (site.key == "node-2") listOf(candidate(site, 1080))
+                else emptyList()
+            override suspend fun details(candidate: HerrinSourceMovie): Film? = playable()
+            override suspend fun canPlay(detailed: Film) = active == "node-2"
+        }
+        val started = System.nanoTime()
+        val result = HerrinApprovedSpiderBatch.scan(request, listOf(site(1), site(2)),
+            { true }, session, timeoutPerSiteMs = 1_000L, stopAtFirstPlayable = true,
+            onSiteProgress = { progress += it.checked })
+        val durationMs = (System.nanoTime() - started) / 1_000_000L
+        assertEquals("node-2", result.match?.site?.key)
+        assertEquals(listOf(1, 2), progress)
+        assertEquals(listOf("node-1", "node-2"), visited)
+        assertTrue("A cancellable slow provider must not hold up a working one", durationMs < 1_900L)
+    }
+
     @Test fun allDeadSitesAreScannedWithoutManualSourceSelection() = runBlocking {
         val attempted = mutableListOf<String>()
         val dead = object : HerrinApprovedSpiderBatch.Session {
