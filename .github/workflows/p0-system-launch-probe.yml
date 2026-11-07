@@ -17,8 +17,8 @@ jobs:
         with:
           script: |
             for(let attempt=0;attempt<90;attempt++){
-              const {data:run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:42362418140});
-              if(run.head_sha!=='52a6a87db2eae7b1049231744d66e865541f3f62')throw new Error('Candidate SHA mismatch');
+              const {data:run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:42363299465});
+              if(run.head_sha!=='92bd777604ea1c68361bd7d677a6c4ac7372c5b7')throw new Error('Candidate SHA mismatch');
               const {data}=await github.rest.actions.listJobsForWorkflowRun({...context.repo,run_id:run.id});
               const debug=data.jobs.find(job=>job.name==='debug / debug');
               if(debug?.status==='completed'){
@@ -36,7 +36,7 @@ jobs:
         with:
           name: HERRIN-debug-apk
           github-token: ${{ github.token }}
-          run-id: 42362418140
+          run-id: 42363299465
           path: startup-apk
       - name: Enable Linux KVM
         run: |
