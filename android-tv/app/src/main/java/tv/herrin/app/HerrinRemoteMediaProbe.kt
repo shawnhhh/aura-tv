@@ -92,7 +92,7 @@ internal class HerrinRemoteMediaProbe(
                 if (contentType in setOf("text/html", "application/xhtml+xml",
                         "application/json", "text/json"))
                     return@readSourceResponse Result.LOGIN_OR_TEXT
-                val buffer = ByteArray(PROBE_RANGE_END + 1)
+                val buffer = ByteArray((PROBE_RANGE_END + 1).toInt())
                 val size = try {
                     val stream=reply.body?.byteStream() ?: return@readSourceResponse Result.EMPTY_BODY
                     var received=0
