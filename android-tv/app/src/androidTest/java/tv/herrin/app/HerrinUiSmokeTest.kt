@@ -97,7 +97,8 @@ class HerrinUiSmokeTest {
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
-        if (tag.startsWith("card-") || tag == "screen-first") {
+        if (tag.startsWith("card-") || tag == "screen-first" ||
+            (tag.startsWith("search-") && tag != "search-input")) {
             val inputMethod = compose.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             compose.waitUntil(5000) { !inputMethod.isAcceptingText }
         }
@@ -688,6 +689,8 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("search-input").performTextReplacement("Protocol 2")
         awaitProtocolResults("1 部")
         compose.onNodeWithTag("card-tmdb-movie-9002").assertExists()
+        // Return from an actionable result, not from an active text editor/IME.
+        focus("card-tmdb-movie-9002")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("search").assertIsFocused()
     }

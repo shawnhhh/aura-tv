@@ -2512,7 +2512,7 @@ private fun Herrin(startup: StartupPresentation) {
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
     LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
         val leavingSearchEditor = screen == "search" && !searchInputFocused &&
-            focusId.startsWith("card-")
+            (focusId.startsWith("card-") || (focusId.startsWith("search-") && focusId != "search-input"))
         val leavingSettingsEditor = screen == "settings" && !configInputFocused
         if (leavingSearchEditor || leavingSettingsEditor) {
             keyboard?.hide()
