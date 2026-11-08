@@ -90,7 +90,23 @@ class HerrinUiSmokeTest {
         // entry explicit, then exercise actual D-pad focus/key delivery below.
         compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.waitForIdle()
+        awaitSearchImeView(shown = true)
         compose.onNodeWithTag("search-input").performTextReplacement(value)
+    }
+    private fun awaitSearchImeView(shown: Boolean) {
+        // Insets/isAcceptingText can clear before the actual TV IME finishes its
+        // input view. Run 42436598370 injected CENTER at 02:09:22.586 while the
+        // service's onFinishInputView was still pending until .675; only UP reached
+        // the Activity. API30 dumpsys includes the real InputMethodService state.
+        // Read only these booleans; never export EditorInfo or the raw dump.
+        val inst = InstrumentationRegistry.getInstrumentation()
+        compose.waitUntil(5_000) {
+            val state = inst.uiAutomation.executeShellCommand("dumpsys input_method").use { fd ->
+                java.io.FileInputStream(fd.fileDescriptor).bufferedReader().use { it.readText() }
+            }.substringAfter("Input method service state for ", "")
+            state.contains("mInputViewStarted=$shown") && state.contains("mWindowVisible=$shown")
+        }
+        RemoteTrace.event("TEST IME input_view=$shown window=$shown ready=true")
     }
     private fun awaitProtocolResults(count: String) {
         compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("search-filter-status").assertTextContains(count, substring = true) }.isSuccess }
@@ -114,6 +130,7 @@ class HerrinUiSmokeTest {
             // keys back to this window (CI trace: OK never reached Activity).
             // Use the same OS readiness fence as dismissEditorIme, never retry OK.
             InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+            if (tag != "search-input") awaitSearchImeView(shown = false)
             compose.onNodeWithTag(tag).assertIsFocused()
         }
     }
