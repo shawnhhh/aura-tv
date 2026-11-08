@@ -804,6 +804,12 @@ http://example.org/live/channel.m3u8
         compose.waitForIdle()
         capture("favorites-online-search-persisted")
         focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The real key reaches DETAILS (run 42438102723, 02:29:41.010),
+        // while the restored metadata detail is still mounting its lazy actions.
+        // Require the persisted favorite action before requesting its focus.
+        compose.waitUntil(5_000) {
+            runCatching { compose.onNodeWithText("♥ 已收藏 · 取消").assertExists() }.isSuccess
+        }
         activate("♥ 已收藏 · 取消")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithText("没有找到匹配影片").assertExists()
@@ -872,6 +878,16 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("重新同步目录"))
         activate("重新同步目录")
         // LazyColumn does not compose its off-screen status row until scrolled into view.
+        // Observe its committed status, like the async save checks above. A
+        // traversal during the refresh/layout boundary triggered Compose's
+        // off-thread error-tree SnapshotStateObserver in run 42438102723.
+        compose.waitUntil(8_000) {
+            runCatching {
+                compose.onNodeWithTag("settings-list")
+                    .performScrollToNode(hasText("当前使用离线演示目录"))
+                compose.onNodeWithText("当前使用离线演示目录").assertExists()
+            }.isSuccess
+        }
         compose.onNodeWithTag("settings-list")
             .performScrollToNode(hasText("当前使用离线演示目录"))
         compose.onNodeWithText("当前使用离线演示目录").assertExists()
