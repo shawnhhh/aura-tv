@@ -26,12 +26,15 @@ import kotlinx.coroutines.withContext
 import java.net.NetworkInterface
 
 internal class NoLanAddress : java.io.IOException()
-internal fun openLanConfigServer(context: Context, applied: (String) -> Unit): LanConfigServer {
+internal fun openLanConfigServer(context: Context, applied: (String) -> Unit): LanConfigServer =
+    openLanConfigServer(context, false, applied)
+
+private fun openLanConfigServer(context: Context, quickHttp: Boolean, applied: (String) -> Unit): LanConfigServer {
     val host = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().asSequence()
         .filter { it.isUp && !it.isLoopback }.flatMap { it.inetAddresses.toList().asSequence() }
         .firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }?.hostAddress
         ?: throw NoLanAddress()
-    return LanConfigServer(context, host, applied)
+    return LanConfigServer(context, host, quickHttp, applied)
 }
 internal fun configurationQr(value: String): Bitmap {
     val matrix = QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 480, 480)
@@ -49,22 +52,24 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
     var server by remember { mutableStateOf<LanConfigServer?>(null) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pending by remember { mutableStateOf(false) }
+    var quickHttp by remember { mutableStateOf(false) }
     var epoch by remember { mutableIntStateOf(0) }
     var failed by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("正在开启临时 HTTPS 服务…") }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
-    LaunchedEffect(epoch) {
+    LaunchedEffect(epoch, quickHttp) {
         var created: LanConfigServer? = null
         bitmap = null; failed = false; pending = false
-        message = "正在开启临时 HTTPS 服务…"
+        message = if (quickHttp) "正在开启临时 HTTP 服务…" else "正在开启临时 HTTPS 服务…"
         try {
             val started = withContext(Dispatchers.IO) {
-                serverFactory(context) { module -> main.post { callback(module) } }
+                (if (quickHttp) openLanConfigServer(context, true) { module -> main.post { callback(module) } }
+                else serverFactory(context) { module -> main.post { callback(module) } })
                     .also { created = it }.apply { start(5000, true) }
             }
             server = started
             bitmap = withContext(Dispatchers.Default) { qrFactory(started.qr) }
-            message = "配对 3 分钟有效；确认后闲置 30 分钟结束。"
+            message = if (quickHttp) "配对 3 分钟有效；服务开启后最多 5 分钟，退出立即关闭。" else "配对 3 分钟有效；确认后闲置 30 分钟结束。"
             while (!started.pairing.expired()) {
                 pending = started.pairing.pending()
                 delay(350)
@@ -93,16 +98,19 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
                         else Text(if (failed) "二维码不可用" else "正在准备二维码…", color = Color.Black)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("四个模块共用会话：TMDB、影视源、直播、NAS。", fontSize = 16.sp, color = Color.White)
+                        Text(if (quickHttp) "仅添加和修改公开影视源，不接受任何敏感配置。" else "四个模块共用会话：TMDB、影视源、直播、NAS。", fontSize = 16.sp, color = Color.White)
                         server?.let { current ->
                             Text(current.origin, fontSize = 17.sp, color = Color.White, modifier = Modifier.testTag("phone-config-address"))
-                            Text("证书 SHA-256：\n${current.fingerprint}", fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFD4D4D6))
+                            if (!quickHttp) Text("证书 SHA-256：\n${current.fingerprint}", fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFD4D4D6))
                         }
-                        Text("自签名 HTTPS 需要在手机核对完整证书指纹。Safari 等浏览器可能限制访问；无法核对时请手动配置。", fontSize = 14.sp, lineHeight = 20.sp, color = Color(0xFFD4D4D6))
+                        Text(if (quickHttp) "HTTP 明文传输，仅供可信家庭局域网临时使用。勿填写账号、密码、Token 或私密链接；配对码不能防止局域网中间人攻击。" else "自签名 HTTPS 需要在手机核对完整证书指纹。Safari 等浏览器可能限制访问；无法核对时请手动配置。", fontSize = 14.sp, lineHeight = 20.sp, color = Color(0xFFD4D4D6))
                         Text(message, fontSize = 14.sp, lineHeight = 20.sp, color = Color.White, modifier = Modifier.testTag("phone-config-status"))
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    TvButton(if (quickHttp) "返回 HTTPS 配置" else "局域网快速配置", Modifier.testTag("phone-config-http")) {
+                        server?.end(); quickHttp = !quickHttp
+                    }
                     if (pending) TvButton("确认此手机配对", Modifier.testTag("phone-config-approve")) { server?.pairing?.confirm() }
                     if (failed) TvButton("重试", Modifier.testTag("phone-config-retry")) { epoch++ }
                     TvButton("结束配置", Modifier.testTag("phone-config-close"), onClick = onDismiss)

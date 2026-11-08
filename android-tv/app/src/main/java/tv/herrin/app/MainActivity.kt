@@ -5151,6 +5151,7 @@ private fun Herrin(startup: StartupPresentation) {
                     }
                 }
                 "sources" -> {
+                    tvBoxRunSpiderAfterApply = false
                     personalSourceConfigEpoch++
                     configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
                     if (prefs.tvBoxWarehouseUrl.isNotBlank()) {
