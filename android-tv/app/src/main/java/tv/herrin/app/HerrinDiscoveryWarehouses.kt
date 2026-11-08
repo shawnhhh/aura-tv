@@ -26,7 +26,7 @@ internal object HerrinDiscoveryWarehouses {
                             is TvBoxConfig.Warehouses -> config.entries.take(10)
                             else -> {
                                 failed.incrementAndGet()
-                                DiscoveryProtocolTrace.phase(warehouse.url,SourceSearchStage.DISCOVER,SourceSearchOutcome.NETWORK,
+                                DiscoveryProtocolTrace.phase(warehouse.url,SourceSearchStage.DISCOVER,SourceSearchOutcome.ERROR,
                                     (System.nanoTime()-started)/1_000_000)
                                 emptyList()
                             }

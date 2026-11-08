@@ -16,6 +16,10 @@ collect() {
     adb pull /sdcard/herrin-final.xml build/emulator-evidence/final.xml >/dev/null 2>&1 || true
     adb logcat -d -s HerrinRemote:D > build/emulator-evidence/remote-trace.log 2>&1 || true
     cat build/emulator-evidence/remote-trace.log
+    # Public fixture semantics only. Preserve the original failing assertion and
+    # expose its exact tree even when artifact downloads are unavailable.
+    adb logcat -d -s HerrinCachedHeroFailure:I > build/emulator-evidence/cached-hero-failure.log 2>&1 || true
+    head -n 256 build/emulator-evidence/cached-hero-failure.log
     # Full PNGs remain in artifacts; keep logs bounded so connector log retrieval is reliable.
     python3 scripts/emulator_report.py "$code" || true
     exit "$code"

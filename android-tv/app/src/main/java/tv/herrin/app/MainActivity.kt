@@ -939,6 +939,9 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.tmdbPersonalPlayback.clear()
         tmdbState.tmdbPlaybackRoutes.clear()
         tmdbState.tmdbFallbackIndex.clear()
+        tmdbState.sourceDiscoveries.clear()
+        tmdbState.discoveredSources.clear()
+        tmdbState.discoverySelection = null
         tmdbState.automaticPlayback.clear()
         tmdbState.automaticSearch = null
         tmdbState.automaticResume = null
@@ -1258,7 +1261,7 @@ private fun Herrin(startup: StartupPresentation) {
                 tmdbState.tmdbPlaybackRoutes.personal(filmId)
             }
         }
-        tmdbState.tmdbFallbackIndex.select(filmId, hit.movie.sourceId)
+        tmdbState.tmdbFallbackIndex.select(filmId, hit.node.id)
         tmdbState.tmdbResolved[filmId] = metadata.copy(cmsVodId = detailed.cmsVodId,
             spiderVodId = detailed.spiderVodId, playbackEpisodes = detailed.playbackEpisodes,
             episodes = detailed.playbackEpisodes.size)
@@ -2637,8 +2640,10 @@ private fun Herrin(startup: StartupPresentation) {
             inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
             // Restarting the input connection while a TV settings button has focus
             // reopens some television IMEs and swallows its first D-pad CENTER key.
-            // The search result path needs restartInput for its older IME handoff fix.
-            if (leavingSearchEditor) inputMethod.restartInput(view)
+            // Search is read-only after blur: Compose normally already ended the
+            // connection. CI traced a lost DOWN / orphan UP after restarting that
+            // closed session. Restart only if Android still serves an editor.
+            if (leavingSearchEditor && inputMethod.isAcceptingText) inputMethod.restartInput(view)
             RemoteTrace.event { "IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}" }
         }
     }

@@ -37,6 +37,11 @@ class P0CachedHomeHeroTest {
         }
     }
     @get:Rule(order=1) val compose=createAndroidComposeRule<MainActivity>()
+    @get:Rule(order=2) val failureEvidence=object:org.junit.rules.TestWatcher() {
+        override fun failed(error:Throwable?,description:org.junit.runner.Description) {
+            runCatching { compose.onRoot(useUnmergedTree=true).printToLog("HerrinCachedHeroFailure") }
+        }
+    }
 
     @Test fun cachedOfflineHomeAndRapidCategoriesKeepTitleAndBackdropOnTheirOwnFirstFilm() {
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
