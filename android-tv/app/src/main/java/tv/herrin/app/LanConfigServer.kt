@@ -11,9 +11,11 @@ import java.security.MessageDigest
 /** Ephemeral, locally bound configuration. Cleartext exposes only public source editing. */
 internal class LanConfigServer(
     private val context: Context, val host: String,
-    val quickHttp: Boolean = false,
+    val quickHttp: Boolean,
     private val applied: (String) -> Unit
 ) : NanoHTTPD(host, 0) {
+    constructor(context: Context, host: String, applied: (String) -> Unit) :
+        this(context, host, false, applied)
     val pairing = ConfigPairingSession(maxLifetimeMs = if (quickHttp) 5 * 60_000L else Long.MAX_VALUE)
     private val reaper = java.util.Timer("lan-config-expiry", true)
     internal val certificate = HeldCertificate.Builder().commonName("HERRIN local configuration")

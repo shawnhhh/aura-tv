@@ -30,4 +30,23 @@ class P0QrFailureTest {
         compose.onNodeWithTag("phone-config-close").assertIsDisplayed().performClick()
         compose.waitForIdle();assertFalse(server!!.isAlive)
     }
+
+    @Test fun switchingToHttpClosesHttpsAndDismissClosesHttp() {
+        var secure: LanConfigServer? = null
+        var quick: LanConfigServer? = null
+        var open by mutableStateOf(true)
+        compose.setContent { MaterialTheme {
+            if (open) LanConfigDialog({ open = false }, {},
+                serverFactory = { c, cb -> LanConfigServer(c, "127.0.0.1", cb).also { secure = it } },
+                quickServerFactory = { c, cb -> LanConfigServer(c, "127.0.0.1", true, cb).also { quick = it } })
+        } }
+        compose.waitUntil(5000) { secure?.isAlive == true }
+        compose.onNodeWithTag("phone-config-http").performClick()
+        compose.waitUntil(5000) { quick?.isAlive == true }
+        assertFalse(secure!!.isAlive)
+        compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring = true)
+        compose.onNodeWithTag("phone-config-close").performClick()
+        compose.waitForIdle()
+        assertFalse(quick!!.isAlive)
+    }
 }

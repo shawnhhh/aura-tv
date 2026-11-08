@@ -29,7 +29,7 @@ internal class NoLanAddress : java.io.IOException()
 internal fun openLanConfigServer(context: Context, applied: (String) -> Unit): LanConfigServer =
     openLanConfigServer(context, false, applied)
 
-private fun openLanConfigServer(context: Context, quickHttp: Boolean, applied: (String) -> Unit): LanConfigServer {
+internal fun openLanConfigServer(context: Context, quickHttp: Boolean, applied: (String) -> Unit): LanConfigServer {
     val host = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().asSequence()
         .filter { it.isUp && !it.isLoopback }.flatMap { it.inetAddresses.toList().asSequence() }
         .firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }?.hostAddress
@@ -46,7 +46,9 @@ internal fun configurationQr(value: String): Bitmap {
 @Composable
 internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
     serverFactory: (Context, (String) -> Unit) -> LanConfigServer = ::openLanConfigServer,
-    qrFactory: (String) -> Bitmap = ::configurationQr) {
+    qrFactory: (String) -> Bitmap = ::configurationQr,
+    quickServerFactory: (Context, (String) -> Unit) -> LanConfigServer =
+        { context, applied -> openLanConfigServer(context, true, applied) }) {
     val context = LocalContext.current
     val callback by rememberUpdatedState(onApplied)
     var server by remember { mutableStateOf<LanConfigServer?>(null) }
@@ -63,7 +65,7 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
         message = if (quickHttp) "正在开启临时 HTTP 服务…" else "正在开启临时 HTTPS 服务…"
         try {
             val started = withContext(Dispatchers.IO) {
-                (if (quickHttp) openLanConfigServer(context, true) { module -> main.post { callback(module) } }
+                (if (quickHttp) quickServerFactory(context) { module -> main.post { callback(module) } }
                 else serverFactory(context) { module -> main.post { callback(module) } })
                     .also { created = it }.apply { start(5000, true) }
             }
