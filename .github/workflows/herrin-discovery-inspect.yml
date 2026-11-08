@@ -1,0 +1,33 @@
+name: HERRIN Discovery Controlled Evidence Inspection
+on:
+  push:
+    branches: ['codex/herrin-discovery-evidence-20261108']
+    paths: ['.github/workflows/herrin-discovery-inspect.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          github-token: ${{ github.token }}
+          run-id: 42431720138
+          path: evidence
+      - name: Read retained public cached-home fixture semantics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          shown=0
+          for path in Path('evidence').rglob('logcat.txt'):
+              for row in path.read_text(errors='replace').splitlines():
+                  if 'HerrinCachedHeroFailure' not in row and 'HerrinCachedHero:' not in row:continue
+                  row=re.sub(r'https?://[^\s\]<>]+','<url>',row)
+                  print(row[:1200]);shown+=1
+                  if shown>=600:break
+          print('PUBLIC_FIXTURE_ROWS',shown)
+          PY
