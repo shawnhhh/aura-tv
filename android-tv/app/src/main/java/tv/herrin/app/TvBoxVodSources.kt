@@ -131,7 +131,7 @@ internal object TvBoxVodCodec {
                 backdropUrl = SourceArtwork.backdrop(item, allowHttp),
                 episodes = maxOf(1, episodes.size), playbackEpisodes = episodes,
                 cmsVodId = id)
-        }
+        }.also { DiscoveryProtocolTrace.record("cms-codec","CMS_JSON",items.length(),it.size) }
     }
 
     fun detail(json: String, film: Film, allowHttp: Boolean, allowOpaque: Boolean = false): Film {

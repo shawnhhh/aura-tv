@@ -11,5 +11,9 @@ internal object DiscoveryProtocolTrace {
         if(events.size == 96) events.removeFirst()
         events.addLast(line)
     }
+    @Synchronized fun phase(site: String, stage: SourceSearchStage, outcome: SourceSearchOutcome, elapsedMs: Long, count: Int = 0) {
+        if(events.size == 96) events.removeFirst()
+        events.addLast("site=${SourceHealthIndex.digest(site).take(12)} stage=$stage result=$outcome duration_ms=${elapsedMs.coerceAtLeast(0)} count=${count.coerceAtLeast(0)}")
+    }
     @Synchronized fun summary() = events.joinToString("\n")
 }

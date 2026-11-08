@@ -59,7 +59,7 @@ internal object SpiderIpc {
     fun site(site: TvBoxSite): JSONObject = JSONObject()
         .put("name", site.name).put("key", site.key)
         .put("spiderApi", site.spiderApi ?: "").put("scriptApi", site.scriptApi ?: "")
-        .put("ext", site.extension)
+        .put("ext", site.extension).put("apiType", site.apiType)
         .put("jar", site.jar ?: "").put("click", site.click)
         .put("header", JSONObject(site.headers))
 
@@ -75,7 +75,7 @@ internal object SpiderIpc {
                     api.substringBefore('?').endsWith(".py", true)))
         },
         extension = obj.optString("ext").take(64_000),
-        click = obj.optString("click").take(4096),
+        click = obj.optString("click").take(4096), apiType = obj.optInt("apiType",1),
         jar = obj.optString("jar").takeIf { it.isNotBlank() },
         headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))
 
@@ -354,6 +354,7 @@ class TvBoxSpiderService : Service() {
                                 val keyword = request.optString("query").trim().take(120)
                                 when (val result = worker.search(site, keyword)) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
+                                        .put("rawCount",worker.lastSearchCounts.first).put("parsedCount",worker.lastSearchCounts.second)
                                         .put("films", JSONArray().apply {
                                             result.value.take(60).forEach { put(SpiderIpc.film(it)) }
                                         })
@@ -849,6 +850,8 @@ internal class TvBoxSpiderBridge(context: Context) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> try {
                 val array = response.value.getJSONArray("films")
+                DiscoveryProtocolTrace.record(site.key,"SPIDER_SEARCH_FALSE",
+                    response.value.optInt("rawCount",array.length()),array.length(),keyword)
                 SpiderResult.Ready((0 until minOf(60, array.length())).map {
                     SpiderIpc.readFilm(array.getJSONObject(it))
                 })

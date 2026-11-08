@@ -1214,6 +1214,7 @@ private fun Herrin(startup: StartupPresentation) {
         val consent = spiderBridge.configurationTicket()
         val metadata = tmdbState.tmdbResolved[filmId] ?: return@LaunchedEffect
         tmdbState.tmdbSourceStatus = "正在读取 ${hit.node.name} 的真实选集…"
+        val detailStarted = System.nanoTime()
         val loaded = withContext(Dispatchers.IO + SpiderSearchAuthority(consent)) {
             try {
                 withTimeoutOrNull(15_000) {
@@ -1225,6 +1226,9 @@ private fun Herrin(startup: StartupPresentation) {
         }
         if(spiderBridge.configurationTicket() != consent ||
             tmdbState.discoveredSources[filmId]?.revision != snapshot.revision) return@LaunchedEffect
+        DiscoveryProtocolTrace.phase(hit.node.id,SourceSearchStage.DETAILS,
+            if(loaded?.film?.playbackEpisodes?.isNotEmpty() == true) SourceSearchOutcome.VERIFIED else SourceSearchOutcome.NO_EPISODES,
+            (System.nanoTime()-detailStarted)/1_000_000,loaded?.film?.playbackEpisodes?.size ?: 0)
         if(loaded == null || loaded.film.playbackEpisodes.isEmpty()) {
             tmdbState.tmdbSourceStatus = "${hit.node.name} 已返回搜索条目，但详情未提供可用选集；可重试或选择其他影视点"
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "DISCOVERY_DETAIL_FAILED")

@@ -51,3 +51,5 @@
 `d516f97` Debug run 42429308967：640 个 JVM 测试中 639 通过，`M437SourceDetailMergeTest` 的 Spider 元数据合并用例失败。共享详情样本的 vod_id 是 CMS 的 `original-cms-id`，请求却是 Spider 的 `original-spider-id`，被新增身份校验正确拒绝。将该用例的响应样本改为所请求的 Spider VOD，保留所有 IPC/元数据/原始 ID 断言；独立的显式错误 VOD 拒绝回归继续保留。没有删除或跳过失败用例，没有放宽生产校验。
 
 新增真实 Activity 回归 `tmdbDetailStreamsBothCmsSourcesAndLoadsOnlyChosenProviderVod`：两个本地 HTTP CMS 返回带后缀和不同年份的条目，UI 展示两站真实响应；未选择时详情请求 0、媒体请求 0；分别选择后只使用对应 provider VOD 请求详情，媒体仍 0，另一来源仍保留。该测试是受控协议集成测试，不是第三方成功证据。
+
+诊断补充：Spider IPC 回传原始列表数量与解析保留数量，宿主安全环形日志可导出；不是只在子进程内记录。节点事件包含实际 completed/total，保留 ACTIVATE_FAILED、429 等阶段/错误分类。新增回归验证失败不会污染其他来源，以及私有 URL/参数不会进入导出文本。

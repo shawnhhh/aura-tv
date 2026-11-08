@@ -62,14 +62,20 @@ internal class HerrinSourceDiscovery {
             suspend fun execute() {
                 update(Outcome.SEARCHING)
                 val started = System.nanoTime()
+                var failureStage = SourceSearchStage.SEARCH
+                var failureCode: SourceSearchOutcome? = null
                 try {
                     val result = withTimeoutOrNull(node.timeoutMs) { node.search() }
                     update(if (result == null) Outcome.TIMEOUT else if (result.isEmpty()) Outcome.EMPTY else Outcome.FOUND,
                         result.orEmpty())
                 } catch (cancelled: CancellationException) { throw cancelled
+                } catch (failure: SourceCandidateFailure) {
+                    failureStage = failure.stage; failureCode = failure.outcome; update(Outcome.FAILED)
+                } catch (failure: SourceHttpFailure) {
+                    failureCode = SourceHealthIndex.httpOutcome(failure.code); update(Outcome.FAILED)
                 } catch (_: Exception) { update(Outcome.FAILED) }
-                diagnose(SourceSearchEvent(node.id, SourceSearchStage.SEARCH,
-                    when(snapshot.outcomes[node.id]) {
+                diagnose(SourceSearchEvent(node.id, failureStage,
+                    failureCode ?: when(snapshot.outcomes[node.id]) {
                         Outcome.FOUND -> SourceSearchOutcome.VERIFIED
                         Outcome.EMPTY -> SourceSearchOutcome.NO_MATCH
                         Outcome.TIMEOUT -> SourceSearchOutcome.TIMEOUT

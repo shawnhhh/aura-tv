@@ -32,9 +32,14 @@ internal object HerrinDiscoveryNodes {
         if(config != null) spiders.forEach { site ->
             suspend fun activate(): Boolean {
                 check(bridge.configurationTicket() == consent) { "Source consent changed" }
-                return withContext(SpiderRequestBudget(12_000)) {
+                val started = System.nanoTime()
+                val ready = withContext(SpiderRequestBudget(12_000)) {
                     bridge.browse(site, config, searchOnly = true) is SpiderResult.Ready
                 }
+                DiscoveryProtocolTrace.phase(site.key,SourceSearchStage.ACTIVATE,
+                    if(ready) SourceSearchOutcome.VERIFIED else SourceSearchOutcome.ACTIVATE_FAILED,
+                    (System.nanoTime()-started)/1_000_000)
+                return ready
             }
             val source = HerrinTvBoxSpiderSource(site, bridge, ::activate)
             nodes += HerrinSourceDiscovery.Node(id(root, site, config.spiderJar), site.name, source.type,

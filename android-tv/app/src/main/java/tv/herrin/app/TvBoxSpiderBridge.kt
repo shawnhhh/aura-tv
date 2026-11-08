@@ -389,6 +389,8 @@ internal class SpiderInitializationFailure(cause: Throwable) :
  * Worker epochs own resources, independently of the facade's source approval.
  */
 internal class TvBoxSpiderWorker(private val context: Context) {
+    var lastSearchCounts = 0 to 0
+        private set
     private val lifecycle = Any()
     private var epoch = 0L
     private var initializingProxy: NativeFongMiProxy? = null
@@ -642,7 +644,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         val owner = activeAuthority ?: error("Spider 来源授权已失效")
         val response = spider.searchContent(keyword, false)
         SpiderVodCodec.listing(response, site).map(owner::sign).also { films ->
-            DiscoveryProtocolTrace.record(site.key, "SPIDER_SEARCH_FALSE", JSONObject(response).optJSONArray("list")?.length() ?: 0, films.size, keyword)
+            lastSearchCounts = (JSONObject(response).optJSONArray("list")?.length() ?: 0) to films.size
+            DiscoveryProtocolTrace.record(site.key, "SPIDER_SEARCH_FALSE", lastSearchCounts.first, films.size, keyword)
         }
     }
 

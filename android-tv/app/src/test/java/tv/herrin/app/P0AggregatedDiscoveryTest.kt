@@ -134,4 +134,28 @@ class P0AggregatedDiscoveryTest {
         val right="""{"list":[{"vod_id":"other"},{"vod_id":"opaque-7","vod_play_from":"right","vod_play_url":"集${'$'}right-id"}]}"""
         assertEquals("right-id",SpiderVodCodec.detail(right,original).playbackEpisodes.single().lines.single().uri)
     }
+    @Test fun authorizationAndRateLimitKeepTheirActualStageAndErrorCode() = runBlocking {
+        val events=mutableListOf<SourceSearchEvent>()
+        var last=HerrinSourceDiscovery.Snapshot("",0)
+        val activate=node("init",HerrinSourceType.TVBOX_SPIDER) {
+            throw SourceCandidateFailure(SourceSearchStage.ACTIVATE,SourceSearchOutcome.ACTIVATE_FAILED)
+        }
+        val limited=node("429") { throw SourceHttpFailure(429,3000) }
+        HerrinSourceDiscovery().search("r",listOf(activate,limited,node("ready")),null,Mutex(),{events+=it}){last=it}
+        assertEquals(3,last.checked)
+        assertEquals(1,last.hits.size)
+        assertEquals(SourceSearchStage.ACTIVATE,events.single{it.source=="init"}.stage)
+        assertEquals(SourceSearchOutcome.ACTIVATE_FAILED,events.single{it.source=="init"}.outcome)
+        assertEquals(SourceSearchOutcome.RATE_LIMITED,events.single{it.source=="429"}.outcome)
+        assertTrue(events.all{it.nodeComplete &&it.total==3})
+    }
+    @Test fun diagnosticNeverExportsPrivateAddressOrParameters() {
+        DiscoveryProtocolTrace.record("https://private.invalid/api?token=private","CMS_SEARCH",3,1,
+            "https://private.invalid/api?token=private")
+        val line=DiscoveryProtocolTrace.summary().lineSequence().last()
+        assertFalse(line.contains("private"))
+        assertFalse(line.contains("https"))
+        assertTrue(line.contains("raw=3 parsed=1 discarded=2"))
+    }
+
 }
