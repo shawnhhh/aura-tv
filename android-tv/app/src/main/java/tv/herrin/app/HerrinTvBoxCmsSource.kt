@@ -42,7 +42,7 @@ internal class HerrinTvBoxCmsSource(
                 if (!strict || HerrinFilmIdentityMatch.matches(identity, entry))
                     matches[film.cmsVodId ?: film.id] = entry
             }
-            if (matches.isNotEmpty()) break
+            if (matches.values.any { HerrinFilmIdentityMatch.matches(identity, it) }) break
         }
         return matches.values.take(60)
     }

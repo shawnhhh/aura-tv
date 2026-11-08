@@ -32,7 +32,8 @@ internal class HerrinRemoteMediaProbe(
     // for its current approved Spider site; all other callers fail closed.
     private val authorizeLocal: suspend (String) -> Boolean = { false },
     private val onHttpFailure: (Int, Long?) -> Unit = { _, _ -> },
-    private val strictHttpFailure: Boolean = false
+    private val strictHttpFailure: Boolean = false,
+    private val evidence: (String, String) -> Unit = { _, _ -> }
 ) {
     enum class Result {
         MEDIA, INVALID_URL, UNAUTHORIZED_LOCAL, HTTP_ERROR, LOGIN_OR_TEXT,
@@ -60,6 +61,7 @@ internal class HerrinRemoteMediaProbe(
                 return Result.INVALID_URL
             }
             val result = try { readSourceResponse(client,request) { reply ->
+                evidence("MEDIA_HTTP", "STATUS=${reply.code}")
                 if (reply.code in setOf(301, 302, 303, 307, 308)) {
                     if (hop >= 2) return@readSourceResponse Result.HTTP_ERROR
                     val location = reply.header("Location") ?: return@readSourceResponse Result.HTTP_ERROR
@@ -92,6 +94,13 @@ internal class HerrinRemoteMediaProbe(
                 if (contentType in setOf("text/html", "application/xhtml+xml",
                         "application/json", "text/json"))
                     return@readSourceResponse Result.LOGIN_OR_TEXT
+                evidence("MEDIA_TYPE_" + when {
+                    contentType.contains("mpegurl") -> "HLS"
+                    contentType.startsWith("video/") -> "VIDEO"
+                    contentType.startsWith("text/") -> "TEXT"
+                    contentType.contains("json") -> "JSON"
+                    else -> "OTHER"
+                }, "")
                 val buffer = ByteArray((PROBE_RANGE_END + 1).toInt())
                 val size = try {
                     val stream=reply.body?.byteStream() ?: return@readSourceResponse Result.EMPTY_BODY
@@ -101,11 +110,15 @@ internal class HerrinRemoteMediaProbe(
                         if(count<0)break
                         if(count==0)continue
                         received+=count
+                        val prefix = buffer.copyOf(received).toString(Charsets.UTF_8)
+                            .trimStart('\uFEFF',' ','\n','\r','\t')
+                        if (prefix.startsWith("#EXTM3U\n") || prefix.startsWith("#EXTM3U\r\n")) break
                     }
                     received
                 } catch (cancel: CancellationException) {
                     throw cancel
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    evidence("MEDIA_IO_" + ioCode(error), "")
                     return@readSourceResponse Result.NETWORK_ERROR
                 }
                 if (size <= 0) return@readSourceResponse Result.EMPTY_BODY
@@ -132,6 +145,7 @@ internal class HerrinRemoteMediaProbe(
                     return@readSourceResponse Result.LOGIN_OR_TEXT
                 Result.MEDIA
             } } catch(cancel:CancellationException){throw cancel} catch(error:Exception){
+                evidence("MEDIA_IO_" + ioCode(error), "")
                 if(strictHttpFailure &&error is SourceHttpFailure)throw error
                 return Result.NETWORK_ERROR
             }
@@ -152,6 +166,15 @@ internal class HerrinRemoteMediaProbe(
         val total = match.groupValues[2]
         return end <= PROBE_RANGE_END &&
             (total == "*" || (total.toLongOrNull()?.let { it > end } == true))
+    }
+
+    private fun ioCode(error: Exception) = when(error) {
+        is java.net.SocketTimeoutException, is java.io.InterruptedIOException -> "TIMEOUT"
+        is java.net.UnknownHostException -> "DNS"
+        is javax.net.ssl.SSLException -> "TLS"
+        is java.net.ConnectException -> "CONNECT"
+        is java.io.EOFException -> "EOF"
+        else -> "OTHER"
     }
 
     private fun isLoopback(uri: URI) =

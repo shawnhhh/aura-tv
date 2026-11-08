@@ -21,7 +21,7 @@ internal object HerrinDiscoveryNodes {
                     val playlist = HerrinPersonalPlaylistBuilder.create(offers.ifEmpty { listOf(offer) }, source::playback)
                     HerrinSourceDiscovery.Detail(offer.film.copy(playbackEpisodes = playlist.episodes,
                         episodes = playlist.episodes.size), playlist.mediaByLine)
-                }, timeoutMs = 1_500)
+                }, timeoutMs = 1_500, identity = identity)
         }
         cms.forEach { (origin, site, owner) ->
             val source = HerrinTvBoxCmsSource(site, repo, allowHttp)
@@ -34,7 +34,7 @@ internal object HerrinDiscoveryNodes {
                         is TvBoxVodDetailResult.Error -> throw SourceCandidateFailure(SourceSearchStage.DETAILS,
                             result.httpCode?.let { SourceHealthIndex.httpOutcome(it) } ?: result.outcome)
                     }
-                }, site = site, config = owner)
+                }, site = site, config = owner, identity = identity)
         }
         if(config != null) spiders.forEach { site ->
             suspend fun activate(): Boolean {
@@ -64,7 +64,7 @@ internal object HerrinDiscoveryNodes {
                             is SpiderResult.Failure -> throw SourceCandidateFailure(SourceSearchStage.DETAILS,SourceSearchOutcome.ERROR)
                         }
                     }
-                }, site = site, config = config)
+                }, site = site, config = config, identity = identity)
         }
         return nodes.distinctBy { it.id }
     }

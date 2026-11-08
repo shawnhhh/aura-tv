@@ -387,13 +387,14 @@ class TvBoxSpiderService : Service() {
                                     .put("uri", active.siteUrl() + "&part=probe")
                             }
                             SpiderIpc.PLAY -> {
+                                SpiderPlaybackEvidence.clear()
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
                                     request.optInt("episode"), request.optString("line"),
                                     request.optBoolean("allowHttp"))
                                 when (result) {
                                     is PlaybackResult.Ready -> SpiderIpc.playback(result.media)
                                     is PlaybackResult.Unavailable -> SpiderIpc.error(result.reason)
-                                }
+                                }.put("playbackEvidence", SpiderPlaybackEvidence.snapshot())
                             }
                             else -> SpiderIpc.error("不支持的插件操作")
                         }
@@ -766,6 +767,7 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
         require(response.length <= SpiderIpc.MAX_RESPONSE_CHARS) { "Spider 返回内容超过进程通信限制" }
         val result = withContext(Dispatchers.Default){JSONObject(response)}
+        if (operation == SpiderIpc.PLAY) SpiderPlaybackEvidence.replay(result.optJSONArray("playbackEvidence"))
         if (result.optBoolean("ok")) SpiderResult.Ready(result)
         else SpiderResult.Failure(result.optString("message").ifBlank { "Spider 返回错误" })
     } catch (timeout: TimeoutCancellationException) {

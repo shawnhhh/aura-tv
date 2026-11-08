@@ -21,22 +21,28 @@ internal class HerrinSourceDiscovery {
         val details: suspend (HerrinSourceMovie) -> Detail?,
         val site: TvBoxSite? = null,
         val config: TvBoxConfig.Single? = null,
-        val timeoutMs: Long = 12_000L
+        val timeoutMs: Long = 12_000L,
+        val identity: HerrinFilmIdentity? = null
     )
     data class EpisodeLayout(val number: Int, val title: String, val lines: List<Pair<String,String>>)
     data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie,
-        val episodes: List<EpisodeLayout> = emptyList())
+        val episodes: List<EpisodeLayout> = emptyList(),
+        val relevance: SourceRelevance = SourceRelevance.CONFIRMED)
     data class Snapshot(val revision: String, val nodes: Int,
         val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList(),
         val expanding: Boolean = false, val warehouseFailures: Int = 0) {
+        val confirmed get() = hits.count { it.relevance == SourceRelevance.CONFIRMED }
+        val possible get() = hits.count { it.relevance == SourceRelevance.POSSIBLE }
+        val excluded get() = hits.count { it.relevance == SourceRelevance.OTHER }
         val checked get() = outcomes.count { it.value != Outcome.SEARCHING }
         val remaining get() = (nodes - checked).coerceAtLeast(0)
         val hasRemaining get() = remaining > 0 || expanding || warehouseFailures > 0
-        fun text() = "已检查 $checked/$nodes · 命中 ${outcomes.count { it.value == Outcome.FOUND }} · " +
+        fun text() = "已检查 $checked/$nodes · 原始条目 ${hits.size} · 确认匹配 $confirmed · 可能相关 $possible · 排除 $excluded · " +
             "无结果 ${outcomes.count { it.value == Outcome.EMPTY }} · 失败 ${outcomes.count { it.value == Outcome.FAILED }} · " +
             "超时 ${outcomes.count { it.value == Outcome.TIMEOUT }} · 剩余 $remaining" +
             if(expanding) " · 正在读取其他已导入影视仓" else if(warehouseFailures > 0) " · $warehouseFailures 个影视仓读取失败，可继续重试" else ""
     }
+    private val version = java.util.concurrent.atomic.AtomicLong()
     private val runs = Mutex()
     private val mutations = Mutex()
     private var snapshot = Snapshot("", 0)
@@ -58,7 +64,10 @@ internal class HerrinSourceDiscovery {
     /** Cancelled nodes stay pending; only terminal nodes are skipped by a continuation. */
     suspend fun search(revision: String, nodes: List<Node>, preferred: String?,
         spiderLock: Mutex, diagnose: (SourceSearchEvent) -> Unit = {},
-        expand: (suspend (suspend (List<Node>) -> Unit) -> Int)? = null, publish: suspend (Snapshot) -> Unit) = runs.withLock {
+        expand: (suspend (suspend (List<Node>) -> Unit) -> Int)? = null, publish: suspend (Snapshot) -> Unit) {
+        val ticket = version.incrementAndGet()
+        runs.withLock {
+        if (version.get() != ticket) return@withLock
         val unique = nodes.distinctBy { it.id }
         val known = unique.associateBy { it.id }.toMutableMap()
         if (snapshot.revision != revision) snapshot = Snapshot(revision, unique.size)
@@ -73,9 +82,11 @@ internal class HerrinSourceDiscovery {
             suspend fun update(outcome: Outcome, offers: List<HerrinSourceMovie> = emptyList()) {
                 mutations.withLock {
                     coroutineContext.ensureActive()
+                    if (version.get() != ticket || snapshot.revision != revision) return@withLock
                     val hits = offers.map { movie ->
                         // A VOD belongs to a provider, never to a TMDB id or array index.
-                        Hit(node.id + ":" + (movie.film.spiderVodId ?: movie.film.cmsVodId ?: movie.film.id), node, movie)
+                        Hit(node.id + ":" + (movie.film.spiderVodId ?: movie.film.cmsVodId ?: movie.film.id), node, movie,
+                            relevance = node.identity?.let { HerrinSourceRelevance.classify(it, movie) } ?: SourceRelevance.CONFIRMED)
                     }
                     snapshot = snapshot.copy(outcomes = snapshot.outcomes + (node.id to outcome),
                         hits = (snapshot.hits + hits).distinctBy { it.key })
@@ -131,5 +142,6 @@ internal class HerrinSourceDiscovery {
                 }
             }
         }
+    }
     }
 }

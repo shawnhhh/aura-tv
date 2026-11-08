@@ -38,7 +38,7 @@ internal class HerrinTvBoxSpiderSource(
                 if (!strict || HerrinFilmIdentityMatch.matches(identity, offered))
                     found[film.spiderVodId ?: film.id] = offered
             }
-            if (found.isNotEmpty()) break
+            if (found.values.any { HerrinFilmIdentityMatch.matches(identity, it) }) break
         }
         return found.values.take(60)
     }

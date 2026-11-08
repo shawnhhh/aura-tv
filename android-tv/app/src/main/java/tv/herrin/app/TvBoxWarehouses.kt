@@ -272,7 +272,7 @@ internal object TvBoxHeaderCodec {
             val value = source.optString(name).trim()
             if (name.matches(Regex("[A-Za-z0-9-]{1,60}")) &&
                 value.length in 1..2_048 && '\n' !in value && '\r' !in value)
-                put(name, value)
+                put(if (name.equals("ua", true)) "User-Agent" else name, value)
         }
     }
 }

@@ -1215,6 +1215,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.discoverySelection = null
         val snapshot = tmdbState.discoveredSources[filmId] ?: return@LaunchedEffect
         val hit = snapshot.hits.firstOrNull { it.key == selection.second } ?: return@LaunchedEffect
+        if (hit.relevance == SourceRelevance.OTHER) return@LaunchedEffect
         val consent = spiderBridge.configurationTicket()
         val metadata = tmdbState.tmdbResolved[filmId] ?: return@LaunchedEffect
         tmdbState.tmdbSourceStatus = "正在读取 ${hit.node.name} 的真实选集…"
@@ -1466,12 +1467,12 @@ private fun Herrin(startup: StartupPresentation) {
                             }, emit = emit)
                     }) { snapshot ->
                     withContext(Dispatchers.Main.immediate) {
-                        if(searchTicket == tmdbState.tmdbSearchGeneration.get() && filmId == targetId) {
+                        if(searchTicket == tmdbState.tmdbSearchGeneration.get() && filmId == targetId && tmdbState.tmdbLookupEpoch == lookupEpoch && personalSourceConfigEpoch == configEpoch && tvBoxSingle === currentTvbox && snapshot.revision == planRevision) {
                             tmdbState.discoveredSources[targetId] = snapshot
                             tmdbState.tmdbSourceStatus = snapshot.text() +
                                 if(snapshot.hits.isEmpty()) " · 尚无站点搜索结果" else " · 选择影视点条目读取真实选集"
                             if(tmdbState.resumeSourceFilm == targetId) {
-                                snapshot.hits.firstOrNull { HerrinFilmIdentityMatch.matches(searchIdentity,it.movie) }?.let { hit ->
+                                snapshot.hits.firstOrNull { it.relevance == SourceRelevance.CONFIRMED && HerrinFilmIdentityMatch.matches(searchIdentity,it.movie) }?.let { hit ->
                                     // A recent-card click is an explicit resume request. Reacquire
                                     // current provider episodes; never replay persisted media URLs.
                                     tmdbState.resumeSourceFilm = null
@@ -2209,14 +2210,17 @@ private fun Herrin(startup: StartupPresentation) {
             }
             val parsed = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp)
             spiderResolved = if(parsed is PlaybackResult.Ready) {
-                val valid = withContext(Dispatchers.IO) {
+                val validation = withContext(Dispatchers.IO) {
                     withTimeoutOrNull(4_000) {
                         HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
                             FongMiSessionAuthorization.isApproved(candidate, spiderBridge.approvedActiveSiteKey())
-                        }).canRead(parsed.media)
-                    } == true
+                        }, evidence = { code, detail -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, detail) }).probe(parsed.media)
+                    }
                 }
-                if(valid) parsed else PlaybackResult.Unavailable("播放解析已返回，但媒体响应验证失败；可重试、换线路或返回其他影视点")
+                val code = validation?.name ?: "PROBE_TIMEOUT"
+                HerrinPlaybackDiagnosticJournal.record("SOURCE", "MEDIA_PROBE_$code")
+                if(validation == HerrinRemoteMediaProbe.Result.MEDIA) parsed else
+                    PlaybackResult.Unavailable("MEDIA_PROBE_$code：播放解析已返回，但媒体响应验证失败；可重试、换线路或返回其他影视点")
             } else parsed
             // Record in the UI process: the :spider worker has a separate
             // in-memory journal. Without this, the on-TV journal says NO_EVENTS
