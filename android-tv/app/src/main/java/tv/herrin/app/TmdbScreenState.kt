@@ -19,6 +19,7 @@ internal class TmdbScreenState {
         }
         return HerrinSourceDiscovery().also { sourceDiscoveries[id] = it }
     }
+    var resumeSourceFilm: String? = null
     var searchReturnFocus:String?=null
     var restoreSearchFocus by mutableStateOf(false)
     val globalSearch = TmdbGlobalSearchState()

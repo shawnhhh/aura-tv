@@ -158,4 +158,50 @@ class P0AggregatedDiscoveryTest {
         assertTrue(line.contains("raw=3 parsed=1 discarded=2"))
     }
 
+    @Test fun warehouseExpansionStartsAfterPreferredAndStreamsNewProvidersWithoutClearingHits() = runBlocking {
+        var preferredFinished=false
+        var last=HerrinSourceDiscovery.Snapshot("",0)
+        val preferred=node("preferred") { preferredFinished=true;listOf(offer("preferred")) }
+        HerrinSourceDiscovery().search("r",listOf(preferred),"preferred",Mutex(),expand={ emit ->
+            assertTrue(preferredFinished)
+            emit(listOf(node("another-root")))
+            0
+        }){ last=it }
+        assertEquals(2,last.hits.size)
+        assertEquals(2,last.checked)
+        assertFalse(last.hasRemaining)
+    }
+    @Test fun cancellingWarehouseExpansionRetainsHitsAndOffersContinuation() = runBlocking {
+        val service=HerrinSourceDiscovery();var last=HerrinSourceDiscovery.Snapshot("",0)
+        val began=CompletableDeferred<Unit>();var calls=0
+        val first=node("preferred") { calls++;listOf(offer("preferred")) }
+        val search=launch {
+            service.search("r",listOf(first),"preferred",Mutex(),expand={ _ -> began.complete(Unit);awaitCancellation() }){last=it}
+        }
+        withTimeout(1000){began.await()};search.cancelAndJoin()
+        assertEquals(1,last.hits.size);assertTrue(last.hasRemaining)
+        service.search("r",listOf(first),"preferred",Mutex(),expand={emit->emit(listOf(node("other")));0}){last=it}
+        assertEquals(1,calls);assertEquals(2,last.hits.size);assertFalse(last.hasRemaining)
+    }
+    @Test fun removingProviderInvalidatesItsHitsAndTerminalCountEvenWithinSameRevision() = runBlocking {
+        val service=HerrinSourceDiscovery();var last=HerrinSourceDiscovery.Snapshot("",0)
+        service.search("r",listOf(node("removed"),node("retained")),null,Mutex()){last=it}
+        service.search("r",listOf(node("retained")),null,Mutex()){last=it}
+        assertEquals(1,last.nodes);assertEquals(1,last.checked)
+        assertEquals(listOf("retained"),last.hits.map{it.node.id})
+    }
+    @Test fun configuredWarehouseMetadataIsFetchedWithoutDownloadingItsJar() = runBlocking {
+        MockWebServer().use{server->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"spider":"${server.url("/must-not-run.jar")}","sites":[{"key":"cms","name":"CMS","type":1,"api":"https://example.invalid/api"}]}"""))
+            val emitted=mutableListOf<HerrinSourceDiscovery.Node>()
+            val failed=HerrinDiscoveryWarehouses.expand(listOf(TvBoxWarehouse("root",server.url("/root.json").toString())),
+                TvBoxConfigRepository(),true,create={root,owner->
+                    assertEquals("cms",owner.sites.single().key)
+                    listOf(node(root))
+                },emit={emitted+=it})
+            assertEquals(0,failed);assertEquals(1,emitted.size);assertEquals(1,server.requestCount)
+        }
+    }
+
 }

@@ -25,12 +25,15 @@ internal class HerrinSourceDiscovery {
     )
     data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie)
     data class Snapshot(val revision: String, val nodes: Int,
-        val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList()) {
+        val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList(),
+        val expanding: Boolean = false, val warehouseFailures: Int = 0) {
         val checked get() = outcomes.count { it.value != Outcome.SEARCHING }
-        val remaining get() = nodes - checked
+        val remaining get() = (nodes - checked).coerceAtLeast(0)
+        val hasRemaining get() = remaining > 0 || expanding || warehouseFailures > 0
         fun text() = "已检查 $checked/$nodes · 命中 ${outcomes.count { it.value == Outcome.FOUND }} · " +
             "无结果 ${outcomes.count { it.value == Outcome.EMPTY }} · 失败 ${outcomes.count { it.value == Outcome.FAILED }} · " +
-            "超时 ${outcomes.count { it.value == Outcome.TIMEOUT }} · 剩余 $remaining"
+            "超时 ${outcomes.count { it.value == Outcome.TIMEOUT }} · 剩余 $remaining" +
+            if(expanding) " · 正在读取其他已导入影视仓" else if(warehouseFailures > 0) " · $warehouseFailures 个影视仓读取失败，可继续重试" else ""
     }
     private val runs = Mutex()
     private val mutations = Mutex()
@@ -38,11 +41,15 @@ internal class HerrinSourceDiscovery {
 
     /** Cancelled nodes stay pending; only terminal nodes are skipped by a continuation. */
     suspend fun search(revision: String, nodes: List<Node>, preferred: String?,
-        spiderLock: Mutex, diagnose: (SourceSearchEvent) -> Unit = {}, publish: suspend (Snapshot) -> Unit) = runs.withLock {
+        spiderLock: Mutex, diagnose: (SourceSearchEvent) -> Unit = {},
+        expand: (suspend (suspend (List<Node>) -> Unit) -> Int)? = null, publish: suspend (Snapshot) -> Unit) = runs.withLock {
         val unique = nodes.distinctBy { it.id }
+        val known = unique.associateBy { it.id }.toMutableMap()
         if (snapshot.revision != revision) snapshot = Snapshot(revision, unique.size)
         else snapshot = snapshot.copy(nodes = unique.size,
-            outcomes = snapshot.outcomes.filterValues { it != Outcome.SEARCHING })
+            outcomes = snapshot.outcomes.filter { it.key in known && it.value != Outcome.SEARCHING },
+            hits = snapshot.hits.filter { it.node.id in known })
+        snapshot = snapshot.copy(expanding = expand != null, warehouseFailures = 0)
         publish(snapshot)
         val cmsSlots = Semaphore(4)
         suspend fun run(node: Node) {
@@ -89,6 +96,24 @@ internal class HerrinSourceDiscovery {
         personal.forEach { run(it) }
         unique.firstOrNull { it.id == preferred && it !in personal }?.let { run(it) }
         // Independent lanes: queued Spider calls do not occupy the CMS slots.
-        coroutineScope { unique.filter { it !in personal && it.id != preferred }.forEach { node -> launch { run(node) } } }
+        coroutineScope {
+            unique.filter { it !in personal && it.id != preferred }.forEach { node -> launch { run(node) } }
+            if(expand != null) launch {
+                val failures = expand { additions ->
+                    val fresh = mutations.withLock {
+                        val added = additions.distinctBy { it.id }.filter { it.id !in known }
+                        added.forEach { known[it.id] = it }
+                        snapshot = snapshot.copy(nodes = known.size)
+                        publish(snapshot)
+                        added
+                    }
+                    fresh.forEach { node -> launch { run(node) } }
+                }
+                mutations.withLock {
+                    snapshot = snapshot.copy(expanding = false, warehouseFailures = failures)
+                    publish(snapshot)
+                }
+            }
+        }
     }
 }

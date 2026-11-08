@@ -16,7 +16,7 @@ internal sealed interface TvBoxVodResult {
 
 internal sealed interface TvBoxVodDetailResult {
     data class Ready(val film: Film) : TvBoxVodDetailResult
-    data class Error(val reason: String, val httpCode: Int? = null, val retryAfterMs: Long? = null) : TvBoxVodDetailResult
+    data class Error(val reason: String, val httpCode: Int? = null, val retryAfterMs: Long? = null, val outcome: SourceSearchOutcome = SourceSearchOutcome.ERROR) : TvBoxVodDetailResult
 }
 
 /** The catalog call is not the detail call: TVBox CMS often omits play URLs on list pages. */
@@ -253,7 +253,7 @@ internal class TvBoxVodRepository {
         try {
             val updated = TvBoxVodCodec.detail(responseJson(fetchJson(request),site), film, allowHttp, allowOpaque = site.apiType == 4)
             if (updated.playbackEpisodes.isEmpty())
-                TvBoxVodDetailResult.Error("CMS 详情未提供直链播放源；此站点可能需要 TVBox 外部解析器")
+                TvBoxVodDetailResult.Error("CMS 详情未提供直链播放源；此站点可能需要 TVBox 外部解析器",outcome=SourceSearchOutcome.NO_EPISODES)
             else TvBoxVodDetailResult.Ready(updated)
         } catch (error: Exception) {
             if(error is kotlinx.coroutines.CancellationException)throw error

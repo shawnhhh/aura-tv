@@ -23,7 +23,7 @@ internal fun LazyListScope.herrinDiscoveryItems(snapshot: HerrinSourceDiscovery.
     if(running) item(key = "discovery-pause") {
         TvButton("暂停站点搜索（保留结果）", modifier = Modifier.testTag("source-discovery-pause"), reduced = reduced, onClick = pause)
     }
-    if(snapshot.remaining > 0 && !running) item(key = "discovery-resume") {
+    if(snapshot.hasRemaining && !running) item(key = "discovery-resume") {
         TvButton("继续未完成站点（保留结果）", modifier = Modifier.testTag("source-discovery-resume"), reduced = reduced, onClick = resume)
     }
 }
