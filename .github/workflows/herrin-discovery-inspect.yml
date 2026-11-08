@@ -15,9 +15,9 @@ jobs:
         with:
           name: HERRIN-emulator-evidence
           github-token: ${{ github.token }}
-          run-id: 42431720138
+          run-id: 42435249433
           path: evidence
-      - name: Read retained public cached-home fixture semantics
+      - name: Read retained decoder lifecycle and input focus evidence
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -25,9 +25,10 @@ jobs:
           shown=0
           for path in Path('evidence').rglob('logcat.txt'):
               for row in path.read_text(errors='replace').splitlines():
-                  if 'HerrinCachedHeroFailure' not in row and 'HerrinCachedHero:' not in row:continue
+                  if not any(tag in row for tag in ['HerrinDecoder', 'MediaDecoderTest', 'INJECT_EVENTS', 'injectInputEvent', 'InputDispatcher', 'ActivityTaskManager', 'WindowManager']):continue
+                  if not any(stamp in row for stamp in ['01:52:4','01:52:5']):continue
                   row=re.sub(r'https?://[^\s\]<>]+','<url>',row)
                   print(row[:1200]);shown+=1
-                  if shown>=600:break
+                  if shown>=180:break
           print('PUBLIC_FIXTURE_ROWS',shown)
           PY
