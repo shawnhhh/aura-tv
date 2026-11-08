@@ -12,7 +12,7 @@ class P0ResponseRelevanceTest {
     private val target = HerrinFilmIdentity(1, "movie", listOf("奥德赛", "The Odyssey"), 2026)
     private fun movie(title: String, year: String = "2026", type: String = "movie") =
         HerrinSourceMovie("site", HerrinSourceType.TVBOX_CMS,
-            Film("vod", title, "", "电影", year, "", R.drawable.photofilm_orbit, cmsVodId = "opaque"), type)
+            Film("vod-$title", title, "", "电影", year, "", R.drawable.photofilm_orbit, cmsVodId = "opaque-$title"), type)
 
     @Test fun unrelatedProviderResultsAreRetainedButNeverConfirmed() = runBlocking {
         val offers = listOf("奥德赛", "生化危机：爆发夜", "后会无期", "八仙过大海").map { movie(it) }
@@ -55,7 +55,9 @@ class P0ResponseRelevanceTest {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl")
                 .setChunkedBody("#EXTM3U\n" + "#comment\n".repeat(200), 8)
-                .throttleBody(8, 3, TimeUnit.SECONDS))
+                // Chunk framing also consumes MockWebServer's throttle budget.
+                // Send the complete signature immediately; stall the remaining body.
+                .throttleBody(64, 3, TimeUnit.SECONDS))
             server.start()
             val result = withTimeout(1200) {
                 HerrinRemoteMediaProbe(authorizeLocal = { true }).probe(PlaybackMedia(server.url("/live").toString()))
