@@ -37,7 +37,7 @@ internal class HerrinSourceDiscovery {
         val checked get() = outcomes.count { it.value != Outcome.SEARCHING }
         val remaining get() = (nodes - checked).coerceAtLeast(0)
         val hasRemaining get() = remaining > 0 || expanding || warehouseFailures > 0
-        fun text() = "已检查 $checked/$nodes · 原始条目 ${hits.size} · 确认匹配 $confirmed · 可能相关 $possible · 排除 $excluded · " +
+        fun text() = "已检查 $checked/$nodes · 原始搜索命中 ${outcomes.count { it.value == Outcome.FOUND }} 站 · 原始条目 ${hits.size} · 确认匹配 $confirmed · 可能相关 $possible · 排除 $excluded · " +
             "无结果 ${outcomes.count { it.value == Outcome.EMPTY }} · 失败 ${outcomes.count { it.value == Outcome.FAILED }} · " +
             "超时 ${outcomes.count { it.value == Outcome.TIMEOUT }} · 剩余 $remaining" +
             if(expanding) " · 正在读取其他已导入影视仓" else if(warehouseFailures > 0) " · $warehouseFailures 个影视仓读取失败，可继续重试" else ""
