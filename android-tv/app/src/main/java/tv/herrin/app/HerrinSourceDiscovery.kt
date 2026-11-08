@@ -54,6 +54,8 @@ internal class HerrinSourceDiscovery {
         val hit=snapshot.hits.firstOrNull{it.key==key} ?:return@withLock null
         val expected=hit.movie.film
         require(expected.cmsVodId == detailed.cmsVodId && expected.spiderVodId == detailed.spiderVodId)
+        require(expected.spiderOrigin?.site == detailed.spiderOrigin?.site &&
+            expected.spiderOrigin?.runtime == detailed.spiderOrigin?.runtime)
         val layout=detailed.playbackEpisodes.map { episode ->
             EpisodeLayout(episode.number,episode.title,episode.lines.map { it.id to it.title })
         }
@@ -128,6 +130,7 @@ internal class HerrinSourceDiscovery {
             if(expand != null) launch {
                 val failures = expand { additions ->
                     val fresh = mutations.withLock {
+                        if (version.get() != ticket || snapshot.revision != revision) return@withLock emptyList<Node>()
                         val added = additions.distinctBy { it.id }.filter { it.id !in known }
                         added.forEach { known[it.id] = it }
                         snapshot = snapshot.copy(nodes = known.size)
@@ -137,6 +140,7 @@ internal class HerrinSourceDiscovery {
                     fresh.forEach { node -> launch { run(node) } }
                 }
                 mutations.withLock {
+                    if (version.get() != ticket || snapshot.revision != revision) return@withLock
                     snapshot = snapshot.copy(expanding = false, warehouseFailures = failures)
                     publish(snapshot)
                 }

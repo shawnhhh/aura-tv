@@ -14,6 +14,13 @@ internal object SpiderPlaybackEvidence {
     fun structure(raw: String) {
         val root = runCatching { JSONObject(raw) }.getOrNull()
         if (root == null) { add("SPIDER", "RESPONSE_INVALID_JSON"); return }
+        add("SPIDER", when {
+            root.optString("playUrl").startsWith("json:") -> "PARSER_JSON"
+            root.optString("playUrl").startsWith("parse:") -> "PARSER_NAMED"
+            root.optInt("jx", 0) == 1 -> "PARSER_CATALOG"
+            root.optInt("parse", 0) == 1 || root.optString("playUrl").isNotEmpty() -> "PARSER_WEB"
+            else -> "PARSER_DIRECT"
+        })
         val kind = when (root.opt("url")) {
             is String -> "STRING"; is JSONArray -> "ARRAY"; is JSONObject -> "OBJECT"; else -> "MISSING"
         }

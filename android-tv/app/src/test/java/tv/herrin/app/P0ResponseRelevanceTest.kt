@@ -63,6 +63,22 @@ class P0ResponseRelevanceTest {
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, result)
         }
     }
+    @Test fun unrelatedChineseResponseDoesNotPreventOriginalTitleSearchAndKeepsVodIdentity() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"list":[{"vod_id":"unrelated-id","vod_name":"生化危机：爆发夜","type_name":"电影","vod_year":"2026"}]}"""))
+            server.enqueue(MockResponse().setBody("""{"list":[{"vod_id":"original-opaque-id","vod_name":"The Odyssey","type_name":"电影","vod_year":"2026"}]}"""))
+            server.start()
+            val site = TvBoxSite("authorized fixture", false, server.url("/api").toString(), key = "owner")
+            val offers = HerrinTvBoxCmsSource(site, TvBoxVodRepository(), true).searchCandidates(target)
+            assertEquals("奥德赛", server.takeRequest().requestUrl?.queryParameter("wd"))
+            assertEquals("The Odyssey", server.takeRequest().requestUrl?.queryParameter("wd"))
+            assertEquals(2, offers.size)
+            assertEquals(listOf("unrelated-id", "original-opaque-id"), offers.map { it.film.cmsVodId })
+            assertEquals(1, offers.count { HerrinSourceRelevance.classify(target, it) == SourceRelevance.CONFIRMED })
+            assertTrue(offers.all { it.sourceId == "cms:" + site.apiUrl && it.film.playbackEpisodes.isEmpty() })
+            assertEquals(2, server.requestCount)
+        }
+    }
     @Test fun accurateFailureCodeDoesNotExportPluginMessagesOrUrls() {
         val report = PlaybackErrorReport.source("SPIDER", "MEDIA_PROBE_LOGIN_OR_TEXT：private-url")
         assertTrue(report.contains("SOURCE_MEDIA_PROBE_LOGIN_OR_TEXT"))
