@@ -111,4 +111,13 @@ class P0DiscoveryProtocolTest {
         }
     }
 
+    @Test fun xmlCmsUsesActualAndroidDomWithoutAllowingDtdOrExternalEntities() {
+        val xml="<rss><list><video><id>platform-7</id><name>Original fixture</name><dl><dd flag=\"A\">One${'$'}https://example.invalid/video.mp4</dd></dl></video></list></rss>"
+        val film=TvBoxVodCodec.decode(TvBoxCmsXml.toJson(xml)).single()
+        assertEquals("platform-7",film.cmsVodId)
+        assertEquals("A",film.playbackEpisodes.single().lines.single().title)
+        val dtd="<!DOCTYPE rss [<!ENTITY ex SYSTEM 'file:///data/local/tmp/must-not-read'>]><rss><video><id>1</id><name>&ex;</name></video></rss>"
+        assertTrue(runCatching{TvBoxCmsXml.toJson(dtd)}.isFailure)
+    }
+
 }

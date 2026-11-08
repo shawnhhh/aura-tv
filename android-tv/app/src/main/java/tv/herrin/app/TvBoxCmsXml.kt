@@ -11,14 +11,21 @@ import javax.xml.parsers.DocumentBuilderFactory
 internal object TvBoxCmsXml {
     fun toJson(text: String): String {
         require(text.toByteArray().size <= 1_048_576)
+        // Same platform policy as the already exercised DAV adapter: Android
+        // DOM does not support every Xerces feature. Refuse declarations before
+        // parsing, so unsupported feature switches never weaken entity safety.
+        require(!Regex("""<!\s*(?:DOCTYPE|ENTITY)\b""",RegexOption.IGNORE_CASE).containsMatchIn(text))
         val factory=DocumentBuilderFactory.newInstance().apply {
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl",true)
-            setFeature("http://xml.org/sax/features/external-general-entities",false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities",false)
+            runCatching { setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING,true) }
+            runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl",true) }
+            runCatching { setFeature("http://xml.org/sax/features/external-general-entities",false) }
+            runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities",false) }
             isExpandEntityReferences=false
-            isXIncludeAware=false
+            runCatching { isXIncludeAware=false }
         }
-        val document=factory.newDocumentBuilder().parse(InputSource(StringReader(text)))
+        val builder=factory.newDocumentBuilder()
+        builder.setEntityResolver { _,_ -> InputSource(StringReader("")) }
+        val document=builder.parse(InputSource(StringReader(text)))
         val videos=document.getElementsByTagName("video")
         val rows=JSONArray()
         for(index in 0 until minOf(60,videos.length)) {
