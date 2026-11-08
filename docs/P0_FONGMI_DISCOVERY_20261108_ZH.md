@@ -87,3 +87,7 @@
 `c5ef16c` TV：236 项中 3 个原搜索遥控用例失败，其余通过；XML 的实际 Android DOM/DTD 拒绝用例已通过。所有中间失败记录保留，不能将其作为最终整套成功。
 
 新增展开仓的配置 JSON 可包含授权头；不沿用原仓缓存的原文写入路径，新增 `forSearch(...persistFetched=false)` 仅用于新展开。元数据在进程内有界保留 20 个根，继续检索复用，配置变化清理并以 epoch 阻止旧任务写回。原直播/已有仓缓存规则与 NAS/云盘加密凭据不改。新增 Android 用例用真实本地配置响应验证授权头不产生磁盘原文缓存、连续两次展开只发起一次请求；不使用真实账号或 Token。
+
+`52e4fcf` 整套验收已通过：655 JVM、Lint/Debug、236 TV 和 17 项预检。随后 `c624c67` 为新增不落盘回归重新完整验收：655 JVM、Lint/Debug 通过；237 TV 中只有原 `MediaDecoderTest` 后台恢复用例失败，其余 236 通过。新增授权元数据回归及所有搜索/聚合/出帧回归均通过，未以此前全绿代替本提交结果。
+
+保留失败 run 42435249433 和证据 artifact 13599294441；独立只读证据作业 42436457383 实际读取该 logcat：01:52:52.850 已解码 7 帧，01:52:54.032 暂停三次位置均 1025 ms；01:52:55.467 InputDispatcher 明确拒绝把 uid 10076 的事件注入仍占输入焦点的 `InstrumentationActivityInvoker$EmptyActivity`（uid 10077），栈为 MediaDecoderTest.kt:141、恢复后的 MEDIA_PLAY。ActivityScenario 的 RESUMED 回调早于测试辅助窗口完成交接，不能用生命周期状态代替输入就绪。增加同一 15 秒 await 工具内的真实 hasWindowFocus 检查，再发送原遥控事件；不提升注入权限、不重发按键、不删除或改变原出帧/暂停位置/ENDED/释放断言，不修改生产播放器。
