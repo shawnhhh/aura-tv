@@ -22,6 +22,9 @@ jobs:
         working-directory: android-tv
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Acceptance APK and reports must identify the actual PR head.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
