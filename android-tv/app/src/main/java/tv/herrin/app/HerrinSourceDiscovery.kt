@@ -20,6 +20,7 @@ internal class HerrinSourceDiscovery {
         val search: suspend () -> List<HerrinSourceMovie>,
         val details: suspend (HerrinSourceMovie) -> Detail?,
         val site: TvBoxSite? = null,
+        val config: TvBoxConfig.Single? = null,
         val timeoutMs: Long = 12_000L
     )
     data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie)
@@ -73,7 +74,7 @@ internal class HerrinSourceDiscovery {
                         Outcome.EMPTY -> SourceSearchOutcome.NO_MATCH
                         Outcome.TIMEOUT -> SourceSearchOutcome.TIMEOUT
                         else -> SourceSearchOutcome.ERROR
-                    }, (System.nanoTime() - started) / 1_000_000))
+                    }, (System.nanoTime() - started) / 1_000_000, completed = snapshot.checked, total = snapshot.nodes, nodeComplete = true))
             }
             if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderLock.withLock { execute() }
             else cmsSlots.withPermit { execute() }

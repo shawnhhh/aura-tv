@@ -12,6 +12,13 @@ internal class TmdbScreenState {
     val discoverySpiderLock = kotlinx.coroutines.sync.Mutex()
     var discoverySelection by mutableStateOf<Pair<String, String>?>(null)
     var discoverySelectionEpoch by mutableIntStateOf(0)
+    fun discoveryFor(id: String): HerrinSourceDiscovery {
+        sourceDiscoveries[id]?.let { return it }
+        if(sourceDiscoveries.size >= 24) {
+            sourceDiscoveries.keys.first().let { old -> sourceDiscoveries.remove(old); discoveredSources.remove(old) }
+        }
+        return HerrinSourceDiscovery().also { sourceDiscoveries[id] = it }
+    }
     var searchReturnFocus:String?=null
     var restoreSearchFocus by mutableStateOf(false)
     val globalSearch = TmdbGlobalSearchState()

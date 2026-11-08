@@ -40,9 +40,9 @@ internal object SpiderVodCodec {
         val array = JSONObject(json).optJSONArray("list") ?: return emptyList()
         return (0 until minOf(array.length(), 80)).mapNotNull { index ->
             val vod = array.optJSONObject(index) ?: return@mapNotNull null
-            val id = vod.optString("vod_id").trim().take(512)
+            val id = vod.optString("vod_id").trim()
             val title = vod.optString("vod_name").trim().take(120)
-            if (id.isEmpty() || title.isEmpty()) return@mapNotNull null
+            if (id.length !in 1..4096 || title.isEmpty()) return@mapNotNull null
             Film(id = "spider-${site.key.hashCode().toUInt().toString(16)}-${id.hashCode().toUInt().toString(16)}-$index",
                 title = title, subtitle = vod.optString("vod_remarks").take(80),
                 category = TvBoxCategories.topLevel(vod.optString("type_name")),

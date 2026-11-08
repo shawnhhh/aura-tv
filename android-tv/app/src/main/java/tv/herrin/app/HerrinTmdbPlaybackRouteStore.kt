@@ -8,7 +8,7 @@ package tv.herrin.app
 internal class HerrinTmdbPlaybackRouteStore(private val clock:()->Long={System.nanoTime()/1_000_000}) {
     sealed interface Route {
         data object Personal : Route
-        data class Cms(val site: TvBoxSite) : Route
+        data class Cms(val site: TvBoxSite, val config: TvBoxConfig.Single? = null) : Route
         data class Spider(val approvedSiteKey: String, val sourceFilm: Film? = null) : Route
     }
     private val routes = linkedMapOf<String, Route>()
@@ -18,7 +18,7 @@ internal class HerrinTmdbPlaybackRouteStore(private val clock:()->Long={System.n
     fun validationVersion(id:String)=versions[id]?:0L
 
     fun personal(id: String) { routes[id] = Route.Personal;checkedAt[id]=clock();versions[id]=++version }
-    fun cms(id: String, site: TvBoxSite) { routes[id] = Route.Cms(site);checkedAt[id]=clock();versions[id]=++version }
+    fun cms(id: String, site: TvBoxSite, config: TvBoxConfig.Single? = null) { routes[id] = Route.Cms(site,config);checkedAt[id]=clock();versions[id]=++version }
     fun spider(id: String, approvedKey: String, sourceFilm: Film? = null) {
         require(approvedKey.isNotBlank())
         routes[id] = Route.Spider(approvedKey, sourceFilm)

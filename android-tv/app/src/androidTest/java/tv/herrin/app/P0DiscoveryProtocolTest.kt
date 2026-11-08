@@ -48,4 +48,48 @@ class P0DiscoveryProtocolTest {
             assertTrue(bridge.isApprovedSourceFilm(loaded.film))
         } finally { bridge.close();file.delete() }
     }
+    @Test fun httpSpiderOpaqueEpisodeGoesThroughFongmiAndRendersActualFrames() = runBlocking {
+        val inst=InstrumentationRegistry.getInstrumentation()
+        val video=inst.context.assets.open("synthetic.mp4").use{it.readBytes()}
+        okhttp3.mockwebserver.MockWebServer().use { server ->
+            val mediaCalls=java.util.concurrent.atomic.AtomicInteger()
+            server.dispatcher=object:okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request:okhttp3.mockwebserver.RecordedRequest):okhttp3.mockwebserver.MockResponse {
+                    if(request.requestUrl!!.encodedPath == "/video.mp4") {
+                        mediaCalls.incrementAndGet()
+                        return okhttp3.mockwebserver.MockResponse().setHeader("Content-Type","video/mp4")
+                            .setBody(okio.Buffer().write(video))
+                    }
+                    check(request.requestUrl!!.queryParameter("play") == "opaque-episode-7")
+                    check(request.requestUrl!!.queryParameter("flag") == "Original line")
+                    return okhttp3.mockwebserver.MockResponse().setBody(org.json.JSONObject()
+                        .put("parse",0).put("url",server.url("/video.mp4")).toString())
+                }
+            }
+            server.start()
+            val site=TvBoxSite("Original HTTP fixture",false,server.url("/api").toString(),key="http-fixture",apiType=4)
+            val source=Film("provider-film","Original fixture","","电影","2026","",R.drawable.photofilm_orbit,
+                cmsVodId="provider-vod-3",playbackEpisodes=listOf(PlaybackEpisode(1,"First",
+                    listOf(PlaybackLine("cms-0","Original line","opaque-episode-7")))))
+            val parsed=resolveHttpSpiderPlayback(inst.targetContext,site,source,1,"cms-0",null,true)
+            assertTrue(parsed is PlaybackResult.Ready)
+            assertEquals(0,mediaCalls.get())
+            val media=(parsed as PlaybackResult.Ready).media
+            assertTrue(HerrinRemoteMediaProbe(authorizeLocal={it==server.url("/video.mp4").toString()}).canRead(media))
+            androidx.test.core.app.ActivityScenario.launch<PlaybackTestActivity>(android.content.Intent(inst.targetContext,
+                PlaybackTestActivity::class.java).putExtra("fixture",media.uri)).use { scenario ->
+                var frames=0;var failure:String?=null
+                withTimeout(20_000) {
+                    while(frames<4 && failure==null) {
+                        scenario.onActivity { frames=it.player.videoDecoderCounters?.renderedOutputBufferCount?:0
+                            failure=it.player.playerError?.errorCodeName }
+                        if(frames<4)delay(80)
+                    }
+                }
+                assertNull(failure)
+                assertTrue("Actual original synthetic MP4 must decode",frames>=4)
+            }
+        }
+    }
+
 }

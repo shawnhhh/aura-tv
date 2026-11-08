@@ -5,9 +5,9 @@ import kotlinx.coroutines.withContext
 /** Bind protocol operations to one immutable root/site/API/JAR identity. */
 internal object HerrinDiscoveryNodes {
     fun id(root: String, site: TvBoxSite, jar: String?) =
-        SourceHealthIndex.digest(root + "|" + TvBoxAutoSites.identity(site, jar))
+        SourceHealthIndex.digest(root + "|" + TvBoxAutoSites.identity(site, jar) + "|" + site.apiType + "|" + SourceHealthIndex.digest(site.extension))
 
-    fun create(personals: List<HerrinWebDavSource>, cms: List<Pair<String, TvBoxSite>>,
+    fun create(personals: List<HerrinWebDavSource>, cms: List<Triple<String, TvBoxSite, TvBoxConfig.Single?>>,
         spiders: List<TvBoxSite>, root: String, config: TvBoxConfig.Single?,
         identity: HerrinFilmIdentity, repo: TvBoxVodRepository, allowHttp: Boolean,
         bridge: TvBoxSpiderBridge, consent: Long): List<HerrinSourceDiscovery.Node> {
@@ -22,12 +22,12 @@ internal object HerrinDiscoveryNodes {
                         episodes = playlist.episodes.size), playlist.mediaByLine)
                 }, timeoutMs = 1_500)
         }
-        cms.forEach { (origin, site) ->
+        cms.forEach { (origin, site, owner) ->
             val source = HerrinTvBoxCmsSource(site, repo, allowHttp)
             nodes += HerrinSourceDiscovery.Node(id(origin, site, null), site.name, source.type,
                 search = { source.searchCandidates(identity) },
                 details = { offer -> (source.details(offer) as? TvBoxVodDetailResult.Ready)?.film
-                    ?.let { HerrinSourceDiscovery.Detail(it) } }, site = site)
+                    ?.let { HerrinSourceDiscovery.Detail(it) } }, site = site, config = owner)
         }
         if(config != null) spiders.forEach { site ->
             suspend fun activate(): Boolean {
@@ -49,7 +49,7 @@ internal object HerrinDiscoveryNodes {
                         fresh?.let { (bridge.details(it.film) as? SpiderResult.Ready)?.value }
                             ?.let { HerrinSourceDiscovery.Detail(it) }
                     }
-                }, site = site)
+                }, site = site, config = config)
         }
         return nodes.distinctBy { it.id }
     }
