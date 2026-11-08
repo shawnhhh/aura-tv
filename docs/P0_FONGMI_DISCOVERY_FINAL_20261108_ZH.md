@@ -72,7 +72,12 @@ M437 元数据测试共用的 CMS 详情样本被交给不同 Spider VOD，新�
 
 ## 最终 CI 与 APK
 
-FINAL_CI_PENDING
+| 工作流 | 当前状态 |
+|---|---|
+| [最新 Debug / JVM / Lint / APK](https://github.com/shawnhhh/aura-tv/actions/runs/42433992617) | 运行中 |
+| [最新 Android TV](https://github.com/shawnhhh/aura-tv/actions/runs/42433992628) | 运行中 |
+
+最终 APK 与 SHA-256 待本提交全套验收，不以中间构建替代。
 
 JVM 为真实本机 HTTP/JSON/XML 协议测试，TV 为 API 30 x86 模拟器、原创授权 DEX 与原创媒体。真实字节和视频解码帧可以证明适配链路执行，不能证明第三方站可播。未删测试、未跳过断言、未降低性能或必跑门禁。
 
