@@ -17,7 +17,7 @@ internal class LanConfigServer(
     constructor(context: Context, host: String, applied: (String) -> Unit) :
         this(context, host, false, applied)
     val pairing = ConfigPairingSession(maxLifetimeMs = if (quickHttp) 5 * 60_000L else Long.MAX_VALUE)
-    private val reaper = java.util.Timer("lan-config-expiry", true)
+    private val reaper by lazy { java.util.Timer("lan-config-expiry", true) }
     internal val certificate = HeldCertificate.Builder().commonName("HERRIN local configuration")
         .addSubjectAlternativeName(host).build()
     val fingerprint: String = MessageDigest.getInstance("SHA-256").digest(certificate.certificate.encoded)

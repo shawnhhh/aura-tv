@@ -12,6 +12,8 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.ExternalResource
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
 
 class P0ExitAndEntryTest {
     @get:Rule(order=0) val reset=object:ExternalResource(){ override fun before(){
@@ -97,5 +99,42 @@ class P0ExitAndEntryTest {
         repeat(12){ i.sendKeySync(KeyEvent(down,SystemClock.uptimeMillis(),KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_BACK,it)) }
         i.sendKeySync(KeyEvent(down,SystemClock.uptimeMillis(),KeyEvent.ACTION_UP,KeyEvent.KEYCODE_BACK,0))
         compose.waitForIdle();assertFalse(compose.activity.isFinishing)
+    }
+
+    @Test fun phoneHttpSaveRefreshesTvWithoutRemoteApply() {
+        ready()
+        okhttp3.mockwebserver.MockWebServer().use { fixture ->
+            fixture.start()
+            fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"sites":[{"name":"扫码刷新样本","api":"${fixture.url("/cms")}"}]}"""))
+            compose.onNodeWithTag("settings").performClick()
+            compose.onNodeWithTag("phone-config-main").performClick()
+            compose.onNodeWithTag("phone-config-http").performClick()
+            compose.waitUntil(5000) {
+                runCatching { compose.onNodeWithTag("phone-config-qr").assertIsDisplayed() }.isSuccess &&
+                    runCatching { compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring=true) }.isSuccess
+            }
+            val pixels = compose.onNodeWithTag("phone-config-qr").captureToImage().toPixelMap()
+            val colors = IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }
+            val qr = com.google.zxing.MultiFormatReader().decode(com.google.zxing.BinaryBitmap(
+                com.google.zxing.common.HybridBinarizer(com.google.zxing.RGBLuminanceSource(pixels.width, pixels.height, colors)))).text
+            val origin = qr.substringBefore("/#")
+            val client = okhttp3.OkHttpClient()
+            fun post(path: String, data: org.json.JSONObject, key: String = ""): org.json.JSONObject =
+                client.newCall(okhttp3.Request.Builder().url(origin + path).header("Origin", origin)
+                    .header("X-Herrin-Session", key).post(data.toString().toRequestBody("application/json".toMediaType())).build())
+                    .execute().use { assertEquals(200, it.code); org.json.JSONObject(it.body!!.string()) }
+            val pair = org.json.JSONObject().put("pairing", qr.substringAfter('#'))
+            assertTrue(post("/pair", pair).getBoolean("pending"))
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("phone-config-approve").assertIsDisplayed() }.isSuccess }
+            compose.onNodeWithTag("phone-config-approve").performClick()
+            val key = post("/pair", pair).getString("session")
+            post("/sources", org.json.JSONObject().put("url", fixture.url("/box.json").toString()), key)
+            compose.waitUntil(15000) { fixture.requestCount > 0 }
+            compose.onNodeWithTag("phone-config-close").performClick()
+            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("vod-apply-feedback"))
+            compose.waitUntil(15000) { runCatching { compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置") }.isSuccess }
+            assertEquals("/box.json", fixture.takeRequest().path)
+        }
     }
 }
