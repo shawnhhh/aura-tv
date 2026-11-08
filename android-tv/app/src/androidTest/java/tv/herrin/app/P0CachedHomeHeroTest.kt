@@ -44,7 +44,16 @@ class P0CachedHomeHeroTest {
     }
 
     @Test fun cachedOfflineHomeAndRapidCategoriesKeepTitleAndBackdropOnTheirOwnFirstFilm() {
-        compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
+        // Curtain readiness means the progressive home skeleton is committed,
+        // not that its asynchronous local catalog projection has published.
+        // Retained failure tree 42431720138 showed the correct hero 127 ms
+        // after the old entry assertion. Keep the same 10s entry bound, then
+        // retain every immediate rapid-category/title/backdrop assertion below.
+        compose.waitUntil(10000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithTag("hero-title-tmdb-movie-11").assertTextEquals("Original 11")
+            compose.onNodeWithTag("hero-art-tmdb-movie-11").assertExists()
+        }.isSuccess }
         val expected=listOf("首页" to "tmdb-movie-11", "电影" to "tmdb-movie-11",
             "剧集" to "tmdb-tv-21", "动漫" to "tmdb-tv-31", "综艺" to "tmdb-tv-41",
             "纪录片" to "tmdb-movie-51", "Top 250" to "tmdb-movie-61", "电影" to "tmdb-movie-11",
