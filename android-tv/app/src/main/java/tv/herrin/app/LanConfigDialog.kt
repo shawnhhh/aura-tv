@@ -86,7 +86,11 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
         } catch (_: Exception) {
             failed = true; message = "服务启动或二维码生成失败。请重试，或使用遥控器手动配置。"
         } finally {
-            created?.end(); server = null; bitmap = null; pending = false
+            created?.end()
+            // A cancelled mode's cleanup must never clear the next mode's UI.
+            if (server === created) {
+                server = null; bitmap = null; pending = false
+            }
         }
     }
     DisposableEffect(lifecycleOwner) {
