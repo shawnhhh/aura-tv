@@ -9,9 +9,9 @@ class AdditionalServiceConfigsTest {
         context.getSharedPreferences("herrin", 0).edit().remove("services_sources").commit()
         val store = AdditionalServiceConfigs(context)
         try {
-            store.batchSources("https://one.invalid/config\nhttps://one.invalid/config\nhttps://two.invalid/config")
+            store.batchSources("https://one.invalid/config\nhttps://one.invalid/config\nhttp://two.invalid/config")
             assertEquals(2, store.list("sources").size)
-            try { store.batchSources("https://three.invalid/config\nhttp://bad.invalid/config"); fail() }
+            try { store.batchSources("https://three.invalid/config\nfile:///bad/config"); fail() }
             catch (_: IllegalArgumentException) { }
             assertEquals(2, store.list("sources").size)
             val entry = store.list("sources").first()
