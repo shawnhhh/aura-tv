@@ -6,7 +6,7 @@
 
 打开原「手机扫码配置」，默认仍是 HTTPS，核对电视完整证书指纹后配对。
 同一窗口新增「局域网快速配置」，切换时关闭原监听并生成新的临时端口、配对码及 HTTP 二维码。
-手机浏览器直接打开 HTTP 页面，点击请求后必须在电视确认。退出窗口、切换模式或结束会话关闭监听。
+手机浏览器直接打开 HTTP 页面，点击请求后必须在电视确认。退出窗口、切换模式、电视退到后台或结束会话关闭监听；启动完成时再次核对前台生命周期，防止启动途中退出留下监听。
 配对码 3 分钟有效；HTTP 服务从创建开始最多 5 分钟，请求不能续期。
 仅选择已启动非回环网卡上的私有 IPv4；不使用 0.0.0.0 或公网监听。测试允许绑定回环地址。
 
@@ -47,7 +47,7 @@ MainActivity 同样明确拒绝将 HTTP TVBox 结果导入 HERRIN 目录。
   增加 HTTPS 页面保存 HTTP 饭太硬 IDN 地址。
 - LanHttpConfigurationTest：HTTP 页面、待确认拒绝写入、IDN 保存、混合批量去重、
   附加源保存、刷新回调、敏感路径/字段/链接拒绝、信任值不变、新 JAR 拒绝、结束后端口关闭、公网通配监听拒绝。
-- P0QrFailureTest：保留无 IPv4 / 二维码生成失败和重试；增加 HTTPS 切换 HTTP、退出关闭监听。
+- P0QrFailureTest：保留无 IPv4 / 二维码生成失败和重试；增加 HTTPS 切换 HTTP、退出及生命周期 ON_STOP 关闭监听。
 - P0ExitAndEntryTest：从真实 TV 窗口截图解码 HTTP 二维码，经电视配对保存受控 HTTP 单仓，
   断言电视自动请求配置、显示导入成功，无需遥控器再次应用。
 - LanSourceAddressTest / QuickConfigPolicyTest：URL/IDN/长度/认证信息/危险 scheme、独立 HTTPS 规则、

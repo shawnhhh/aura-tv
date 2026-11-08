@@ -59,6 +59,7 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
     var failed by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("正在开启临时 HTTPS 服务…") }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(epoch, quickHttp) {
         var created: LanConfigServer? = null
         bitmap = null; failed = false; pending = false
@@ -69,6 +70,7 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
                 else serverFactory(context) { module -> main.post { callback(module) } })
                     .also { created = it }.apply { start(5000, true) }
             }
+            check(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
             server = started
             bitmap = withContext(Dispatchers.Default) { qrFactory(started.qr) }
             message = if (quickHttp) "配对 3 分钟有效；服务开启后最多 5 分钟，退出立即关闭。" else "配对 3 分钟有效；确认后闲置 30 分钟结束。"
@@ -87,7 +89,6 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
             created?.end(); server = null; bitmap = null; pending = false
         }
     }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) server?.end()

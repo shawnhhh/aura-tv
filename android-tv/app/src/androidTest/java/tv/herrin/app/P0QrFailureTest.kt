@@ -49,4 +49,22 @@ class P0QrFailureTest {
         compose.waitForIdle()
         assertFalse(quick!!.isAlive)
     }
+
+    @Test fun backgroundingOwnerClosesListener() {
+        val owner = object : androidx.lifecycle.LifecycleOwner {
+            val registry = androidx.lifecycle.LifecycleRegistry(this)
+            override val lifecycle: androidx.lifecycle.Lifecycle get() = registry
+        }
+        compose.runOnUiThread { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+        var server: LanConfigServer? = null
+        compose.setContent {
+            CompositionLocalProvider(androidx.lifecycle.compose.LocalLifecycleOwner provides owner) {
+                MaterialTheme { LanConfigDialog({}, {},
+                    serverFactory = { c, cb -> LanConfigServer(c, "127.0.0.1", cb).also { server = it } }) }
+            }
+        }
+        compose.waitUntil(5000) { server?.isAlive == true }
+        compose.runOnUiThread { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.CREATED }
+        assertFalse(server!!.isAlive)
+    }
 }
