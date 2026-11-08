@@ -2638,6 +2638,12 @@ private fun Herrin(startup: StartupPresentation) {
             (focusId.startsWith("card-") || (focusId.startsWith("search-") && focusId != "search-input"))
         val leavingSettingsEditor = screen == "settings" && !configInputFocused
         if (leavingSearchEditor || leavingSettingsEditor) {
+            val imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+            // Read-only blur already ends the Compose session. Do not start an
+            // asynchronous IME hide/restart transaction for an already hidden,
+            // closed editor; retained CI traces show it swallowing DOWN only.
+            if(leavingSearchEditor && !inputMethod.isAcceptingText && !imeVisible) return@LaunchedEffect
             keyboard?.hide()
             withFrameNanos { }
             inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
@@ -3787,7 +3793,9 @@ private fun Herrin(startup: StartupPresentation) {
                 val personalMedia = if (screen == "player" && film.playbackEpisodes.any { ep ->
                     ep.number == episode && ep.lines.any { it.id == line } })
                     tmdbState.tmdbPersonalPlayback[film.id]?.get(line) else null
-                val licensed = if (personalMedia != null) PlaybackResult.Ready(personalMedia)
+                val personalPlayback = personalMedia?.let { SelectedPersonalPlayback(it,playerRetryEpoch) }
+                val personalWaiting = personalMedia != null && personalPlayback == null
+                val licensed = if (personalMedia != null) personalPlayback
                     else if (spiderActive && screen == "player") currentSpiderResult
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
@@ -3883,14 +3891,14 @@ private fun Herrin(startup: StartupPresentation) {
                 } else if (screen == "player") {
                     val playbackUnavailable = tmdbState.automaticSearch == null &&
                         (currentSpiderResult is PlaybackResult.Unavailable ||
-                        (!spiderActive && !cmsWaiting && !cmsParseWaiting))
+                        (!spiderActive && !cmsWaiting && !cmsParseWaiting && !personalWaiting))
                     val offlineDemonstration = !sourceConfigured && !spiderActive &&
                         film.playbackEpisodes.isEmpty()
                     PlayerStartupSurface(
                         loading = !playbackUnavailable,
                         offlineDemonstration = offlineDemonstration,
                         cmsFailed = cmsFailed,
-                        retryAvailable = spiderActive || cmsFailed || cmsJsonParser != null || cmsBrowserParser != null,
+                        retryAvailable = spiderActive || cmsFailed || cmsHttpSpider || personalMedia != null || cmsJsonParser != null || cmsBrowserParser != null,
                         reducedMotion = reduceMotion,
                         failureHint = (parsedCms as? PlaybackResult.Unavailable)
                                 ?.reason?.let(PlayerStartupHints::forSpiderFailure)
