@@ -45,3 +45,9 @@
 ## TCL 必验
 
 使用用户合法授权的同版本饭太硬配置，选奶酪，查询小城良方；导出脱敏 source / Spider 日志，确认 init、searchContent(false)、原始/解析计数、详情 VOD、线路和选集数；与 TVBox 对比同关键词、同 root/site/JAR/ext 身份。测试多站命中、未获授权站不执行、暂停/继续、切片/电影、HLS/MP4/JSON/WebView/合法 proxy、换线/重试/拖动/续播和实际视频帧。没有真机证据，全部标记待验。
+
+## 首轮失败保留
+
+`d516f97` Debug run 42429308967：640 个 JVM 测试中 639 通过，`M437SourceDetailMergeTest` 的 Spider 元数据合并用例失败。共享详情样本的 vod_id 是 CMS 的 `original-cms-id`，请求却是 Spider 的 `original-spider-id`，被新增身份校验正确拒绝。将该用例的响应样本改为所请求的 Spider VOD，保留所有 IPC/元数据/原始 ID 断言；独立的显式错误 VOD 拒绝回归继续保留。没有删除或跳过失败用例，没有放宽生产校验。
+
+新增真实 Activity 回归 `tmdbDetailStreamsBothCmsSourcesAndLoadsOnlyChosenProviderVod`：两个本地 HTTP CMS 返回带后缀和不同年份的条目，UI 展示两站真实响应；未选择时详情请求 0、媒体请求 0；分别选择后只使用对应 provider VOD 请求详情，媒体仍 0，另一来源仍保留。该测试是受控协议集成测试，不是第三方成功证据。

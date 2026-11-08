@@ -682,6 +682,68 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("episode-4").performClick()
         compose.onNodeWithText("播放演示").assertExists()
     }
+    @Test fun tmdbDetailStreamsBothCmsSourcesAndLoadsOnlyChosenProviderVod() {
+        MockWebServer().use { server ->
+            val details=java.util.concurrent.ConcurrentLinkedQueue<String>()
+            val mediaCalls=java.util.concurrent.atomic.AtomicInteger()
+            server.dispatcher=object:okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request:okhttp3.mockwebserver.RecordedRequest):MockResponse {
+                    val url=request.requestUrl!!
+                    if(url.encodedPath == "/box.json") return MockResponse().setBody(org.json.JSONObject().put("sites",
+                        org.json.JSONArray().put(org.json.JSONObject().put("key","a").put("name","CMS A").put("type",1).put("api",server.url("/a")))
+                            .put(org.json.JSONObject().put("key","b").put("name","CMS B").put("type",1).put("api",server.url("/b")))).toString())
+                    if(url.encodedPath !in listOf("/a","/b")) {
+                        mediaCalls.incrementAndGet();return MockResponse().setResponseCode(503)
+                    }
+                    val source=url.encodedPath.substringAfter('/')
+                    val row=org.json.JSONObject().put("vod_id","local-$source").put("vod_name","协议测试1（$source）")
+                        .put("type_name","电影").put("vod_year","2024")
+                    if(url.queryParameter("ids") != null) {
+                        details.add(source+":"+url.queryParameter("ids"))
+                        row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/unavailable-$source.mp4"))
+                    }
+                    return MockResponse().setHeader("Content-Type","application/json")
+                        .setBody(org.json.JSONObject().put("list",org.json.JSONArray().put(row)).toString())
+                }
+            }
+            server.start()
+            val root=server.url("/box.json").toString()
+            focus("settings");key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val settings=compose.onNodeWithTag("settings-list")
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
+            compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(root)
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
+            compose.onNodeWithTag("tvbox-warehouse-load").performClick()
+            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")}.isSuccess}
+            settings.performScrollToNode(hasTestTag("settings-source-sites"))
+            compose.onNodeWithTag("settings-source-sites").performClick()
+            compose.onNodeWithTag("site-select-0").performClick()
+            compose.waitUntil(15000){runCatching{compose.onAllNodesWithText("协议测试1（a）").onFirst().assertIsDisplayed()}.isSuccess}
+            protocolSearch("Protocol 1")
+            focus("card-tmdb-movie-9001");key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val list=compose.onNodeWithTag("film-detail-list")
+            list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
+            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status").assertTextContains("命中 2",substring=true)}.isSuccess}
+            assertEquals(0,details.size);assertEquals(0,mediaCalls.get())
+            fun tag(source:String):String {
+                val site=TvBoxSite("CMS "+source.uppercase(),false,server.url("/$source").toString(),key=source)
+                return "source-hit-"+HerrinDiscoveryNodes.id(root,site,null)+":local-$source"
+            }
+            for(source in listOf("a","b")) {
+                list.performScrollToNode(hasTestTag(tag(source)))
+                compose.onNodeWithTag(tag(source)).performClick()
+                list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
+                compose.waitUntil(10000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status")
+                    .assertTextContains("CMS "+source.uppercase(),substring=true)
+                    .assertTextContains("选择集数后",substring=true)}.isSuccess}
+            }
+            assertEquals(listOf("a:local-a","b:local-b"),details.toList())
+            assertEquals(0,mediaCalls.get())
+            list.performScrollToNode(hasTestTag(tag("a")))
+            compose.onNodeWithTag(tag("a")).assertExists()
+            capture("p0-real-cms-protocol-source-groups-before-media")
+        }
+    }
     @Test fun onlineSearchProtocolEmptyAndRemoteResult() {
         protocolSearch()
         enterSearchQuery("not-a-film")
