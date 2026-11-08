@@ -2,14 +2,14 @@
 
 本报告仅记录验收证据。应用分支 `codex/herrin-global-search-20261107`，Draft PR：https://github.com/shawnhhh/aura-tv/pull/84 。报告分支只提交文档；不作为安装包构建分支。
 
-应用候选提交：`8ac4afdb5f944111f031d9bd947181c0ed354fec`。报告分支只记录该提交的证据，不产生另一个应用候选。
+应用候选提交：`50d07d58d09d5a7cfa537fea656e69d6e251d4e3`。报告分支只记录该提交的证据，不产生另一个应用候选。
 
 ## 状态边界
 
 | 项目 | 状态 |
 |---|---|
 | 代码：站点发现、聚合、详情/选集、现有播放衔接 | 已实现 |
-| 最终同提交 JVM/Lint/Debug/TV | 8ac4afd 全套运行中 |
+| 最终同提交 JVM/Lint/Debug/TV | 50d07d5 全套运行中 |
 | 原创协议服务、测试 DEX/IPC、真实视频字节/解码 | c624c67 已通过所有发现/选集/出帧回归；最终同提交结果待汇总 |
 | 用户真实饭太硬/奶酪联网搜索及选集 | 未验证：没有同版本配置与授权样本 |
 | TCL T7L Ultra 实际视频画面 | 未验证：没有真机连接与故障日志 |
@@ -56,6 +56,7 @@
 | 52e4fcf | 所选个人媒体的真实响应门禁、已关闭 IME 不重复交接、17 项原断言预检 |
 | c624c67 | 新展开仓的授权元数据仅存内存，配置变化清理，增加不落盘回归 |
 | 8ac4afd | 据 InputDispatcher 真日志补齐后台恢复测试的实际窗口输入就绪检查 |
+| 50d07d5 | 据 Google TV IME 日志同步测试输入视图生命周期，保留真实遥控与原断言 |
 
 新展开仓通过 `forSearch(...persistFetched=false)` 读取配置，进程内最多保留 20 个根，不写出可能包含 Cookie/Token 的配置正文。配置变更使旧任务失效。保留原有仓缓存和直播行为；这不等于宣称已对历史缓存完成加密迁移。本轮不改 NAS/云盘设置、凭据迁移、SMB 或索引。
 
@@ -74,30 +75,48 @@
 | 383b84d | 653/653、Lint/Debug 通过 | 236 项，1 个原搜索遥控用例失败 |
 | 52e4fcf | 655/655、Lint/Debug 通过 | 236/236、17 项预检全部通过 |
 | c624c67 | 655/655、Lint/Debug 通过 | 237 项，1 个后台恢复输入权限失败；所有搜索/聚合/新隐私回归通过 |
-| 8ac4afd | 运行中 | 运行中 |
+| 8ac4afd | 655/655、Lint/Debug 通过 | 237 项，1 个分类确认失败；后台恢复及全部协议/出帧用例通过 |
+| 50d07d5 | 运行中 | 运行中 |
 
 M437 元数据测试共用的 CMS 详情样本被交给不同 Spider VOD，新增校验正确拒绝；仅改为该 Spider 的实际请求 ID，所有原断言保留，独立错误 ID 拒绝用例保留。NAS 最近续播失败由发现/详情拆分引入，使用原回归确认修复。搜索确认/Down 丢失的日志表现为 IME handoff 后有 UP 无 DOWN；不再对已关闭、已隐藏的编辑会话重复 hide/restartInput，保留原真实遥控测试，并将三个原用例加入预检（14→17；整套仍必跑）。缓存首页已由独立证据作业 42432997195 定位入口等待与缓存发布竞争：01:03:04.529 的首次断言之后 127 ms，保留的语义树已有正确标题 Original 11 和同片背景。原生产代码明确骨架与缓存异步发布；测试在相同 10 秒内等待遮罩消失且缓存首片存在，再执行全部 12 次快速分类即时标题/背景/焦点断言。没有改变首页、启动动画或性能门禁，也没有扩大原等待时间上限。
 
 `c624c67` 失败保留在 [TV 作业 42435249433](https://github.com/shawnhhh/aura-tv/actions/runs/42435249433) 与 [artifact 13599294441](https://github.com/shawnhhh/aura-tv/actions/runs/42435249433/artifacts/13599294441)。[只读检查 42436457383](https://github.com/shawnhhh/aura-tv/actions/runs/42436457383) 读取其完整 logcat：01:52:52.850 已解码 7 帧，01:52:54.032 暂停位置三次均为 1025 ms；01:52:55.467 输入目标仍为 `InstrumentationActivityInvoker$EmptyActivity`（uid 10077），实际注入方 uid 10076 被拒，失败栈为恢复后 MEDIA_PLAY 的第 141 行。测试 Activity 的 RESUMED 回调早于测试辅助窗口交接完成；新增原 15 秒 await 工具内的 `hasWindowFocus()` 检查后再发送原键，未获取额外输入权限、未重发按键、未改播放器或原出帧/暂停/ENDED/释放断言。
 
+`8ac4afd` 的 17 项预检全部通过，完整 TV 仅分类确认失败，保留 [42436598370](https://github.com/shawnhhh/aura-tv/actions/runs/42436598370) / [13599799580](https://github.com/shawnhhh/aura-tv/actions/runs/42436598370/artifacts/13599799580)。[日志检查 42437890045](https://github.com/shawnhhh/aura-tv/actions/runs/42437890045) 确认：02:09:22.586 已注入 CENTER，Google TV IME 到 22.675 才 onFinishInputView、22.690 onDeactivate，Activity 在 22.733 仅收到 UP。语义文本/焦点操作加 Insets/isAcceptingText/无障碍 idle 不足以证明真实 IME 已交接。依据 API30 InputMethodService 的实际 dump 字段，测试先等待真实输入视图启动再设置文本，离开编辑器后等待服务 mInputViewStarted/mWindowVisible 均 false 再发原遥控键。仅读取两个布尔值，不导出 EditorInfo/原始 dump，保留原 5 秒交接检查上限及全部分类/排序/详情断言；生产搜索不改。
+
 ## 最终 CI 与 APK
 
 | 工作流 | 当前状态 |
 |---|---|
-| [最新 Debug / JVM / Lint / APK](https://github.com/shawnhhh/aura-tv/actions/runs/42436598399) | 运行中 |
-| [最新 Android TV](https://github.com/shawnhhh/aura-tv/actions/runs/42436598370) | 运行中 |
+| [最新 Debug / JVM / Lint / APK](https://github.com/shawnhhh/aura-tv/actions/runs/42438102698) | 运行中 |
+| [最新 Android TV](https://github.com/shawnhhh/aura-tv/actions/runs/42438102723) | 运行中 |
 
-[上次 c624c67 Debug APK](https://github.com/shawnhhh/aura-tv/actions/runs/42435249428/artifacts/13599875238)（不是最终同提交交付；GitHub artifact ZIP，下载需仓库访问权限）。ZIP 内 `app-debug.apk` 为 26,642,135 字节，原始 APK 的 SHA-256：
+[上一提交 8ac4afd Debug APK](https://github.com/shawnhhh/aura-tv/actions/runs/42436598399/artifacts/13600285945)（不是最终同提交交付；GitHub artifact ZIP，下载需仓库访问权限）。ZIP 内 `app-debug.apk` 为 26,642,135 字节，原始 APK 的 SHA-256：
 
 ```text
-c2841129613ded52d7dcdb9d5e07728aa521f37615edd72878ec7c2cfec6aae2
+e3adf4fb6a43e66ec5148e0002e8db01339139fa642e97e9bf8740bff1b3aca9
 ```
 
-该哈希由 CI 直接计算，不是 ZIP 的哈希。最终 APK 将使用 `8ac4afdb5f944111f031d9bd947181c0ed354fec` 构建，在该提交全套验收后补齐，不能以上次 APK 替代。
+该哈希由 CI 直接计算，不是 ZIP 的哈希。最终同提交 APK/SHA-256 等待 `50d07d5` 完整验收后更新，不以旧 APK 替代。
 
-[c624c67 JVM/Lint 逐项报告](https://github.com/shawnhhh/aura-tv/actions/runs/42435249428/artifacts/13598599932)。最终同提交 TV 证据待本轮工作流结束补齐。
+[8ac4afd JVM/Lint 逐项报告](https://github.com/shawnhhh/aura-tv/actions/runs/42436598399/artifacts/13600355903)。最终同提交 TV 证据待本轮工作流结束补齐。
 
-JVM 为真实本机 HTTP/JSON/XML 协议测试，TV 为 API 30 x86 模拟器、原创授权 DEX 与原创媒体。真实字节和视频解码帧可以证明适配链路执行，不能证明第三方站可播。未删测试、未跳过断言、未降低性能或必跑门禁。
+JVM 协议用例使用 CI runner 上的 loopback HTTP 服务与实际 JSON/XML 编解码；调度用例使用受控任务。TV 为 API 30 x86 模拟器、原创授权 DEX 与原创媒体。真实字节和视频解码帧可以证明适配链路执行，不能证明第三方站可播。未删测试、未跳过断言、未降低性能或必跑门禁。
+
+## 回归覆盖对应关系
+
+| 验收要求 | 测试与证据范围 |
+|---|---|
+| 指定 CMS、原始 provider VOD 详情 | P0AggregatedDiscoveryTest 的 realCmsSearchKeepsAnnotatedTitleAndUsesProviderIdForDetails；实际 loopback HTTP |
+| 指定 Spider、多个站点同片均保留 | P0DiscoveryProtocolTest 的原创授权 DEX，通过真实 Binder 调用 searchContent(false)，两站结果各自保留 |
+| 搜索命中时媒体暂不可用 | sameTitleFromMultipleSitesSurvivesUnavailableMedia；双 CMS Activity 用例确认选择前详情/媒体请求均为 0 |
+| 超时隔离、44 节点取消/继续、首选和并发 | oneTimeoutDoesNotHideFastHitsAndCountersAreTerminal、fortyFourSitesCancelAndContinueWithoutRepeatingCompletedNodesOrLosingHits、cmsConcurrencyIsBoundedAndSpiderLifecycleIsSerial；受控任务，不是 44 个真实第三方节点 |
+| 多仓、配置身份变化和授权边界 | warehouseExpansionStartsAfterPreferredAndStreamsNewProvidersWithoutClearingHits、configuredWarehouseMetadataIsFetchedWithoutDownloadingItsJar；真实元数据 HTTP，不下载/执行该仓 JAR |
+| 多来源详情/线路不串线 | explicitWrongSpiderDetailVodCannotMixLines、providerEpisodeLayoutsSurviveContinuationAndOtherFailuresWithoutCachingUrls；错误 VOD 拒绝且保留其他来源 |
+| Spider 进程重启后恢复并实际出帧 | twoSpiderSitesRetainHitsAndRestoreExactVodAfterWorkerDeath；实际杀死隔离进程，再查询相同 provider VOD、原 FongMi playerContent/Proxy、媒体读取及至少 4 帧 |
+| HTTP Spider opaque ID、XML、FongMi 衔接 | P0HttpSpiderProtocolTest 与实际 Android DOM 用例；HTTP Spider 经原 FongMi 到原创 MP4，至少 4 帧 |
+| 授权不落盘与媒体真假 | expandedWarehouseCredentialsStayInMemoryAndContinuationDoesNotRefetch；P0SelectedPersonalPlaybackTest 实际 HTTP 头/媒体字节，拒绝伪视频 HTML |
+| 既有搜索/播放器/直播/启动/遥控 | 全套不加过滤；必跑类门禁仍要求原 FongMi、JSON/WebView/HLS/Proxy、直播、收藏历史、启动与遥控性能类 |
 
 ## 不变性与环境限制
 
@@ -108,6 +127,15 @@ JVM 为真实本机 HTTP/JSON/XML 协议测试，TV 为 API 30 x86 模拟器、�
 ## TCL 待验及恢复方式
 
 使用用户合法授权的同版本饭太硬配置/JAR，在 TCL 选择奶酪查询小城良方，采集脱敏阶段、raw/parsed/discarded、原始 VOD、详情选集数与播放器错误。与 TVBox 同身份逐请求核对。验证真实选集、多站切换、HLS/MP4/JSON/WebView/合法 proxy、实际画面、拖动续播、断网恢复和长片。确认旧安装与新 APK 签名兼容及设置保留；不通过卸载清数据解决签名冲突。
+
+真机复现时，从“设置 → 高级工具与诊断 → 复制诊断摘要”导出已有脱敏摘要，包含 SOURCE_SEARCH、节点阶段、耗时、完成数及 raw/parsed/discarded。可在已建立 ADB 连接的电脑执行以下仅采集安全固定字段的日志命令，再复现一次搜索；它不授予 JAR 权限，也不记录配置正文或媒体地址：
+
+```sh
+adb shell setprop log.tag.HerrinSource DEBUG
+adb logcat -v threadtime -s HerrinSource:D HerrinSourceFeedback:I HerrinSpiderWorker:W
+```
+
+应记录实际站点身份摘要/配置版本、TMDB 条目及标题、按来源的搜索条目数、选择的 provider VOD、选集数、playerContent/ParseJob/Proxy/Media3 阶段和首帧事件。原始私有配置、Cookie、Token、签名 URL 不进入报告。当前没有这些用户实源证据，不能补写成已通过。
 
 续跑先核对 Draft #84 与远端 HEAD/CI，再使用当前应用分支：
 
