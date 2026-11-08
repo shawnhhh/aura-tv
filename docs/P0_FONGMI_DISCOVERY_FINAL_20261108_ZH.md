@@ -1,0 +1,98 @@
+# Herrin TV P0：FongMi 多站搜索验收报告
+
+本报告仅记录验收证据。应用分支 `codex/herrin-global-search-20261107`，Draft PR：https://github.com/shawnhhh/aura-tv/pull/84 。报告分支只提交文档；不作为安装包构建分支。
+
+应用候选提交：`383b84dbd6d5fa6dcb1116333dc8df1f9ad3e6ce`。
+
+## 状态边界
+
+| 项目 | 状态 |
+|---|---|
+| 代码：站点发现、聚合、详情/选集、现有播放衔接 | 已实现 |
+| 最终同提交 JVM/Lint/Debug/TV | 等待最终 CI，见下方更新 |
+| 原创协议服务、测试 DEX/IPC、真实视频字节/解码 | 中间候选已执行，最终结果待汇总 |
+| 用户真实饭太硬/奶酪联网搜索及选集 | 未验证：没有同版本配置与授权样本 |
+| TCL T7L Ultra 实际视频画面 | 未验证：没有真机连接与故障日志 |
+
+## 三个故障的结论
+
+### 影视点打不开 / 插件崩溃
+
+没有取得用户当次 JAR、ABI 与异常堆栈，不能宣称已确认奶酪原生崩溃原因。代码中原自动搜源要求激活、搜索、详情、解析和媒体验证都在同一前台预算内完成；宿主回收并不等于插件 SIGSEGV。当前在明确 root/JAR 授权内，初始化与搜索事务串行，跳过无关 home 请求，节点失败隔离；沿用上一阶段脱敏堆栈、阶段和 OS 退出分类。新回归使用原创测试 DEX，在真实远程进程中聚合两站、杀死进程、恢复同一 VOD 并进入原 FongMi 流程，不能据此断言第三方 JAR 已修复。
+
+### 1/44、10/44、成功 0 与反复继续
+
+确认的宿主缺陷：旧路径把“搜到影片”和“媒体验证成功”混为一个成功指标，并以总 8 秒包住所有阶段；CMS/Spider 还先用精确标题、类型和年份过滤。真实响应条目可能在媒体 URL 获取前被丢掉，成功 0 不能解释为全站没资源。
+
+现使用独立发现服务：个人源短预算 → 明确手动首选 → 其余来源；CMS 并发上限 4，Spider 从初始化到搜索整个事务串行。每个已执行节点有独立预算，队列等待不耗其执行预算，不再 8 秒强制中断发现。其他已导入仓在首选后有界并发读取元数据，只展开兼容 CMS，不获权执行其 JAR。逐站发布；成功、无结果、失败、超时、未完成分别统计。取消的任务保持未完成；继续跳过终态，保留结果和各源选集布局。配置变化按稳定 root/site/API/JAR/ext/header 身份失效清理。
+
+### TMDB 有结果但无选集 / 无法播放
+
+搜索响应保留 provider VOD 和来源，不要求先解析视频。用户选某来源后才调用该站 detailContent / CMS ids；选某集后才 playerContent → 原 FongMi ParseJob/Proxy → 媒体响应检查/Media3。各源选集布局只保留集号、集名和线路 ID/名称，不缓存媒体授权；重新选择仍读取当前详情。明确错误 VOD 拒绝，不用 TMDB ID 替换 provider ID。
+
+补齐 FongMi type=4 的 `wd/quick/extend`、长 ext POST、opaque 集 ID 及 `play/flag/extend`；补 type=0 RSS/XML 与 Android DOM 安全适配。各 CMS 保留所属仓解析配置。失败保留其他来源和换线、重试、返回入口。显式最近卡片续播从当前已授权结果严格匹配和重取选集，原历史坐标与返回导航保留。
+
+## 上游对照
+
+实际读取 FongMi/TV `4512b4c9f82534ff66acfde06ccdd68f35b074f0`：SiteApi 的 searchContent/detailContent/playerContent、SiteViewModel 逐站结果和 ViewModelSearchRunner 的独立任务/epoch 取消。完整映射与永久链接见同目录 `P0_FONGMI_DISCOVERY_20261108_ZH.md`。
+
+没有用用户配置进行 Herrin/TVBox 同版本逐请求对比，不能把源码对照当作奶酪实际网络差异证据。
+
+## 提交
+
+| 提交 | 模块 |
+|---|---|
+| d516f97 | 独立发现服务、流式多源、来源分组和独立选集入口 |
+| 2f4ddbf | HTTP Spider / XML CMS 协议及原 FongMi 接入 |
+| 263d16a | Spider 原始 VOD 样本修正、双 CMS Activity 集成 |
+| a9d30e2 | IPC 原始/解析数量、阶段与错误分类、脱敏诊断 |
+| 9c8396e | 多仓动态展开、取消继续、显式最近续播 |
+| 9f6c32d | 根据丢键日志修正 IME 连接重启、配置失效清理 |
+| 99959a1 | 各来源选集布局保留、聚合 Spider 到实际帧、必跑门禁 |
+| c5ef16c | Android DOM 正向/DTD 负向回归及安全兼容 |
+| 383b84d | 据保留语义树同步缓存测试入口，保留快速切换原断言 |
+
+## 保留的失败记录
+
+| 提交 | Debug | TV |
+|---|---|---|
+| d516f97 | 640 项，1 失败 | 233 项，4 失败 |
+| 2f4ddbf | 646 项，1 失败 | 234 项，1 失败 |
+| 263d16a | 646/646、Lint/Debug 通过 | 235 项，2 失败 |
+| a9d30e2 | 648/648、Lint/Debug 通过 | 235 项，2 失败 |
+| 9c8396e | 652/652、Lint/Debug 通过 | 235 项，1 失败；最近续播已通过 |
+| 9f6c32d | 652/652、Lint/Debug 通过 | 235 项，1 失败；搜索遥控与续播均通过 |
+| 99959a1 | 653/653、Lint/Debug 通过 | 待汇总 |
+| c5ef16c | 653/653、Lint/Debug 通过 | 待汇总 |
+| 383b84d | 待最终 CI | 待最终 CI |
+
+M437 元数据测试共用的 CMS 详情样本被交给不同 Spider VOD，新增校验正确拒绝；仅改为该 Spider 的实际请求 ID，所有原断言保留，独立错误 ID 拒绝用例保留。NAS 最近续播失败由发现/详情拆分引入，使用原回归确认修复。搜索确认/Down 丢失的日志表现为 IME handoff 后有 UP 无 DOWN；不再对已关闭的编辑会话无条件 restartInput，保留原真实遥控测试。缓存首页已由独立证据作业 42432997195 定位入口等待与缓存发布竞争：01:03:04.529 的首次断言之后 127 ms，保留的语义树已有正确标题 Original 11 和同片背景。原生产代码明确骨架与缓存异步发布；测试在相同 10 秒内等待遮罩消失且缓存首片存在，再执行全部 12 次快速分类即时标题/背景/焦点断言。没有改变首页、启动动画或性能门禁，也没有扩大原等待时间上限。
+
+## 最终 CI 与 APK
+
+FINAL_CI_PENDING
+
+JVM 为真实本机 HTTP/JSON/XML 协议测试，TV 为 API 30 x86 模拟器、原创授权 DEX 与原创媒体。真实字节和视频解码帧可以证明适配链路执行，不能证明第三方站可播。未删测试、未跳过断言、未降低性能或必跑门禁。
+
+## 不变性与环境限制
+
+本地结构检查与 Python 播放边界回归通过，43 个固定上游 FongMi 文件校验通过。导航与直播播放器代码块相对 689f4da 字节一致；直播、M3U、EPG、原 TMDB 在线搜索、首页/海报/original 背景/评分样式均未改。未使用 Superpowers。#83/#84 保持 Draft，不合并、不强推、不覆盖并行分支，不重置设置或加密凭据。
+
+本机无 Android SDK/adb，Gradle wrapper 下载在沙箱被拒；正式构建/模拟器由既有 GitHub CI 执行。连接器提供 CI artifact 引用后，本执行环境下载证据 ZIP 得到 HTTP 403，验收采用 CI 保留原始日志/逐项报告，不虚构本机执行或文件下载成功。
+
+## TCL 待验及恢复方式
+
+使用用户合法授权的同版本饭太硬配置/JAR，在 TCL 选择奶酪查询小城良方，采集脱敏阶段、raw/parsed/discarded、原始 VOD、详情选集数与播放器错误。与 TVBox 同身份逐请求核对。验证真实选集、多站切换、HLS/MP4/JSON/WebView/合法 proxy、实际画面、拖动续播、断网恢复和长片。确认旧安装与新 APK 签名兼容及设置保留；不通过卸载清数据解决签名冲突。
+
+续跑先核对 Draft #84 与远端 HEAD/CI，再使用当前应用分支：
+
+```sh
+git fetch origin
+git switch codex/herrin-global-search-20261107
+git status --short
+git log -8 --oneline
+cd android-tv
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+```
+
+没有真实源或 TCL 证据时，只能称代码/协议自动化完成，不能称最终实机标准通过；没有后台继续开发承诺。
