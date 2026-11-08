@@ -19,8 +19,8 @@ document.querySelector('#pair').onclick=async()=>{
 document.querySelectorAll('form').forEach(f=>f.onsubmit=async e=>{
  e.preventDefault();const data=Object.fromEntries(new FormData(f));
  let path='/sources';
- if(f.id==='edit'){path='/entries/save';data.module='sources';data.enabled=f.elements.enabled.checked;}
- if(f.id==='batch')path='/entries/batch';
+ if(f.getAttribute('id')==='edit'){path='/entries/save';data.module='sources';data.enabled=f.elements.enabled.checked;}
+ if(f.getAttribute('id')==='batch')path='/entries/batch';
  try{await call(path,data);status.textContent='保存成功，已通知电视刷新；Spider 授权保持独立';f.reset();await refresh();}catch(e){status.textContent=e.message;}
 });
 document.querySelector('#end').onclick=async()=>{try{await call('/end');}catch(e){status.textContent=e.message;}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束';}};

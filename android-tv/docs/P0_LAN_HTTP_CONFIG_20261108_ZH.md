@@ -57,6 +57,15 @@ MainActivity 同样明确拒绝将 HTTP TVBox 结果导入 HERRIN 目录。
 - 完整 TV 必跑类门禁新增上述设备测试，保留全部既有播放、搜索、NAS、
   云盘、直播优先级和性能门禁，不缩减测试集。
 
+## 浏览器表单验证
+
+Chromium 手机尺寸窗口加载真实 quick.html / quick.js，受控本机 API 验证配对、HTTP 中文域名提交、
+混合批量、附加源编辑、结束及无凭据输入框。与 Android 服务端测试独立，不代表 iPhone Safari 实机。
+首轮浏览器编辑断言发现 name=id 表单控件遮蔽 form.id，导致编辑路由错误；
+已改用 getAttribute("id")，保持原编辑提交断言并重跑。
+可复现脚本：scripts/lan_browser_smoke.cjs（Node + playwright + Chromium，设置 CHROMIUM_PATH 可选）。
+浏览器结果写入 LAN_BROWSER_REPORT 指定文件，默认临时目录。
+
 ## 验证记录
 
 本地结构检查通过，43 个固定 FongMi 文件校验通过；播放边界 3 项通过；
