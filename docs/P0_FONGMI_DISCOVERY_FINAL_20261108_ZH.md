@@ -2,15 +2,15 @@
 
 本报告仅记录验收证据。应用分支 `codex/herrin-global-search-20261107`，Draft PR：https://github.com/shawnhhh/aura-tv/pull/84 。报告分支只提交文档；不作为安装包构建分支。
 
-应用候选提交：`c585eeb4a275d7d0909de641b7db3906c1fe4d03`。报告分支只记录该提交的证据，不产生另一个应用候选。
+应用验收提交：`c585eeb4a275d7d0909de641b7db3906c1fe4d03`。报告分支只记录该提交的证据，不产生另一个应用候选。最终核对时间：2026-11-08 03:04 UTC。
 
 ## 状态边界
 
 | 项目 | 状态 |
 |---|---|
 | 代码：站点发现、聚合、详情/选集、现有播放衔接 | 已实现 |
-| 最终同提交 JVM/Lint/Debug/TV | c585eeb 全套运行中 |
-| 原创协议服务、测试 DEX/IPC、真实视频字节/解码 | c624c67 已通过所有发现/选集/出帧回归；最终同提交结果待汇总 |
+| 最终同提交 JVM/Lint/Debug/TV | 655/655 JVM、Lint、Debug、237/237 TV、17/17 预检全部通过，0 失败/错误/跳过 |
+| 原创协议服务、测试 DEX/IPC、真实视频字节/解码 | 同提交通过；Spider 双站聚合/重启/选集/原 FongMi Proxy 到实际帧，HTTP Spider 到实际帧 |
 | 用户真实饭太硬/奶酪联网搜索及选集 | 未验证：没有同版本配置与授权样本 |
 | TCL T7L Ultra 实际视频画面 | 未验证：没有真机连接与故障日志 |
 
@@ -78,7 +78,7 @@
 | c624c67 | 655/655、Lint/Debug 通过 | 237 项，1 个后台恢复输入权限失败；所有搜索/聚合/新隐私回归通过 |
 | 8ac4afd | 655/655、Lint/Debug 通过 | 237 项，1 个分类确认失败；后台恢复及全部协议/出帧用例通过 |
 | 50d07d5 | 655/655、Lint/Debug 通过 | 237 项，2 个设置/收藏就绪失败；所有搜索/多站/恢复/出帧用例通过 |
-| c585eeb | 运行中 | 运行中 |
+| c585eeb | 655/655、Lint/Debug 通过 | 237/237、17 项预检、55 个必跑类门禁全部通过 |
 
 M437 元数据测试共用的 CMS 详情样本被交给不同 Spider VOD，新增校验正确拒绝；仅改为该 Spider 的实际请求 ID，所有原断言保留，独立错误 ID 拒绝用例保留。NAS 最近续播失败由发现/详情拆分引入，使用原回归确认修复。搜索确认/Down 丢失的日志表现为 IME handoff 后有 UP 无 DOWN；不再对已关闭、已隐藏的编辑会话重复 hide/restartInput，保留原真实遥控测试，并将三个原用例加入预检（14→17；整套仍必跑）。缓存首页已由独立证据作业 42432997195 定位入口等待与缓存发布竞争：01:03:04.529 的首次断言之后 127 ms，保留的语义树已有正确标题 Original 11 和同片背景。原生产代码明确骨架与缓存异步发布；测试在相同 10 秒内等待遮罩消失且缓存首片存在，再执行全部 12 次快速分类即时标题/背景/焦点断言。没有改变首页、启动动画或性能门禁，也没有扩大原等待时间上限。
 
@@ -92,18 +92,20 @@ M437 元数据测试共用的 CMS 详情样本被交给不同 Spider VOD，新�
 
 | 工作流 | 当前状态 |
 |---|---|
-| [最新 Debug / JVM / Lint / APK](https://github.com/shawnhhh/aura-tv/actions/runs/42439821473) | 运行中 |
-| [最新 Android TV](https://github.com/shawnhhh/aura-tv/actions/runs/42439821549) | 运行中 |
+| [最新 Debug / JVM / Lint / APK](https://github.com/shawnhhh/aura-tv/actions/runs/42439821473) | 通过；655 JVM，0 失败/错误/跳过；Lint、Debug 构建通过 |
+| [最新 Android TV](https://github.com/shawnhhh/aura-tv/actions/runs/42439821549) | 通过；237/237，0 失败/错误/跳过；17 项预检及 55 个必跑类门禁通过 |
 
-[上一提交 50d07d5 Debug APK](https://github.com/shawnhhh/aura-tv/actions/runs/42438102698/artifacts/13599914101)（不是最终同提交交付；GitHub artifact ZIP，下载需仓库访问权限）。ZIP 内 `app-debug.apk` 为 26,642,135 字节，原始 APK 的 SHA-256：
+[同提交 Debug APK](https://github.com/shawnhhh/aura-tv/actions/runs/42439821473/artifacts/13600962653)（GitHub artifact ZIP，下载需仓库访问权限，保存至 2026-11-22）。ZIP 内 `app-debug.apk` 为 26,642,135 字节，原始 APK 的 SHA-256：
 
 ```text
-42ccfdfc3ae39a7669e6111040b26505e64852755b91fb5ab005ca1997e0ebc7
+27d48c2fbc095f9bc1116e21c87bea70a67609c52b547478a7fa8c62b23b06b5
 ```
 
-该哈希由 CI 直接计算，不是 ZIP 的哈希。最终同提交 APK/SHA-256 等待 `c585eeb` 完整验收后更新，不以旧 APK 替代。
+该哈希由 CI 直接计算，不是 ZIP 的哈希。源码和 artifact 元数据均为 `c585eeb4a275d7d0909de641b7db3906c1fe4d03`，PR CI 合并树与源码树相同：`0fad3eaa00ec743d0548cc98d49db7acc74418b7`，未执行分支合并。该提交 Debug 与 TV 两个工作流均成功。
 
-[50d07d5 JVM/Lint 逐项报告](https://github.com/shawnhhh/aura-tv/actions/runs/42438102698/artifacts/13599963899)。最终同提交 TV 证据待本轮工作流结束补齐。
+[同提交 JVM/Lint 逐项报告](https://github.com/shawnhhh/aura-tv/actions/runs/42439821473/artifacts/13600723771)；[同提交 TV 截图、logcat、JUnit 与性能证据](https://github.com/shawnhhh/aura-tv/actions/runs/42439821549/artifacts/13601682768)。原 onlineSearchProtocolEmptyAndRemoteResult、分类排序、收藏重启/取消、设置持久性、播放器后台恢复及四个 P0DiscoveryProtocolTest 用例全部通过；主进程 fatal_exception_present=false，physical_TCL_tested=false。
+
+最终模拟器测量：首状态 CPU draw 为 13–56 ms，专用反馈用例为 13 ms；这不是显示器呈现延迟，也不代表第三方站搜索或 TCL 的实际耗时。原遥控门禁全部通过：水平 key-to-draw P95 23.47 ms、垂直 P95 53.33 ms，120 键突发最终焦点正确，4626 ms；导航/重绘帧 P95 比值 1.09。API30 x86 软件环境的长帧比例仍为 100%，不能据此宣称 TCL 高帧率、4K 或真实网络 1–3 秒达标。原性能阈值未改。
 
 JVM 协议用例使用 CI runner 上的 loopback HTTP 服务与实际 JSON/XML 编解码；调度用例使用受控任务。TV 为 API 30 x86 模拟器、原创授权 DEX 与原创媒体。真实字节和视频解码帧可以证明适配链路执行，不能证明第三方站可播。未删测试、未跳过断言、未降低性能或必跑门禁。
 
