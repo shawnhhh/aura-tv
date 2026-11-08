@@ -42,7 +42,11 @@ class P0QrFailureTest {
         } }
         compose.waitUntil(5000) { secure?.isAlive == true }
         compose.onNodeWithTag("phone-config-http").performClick()
-        compose.waitUntil(5000) { quick?.isAlive == true }
+        compose.waitUntil(5000) {
+            quick?.isAlive == true && runCatching {
+                compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring = true)
+            }.isSuccess
+        }
         assertFalse(secure!!.isAlive)
         compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring = true)
         compose.onNodeWithTag("phone-config-close").performClick()
@@ -63,7 +67,11 @@ class P0QrFailureTest {
                     serverFactory = { c, cb -> LanConfigServer(c, "127.0.0.1", cb).also { server = it } }) }
             }
         }
-        compose.waitUntil(5000) { server?.isAlive == true }
+        compose.waitUntil(5000) {
+            server?.isAlive == true && runCatching {
+                compose.onNodeWithTag("phone-config-address").assertIsDisplayed()
+            }.isSuccess
+        }
         compose.runOnUiThread { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.CREATED }
         assertFalse(server!!.isAlive)
     }
