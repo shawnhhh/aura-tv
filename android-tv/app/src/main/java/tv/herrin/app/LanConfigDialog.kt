@@ -87,7 +87,17 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
             created?.end(); server = null; bitmap = null; pending = false
         }
     }
-    DisposableEffect(Unit) { onDispose { server?.end() } }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) server?.end()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            server?.end()
+        }
+    }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.width(800.dp).testTag("phone-config-dialog"), color = Color(0xFF171719),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
