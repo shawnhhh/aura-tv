@@ -119,7 +119,7 @@ internal object SpiderVodCodec {
         val uri = playable.firstOrNull()
             ?: return PlaybackResult.Unavailable("Spider 没有返回本次授权的 HTTP(S) 直链")
         val responseHeaders = TvBoxHeaderCodec.decode(
-            data.optJSONObject("header") ?: data.optString("header").takeIf { it.startsWith("{") }
+            data.optJSONObject("header") ?: data.optString("header").trim().takeIf { it.startsWith("{") }
                 ?.let { runCatching { JSONObject(it) }.getOrNull() } ?: data.optJSONObject("headers"))
         // FongMi Result.headers() returns the Site.header fallback only when
         // the player result supplies no explicit headers. Avoid key-by-key
