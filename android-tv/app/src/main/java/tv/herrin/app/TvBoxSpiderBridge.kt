@@ -56,8 +56,11 @@ internal object SpiderVodCodec {
     }
 
     fun detail(json: String, film: Film): Film {
-        val item = JSONObject(json).optJSONArray("list")?.optJSONObject(0)
-            ?: error("Spider 详情缺少 list[0]")
+        val list = JSONObject(json).optJSONArray("list") ?: error("Spider 详情缺少 list")
+        val items = (0 until list.length()).mapNotNull { list.optJSONObject(it) }
+        val item = items.firstOrNull { it.optString("vod_id") == film.spiderVodId }
+            ?: items.singleOrNull()?.takeIf { it.optString("vod_id").isBlank() }
+            ?: error("Spider 详情未返回所选原始 vod_id")
         val flags = item.optString("vod_play_from").split("$$$").take(12)
         val episodes = linkedMapOf<Int, MutableList<PlaybackLine>>()
         val episodeTitles = linkedMapOf<Int, String>()
@@ -637,7 +640,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             "拒绝在未应用的 Spider 站点自动检索"
         }
         val owner = activeAuthority ?: error("Spider 来源授权已失效")
-        SpiderVodCodec.listing(spider.searchContent(keyword, false), site).map(owner::sign)
+        val response = spider.searchContent(keyword, false)
+        SpiderVodCodec.listing(response, site).map(owner::sign).also { films ->
+            DiscoveryProtocolTrace.record(site.key, "SPIDER_SEARCH_FALSE", JSONObject(response).optJSONArray("list")?.length() ?: 0, films.size, keyword)
+        }
     }
 
     suspend fun details(film: Film): SpiderResult<Film> = attempt {

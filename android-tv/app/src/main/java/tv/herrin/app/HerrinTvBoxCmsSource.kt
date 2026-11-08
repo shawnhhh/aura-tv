@@ -16,14 +16,22 @@ internal class HerrinTvBoxCmsSource(
     override val id: String = "cms:" + (site.apiUrl ?: site.key)
     override val type: HerrinSourceType = HerrinSourceType.TVBOX_CMS
 
-    override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> {
+    override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> =
+        searchInternal(identity, strict = true)
+
+    /** Keep provider hits even if TMDB metadata differs or media is unavailable. */
+    suspend fun searchCandidates(identity: HerrinFilmIdentity): List<HerrinSourceMovie> =
+        searchInternal(identity, strict = false)
+
+    private suspend fun searchInternal(identity: HerrinFilmIdentity, strict: Boolean): List<HerrinSourceMovie> {
         val titles = identity.names.filter { it.length in 2..120 }
             .distinct().take(2)
         val matches = linkedMapOf<String, HerrinSourceMovie>()
         for (name in titles) {
             val result = repo.search(site, name, allowHttp)
             if(result is TvBoxVodResult.Error && result.httpCode!=null)throw SourceHttpFailure(result.httpCode,result.retryAfterMs)
-            if (result !is TvBoxVodResult.Ready) continue
+            if (result !is TvBoxVodResult.Ready) throw SourceCandidateFailure(SourceSearchStage.SEARCH, SourceSearchOutcome.ERROR)
+            DiscoveryProtocolTrace.record(site.key, "CMS_SEARCH", result.films.size, result.films.size, name)
             for (film in result.films) {
                 val categoryType = ArtworkTitle.identify(film).mediaType ?: identity.mediaType
                 val entry = HerrinSourceMovie(id, type, film, categoryType,
@@ -31,7 +39,7 @@ internal class HerrinTvBoxCmsSource(
                         " " + film.subtitle),
                     hdrClaim = Regex("""(?i)\b(?:HDR10|HDR|Dolby[ ._-]?Vision|DV)\b""")
                         .containsMatchIn(film.subtitle))
-                if (HerrinFilmIdentityMatch.matches(identity, entry))
+                if (!strict || HerrinFilmIdentityMatch.matches(identity, entry))
                     matches[film.cmsVodId ?: film.id] = entry
             }
             if (matches.isNotEmpty()) break

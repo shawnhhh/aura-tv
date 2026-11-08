@@ -7,6 +7,11 @@ import java.util.concurrent.atomic.AtomicLong
  * below the problematic register pressure. No credentials or saved UI change. */
 @Stable
 internal class TmdbScreenState {
+    val sourceDiscoveries = mutableMapOf<String, HerrinSourceDiscovery>()
+    val discoveredSources = mutableStateMapOf<String, HerrinSourceDiscovery.Snapshot>()
+    val discoverySpiderLock = kotlinx.coroutines.sync.Mutex()
+    var discoverySelection by mutableStateOf<Pair<String, String>?>(null)
+    var discoverySelectionEpoch by mutableIntStateOf(0)
     var searchReturnFocus:String?=null
     var restoreSearchFocus by mutableStateOf(false)
     val globalSearch = TmdbGlobalSearchState()
