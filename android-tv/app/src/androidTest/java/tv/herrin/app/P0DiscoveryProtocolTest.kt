@@ -46,6 +46,25 @@ class P0DiscoveryProtocolTest {
             assertTrue(loaded.film.playbackEpisodes.isNotEmpty())
             assertEquals(2,result.hits.size)
             assertTrue(bridge.isApprovedSourceFilm(loaded.film))
+            val entry=HerrinPlaybackEntry.firstPlayable(loaded.film)!!
+            val resolved=bridge.play(loaded.film,entry.first,entry.second,true) as? PlaybackResult.Ready
+                ?:throw AssertionError("Aggregated provider VOD must resolve through its own FongMi playerContent")
+            assertTrue(HerrinRemoteMediaProbe(authorizeLocal={candidate->
+                tv.herrin.app.nativeplayback.FongMiSessionAuthorization.isApproved(candidate,first.key)
+            }).canRead(resolved.media))
+            androidx.test.core.app.ActivityScenario.launch<PlaybackTestActivity>(android.content.Intent(context,
+                PlaybackTestActivity::class.java).putExtra("fixture",resolved.media.uri)).use { scenario ->
+                var frames=0;var failure:String?=null
+                withTimeout(20_000) {
+                    while(frames<4 &&failure==null) {
+                        scenario.onActivity { frames=it.player.videoDecoderCounters?.renderedOutputBufferCount?:0
+                            failure=it.player.playerError?.errorCodeName }
+                        if(frames<4)delay(80)
+                    }
+                }
+                assertNull(failure)
+                assertTrue("Aggregated/restarted original Spider must decode actual video",frames>=4)
+            }
         } finally { bridge.close();file.delete() }
     }
     @Test fun httpSpiderOpaqueEpisodeGoesThroughFongmiAndRendersActualFrames() = runBlocking {

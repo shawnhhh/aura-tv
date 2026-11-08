@@ -204,4 +204,19 @@ class P0AggregatedDiscoveryTest {
         }
     }
 
+    @Test fun providerEpisodeLayoutsSurviveContinuationAndOtherFailuresWithoutCachingUrls() = runBlocking {
+        val service=HerrinSourceDiscovery();var last=HerrinSourceDiscovery.Snapshot("",0)
+        val sources=listOf(node("a"),node("b"))
+        service.search("r",sources,null,Mutex()){last=it}
+        val a=last.hits.first{it.node.id=="a"}
+        val detailed=a.movie.film.copy(playbackEpisodes=listOf(PlaybackEpisode(7,"第七集",
+            listOf(PlaybackLine("same-line","A original","https://private.invalid/expired?token=private")))))
+        last=service.retainEpisodes("r",a.key,detailed)!!
+        service.search("r",sources,null,Mutex()){last=it}
+        assertEquals(7,last.hits.first{it.node.id=="a"}.episodes.single().number)
+        assertTrue(last.hits.first{it.node.id=="b"}.episodes.isEmpty())
+        assertFalse(last.hits.first{it.node.id=="a"}.episodes.toString().contains("private"))
+        assertTrue(runCatching{service.retainEpisodes("r",a.key,detailed.copy(cmsVodId="wrong-vod"))}.isFailure)
+    }
+
 }

@@ -23,7 +23,9 @@ internal class HerrinSourceDiscovery {
         val config: TvBoxConfig.Single? = null,
         val timeoutMs: Long = 12_000L
     )
-    data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie)
+    data class EpisodeLayout(val number: Int, val title: String, val lines: List<Pair<String,String>>)
+    data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie,
+        val episodes: List<EpisodeLayout> = emptyList())
     data class Snapshot(val revision: String, val nodes: Int,
         val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList(),
         val expanding: Boolean = false, val warehouseFailures: Int = 0) {
@@ -38,6 +40,20 @@ internal class HerrinSourceDiscovery {
     private val runs = Mutex()
     private val mutations = Mutex()
     private var snapshot = Snapshot("", 0)
+
+    /** Retain each provider's actual episode/line layout without caching media authorization.
+     * Selecting it again always reacquires details through that provider's callback. */
+    suspend fun retainEpisodes(revision: String, key: String, detailed: Film): Snapshot? = mutations.withLock {
+        if(snapshot.revision != revision) return@withLock null
+        val hit=snapshot.hits.firstOrNull{it.key==key} ?:return@withLock null
+        val expected=hit.movie.film
+        require(expected.cmsVodId == detailed.cmsVodId && expected.spiderVodId == detailed.spiderVodId)
+        val layout=detailed.playbackEpisodes.map { episode ->
+            EpisodeLayout(episode.number,episode.title,episode.lines.map { it.id to it.title })
+        }
+        snapshot=snapshot.copy(hits=snapshot.hits.map{if(it.key==key)it.copy(episodes=layout) else it})
+        snapshot
+    }
 
     /** Cancelled nodes stay pending; only terminal nodes are skipped by a continuation. */
     suspend fun search(revision: String, nodes: List<Node>, preferred: String?,

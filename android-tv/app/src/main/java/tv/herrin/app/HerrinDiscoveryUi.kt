@@ -16,7 +16,9 @@ internal fun LazyListScope.herrinDiscoveryItems(snapshot: HerrinSourceDiscovery.
             Text(hits.first().node.name + " · ${hits.size} 个真实搜索条目", fontSize = 18.sp)
         }
         items(hits, key = { "discovery-hit-" + it.key }) { hit ->
-            TvButton(hit.movie.film.title + " · " + hit.movie.film.subtitle,
+            val loaded = if(hit.episodes.isEmpty()) "" else " · 已读取 ${hit.episodes.size} 集 / " +
+                "${hit.episodes.flatMap { it.lines }.distinctBy { it.first }.size} 条线路"
+            TvButton(hit.movie.film.title + " · " + hit.movie.film.subtitle + loaded,
                 modifier = Modifier.testTag("source-hit-" + hit.key), reduced = reduced) { select(hit) }
         }
     }

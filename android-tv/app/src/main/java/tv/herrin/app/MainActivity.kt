@@ -1241,6 +1241,9 @@ private fun Herrin(startup: StartupPresentation) {
             return@LaunchedEffect
         }
         val detailed = loaded.film
+        tmdbState.sourceDiscoveries[filmId]?.retainEpisodes(snapshot.revision,hit.key,detailed)?.let {
+            tmdbState.discoveredSources[filmId] = it
+        }
         tmdbState.tmdbPersonalPlayback.remove(filmId)
         tmdbState.tmdbPlaybackRoutes.forget(filmId)
         when(hit.node.type) {
