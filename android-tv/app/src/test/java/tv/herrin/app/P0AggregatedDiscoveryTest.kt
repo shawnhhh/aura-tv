@@ -191,6 +191,7 @@ class P0AggregatedDiscoveryTest {
         assertEquals(listOf("retained"),last.hits.map{it.node.id})
     }
     @Test fun configuredWarehouseMetadataIsFetchedWithoutDownloadingItsJar() = runBlocking {
+        HerrinDiscoveryWarehouses.clear()
         MockWebServer().use{server->
             server.start()
             server.enqueue(MockResponse().setBody("""{"spider":"${server.url("/must-not-run.jar")}","sites":[{"key":"cms","name":"CMS","type":1,"api":"https://example.invalid/api"}]}"""))

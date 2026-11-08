@@ -120,4 +120,28 @@ class P0DiscoveryProtocolTest {
         assertTrue(runCatching{TvBoxCmsXml.toJson(dtd)}.isFailure)
     }
 
+    @Test fun expandedWarehouseCredentialsStayInMemoryAndContinuationDoesNotRefetch() = runBlocking {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        HerrinDiscoveryWarehouses.clear()
+        okhttp3.mockwebserver.MockWebServer().use { server ->
+            server.start()
+            val root=server.url("/p0-private-expansion.json").toString()
+            val file=File(File(context.filesDir,"tvbox-config"),SourceHealthIndex.digest(root)+".json")
+            assertFalse(file.exists())
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("""{"sites":[{"name":"Original","key":"private","type":4,"api":"https://example.invalid/api","header":{"Cookie":"fixture-only-cookie"},"ext":"fixture-only-token"}]}"""))
+            val repo=TvBoxConfigRepository(context)
+            repeat(2) {
+                assertEquals(0,HerrinDiscoveryWarehouses.expand(listOf(TvBoxWarehouse("private",root)),repo,true,
+                    create={_,owner->
+                        assertEquals("fixture-only-cookie",owner.sites.single().headers["Cookie"])
+                        emptyList()
+                    },emit={}))
+                assertFalse("Expanded authorization must not be written to a plaintext config cache",file.exists())
+            }
+            assertEquals(1,server.requestCount)
+            assertNotNull(HerrinDiscoveryWarehouses.cached(root))
+        }
+        HerrinDiscoveryWarehouses.clear()
+    }
+
 }

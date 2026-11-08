@@ -941,6 +941,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.tmdbFallbackIndex.clear()
         tmdbState.sourceDiscoveries.clear()
         tmdbState.discoveredSources.clear()
+        HerrinDiscoveryWarehouses.clear()
         tmdbState.discoverySelection = null
         tmdbState.automaticPlayback.clear()
         tmdbState.automaticSearch = null
@@ -1411,7 +1412,7 @@ private fun Herrin(startup: StartupPresentation) {
             // lookup; cap fan-out so a TV does not stall or scan the internet.
             for (warehouse in importedWarehouses) {
                 if (directSites.size >= 100) break
-                when (val nested = tvBoxRepository.forSearch(warehouse.url, tvBoxAllowHttp, allowNetwork = screen != "detail" && extended)) {
+                when (val nested = HerrinDiscoveryWarehouses.cached(warehouse.url) ?: tvBoxRepository.forSearch(warehouse.url, tvBoxAllowHttp, allowNetwork = screen != "detail" && extended)) {
                     is TvBoxConfig.Single -> {
                         val cmsSites = nested.sites.filter { it.apiUrl != null }.take(100-directSites.size)
                         directSites += cmsSites

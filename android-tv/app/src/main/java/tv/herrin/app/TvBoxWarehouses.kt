@@ -279,7 +279,7 @@ internal object TvBoxHeaderCodec {
 
 internal class TvBoxConfigRepository(private val context: Context? = null) {
     /** Search never spends the fast budget serially refreshing every warehouse. */
-    suspend fun forSearch(input:String,allowHttp:Boolean,allowNetwork:Boolean):TvBoxConfig?=withContext(Dispatchers.IO){
+    suspend fun forSearch(input:String,allowHttp:Boolean,allowNetwork:Boolean,persistFetched:Boolean=true):TvBoxConfig?=withContext(Dispatchers.IO){
         val address=TvBoxUrl.normalize(input,allowHttp)?:return@withContext null
         cached(address)?.let{return@withContext it}
         if(!allowNetwork)return@withContext null
@@ -294,7 +294,7 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
                 val data=output.toByteArray()
                 val text=TvBoxWrappedConfig.stripComments(TvBoxWrappedConfig.extract(data)?:String(data,Charsets.UTF_8))
                 when(val parsed=TvBoxConfigParser.parse(text,address)){
-                    is TvBoxConfig.Single,is TvBoxConfig.Warehouses->{save(address,text);parsed}
+                    is TvBoxConfig.Single,is TvBoxConfig.Warehouses->{if(persistFetched)save(address,text);parsed}
                     else->null
                 }
             }
