@@ -2,14 +2,14 @@
 
 本报告仅记录验收证据。应用分支 `codex/herrin-global-search-20261107`，Draft PR：https://github.com/shawnhhh/aura-tv/pull/84 。报告分支只提交文档；不作为安装包构建分支。
 
-应用候选提交：`50d07d58d09d5a7cfa537fea656e69d6e251d4e3`。报告分支只记录该提交的证据，不产生另一个应用候选。
+应用候选提交：`c585eeb4a275d7d0909de641b7db3906c1fe4d03`。报告分支只记录该提交的证据，不产生另一个应用候选。
 
 ## 状态边界
 
 | 项目 | 状态 |
 |---|---|
 | 代码：站点发现、聚合、详情/选集、现有播放衔接 | 已实现 |
-| 最终同提交 JVM/Lint/Debug/TV | 50d07d5 全套运行中 |
+| 最终同提交 JVM/Lint/Debug/TV | c585eeb 全套运行中 |
 | 原创协议服务、测试 DEX/IPC、真实视频字节/解码 | c624c67 已通过所有发现/选集/出帧回归；最终同提交结果待汇总 |
 | 用户真实饭太硬/奶酪联网搜索及选集 | 未验证：没有同版本配置与授权样本 |
 | TCL T7L Ultra 实际视频画面 | 未验证：没有真机连接与故障日志 |
@@ -57,6 +57,7 @@
 | c624c67 | 新展开仓的授权元数据仅存内存，配置变化清理，增加不落盘回归 |
 | 8ac4afd | 据 InputDispatcher 真日志补齐后台恢复测试的实际窗口输入就绪检查 |
 | 50d07d5 | 据 Google TV IME 日志同步测试输入视图生命周期，保留真实遥控与原断言 |
+| c585eeb | 据实际堆栈/按键日志同步刷新后的设置状态行和重启后的收藏详情动作 |
 
 新展开仓通过 `forSearch(...persistFetched=false)` 读取配置，进程内最多保留 20 个根，不写出可能包含 Cookie/Token 的配置正文。配置变更使旧任务失效。保留原有仓缓存和直播行为；这不等于宣称已对历史缓存完成加密迁移。本轮不改 NAS/云盘设置、凭据迁移、SMB 或索引。
 
@@ -76,7 +77,8 @@
 | 52e4fcf | 655/655、Lint/Debug 通过 | 236/236、17 项预检全部通过 |
 | c624c67 | 655/655、Lint/Debug 通过 | 237 项，1 个后台恢复输入权限失败；所有搜索/聚合/新隐私回归通过 |
 | 8ac4afd | 655/655、Lint/Debug 通过 | 237 项，1 个分类确认失败；后台恢复及全部协议/出帧用例通过 |
-| 50d07d5 | 运行中 | 运行中 |
+| 50d07d5 | 655/655、Lint/Debug 通过 | 237 项，2 个设置/收藏就绪失败；所有搜索/多站/恢复/出帧用例通过 |
+| c585eeb | 运行中 | 运行中 |
 
 M437 元数据测试共用的 CMS 详情样本被交给不同 Spider VOD，新增校验正确拒绝；仅改为该 Spider 的实际请求 ID，所有原断言保留，独立错误 ID 拒绝用例保留。NAS 最近续播失败由发现/详情拆分引入，使用原回归确认修复。搜索确认/Down 丢失的日志表现为 IME handoff 后有 UP 无 DOWN；不再对已关闭、已隐藏的编辑会话重复 hide/restartInput，保留原真实遥控测试，并将三个原用例加入预检（14→17；整套仍必跑）。缓存首页已由独立证据作业 42432997195 定位入口等待与缓存发布竞争：01:03:04.529 的首次断言之后 127 ms，保留的语义树已有正确标题 Original 11 和同片背景。原生产代码明确骨架与缓存异步发布；测试在相同 10 秒内等待遮罩消失且缓存首片存在，再执行全部 12 次快速分类即时标题/背景/焦点断言。没有改变首页、启动动画或性能门禁，也没有扩大原等待时间上限。
 
@@ -84,22 +86,24 @@ M437 元数据测试共用的 CMS 详情样本被交给不同 Spider VOD，新�
 
 `8ac4afd` 的 17 项预检全部通过，完整 TV 仅分类确认失败，保留 [42436598370](https://github.com/shawnhhh/aura-tv/actions/runs/42436598370) / [13599799580](https://github.com/shawnhhh/aura-tv/actions/runs/42436598370/artifacts/13599799580)。[日志检查 42437890045](https://github.com/shawnhhh/aura-tv/actions/runs/42437890045) 确认：02:09:22.586 已注入 CENTER，Google TV IME 到 22.675 才 onFinishInputView、22.690 onDeactivate，Activity 在 22.733 仅收到 UP。语义文本/焦点操作加 Insets/isAcceptingText/无障碍 idle 不足以证明真实 IME 已交接。依据 API30 InputMethodService 的实际 dump 字段，测试先等待真实输入视图启动再设置文本，离开编辑器后等待服务 mInputViewStarted/mWindowVisible 均 false 再发原遥控键。仅读取两个布尔值，不导出 EditorInfo/原始 dump，保留原 5 秒交接检查上限及全部分类/排序/详情断言；生产搜索不改。
 
+`50d07d5` 保留 [失败 run 42438102723](https://github.com/shawnhhh/aura-tv/actions/runs/42438102723) / [artifact 13600399498](https://github.com/shawnhhh/aura-tv/actions/runs/42438102723/artifacts/13600399498)。原 onlineSearch、分类排序、完整多站、选集、恢复及出帧回归均通过；设置在刷新后滚动状态行时，由错误语义树打印触发 instrumentation/main 的 SnapshotStateObserver 线程竞争，新增与同测试保存流程相同的 8 秒实际状态行就绪检查。收藏日志确认 02:29:41.007/009 原 DOWN/UP 和 41.010 DETAILS 调用，41.052 才提交详情路由；新增 5 秒实际已收藏动作就绪检查，再执行原焦点/遥控取消/返回空结果断言。未改设置或收藏生产实现、未重发用户操作、未删除原断言。
+
 ## 最终 CI 与 APK
 
 | 工作流 | 当前状态 |
 |---|---|
-| [最新 Debug / JVM / Lint / APK](https://github.com/shawnhhh/aura-tv/actions/runs/42438102698) | 运行中 |
-| [最新 Android TV](https://github.com/shawnhhh/aura-tv/actions/runs/42438102723) | 运行中 |
+| [最新 Debug / JVM / Lint / APK](https://github.com/shawnhhh/aura-tv/actions/runs/42439821473) | 运行中 |
+| [最新 Android TV](https://github.com/shawnhhh/aura-tv/actions/runs/42439821549) | 运行中 |
 
-[上一提交 8ac4afd Debug APK](https://github.com/shawnhhh/aura-tv/actions/runs/42436598399/artifacts/13600285945)（不是最终同提交交付；GitHub artifact ZIP，下载需仓库访问权限）。ZIP 内 `app-debug.apk` 为 26,642,135 字节，原始 APK 的 SHA-256：
+[上一提交 50d07d5 Debug APK](https://github.com/shawnhhh/aura-tv/actions/runs/42438102698/artifacts/13599914101)（不是最终同提交交付；GitHub artifact ZIP，下载需仓库访问权限）。ZIP 内 `app-debug.apk` 为 26,642,135 字节，原始 APK 的 SHA-256：
 
 ```text
-e3adf4fb6a43e66ec5148e0002e8db01339139fa642e97e9bf8740bff1b3aca9
+42ccfdfc3ae39a7669e6111040b26505e64852755b91fb5ab005ca1997e0ebc7
 ```
 
-该哈希由 CI 直接计算，不是 ZIP 的哈希。最终同提交 APK/SHA-256 等待 `50d07d5` 完整验收后更新，不以旧 APK 替代。
+该哈希由 CI 直接计算，不是 ZIP 的哈希。最终同提交 APK/SHA-256 等待 `c585eeb` 完整验收后更新，不以旧 APK 替代。
 
-[8ac4afd JVM/Lint 逐项报告](https://github.com/shawnhhh/aura-tv/actions/runs/42436598399/artifacts/13600355903)。最终同提交 TV 证据待本轮工作流结束补齐。
+[50d07d5 JVM/Lint 逐项报告](https://github.com/shawnhhh/aura-tv/actions/runs/42438102698/artifacts/13599963899)。最终同提交 TV 证据待本轮工作流结束补齐。
 
 JVM 协议用例使用 CI runner 上的 loopback HTTP 服务与实际 JSON/XML 编解码；调度用例使用受控任务。TV 为 API 30 x86 模拟器、原创授权 DEX 与原创媒体。真实字节和视频解码帧可以证明适配链路执行，不能证明第三方站可播。未删测试、未跳过断言、未降低性能或必跑门禁。
 
