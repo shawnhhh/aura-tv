@@ -248,7 +248,7 @@ internal class HerrinTmdbDiscovery(
                 id = "tmdb-" + type + "-" + id,
                 title = title,
                 subtitle = original.takeIf { it != title }.orEmpty(),
-                category = TmdbGenreClassification.category(if (type == "movie") "电影" else "剧集", type, ids),
+                category = TmdbAnimeIp.category(type, id, ids.toSet(), null, emptyMap()),
                 year = year,
                 synopsis = item.optString("overview").trim().take(2_000),
                 artwork = R.drawable.photofilm_orbit,

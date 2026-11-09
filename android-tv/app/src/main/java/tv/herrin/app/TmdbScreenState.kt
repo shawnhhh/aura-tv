@@ -25,7 +25,7 @@ internal class TmdbScreenState {
     val globalSearch = TmdbGlobalSearchState()
     var sourceForeground by mutableStateOf(false)
     var sourceSearchJob:kotlinx.coroutines.Job?=null
-    var tmdbHomeFilms by mutableStateOf<List<Film>>(emptyList())
+    var tmdbBrowseIndex by mutableStateOf<List<Film>>(emptyList())
     var cacheHydrated by mutableStateOf(false)
     var tmdbTop250Films by mutableStateOf<List<Film>>(emptyList())
     var tmdbTop250Status by mutableStateOf("")

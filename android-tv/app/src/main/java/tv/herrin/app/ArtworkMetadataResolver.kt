@@ -376,8 +376,9 @@ internal class ArtworkMetadataResolver(
             val rating = candidate.rating?.takeIf { it.isFinite() && it in 0.0..10.0 &&
                 candidate.voteCount >= 10 }
             val genres = TmdbGenreClassification.labels(candidate.genreIds)
-            val classified = TmdbGenreClassification.category(film.category, matchedCategory,
-                candidate.genreIds)
+            val classified = candidate.tmdbId?.let {
+                TmdbAnimeIp.category(matchedCategory, it, candidate.genreIds.toSet(), null, emptyMap())
+            } ?: TmdbGenreClassification.category(film.category, matchedCategory, candidate.genreIds)
             val picture = EnrichedArtwork(
                 image("w780", candidate.posterPath), image("original", candidate.backdropPath),
                 synopsis, candidate.year?.toString(), rating, genres, classified,

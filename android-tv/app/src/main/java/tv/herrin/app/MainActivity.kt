@@ -914,14 +914,14 @@ private fun Herrin(startup: StartupPresentation) {
     var catalogRefresh by remember { zeroIntState() }
     val tmdbPrimary = prefs.tmdbReadToken.isNotBlank()
     val extraNasConfigured = remember(personalSourceConfigEpoch) { AdditionalServiceConfigs(context).enabled("nas").isNotEmpty() }
-    val sourceConfigured = extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbHomeFilms.isNotEmpty() ||
+    val sourceConfigured = extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbBrowseIndex.isNotEmpty() ||
         prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
     var recentIndexEpoch by remember { zeroIntState() }
     var recentIndexFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
     LaunchedEffect(recentIndexEpoch) { recentIndexFilms = withContext(Dispatchers.IO) { watchHistory.indexedFilms() } }
     val resolvedSnapshot = tmdbState.tmdbResolved.toMap()
-    val catalogFilms = remember(tmdbPrimary, tmdbState.tmdbHomeFilms, tmdbState.tmdbTop250Films, resolvedSnapshot, providerFilms, sourceConfigured) { if (tmdbPrimary) {
-        (tmdbState.tmdbHomeFilms + tmdbState.tmdbTop250Films).distinctBy(Film::id)
+    val catalogFilms = remember(tmdbPrimary, tmdbState.tmdbBrowseIndex, tmdbState.tmdbTop250Films, resolvedSnapshot, providerFilms, sourceConfigured) { if (tmdbPrimary) {
+        (tmdbState.tmdbBrowseIndex + tmdbState.tmdbTop250Films).distinctBy(Film::id)
             .map { resolvedSnapshot[it.id] ?: it }
     } else providerFilms ?: if (sourceConfigured) emptyList() else demoFilms }
     val films = remember(catalogFilms, recentIndexFilms, resolvedSnapshot) {
@@ -1110,6 +1110,14 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
+    val tmdbBrowseRepository = remember(context, MetadataFetchers.current) {
+        TmdbBrowseRepository(MetadataFetchers.current, java.io.File(context.filesDir, "tmdb-browse-v2"))
+    }
+    val tmdbBrowseState = remember(metadataToken, tmdbBrowseRepository) { TmdbBrowseState(tmdbBrowseRepository, metadataToken) }
+    LaunchedEffect(tmdbBrowseState) {
+        snapshotFlow { tmdbBrowseState.allFilms() }.collect { tmdbState.tmdbBrowseIndex = it }
+    }
+
     LaunchedEffect(screen, query, metadataToken, tmdbState.globalSearch.page, tmdbState.globalSearch.retry) {
         if (screen == "search") {
             val key = SourceHealthIndex.digest(query + "|" + metadataToken)
@@ -1129,51 +1137,27 @@ private fun Herrin(startup: StartupPresentation) {
     LaunchedEffect(metadataToken) {
         CrashJournal.stage("CACHE")
         tmdbState.cacheHydrated=false
-        tmdbState.tmdbHomeFilms = emptyList()
+        tmdbState.tmdbBrowseIndex = emptyList()
         tmdbState.tmdbTop250Films = emptyList()
         if (metadataToken.isNotBlank()) {
             val saved = withContext(Dispatchers.IO) { TvBoxCatalogSnapshot(context, Long.MAX_VALUE).load("tmdb-library", "selected") }
             saved.filter { tmdbDiscovery.identity(it) != null }.forEach { tmdbState.tmdbResolved.putIfAbsent(it.id, it) }
-            val cached = withContext(Dispatchers.IO) { tmdbDiscovery.cachedHome(metadataToken) }
-            tmdbState.tmdbHomeFilms = cached
+            tmdbBrowseState.hydrate()
+            tmdbState.tmdbBrowseIndex = tmdbBrowseState.allFilms()
             tmdbState.tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
         }
         // Empty is a valid offline result only after the bounded local read;
         // before that it cannot signal that the cached homepage is ready.
         tmdbState.cacheHydrated=true
     }
-    // TMDB is the authoritative discovery index. No video-site homepage is
-    // consulted to build the hero, ratings or poster rails.
-    LaunchedEffect(metadataToken, tmdbConnectivity, startup.networkReady) {
-        if(!startup.networkReady)return@LaunchedEffect
-        if (tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
-        tmdbState.tmdbDiscoveryStatus = "正在加载 TMDB 热播影片与类型推荐…"
-        val keys = listOf("trending-movies", "trending-tv", "new-movies",
-            "on-air-tv", "top250", "sci-fi", "action", "mystery", "animation", "variety", "documentary")
-        CrashJournal.stage("DISCOVERY")
-        val loaded = mutableListOf<Film>()
-        for (key in keys) {
-            val section = tmdbDiscovery.sections.first { it.key == key }
-            val shelf = try { tmdbDiscovery.load(section, metadataToken) } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel } catch (_: java.io.IOException) { null }
-            if (shelf != null) {
-                loaded += shelf.films
-                // Top Rated is already loaded as a home recommendation.
-                // Reuse its valid first page immediately in Top250 instead
-                // of showing an empty tab until a separate 13-page fetch.
-                if (key == "top250" && shelf.films.isNotEmpty() &&
-                    tmdbState.tmdbTop250Films.isEmpty()) {
-                    tmdbState.tmdbTop250Films = shelf.films
-                    tmdbState.tmdbTop250Status = "已读取高分电影 ${shelf.films.size}/250 部，打开榜单可继续加载"
-                }
-            }
-        }
-        if (loaded.isNotEmpty()) {
-            tmdbState.tmdbHomeFilms = loaded.distinctBy(Film::id)
-            // Discovery publication must not steal selection or focus.
-            tmdbState.tmdbDiscoveryStatus = "TMDB 已加载 ${tmdbState.tmdbHomeFilms.size} 部作品；播放时优先检索 NAS／云盘"
-        } else {
-            tmdbState.tmdbDiscoveryStatus = "TMDB 未返回新资料；保留首页缓存，可重试联网"
-        }
+    // Fetch only the selected page's independent rails, after cache hydration and first paint.
+    LaunchedEffect(category, metadataToken, tmdbConnectivity, startup.networkReady, tmdbProbeEpoch, tmdbState.cacheHydrated) {
+        val page = TmdbBrowsePage.from(category) ?: return@LaunchedEffect
+        if (!startup.networkReady || !tmdbState.cacheHydrated ||
+            tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
+        tmdbState.tmdbDiscoveryStatus = "正在更新 TMDB 栏目，已有缓存保持可浏览"
+        tmdbBrowseState.refresh(page, force = tmdbProbeEpoch > 0)
+        tmdbState.tmdbDiscoveryStatus = "TMDB 栏目已更新；播放时优先检索 NAS／云盘"
     }
     LaunchedEffect(category, metadataToken, tmdbConnectivity, tmdbState.tmdbTop250RetryEpoch, startup.networkReady) {
         if(!startup.networkReady)return@LaunchedEffect
@@ -1285,7 +1269,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.preferredSiteStatus = "首选影视点：${site.name}"
         tmdbState.tmdbLookupEpoch++
     }
-    val lookupFilm = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbHomeFilms + tmdbState.tmdbTop250Films + recentIndexFilms).firstOrNull { it.id == filmId }
+    val lookupFilm = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbBrowseIndex + tmdbState.tmdbTop250Films + recentIndexFilms).firstOrNull { it.id == filmId }
     // Capture the same value as the effect key. Lifecycle observers can publish
     // STARTED during apply, before the old (false-keyed) effect is launched.
     val sourceSearchForeground=tmdbState.sourceForeground
@@ -1801,7 +1785,7 @@ private fun Herrin(startup: StartupPresentation) {
         if (screen != "detail" || !filmId.startsWith("tmdb-") ||
             metadataToken.isBlank())
             return@LaunchedEffect
-        val filmToEnrich = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbHomeFilms + tmdbState.tmdbTop250Films).firstOrNull { it.id == filmId }
+        val filmToEnrich = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbBrowseIndex + tmdbState.tmdbTop250Films).firstOrNull { it.id == filmId }
             ?: return@LaunchedEffect
         CrashJournal.stage("DETAIL")
         val detailed = try { tmdbDiscovery.detail(filmToEnrich, metadataToken) }
@@ -1851,7 +1835,7 @@ private fun Herrin(startup: StartupPresentation) {
         // a real TMDB search endpoint response; otherwise 0/20 looks like
         // twenty bad movie names when the API is rate-limited or blocked.
         if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED ||
-            tmdbState.tmdbHomeFilms.isNotEmpty()) return@LaunchedEffect
+            tmdbState.tmdbBrowseIndex.isNotEmpty()) return@LaunchedEffect
         val unprocessed = eligible.filter { it.metadataSource != "TMDB" }
         // Network work stays at most three concurrent, but catalog publication
         // is coalesced to one update per 12 items instead of one per item.
@@ -1902,7 +1886,7 @@ private fun Herrin(startup: StartupPresentation) {
     // a second TMDB client inside every visible PosterArtwork composable.
     LaunchedEffect(catalogScope, filmId, metadataToken, metadataRescanEpoch, tmdbConnectivity) {
         if (metadataToken.isBlank() || tmdbConnectivity != TmdbProbeState.CONNECTED ||
-            tmdbState.tmdbHomeFilms.isNotEmpty()) return@LaunchedEffect
+            tmdbState.tmdbBrowseIndex.isNotEmpty()) return@LaunchedEffect
         delay(ArtworkScrapePolicy.FOCUS_DWELL_MS)
         val candidates = providerFilms.orEmpty()
         val index = candidates.indexOfFirst { it.id == filmId }
@@ -1988,8 +1972,11 @@ private fun Herrin(startup: StartupPresentation) {
         val ids = catalogFilms.mapTo(hashSetOf(), Film::id)
         browseFilms.filter { it.id in ids }
     }
-    val categoryHeroFilms = remember(collapsedCatalog, category, tmdbState.tmdbTop250Films) {
-        BrowseHeroSelection.candidates(category, collapsedCatalog, tmdbState.tmdbTop250Films)
+    val tmdbBrowsePage = TmdbBrowsePage.from(category).takeIf { tmdbPrimary }
+    val browseRowsSnapshot = tmdbBrowseState.rows.toMap()
+    val categoryHeroFilms = remember(collapsedCatalog, category, tmdbState.tmdbTop250Films, browseRowsSnapshot, tmdbBrowsePage, recentIndexFilms) {
+        if (tmdbBrowsePage != null) (tmdbBrowseState.films(tmdbBrowsePage) + if (tmdbBrowsePage == TmdbBrowsePage.HOME) recentIndexFilms else emptyList()).distinctBy(Film::id)
+        else BrowseHeroSelection.candidates(category, collapsedCatalog, tmdbState.tmdbTop250Films)
     }
     val categoryHero = BrowseHeroSelection.select(categoryHeroFilms, heroSelections[category])
     val displayFilm = if (screen == "browse" && category !in setOf("直播", "我的"))
@@ -2998,9 +2985,13 @@ private fun Herrin(startup: StartupPresentation) {
                         else emptyList()
                     }
                 }
-                val railFilms = if (!isSearch && category == "首页" && sourceConfigured) showCatalog.recentRail(recentIndexFilms, watched) else filtered
+                val independentPage = TmdbBrowsePage.from(category).takeIf { tmdbPrimary && !isSearch }
+                val railFilms = if (independentPage != null && independentPage != TmdbBrowsePage.HOME)
+                    tmdbBrowseState.row(TmdbRailSpec(independentPage, TmdbRailKind.HOT)).entries.map { it.film }
+                else if (!isSearch && category == "首页" && sourceConfigured) showCatalog.recentRail(recentIndexFilms, watched) else filtered
                 val railState = railStates.getValue(if (isSearch) "search" else category)
-                val recommendedFilms = if (!isSearch && category == "首页") { if (sourceConfigured) BrowseHeroSelection.candidates("首页", collapsedCatalog, tmdbState.tmdbTop250Films) else collapsedCatalog.asReversed() } else emptyList()
+                val recommendedFilms = if (independentPage == TmdbBrowsePage.HOME) tmdbBrowseState.row(TmdbRailSpec(independentPage, TmdbRailKind.HOT)).entries.map { it.film }
+                    else if (!isSearch && category == "首页") { if (sourceConfigured) BrowseHeroSelection.candidates("首页", collapsedCatalog, tmdbState.tmdbTop250Films) else collapsedCatalog.asReversed() } else emptyList()
                 val recommendationPrefix = if (railFilms.isEmpty()) "card-" else "recommend-"
                 val recommendState = railStates.getValue("recommend")
                 val browseScroll = browseScrollStates.getValue(if (isSearch) "search" else category)
@@ -3033,7 +3024,9 @@ private fun Herrin(startup: StartupPresentation) {
                 val visibleFirstIndex by remember(railState) {
                     derivedStateOf { railState.firstVisibleItemIndex }
                 }
-                val firstPosterTarget = (railFilms.getOrNull(visibleFirstIndex) ?: recommendedFilms.firstOrNull())
+                val firstPosterTarget = if (independentPage != null)
+                    TmdbBrowseFocus.first(tmdbBrowseState, independentPage, if (category == "首页") railFilms else emptyList())?.let { requester(it) }
+                else (railFilms.getOrNull(visibleFirstIndex) ?: recommendedFilms.firstOrNull())
                     ?.let { requester("card-${displayKey(it)}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
                 Column(Modifier.fillMaxSize().testTag("browse-scroll").graphicsLayer {
@@ -3057,10 +3050,11 @@ private fun Herrin(startup: StartupPresentation) {
                         Box(Modifier.align(Alignment.Center)) {
                             TvNavTabs(category, isSearch, focusId, reduceMotion, headerDownTarget,
                             { id -> requester(id) },
-                            onFocus = { focusId = it },
+                            onFocus = { tmdbBrowseState.focus(null); focusId = it },
                             onSelect = { selected ->
                                 category = selected
-                                val candidates = if (selected == "Top 250") tmdbState.tmdbTop250Films else catalogFilms.filter {
+                                val candidates = if (tmdbPrimary && TmdbBrowsePage.from(selected) != null) tmdbBrowseState.films(TmdbBrowsePage.from(selected)!!)
+                                else if (selected == "Top 250") tmdbState.tmdbTop250Films else catalogFilms.filter {
                                     selected == "首页" || it.category == selected || selected in it.genres
                                 }
                                 (candidates.firstOrNull { it.id == heroSelections[selected] } ?: candidates.firstOrNull())?.let { filmId = it.id }
@@ -3282,7 +3276,7 @@ private fun Herrin(startup: StartupPresentation) {
                             horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                             Box(Modifier.width(13.dp).height(1.dp)
                                 .background(Color(0xB8DCE5F0)))
-                            Text(if (tmdbState.tmdbHomeFilms.isNotEmpty()) "TMDB 精选"
+                            Text(if (tmdbState.tmdbBrowseIndex.isNotEmpty()) "TMDB 精选"
                                 else if (providerFilms == null) "演示片库" else "我的媒体",
                                 fontSize = 11.sp, letterSpacing = 1.2.sp,
                                 fontWeight = FontWeight.Medium, color = Color(0xC2DDE6F0))
@@ -3308,26 +3302,39 @@ private fun Herrin(startup: StartupPresentation) {
                             fontSize = 12.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xCCDCE5EE))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton(if (film.id.startsWith("tmdb-")) "搜索片源与选集" else if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
-                                selected = true, reduced = reduceMotion, onFocus = { focusId = "play" },
+                            TvButton(if (displayFilm.id.startsWith("tmdb-")) "搜索片源与选集" else if (providerFilms == null) "▶ 播放演示" else "选择集数与线路",
+                                selected = true, reduced = reduceMotion, onFocus = { tmdbBrowseState.focus(null); focusId = "play" },
                                 modifier = Modifier.testTag("play")
                                     .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
                                     .focusRequester(requester("play"))) {
-                                if (film.id.startsWith("tmdb-") || showGroup != null || providerFilms != null) details(film)
+                                if (displayFilm.id.startsWith("tmdb-") || showGroup != null || providerFilms != null) details(displayFilm)
                                 else {
                                     returnScreen = "browse"
-                                    episode = film.playbackEpisodes.firstOrNull()?.number ?: 1
-                                    line = film.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
+                                    episode = displayFilm.playbackEpisodes.firstOrNull()?.number ?: 1
+                                    line = displayFilm.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "演示线路 A"
                                     screen = "player"
                                 }
                             }
-                            TvButton("影片详情", reduced = reduceMotion, onFocus = { focusId = "details" },
+                            TvButton("影片详情", reduced = reduceMotion, onFocus = { tmdbBrowseState.focus(null); focusId = "details" },
                                 modifier = Modifier.testTag("details")
                                     .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
-                                    .focusRequester(requester("details"))) { details(film) }
+                                    .focusRequester(requester("details"))) { details(displayFilm) }
                         }
                         Spacer(Modifier.height(12.dp))
                     }
+                    if (independentPage != null) {
+                        TmdbBrowseRails(tmdbBrowseState, independentPage,
+                            if (independentPage == TmdbBrowsePage.HOME) railFilms else emptyList(), reduceMotion,
+                            { id -> requester(id) },
+                            onFocus = { item, tag -> filmId = item.id; heroSelections[category] = item.id; focusId = tag },
+                            onOpen = { item ->
+                                val recent = independentPage == TmdbBrowsePage.HOME && recentIndexFilms.any { it.id == item.id }
+                                val origin = if (recent) PlaybackReturnContext(screen, category, "card-" + displayKey(item), item.id) else null
+                                openMovie(item)
+                                recentPlaybackReturn = origin
+                                tmdbState.resumeSourceFilm = item.id.takeIf { recent }
+                            })
+                    } else {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "继续观看与收藏 · ${filtered.size} 部"; category == "首页" -> if (sourceConfigured) "最近播放" else "演示片库"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
@@ -3653,6 +3660,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     onClick = { openMovie(item) })
                             }
                         }
+                    }
                     }
                 }
                 pendingLiveLines?.takeIf { category == "直播" }?.let { choice ->
@@ -5523,7 +5531,7 @@ private fun LiveTvSurface(
 }
 
 @Composable
-private fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: () -> Unit, onClick: () -> Unit, progress: Float? = null) {
+internal fun Poster(film: Film, modifier: Modifier, reduced: Boolean, onFocus: () -> Unit, onClick: () -> Unit, progress: Float? = null) {
     var focused by remember { mutableStateOf(false) }
     // Keep artwork dimensions fixed. Enlarging the whole focus target used to
     // crop neighboring cards and made TV posters appear to change size.
