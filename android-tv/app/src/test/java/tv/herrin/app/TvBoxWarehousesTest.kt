@@ -4,6 +4,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TvBoxWarehousesTest {
+    @Test fun manualWarehouseConsentIsExplicitAndFormatErrorsAreNotReportedAsHttpDenial(): Unit = kotlinx.coroutines.runBlocking {
+        val repo = TvBoxConfigRepository()
+        assertTrue((repo.load("not a URL", true) as TvBoxConfig.Error).reason.startsWith("WAREHOUSE_URL_INVALID"))
+        assertTrue((repo.load("http://www.饭太硬.net/tv", false) as TvBoxConfig.Error).reason.startsWith("WAREHOUSE_HTTP_NOT_ALLOWED"))
+        okhttp3.mockwebserver.MockWebServer().use { server ->
+            repeat(2) { server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("""{"sites":[{"name":"原创节点","api":"csp_Fixture"}]}""")) }
+            server.start()
+            val url = server.url("/tv").toString()
+            assertTrue(repo.loadUserWarehouse(url) is TvBoxConfig.Single)
+            assertTrue(repo.load(url, true) is TvBoxConfig.Single)
+            assertEquals(2, server.requestCount)
+            repeat(2) { val request = server.takeRequest(); assertNull(request.getHeader("Authorization")); assertNull(request.getHeader("Cookie")) }
+        }
+    }
+
     @Test fun autoProbeReservesTimeForSpiderAfterSeveralCmsTimeouts() {
         assertEquals(6_000L, TvBoxAutoScanPolicy.timeoutMs(0, 0, true, false))
         assertEquals(3_000L, TvBoxAutoScanPolicy.timeoutMs(9_000, 9_000, true, false))

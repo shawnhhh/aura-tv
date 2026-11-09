@@ -710,7 +710,7 @@ private fun Herrin(startup: StartupPresentation) {
         tvBoxImportJsonRequest = null
         val loadedConfig = if (imported != null)
             tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
-            else tvBoxRepository.load(address, tvBoxAllowHttp, preferCached = preferCache)
+            else tvBoxRepository.loadUserWarehouse(address, preferCached = preferCache)
         when (val result = loadedConfig) {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
@@ -750,7 +750,7 @@ private fun Herrin(startup: StartupPresentation) {
         // launch. Never replace the active browsing state mid-remote action.
         if (preferCache && ((loadedConfig is TvBoxConfig.Single && loadedConfig.fromCache) ||
                 (loadedConfig is TvBoxConfig.Warehouses && loadedConfig.fromCache))) {
-            launch(Dispatchers.IO) { tvBoxRepository.load(address, tvBoxAllowHttp) }
+            launch(Dispatchers.IO) { tvBoxRepository.loadUserWarehouse(address) }
         }
         if (settingsTvBoxOnly && tvBoxSingle != null) {
             // Import must activate an actual catalog, not just display 49 names

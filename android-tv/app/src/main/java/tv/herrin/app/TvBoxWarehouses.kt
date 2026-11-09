@@ -345,66 +345,62 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
         }
     }
 
+    /** Explicit TV/paired-phone warehouse entry; this grants metadata transport only. */
+    suspend fun loadUserWarehouse(input: String, preferCached: Boolean = false): TvBoxConfig =
+        load(input, allowHttp = true, preferCached = preferCached)
+
+    private val importClient by lazy { okhttp3.OkHttpClient.Builder()
+        .followRedirects(false).followSslRedirects(false)
+        .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(16, java.util.concurrent.TimeUnit.SECONDS).build() }
+
     suspend fun load(input: String, allowHttp: Boolean = false,
                      preferCached: Boolean = false): TvBoxConfig = withContext(Dispatchers.IO) {
-        val address = TvBoxUrl.normalize(input, allowHttp)
-            ?: return@withContext TvBoxConfig.Error("只接受 HTTPS；如需读取 HTTP，请先手动开启本次授权")
-        // The TV must not block its initial home screen for an 8s+ unreliable
-        // provider timeout when there is already a validated local warehouse.
-        // Explicit 'apply/refresh' calls still use the network by default.
-        if (preferCached) cached(address)?.let { return@withContext it }
-        val connection = try { URL(address).openConnection() as HttpURLConnection }
-        catch (_: Exception) { return@withContext cached(address) ?: TvBoxConfig.Error("无法建立配置连接") }
+        val valid = TvBoxUrl.normalize(input, allowHttp = true)
+            ?: return@withContext TvBoxConfig.Error("WAREHOUSE_URL_INVALID：影视仓 URL 格式错误；需要 HTTP(S) 地址，不能含账号或片段")
+        if (!allowHttp && valid.startsWith("http://")) return@withContext TvBoxConfig.Error(
+            "WAREHOUSE_HTTP_NOT_ALLOWED：HTTP 访问未获用户许可")
+        if (preferCached) cached(valid)?.let { return@withContext it }
         try {
-            connection.connectTimeout = 8_000
-            connection.readTimeout = 8_000
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/json, text/plain")
-            connection.setRequestProperty("Accept-Encoding", "identity")
-            val status = connection.responseCode
-            if (status in 300..399) return@withContext cached(address)
-                ?: TvBoxConfig.Error("配置地址发生跳转；请检查最终地址后重新输入")
-            if (status !in 200..299) return@withContext cached(address)
-                ?: TvBoxConfig.Error("配置读取失败：HTTP $status")
-            val contentType = connection.contentType.orEmpty().lowercase()
-            if (contentType.startsWith("video/") || contentType.startsWith("text/html")) {
-                return@withContext cached(address)
-                    ?: TvBoxConfig.Error("地址返回了网页或视频，不是 TVBox JSON 配置")
-            }
-            val maxBytes = 1024 * 1024
-            if (connection.contentLengthLong > maxBytes) return@withContext cached(address)
-                ?: TvBoxConfig.Error("配置超过 1 MB 安全限制")
-            val bytes = ByteArrayOutputStream()
-            connection.inputStream.use { inputStream ->
-                val buffer = ByteArray(8192)
-                while (true) {
-                    val read = inputStream.read(buffer)
-                    if (read == -1) break
-                    if (bytes.size() + read > maxBytes) return@withContext cached(address)
-                        ?: TvBoxConfig.Error("配置超过 1 MB 安全限制")
-                    bytes.write(buffer, 0, read)
+            readSourceResponse(importClient, okhttp3.Request.Builder().url(valid)
+                .header("Accept", "application/json, text/plain").header("Accept-Encoding", "identity").build()) { response ->
+                if (response.code in 300..399) return@readSourceResponse cached(valid)
+                    ?: TvBoxConfig.Error("WAREHOUSE_REDIRECT：配置发生跳转；请检查最终地址后重新输入")
+                if (!response.isSuccessful) return@readSourceResponse cached(valid)
+                    ?: TvBoxConfig.Error("WAREHOUSE_HTTP_ERROR：配置读取 HTTP ${response.code}")
+                val contentType = response.header("Content-Type").orEmpty().lowercase()
+                if (contentType.startsWith("video/") || contentType.startsWith("text/html"))
+                    return@readSourceResponse cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：地址返回网页或视频")
+                val body = response.body ?: return@readSourceResponse TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：配置为空")
+                if (body.contentLength() > 1_048_576) return@readSourceResponse TvBoxConfig.Error("WAREHOUSE_SIZE_LIMIT：配置超过 1 MB")
+                val bytes = ByteArrayOutputStream()
+                body.byteStream().use { inputStream ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val read = inputStream.read(buffer)
+                        if (read == -1) break
+                        if (bytes.size() + read > 1_048_576) return@readSourceResponse TvBoxConfig.Error("WAREHOUSE_SIZE_LIMIT：配置超过 1 MB")
+                        bytes.write(buffer, 0, read)
+                    }
+                }
+                val wrapped = TvBoxWrappedConfig.extract(bytes.toByteArray())
+                if (wrapped == null && contentType.startsWith("image/")) return@readSourceResponse cached(valid)
+                    ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：图片中没有有效的影视仓配置")
+                val json = TvBoxWrappedConfig.stripComments(wrapped ?: bytes.toString(Charsets.UTF_8.name()))
+                when (val parsed = TvBoxConfigParser.parse(json, valid)) {
+                    is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
+                        runCatching { save(valid, json) }
+                        if (parsed is TvBoxConfig.Single && wrapped != null) parsed.copy(wrappedInImage = true) else parsed
+                    }
+                    is TvBoxConfig.Error -> cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：${parsed.reason}")
+                    else -> parsed
                 }
             }
-            val wrapped = TvBoxWrappedConfig.extract(bytes.toByteArray())
-            if (wrapped == null && contentType.startsWith("image/")) {
-                return@withContext cached(address)
-                    ?: TvBoxConfig.Error("地址返回图片，但未找到有效的 TVBox 尾随 Base64 配置")
-            }
-            val json = TvBoxWrappedConfig.stripComments(wrapped ?: bytes.toString(Charsets.UTF_8.name()))
-            when (val parsed = TvBoxConfigParser.parse(json, address)) {
-                is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
-                    runCatching { save(address, json) }
-                    if (parsed is TvBoxConfig.Single && wrapped != null)
-                        parsed.copy(wrappedInImage = true)
-                    else parsed
-                }
-                is TvBoxConfig.Error -> cached(address) ?: parsed
-                else -> parsed
-            }
-        } catch (_: Exception) {
-            cached(address) ?: TvBoxConfig.Error("配置连接失败或读取超时；请检查源是否可用")
-        } finally {
-            connection.disconnect()
-        }
+        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
+        catch (_: javax.net.ssl.SSLException) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_TLS_ERROR：TLS 验证或握手失败") }
+        catch (_: java.net.UnknownHostException) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_DNS_ERROR：域名解析失败") }
+        catch (_: java.io.InterruptedIOException) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_TIMEOUT：配置读取超时，可重试") }
+        catch (_: Exception) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_NETWORK_ERROR：配置连接或读取失败") }
     }
 }
