@@ -39,14 +39,18 @@ class P0QrFailureTest {
                 LanConfigServer(c,"127.0.0.1",cb).also{servers.add(it)}
             })
         } }
-        compose.waitUntil(5000){servers.firstOrNull()?.isAlive==true}
+        compose.waitUntil(5000){servers.firstOrNull()?.isAlive==true && runCatching {
+            compose.onNodeWithTag("phone-config-address").assertTextContains("https://",substring=true)
+        }.isSuccess}
         compose.onNodeWithTag("phone-config-http").assertDoesNotExist()
         compose.onNodeWithTag("phone-config-address").assertTextContains("https://",substring=true)
         val first=servers.first()
         compose.onNodeWithTag("phone-config-close").performClick()
         compose.waitForIdle();assertFalse(first.isAlive)
         compose.runOnIdle { open=true }
-        compose.waitUntil(5000){servers.size==2 && servers.last().isAlive}
+        compose.waitUntil(5000){servers.size==2 && servers.last().isAlive && runCatching {
+            compose.onNodeWithTag("phone-config-address").assertTextContains("https://",substring=true)
+        }.isSuccess}
         assertEquals(first.fingerprint,servers.last().fingerprint)
         assertNotEquals(first.pairing.pairing,servers.last().pairing.pairing)
         compose.onNodeWithTag("phone-config-address").assertTextContains("https://",substring=true)

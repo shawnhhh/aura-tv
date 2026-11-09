@@ -1149,10 +1149,8 @@ private fun Herrin(startup: StartupPresentation) {
         if (metadataToken.isNotBlank()) {
             val saved = withContext(Dispatchers.IO) { TvBoxCatalogSnapshot(context, Long.MAX_VALUE).load("tmdb-library", "selected") }
             saved.filter { tmdbDiscovery.identity(it) != null }.forEach { tmdbState.tmdbResolved.putIfAbsent(it.id, it) }
-            tmdbBrowseState.hydrate(TmdbBrowsePage.HOME)
-            tmdbState.cacheHydrated=true
-            // The other twenty cached rails cannot delay the first usable homepage.
-            launch { tmdbBrowseState.hydrate() }
+            // Restore the bounded local index atomically before cached navigation is enabled.
+            tmdbBrowseState.hydrate()
             tmdbState.tmdbBrowseIndex = tmdbBrowseState.allFilms()
             tmdbState.tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
         }
