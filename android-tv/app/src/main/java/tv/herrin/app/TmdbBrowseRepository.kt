@@ -25,7 +25,7 @@ internal class TmdbBrowseRepository(
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     private val network = Semaphore(3)
-    private val proofLocks = ConcurrentHashMap<String, Mutex>()
+    private val proofLocks = Array(64) { Mutex() }
     private val collections = ConcurrentHashMap<String, Map<Int, Int>>()
     private val ambiguous = ConcurrentHashMap<String, Set<Int>>()
     private val parser = HerrinTmdbDiscovery()
@@ -142,7 +142,7 @@ internal class TmdbBrowseRepository(
     }
     private suspend fun proof(type: String, id: Int, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + "-proof-$type-$id"
-        return proofLocks.getOrPut(key) { Mutex() }.withLock {
+        return proofLocks[(key.hashCode() and Int.MAX_VALUE) % proofLocks.size].withLock {
             val disk = read(key)
             val recent = disk?.takeIf { !force && clock() - it.optLong("saved") in 0..86_400_000L }?.optJSONObject("proof")
             if (recent != null) { learn(type, id, recent, token); return@withLock recent }

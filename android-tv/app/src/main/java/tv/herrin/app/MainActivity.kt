@@ -1109,7 +1109,7 @@ private fun Herrin(startup: StartupPresentation) {
             metadataRescanEpoch++
         }
     }
-    val tmdbBrowseRepository = remember(context, MetadataFetchers.current) {
+    val tmdbBrowseRepository = remember(context, MetadataFetchers.current, metadataToken) {
         TmdbBrowseRepository(MetadataFetchers.current, java.io.File(context.filesDir, "tmdb-browse-v2"))
     }
     val tmdbDiscovery = remember(context, metadataToken, tmdbBrowseRepository) {
