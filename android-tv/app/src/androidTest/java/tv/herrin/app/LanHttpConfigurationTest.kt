@@ -25,7 +25,7 @@ class LanHttpConfigurationTest {
             val plain=server.origin.replace("https:","http:")
             val body=JSONObject().put("token","sensitive").put("username","account").put("password","secret")
                 .put("url","http://饭太硬.net/tv").toString()
-            for(path in listOf("/pair","/sources","/entries/save","/entries/batch","/tmdb","/nas","/live")) {
+            for(path in listOf("/pair","/sources","/entries/save","/entries/batch","/tmdb","/nas","/live","/smb","/smb/test")) {
                 try {
                     client.newCall(Request.Builder().url(plain+path).header("Origin",plain)
                         .post(body.toRequestBody("application/json".toMediaType())).build()).execute().use {

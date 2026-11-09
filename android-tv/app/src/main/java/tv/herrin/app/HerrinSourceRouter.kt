@@ -54,6 +54,11 @@ internal interface HerrinFilmSource {
     suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie>
 }
 
+/** Personal adapters share one source router, playlist builder and existing FongMi player. */
+internal interface HerrinPersonalSource:HerrinFilmSource {
+    fun playback(offer:HerrinSourceMovie):PlaybackResult
+}
+
 internal data class HerrinFilmLookupResult(
     val options: List<HerrinSourceMovie>,
     val selectedTier: HerrinSourceTier?,

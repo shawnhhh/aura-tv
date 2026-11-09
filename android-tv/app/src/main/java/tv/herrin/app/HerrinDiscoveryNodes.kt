@@ -8,7 +8,7 @@ internal object HerrinDiscoveryNodes {
         SourceHealthIndex.digest(root + "|" + TvBoxAutoSites.identity(site, jar) + "|" + site.apiType + "|" + SourceHealthIndex.digest(site.extension) + "|" +
             SourceHealthIndex.digest(site.headers.entries.sortedBy { it.key }.joinToString()))
 
-    fun create(personals: List<HerrinWebDavSource>, cms: List<Triple<String, TvBoxSite, TvBoxConfig.Single?>>,
+    fun create(personals: List<HerrinPersonalSource>, cms: List<Triple<String, TvBoxSite, TvBoxConfig.Single?>>,
         spiders: List<TvBoxSite>, root: String, config: TvBoxConfig.Single?,
         identity: HerrinFilmIdentity, repo: TvBoxVodRepository, allowHttp: Boolean,
         bridge: TvBoxSpiderBridge, consent: Long): List<HerrinSourceDiscovery.Node> {

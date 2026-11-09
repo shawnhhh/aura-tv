@@ -16,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Failed decryption never silently falls back to plaintext persistence.
  */
 internal class HerrinPersonalCredentialStore(context: Context, private val slot: String = "nas") {
-    init { require(slot in setOf("nas", "cloud", "tmdb") || slot.matches(Regex("config-[a-f0-9-]{36}"))) }
+    init { require(slot in setOf("nas", "cloud", "tmdb", "smb") || slot.matches(Regex("config-[a-f0-9-]{36}"))) }
     private val prefs = context.getSharedPreferences("herrin_personal_secrets", Context.MODE_PRIVATE)
     private val alias = "herrin-webdav-aes-gcm-v1-" + slot
 
@@ -34,9 +34,11 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
         return generator.generateKey()
     }
 
-    fun save(username: String, password: String): Boolean = runCatching {
-        val value = (username.take(256) + "\u0000" + password.take(2048))
-            .toByteArray(Charsets.UTF_8)
+    fun save(username: String, password: String): Boolean = savePayload(username.take(256) + "\u0000" + password.take(2048))
+
+    internal fun savePayload(plain: String): Boolean = runCatching {
+        require(plain.length<=16384)
+        val value=plain.toByteArray(Charsets.UTF_8)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val bytes = cipher.iv + cipher.doFinal(value)
@@ -44,18 +46,22 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
             .putString("_revision",java.util.UUID.randomUUID().toString()).commit()
     }.getOrDefault(false)
 
-    fun load(): Pair<String, String> = runCatching {
+    fun load(): Pair<String, String> = loadPayload()?.let { plain ->
+        plain.substringBefore('\u0000') to plain.substringAfter('\u0000')
+    } ?: ("" to "")
+
+    internal fun loadPayload(): String? = runCatching {
         val encoded = prefs.getString(slot, "").orEmpty()
-        if (encoded.isBlank()) return@runCatching "" to ""
+        if (encoded.isBlank()) return@runCatching null
         val bytes = Base64.decode(encoded, Base64.NO_WRAP)
         // Username/password limits are characters; UTF-8 may use four bytes each.
-        require(bytes.size in 28..10000)
+        require(bytes.size in 28..65564)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(),
             GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
         val plain = String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
-        plain.substringBefore('\u0000') to plain.substringAfter('\u0000')
-    }.getOrDefault("" to "")
+        plain
+    }.getOrNull()
 
     fun clear() {
         prefs.edit().remove(slot).putString("_revision",java.util.UUID.randomUUID().toString()).commit()

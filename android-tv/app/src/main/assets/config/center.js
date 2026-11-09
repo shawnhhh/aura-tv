@@ -12,13 +12,13 @@ document.querySelector('#pair').onclick=async()=>{
  try{while(!session){const r=await call('/pair',{pairing});session=r.session;if(!session){status.textContent='请在电视确认此配对';await new Promise(r=>setTimeout(r,1500));}}
  pairing='';document.querySelector('#trust').hidden=true;document.querySelector('#manager').hidden=false;
  const r=await call('/status');document.querySelector('#endpoint').textContent=r.endpoint+' · '+(r.tokenConfigured?'已配置':'未配置');
- document.querySelector('#sources [name=url]').value=r.tvbox;document.querySelector('#live [name=m3u]').value=r.m3u;document.querySelector('#live [name=epg]').value=r.epg;document.querySelector('#nas [name=url]').value=r.nas;document.querySelector('#cloud [name=url]').value=r.cloud||'';
+ document.querySelector('#sources [name=url]').value=r.tvbox;document.querySelector('#live [name=m3u]').value=r.m3u;document.querySelector('#live [name=epg]').value=r.epg;document.querySelector('#nas [name=url]').value=r.nas;document.querySelector('#cloud [name=url]').value=r.cloud||'';document.querySelector('#smb [name=url]').value=r.smb?.url||'';document.querySelector('#smb [name=encryption]').checked=!!r.smb?.encryption;
  status.textContent='已配对，四个模块共用会话；闲置 30 分钟后关闭';
  }catch(e){status.textContent=e.message;}finally{polling=false;}
 };
 let module='tmdb';
 async function refreshEntries(){
- document.querySelector('#cloud').hidden=module!=='nas';
+ document.querySelector('#cloud').hidden=module!=='nas';document.querySelector('#smb').hidden=module!=='nas';
  const additional=document.querySelector('#additional');additional.hidden=module==='tmdb';document.querySelector('#catalog-manager').hidden=module!=='sources';if(additional.hidden)return;
  document.querySelector('#entry-edit').hidden=false;
  document.querySelector('#extra-epg').hidden=module!=='live';document.querySelector('#extra-login').hidden=module!=='nas';document.querySelector('#batch').hidden=module!=='sources';await refreshCatalogs();
@@ -31,7 +31,7 @@ async function refreshEntries(){
  if(module==='nas')button('测试',async()=>{status.textContent=(await call('/nas/test',{id:entry.id})).result;});list.append(row);});
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('form').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();if(module==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}});
-document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{await call('/'+f.id,Object.fromEntries(new FormData(f)));f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
+document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(f));if(f.id==='smb')data.encryption=f.elements.encryption.checked;await call('/'+f.id,data);f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
 document.querySelector('#test').onclick=async()=>{try{status.textContent=(await call('/tmdb/test')).result;await refreshTmdbStatus();}catch(e){status.textContent=e.message;}};
 document.querySelector('#end').onclick=async()=>{try{await call('/end');}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束，请在电视重新开启';}};
 // Editing a long form is activity; refresh only while the user is actively editing.
@@ -59,3 +59,5 @@ async function refreshTmdbStatus(){const r=await call('/status');document.queryS
 document.querySelector('#nas-test').onclick=async()=>{try{status.textContent=(await call('/nas/test')).result;}catch(e){status.textContent=e.message;}};
 
 document.querySelector('#cloud-test').onclick=async()=>{try{status.textContent=(await call('/cloud/test')).result;}catch(e){status.textContent=e.message;}};
+
+document.querySelector('#smb-test').onclick=async()=>{try{status.textContent=(await call('/smb/test')).result;}catch(e){status.textContent=e.message;}};

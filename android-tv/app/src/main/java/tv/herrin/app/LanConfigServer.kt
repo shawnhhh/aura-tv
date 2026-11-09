@@ -102,6 +102,20 @@ internal class LanConfigServer(
                     val connected = kotlinx.coroutines.runBlocking { HerrinWebDavSource(account).testConnection() }
                     JSONObject().put("result", if (connected) "WebDAV 已连接" else "连接失败")
                 }
+                "/smb" -> {
+                    HerrinSmbConfigStore(context).save(input)
+                    applied("nas");JSONObject().put("ok",true)
+                }
+                "/smb/test" -> {
+                    val result=try {
+                        val account=requireNotNull(HerrinSmbConfigStore(context).account())
+                        val connected=kotlinx.coroutines.runBlocking {
+                            HerrinSmbSessions().use{HerrinSmbSource(account,it).testConnection()}
+                        }
+                        if(connected)"SMB2/3 共享目录已连接" else "SMB 共享目录不存在或不可访问"
+                    }catch(error:Exception){SmbFailure.message(error)}
+                    JSONObject().put("result",result)
+                }
                 "/cloud/test" -> {
                     val login=HerrinPersonalCredentialStore(context,"cloud").load()
                     val connected=kotlinx.coroutines.runBlocking {
@@ -121,7 +135,7 @@ internal class LanConfigServer(
                     .put("tokenConfigured", prefs.tmdbReadToken.isNotBlank())
                     .put("tvbox", prefs.tvBoxWarehouseUrl).put("m3u", prefs.livePlaylistUrl)
                     .put("epg", prefs.liveEpgUrl).put("nas", prefs.nasWebDavUrl)
-                    .put("cloud",prefs.cloudWebDavUrl).put("nasProtocol", "WebDAV")
+                    .put("cloud",prefs.cloudWebDavUrl).put("smb",HerrinSmbConfigStore(context).publicConfig()).put("nasProtocol", "WebDAV")
                 "/tmdb/test" -> JSONObject().put("result", TmdbConnectivityProbe.checkDetailed(prefs.tmdbReadToken).text)
                 "/tmdb" -> {
                     val token = input.getString("token").trim()

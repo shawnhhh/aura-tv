@@ -48,6 +48,9 @@ jobs:
           sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
           test -x "$sdk_manager"
           "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Start controlled real SMB2 and SMB3 fixture
+        working-directory: ${{ github.workspace }}
+        run: bash .github/scripts/start_smb_fixture.sh
       - name: Test, lint and assemble Debug APK
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
       - name: Generate Chinese acceptance record

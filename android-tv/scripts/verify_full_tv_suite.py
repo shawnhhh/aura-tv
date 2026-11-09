@@ -14,6 +14,8 @@ REQUIRED_CLASSES = (
     "LanConfigurationTest",
     "LanHttpConfigurationTest",
     "LanTlsIdentityTest",
+    "SmbRealPlaybackTest",
+    "SmbConfigSecurityTest",
     "P0QrFailureTest",
     "P0ExitAndEntryTest",
     "AdditionalServiceConfigsTest",

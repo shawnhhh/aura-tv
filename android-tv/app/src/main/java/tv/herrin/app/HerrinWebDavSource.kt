@@ -40,7 +40,7 @@ internal class HerrinWebDavSource(
         .connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(4, TimeUnit.SECONDS)
         .callTimeout(6, TimeUnit.SECONDS).build()
-) : HerrinFilmSource {
+) : HerrinPersonalSource {
     init {
         require(account.category in listOf(HerrinSourceType.NAS, HerrinSourceType.CLOUD))
         val root = URI(account.rootUrl)
@@ -136,7 +136,7 @@ internal class HerrinWebDavSource(
         }
 
     /** A selected direct file remains under the original, explicitly permitted DAV root. */
-    fun playback(offer: HerrinSourceMovie): PlaybackResult {
+    override fun playback(offer: HerrinSourceMovie): PlaybackResult {
         if (offer.sourceId != id || offer.sourceType != type)
             return PlaybackResult.Unavailable("媒体不是此 NAS/云盘来源")
         val line = offer.film.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()

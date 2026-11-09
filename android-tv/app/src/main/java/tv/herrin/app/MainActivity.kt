@@ -566,6 +566,10 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     var personalSourceConfigEpoch by remember { zeroIntState() }
+    val smbSessions=remember(context,personalSourceConfigEpoch){HerrinSmbSessions()}
+    DisposableEffect(smbSessions){onDispose{smbSessions.close()}}
+    val smbConfigured=remember(personalSourceConfigEpoch){HerrinSmbConfigStore(context).configured()}
+
     var nasDavUrlDraft by remember { mutableStateOf(prefs.nasWebDavUrl) }
     var cloudDavUrlDraft by remember { mutableStateOf(prefs.cloudWebDavUrl) }
     var nasDavUserDraft by remember { mutableStateOf("") }
@@ -913,7 +917,7 @@ private fun Herrin(startup: StartupPresentation) {
     var catalogRefresh by remember { zeroIntState() }
     val tmdbPrimary = prefs.tmdbReadToken.isNotBlank()
     val extraNasConfigured = remember(personalSourceConfigEpoch) { AdditionalServiceConfigs(context).enabled("nas").isNotEmpty() }
-    val sourceConfigured = extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbBrowseIndex.isNotEmpty() ||
+    val sourceConfigured = smbConfigured || extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbBrowseIndex.isNotEmpty() ||
         prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
     var recentIndexEpoch by remember { zeroIntState() }
     var recentIndexFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
@@ -1342,6 +1346,7 @@ private fun Herrin(startup: StartupPresentation) {
         }
         val searchOutput=try { withTimeoutOrNull(if(screen == "detail") Long.MAX_VALUE else budgetMs) { withContext(Dispatchers.IO+SpiderSearchAuthority(consentAtStart)) {
             val adapters = mutableListOf<HerrinFilmSource>()
+            HerrinSmbConfigStore(context).account()?.let{adapters+=HerrinSmbSource(it,smbSessions)}
             for ((slot, url, insecure, kind) in listOf(
                 listOf("nas", nasUrl, allowNasHttp.toString(), "NAS"),
                 listOf("cloud", cloudUrl, allowCloudHttp.toString(), "CLOUD")
@@ -1386,6 +1391,7 @@ private fun Herrin(startup: StartupPresentation) {
             directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(100-directSites.size)
             // Metadata cache first; explicit continuation alone may refresh missing warehouse data.
             val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),prefs.tvBoxPreferredRootId,prefs.tvBoxPreferredSiteId,nasUrl,cloudUrl,
+                HerrinSmbConfigStore(context).publicConfig().toString(),
                 AdditionalServiceConfigs(context).enabled("nas").toString(),importedWarehouses.toString(),
                 context.getSharedPreferences("herrin_personal_secrets",0).getString("_revision","legacy").orEmpty()).joinToString("|"))
             health=SourceHealthIndex(java.io.File(context.filesDir,"source-health-v1.json"),scope)
@@ -1438,7 +1444,7 @@ private fun Herrin(startup: StartupPresentation) {
                     site.spiderApi != null && TvBoxSpiderPolicy.mayRun(false, approvedRoot,
                         site.jar ?: currentTvbox?.spiderJar.orEmpty(), trustedSpiderRoot, trustedSpiderJar)
                 }
-                val nodes = HerrinDiscoveryNodes.create(adapters.filterIsInstance<HerrinWebDavSource>(),
+                val nodes = HerrinDiscoveryNodes.create(adapters.filterIsInstance<HerrinPersonalSource>(),
                     discoveryCms, authorizedSpiders, approvedRoot, currentTvbox, searchIdentity,
                     tvBoxVodRepo, tvBoxAllowHttp, spiderBridge, consentAtStart)
                 val preferredNode = preferredSite?.let { HerrinDiscoveryNodes.id(approvedRoot, it,
@@ -1472,7 +1478,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 return@withContext null
             }
-            val personals = adapters.filterIsInstance<HerrinWebDavSource>().associateBy { it.id }
+            val personals = adapters.filterIsInstance<HerrinPersonalSource>().associateBy { it.id }
             val remotes = adapters.associateBy { it.id }
             val reachability = HerrinPersonalMediaProbe(strictHttpFailure=true)
             val personalUris=hashSetOf<String>()
@@ -1718,7 +1724,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.tmdbFallbackIndex.select(targetId, found.sourceId)
         HerrinPlaybackDiagnosticJournal.record("SOURCE", "VERIFIED_SOURCE_SELECTED")
         when (val adapter = sources.firstOrNull { it.id == found.sourceId }) {
-            is HerrinWebDavSource -> {
+            is HerrinPersonalSource -> {
                 val playlist = verified.personalPlaylist
                 if (playlist == null || playlist.episodes.isEmpty()) {
                     tmdbState.tmdbSourceStatus = "个人媒体没有可用的授权播放线路，已尝试其他来源"
@@ -3260,7 +3266,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 settingsTvBoxOnly = true
                                 screen = "settings"
                             }
-                            Text("NAS ${if (prefs.nasWebDavUrl.isBlank()) "未配置" else "已配置"}" +
+                            Text("NAS ${if (prefs.nasWebDavUrl.isBlank() && !smbConfigured) "未配置" else "已配置"}" +
                                 " · 云盘 ${if (prefs.cloudWebDavUrl.isBlank()) "未配置" else "已配置"}",
                                 modifier = Modifier.testTag("my-personal-source-status"),
                                 color = Color(0xFFAFC1D7), fontSize = 12.sp)

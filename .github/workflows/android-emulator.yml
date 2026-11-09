@@ -50,6 +50,8 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Start controlled real SMB2 and SMB3 fixture
+        run: bash .github/scripts/start_smb_fixture.sh
       - name: Test on Android TV emulator (API 30)
         uses: reactivecircus/android-emulator-runner@v2
         with:
