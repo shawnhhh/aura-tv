@@ -692,10 +692,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // CatVod Spider.playerContent is synchronous and may block in network
             // or plugin code. Keep it interruptible without wrapping the later
             // suspending ParseJob in runBlocking (which breaks cancellation).
-            val raw = runInterruptible(Dispatchers.IO) {
+            val raw = PlaybackDiagnosticSession.stage("SPIDER", "PLAYER_CONTENT") { runInterruptible(Dispatchers.IO) {
                 HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_STARTED")
                 spider.playerContent(selected.title, selected.uri, activeVipFlags)
-            }
+            } }
+            SpiderPlaybackEvidence.structure(raw)
             HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_RECEIVED", "EMPTY=${if (raw.isNullOrBlank()) 1 else 0}")
             val siteKey = activeSiteKey.orEmpty()
             val localProxy = activeNativeProxy
@@ -706,7 +707,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             val nativeContent = NativeFongMiRoute.playerContent(raw, siteKey, localProxy)
                 ?: return@attemptPlayback PlaybackResult.Unavailable(
                     "FongMi 原生代理拒绝了跨站点或过期的线路（NATIVE_PROXY_ROUTE_REJECTED）")
-            val resolved = FongMiParsePlayback.resolve(
+            val resolved = PlaybackDiagnosticSession.stage("SPIDER", "PARSE_JOB") { FongMiParsePlayback.resolve(
                     context = context,
                     playerContent = nativeContent,
                     flag = selected.title,
@@ -720,7 +721,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
                     videoCheck = if (spider.manualVideoCheck()) spider::isVideoFormat else null,
                     normalizeMedia = { url ->
                         NativeFongMiRoute.url(url, siteKey, localProxy)
-                    })
+                    }) }
             val healthy = when (resolved) {
                 is PlaybackResult.Ready -> {
                     val primary = NativeFongMiRoute.url(resolved.media.uri, siteKey, localProxy)

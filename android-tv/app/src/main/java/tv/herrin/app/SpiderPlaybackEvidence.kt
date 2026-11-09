@@ -14,6 +14,14 @@ internal object SpiderPlaybackEvidence {
     fun structure(raw: String) {
         val root = runCatching { JSONObject(raw) }.getOrNull()
         if (root == null) { add("SPIDER", "RESPONSE_INVALID_JSON"); return }
+        // Only fixed field names/types and bounded numeric statuses, never source messages.
+        for (key in listOf("code", "status")) {
+            val value = root.opt(key)
+            if (value is Number) add("SPIDER", "RESPONSE_" + key.uppercase(), "VALUE=" + value.toInt().coerceIn(0, 99999))
+        }
+        for (key in listOf("error", "message", "msg", "data")) {
+            if (root.has(key)) add("SPIDER", "RESPONSE_HAS_" + key.uppercase())
+        }
         add("SPIDER", when {
             root.optString("playUrl").startsWith("json:") -> "PARSER_JSON"
             root.optString("playUrl").startsWith("parse:") -> "PARSER_NAMED"

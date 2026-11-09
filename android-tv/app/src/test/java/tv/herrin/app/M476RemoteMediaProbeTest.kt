@@ -11,6 +11,20 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicInteger
 
 class M476RemoteMediaProbeTest {
+    @Test fun slowChunkedBinaryStopsAtConclusiveSignatureWithoutWaitingForOneKilobyte(): Unit = runBlocking {
+        for (prefix in listOf(byteArrayOf(0,0,0,24,102,116,121,112), byteArrayOf(0x1a,0x45,0xdf.toByte(),0xa3.toByte()))) {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream")
+                    .setChunkedBody(okio.Buffer().write(prefix).write(ByteArray(2048)), prefix.size)
+                    .throttleBody((prefix.size + prefix.size.toString(16).length + 4).toLong(), 2, java.util.concurrent.TimeUnit.SECONDS))
+                server.start()
+                val began = System.nanoTime()
+                assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, probe().probe(PlaybackMedia(server.url("/signed").toString())))
+                assertTrue("Must not wait for the next chunk or enlarge the timeout", (System.nanoTime()-began)/1_000_000 < 1200)
+            }
+        }
+    }
+
     private fun probe(authorized: Boolean = true) = HerrinRemoteMediaProbe(
         authorizeLocal = { authorized })
 

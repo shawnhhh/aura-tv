@@ -2145,6 +2145,9 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch, tmdbState.automaticSearch,playbackNeedsRefresh) {
+        val diagnosticSession = PlaybackDiagnosticSession.newId()
+        withContext(PlaybackDiagnosticSession.context(diagnosticSession)) {
+        if (screen == "player") HerrinPlaybackDiagnosticJournal.record("SOURCE", "SELECTION_STARTED")
         spiderResolved = null
         spiderResolvedFor = HerrinAutomaticPlayback.Attempt(film.id, episode, line, playerRetryEpoch,
             tmdbState.tmdbFallbackIndex.selected(film.id) ?: catalogScope)
@@ -2153,7 +2156,7 @@ private fun Herrin(startup: StartupPresentation) {
             val sourceFilm = if (film.id.startsWith("tmdb-")) tmdbState.tmdbPlaybackRoutes.sourceFilm(film.id) else film
             if (sourceFilm == null) {
                 spiderResolved = PlaybackResult.Unavailable("影片来源已失效，请重新查找片源")
-                return@LaunchedEffect
+                return@withContext
             }
             var playableFilm: Film = sourceFilm
             if(!withContext(Dispatchers.IO){spiderBridge.isApprovedSourceFilm(playableFilm)}){
@@ -2165,7 +2168,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }}
                 if(fresh==null ||fresh.playbackEpisodes.none{ep->ep.number==episode &&ep.lines.any{it.id==line}}){
                     spiderResolved=PlaybackResult.Unavailable("来源会话或选集已变化，请返回详情重新选择")
-                    return@LaunchedEffect
+                    return@withContext
                 }
                 playableFilm=fresh
                 if(film.id.startsWith("tmdb-")){
@@ -2187,19 +2190,19 @@ private fun Herrin(startup: StartupPresentation) {
                         val option = first?.lines?.firstOrNull()
                         if (first == null || option == null) {
                             spiderResolved = PlaybackResult.Unavailable("没有可用选集")
-                            return@LaunchedEffect
+                            return@withContext
                         }
                         // Episode/line state changes restart this effect with the
                         // newly loaded Film, avoiding a double playerContent call.
                         if (episode != first.number || line != option.id) {
                             episode = first.number
                             line = option.id
-                            return@LaunchedEffect
+                            return@withContext
                         }
                     }
                     is SpiderResult.Failure -> {
                         spiderResolved = PlaybackResult.Unavailable(detailed.message)
-                        return@LaunchedEffect
+                        return@withContext
                     }
                 }
             }
@@ -2209,7 +2212,7 @@ private fun Herrin(startup: StartupPresentation) {
                     withTimeoutOrNull(4_000) {
                         HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
                             FongMiSessionAuthorization.isApproved(candidate, spiderBridge.approvedActiveSiteKey())
-                        }, evidence = { code, detail -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, detail) }).probe(parsed.media)
+                        }, evidence = { code, detail -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, detail, diagnosticSession) }).probe(parsed.media)
                     }
                 }
                 val code = validation?.name ?: "PROBE_TIMEOUT"
@@ -2259,6 +2262,7 @@ private fun Herrin(startup: StartupPresentation) {
                         "$failedStatus；$reason"
                 }
             }
+        }
         }
     }
     LaunchedEffect(screen, film.id) {

@@ -191,7 +191,7 @@ internal object SpiderIpc {
 
     fun playback(media: PlaybackMedia): JSONObject = JSONObject().put("ok", true)
         .put("uri", media.uri)
-        .put("mediaId", media.mediaId)
+        .put("mediaId", media.mediaId).put("diagnosticSession", PlaybackDiagnosticSession.id())
         .put("alternates", JSONArray(media.alternateUris.take(7)))
         .put("allowHttpRedirects", media.allowHttpRedirects)
         // Without this field, a working header-free VOD backup loses its
@@ -242,6 +242,7 @@ internal object SpiderIpc {
         return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
             response.optBoolean("allowHttpRedirects") && allowHttp,
             declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime")),
+            diagnosticSessionId = response.optString("diagnosticSession").takeIf { it.matches(Regex("[a-f0-9-]{36}")) },
             mediaId = response.optString("mediaId").takeIf { it.isNotBlank() && it.length <= 256 },
             // Re-validate in the receiving process. A malicious/forged IPC
             // flag cannot enable cross-origin fallback for authenticated
@@ -305,7 +306,7 @@ class TvBoxSpiderService : Service() {
         val payload = message.data.getString("payload").orEmpty()
         if (reply != null) {
             val operationBudget = message.data.getLong("operationBudgetMs", 150_000L).coerceIn(200,150_000)
-            val task = scope.launch(start = CoroutineStart.LAZY) {
+            val task = scope.launch(PlaybackDiagnosticSession.context(message.data.getString("diagnosticSession").orEmpty()), start = CoroutineStart.LAZY) {
                 val response = lock.withLock {
                     if (retiring) return@withLock SpiderIpc.error("Spider 会话正在回收")
                     activeOperation = id
@@ -726,6 +727,13 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     private suspend fun sendRequest(operation: Int, payload: JSONObject,
         sourceEpoch: Long? = null): SpiderResult<JSONObject> = try {
+        val diagnosticStart = System.nanoTime()
+        val diagnosticEvent = when(operation) {
+            SpiderIpc.BROWSE -> "INITIALIZE"; SpiderIpc.SEARCH -> "SEARCH"
+            SpiderIpc.DETAILS -> "DETAILS_EPISODES"; SpiderIpc.PLAY -> "RESOLVE"
+            else -> "RESOURCE_RELEASE"
+        }
+        HerrinPlaybackDiagnosticJournal.record("SPIDER", diagnosticEvent + "_STARTED")
         val response = withContext(Dispatchers.Main.immediate) {
             check(sourceEpoch == null || sourceSession.isCurrent(sourceEpoch)) { "Spider 会话已结束或变化" }
             val encoded = payload.toString()
@@ -742,7 +750,7 @@ internal class TvBoxSpiderBridge(context: Context) {
                 server.send(Message.obtain(null, operation).apply {
                     arg1 = id
                     replyTo = responses
-                    data = Bundle().apply { putString("payload", encoded); putLong("operationBudgetMs",budget) }
+                    data = Bundle().apply { putString("payload", encoded); putLong("operationBudgetMs",budget); putString("diagnosticSession", PlaybackDiagnosticSession.id()) }
                 })
                 withTimeout(if (budget == 150_000L) 165_000L else budget + 800) { deferred.await() }
             } catch (timeout: TimeoutCancellationException) {
@@ -766,6 +774,8 @@ internal class TvBoxSpiderBridge(context: Context) {
                 SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge)
             }
         }
+        HerrinPlaybackDiagnosticJournal.record("SPIDER", diagnosticEvent + "_RETURNED",
+            "MS=" + ((System.nanoTime()-diagnosticStart)/1_000_000).coerceAtMost(99999))
         require(response.length <= SpiderIpc.MAX_RESPONSE_CHARS) { "Spider 返回内容超过进程通信限制" }
         val result = withContext(Dispatchers.Default){JSONObject(response)}
         if (operation == SpiderIpc.PLAY) SpiderPlaybackEvidence.replay(result.optJSONArray("playbackEvidence"))
@@ -881,6 +891,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
+        playbackLease.incrementAndGet()
         val invocation = sourceSession.snapshot()
         if (!ownsFilm(film, invocation))
             return PlaybackResult.Unavailable("Spider 影片或选集来源已失效，请重新查找片源")
@@ -973,13 +984,16 @@ internal class TvBoxSpiderBridge(context: Context) {
      * rebind a service before onDestroy, so unbind alone is not a close barrier.
      * This job is owned by the bridge, not the outgoing media composition.
      */
+    private val playbackLease = java.util.concurrent.atomic.AtomicLong()
+
     fun releasePlayback() {
+        val selectedLease = playbackLease.get()
         val selectedSource = lastBrowse
         val selectedGeneration = generation
         cleanupJob?.cancel()
         cleanupJob = cleanupScope.launch(start = CoroutineStart.UNDISPATCHED) {
             requests.withLock {
-                if (generation != selectedGeneration || lastBrowse != selectedSource) return@withLock
+                if (playbackLease.get() != selectedLease || generation != selectedGeneration || lastBrowse != selectedSource) return@withLock
                 if (remote == null && !bound) {
                     invalidate("Spider 播放会话已结束")
                     return@withLock

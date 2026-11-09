@@ -43,6 +43,8 @@ internal class HerrinRemoteMediaProbe(
     suspend fun canRead(media: PlaybackMedia): Boolean = probe(media) == Result.MEDIA
 
     suspend fun probe(media: PlaybackMedia): Result {
+        val began = System.nanoTime()
+        var receivedBytes = 0
         var url = media.uri
         var headers = media.headers
         repeat(3) { hop ->
@@ -60,8 +62,12 @@ internal class HerrinRemoteMediaProbe(
             } catch (_: IllegalArgumentException) {
                 return Result.INVALID_URL
             }
+            evidence("MEDIA_REQUEST", "HOP=$hop")
+            evidence(if (isLoopback(target)) "MEDIA_TARGET_PROXY" else "MEDIA_TARGET_REMOTE", "")
             val result = try { readSourceResponse(client,request) { reply ->
+                evidence("MEDIA_HEADERS", "MS=${((System.nanoTime()-began)/1_000_000).coerceAtMost(99999)}")
                 evidence("MEDIA_HTTP", "STATUS=${reply.code}")
+                evidence(if (reply.header("Transfer-Encoding").equals("chunked", true)) "MEDIA_CHUNKED" else "MEDIA_NOT_CHUNKED", "")
                 if (reply.code in setOf(301, 302, 303, 307, 308)) {
                     if (hop >= 2) return@readSourceResponse Result.HTTP_ERROR
                     val location = reply.header("Location") ?: return@readSourceResponse Result.HTTP_ERROR
@@ -109,15 +115,20 @@ internal class HerrinRemoteMediaProbe(
                         val count=stream.read(buffer,received,buffer.size-received)
                         if(count<0)break
                         if(count==0)continue
+                        if (received == 0) evidence("MEDIA_FIRST_BYTE", "MS=${((System.nanoTime()-began)/1_000_000).coerceAtMost(99999)}")
                         received+=count
+                        receivedBytes = received
                         val prefix = buffer.copyOf(received).toString(Charsets.UTF_8)
                             .trimStart('\uFEFF',' ','\n','\r','\t')
-                        if (prefix.startsWith("#EXTM3U\n") || prefix.startsWith("#EXTM3U\r\n")) break
+                        if (prefix.startsWith("#EXTM3U\n") || prefix.startsWith("#EXTM3U\r\n") ||
+                            MediaProbePrefix.identified(buffer, received)) break
                     }
                     received
                 } catch (cancel: CancellationException) {
                     throw cancel
                 } catch (error: Exception) {
+                    evidence("MEDIA_BYTES", "COUNT=$receivedBytes")
+                    evidence("MEDIA_BODY_IO_" + ioCode(error), "")
                     evidence("MEDIA_IO_" + ioCode(error), "")
                     return@readSourceResponse Result.NETWORK_ERROR
                 }
@@ -144,7 +155,8 @@ internal class HerrinRemoteMediaProbe(
                 if (contentType.startsWith("text/") || contentType.contains("xml"))
                     return@readSourceResponse Result.LOGIN_OR_TEXT
                 Result.MEDIA
-            } } catch(cancel:CancellationException){throw cancel} catch(error:Exception){
+            } } catch(cancel:CancellationException){evidence("MEDIA_CANCELLED_CALLER", "");throw cancel} catch(error:Exception){
+                evidence("MEDIA_CONNECT_IO_" + ioCode(error), "")
                 evidence("MEDIA_IO_" + ioCode(error), "")
                 if(strictHttpFailure &&error is SourceHttpFailure)throw error
                 return Result.NETWORK_ERROR
