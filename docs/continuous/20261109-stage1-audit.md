@@ -67,3 +67,15 @@ M456三种实际解码/SurfaceView/截图边框测试全部通过；原比例UI�
 新比例、超时取消、唯一播放器及遥控器断言全部通过；仅既有扫码截图解码出现NotFoundException。
 将原5秒等待“节点存在”强化为同一5秒内真实截图必须可解码且为HTTP模式，
 保留后续真实电视配对/HTTP保存/自动刷新全部断言；没有拿原始生成字符串代替截图，也未增加超时。
+
+## 阶段一最终自动化回执
+
+代码与测试提交：6e5364817a11923ccb299a0b4f3b8c5cf5614fd0。
+- JVM665/Lint/Debug全部通过：https://github.com/shawnhhh/aura-tv/actions/runs/42562607352
+- Android TV245/245、零失败/错误/跳过，17预检、61必跑类及原性能门禁通过，无主进程fatal：https://github.com/shawnhhh/aura-tv/actions/runs/42562607295
+- 阶段一APK：https://github.com/shawnhhh/aura-tv/actions/runs/42562607352/artifacts/13650297482
+- APK SHA256：4d57ac95e388abcb53fe086beaef125f04f58ccf0f09b4d502418feb5e5485c3
+- TV真实边框截图、JUnit、logcat与性能：https://github.com/shawnhhh/aura-tv/actions/runs/42562607295/artifacts/13650831652
+
+这是阶段一自动化完成记录，不代表六阶段完成；TCL实际第三方节点、iPhone Safari和真实NAS均待真机。
+本报告/续跑检查点的文档提交不改变以上已验收生产代码。
