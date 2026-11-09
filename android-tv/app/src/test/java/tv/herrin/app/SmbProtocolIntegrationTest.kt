@@ -34,6 +34,28 @@ class SmbProtocolIntegrationTest {
             }
         }
     }
+    @Test fun realEncryptedBdavReadsMatchEveryOriginalTsByteAndUnalignedSeekRanges() {
+        val file=listOf(Paths.get("src/androidTest/assets/synthetic-segment-00.ts"),
+            Paths.get("app/src/androidTest/assets/synthetic-segment-00.ts")).first{Files.isRegularFile(it)}
+        val expected=Files.readAllBytes(file)
+        HerrinSmbSessions().use { sessions ->
+            val media=sessions.media(account(),"Original M2TS.2026.m2ts")
+            client.newCall(Request.Builder().url(media.uri).build()).execute().use {
+                assertEquals(200,it.code)
+                assertEquals(expected.size.toLong(),it.body!!.contentLength())
+                assertArrayEquals(expected,it.body!!.bytes())
+            }
+            // Deliberately cross TS packet and the bounded 512-packet window edges.
+            for(start in listOf(1,187,188,189,188*512-3,expected.size-203)) {
+                val end=minOf(start+1300,expected.lastIndex)
+                client.newCall(Request.Builder().url(media.uri).header("Range","bytes=$start-$end").build()).execute().use {
+                    assertEquals(206,it.code)
+                    assertEquals("bytes $start-$end/${expected.size}",it.header("Content-Range"))
+                    assertArrayEquals(expected.copyOfRange(start,end+1),it.body!!.bytes())
+                }
+            }
+        }
+    }
     @Test fun sourceSearchRangeSeekAndLargeFileUseTheActualSmbServer():Unit=runBlocking {
         HerrinSmbSessions().use { sessions ->
             val source=HerrinSmbSource(account(),sessions)
