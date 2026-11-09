@@ -62,7 +62,7 @@ internal fun TmdbBrowseRails(
                     status?.error == true -> "加载失败，保留已有缓存"
                     else -> "暂无可确认已发行或已播出的内容"
                 }, color = Color(0xFFB8BEC8), fontSize = 14.sp)
-                if ((status?.unknown ?: 0) > 0) Text("发行或播出信息未知：" + status!!.unknown + " 部，暂未推荐",
+                if ((status?.unknown ?: 0) > 0) Text(if (spec?.kind == TmdbRailKind.HOT) "部分推荐的发行信息仍待核验" else "发行或播出信息未知：" + status!!.unknown + " 部，暂未推荐",
                     color = Color(0xFFB8BEC8), fontSize = 12.sp, modifier = Modifier.testTag("tmdb-unknown-$key"))
                 LazyRow(state = rail, modifier = Modifier.testTag("tmdb-rail-$key"),
                     contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {

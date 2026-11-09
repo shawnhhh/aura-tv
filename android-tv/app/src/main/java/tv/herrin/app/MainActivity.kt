@@ -1062,6 +1062,7 @@ private fun Herrin(startup: StartupPresentation) {
     var showSearchAdvancedFilters by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
+    val playbackDiagnosticId = remember(screen, filmId, episode, line, playerRetryEpoch) { PlaybackDiagnosticSession.newId() }
     var detailSelectedSeason by rememberSaveable { zeroIntState() }
     var restoreSeasonFocus by remember { mutableStateOf(false) }
     var restoreGroupFocus by remember { mutableStateOf(false) }
@@ -1148,7 +1149,10 @@ private fun Herrin(startup: StartupPresentation) {
         if (metadataToken.isNotBlank()) {
             val saved = withContext(Dispatchers.IO) { TvBoxCatalogSnapshot(context, Long.MAX_VALUE).load("tmdb-library", "selected") }
             saved.filter { tmdbDiscovery.identity(it) != null }.forEach { tmdbState.tmdbResolved.putIfAbsent(it.id, it) }
-            tmdbBrowseState.hydrate()
+            tmdbBrowseState.hydrate(TmdbBrowsePage.HOME)
+            tmdbState.cacheHydrated=true
+            // The other twenty cached rails cannot delay the first usable homepage.
+            launch { tmdbBrowseState.hydrate() }
             tmdbState.tmdbBrowseIndex = tmdbBrowseState.allFilms()
             tmdbState.tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
         }
@@ -1344,7 +1348,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
             }
         }
-        val searchOutput=try { withTimeoutOrNull(if(screen == "detail") Long.MAX_VALUE else budgetMs) { withContext(Dispatchers.IO+SpiderSearchAuthority(consentAtStart)) {
+        val searchOutput=try { withTimeoutOrNull(if(screen == "detail") Long.MAX_VALUE else budgetMs) { withContext(Dispatchers.IO+SpiderSearchAuthority(consentAtStart)+PlaybackDiagnosticSession.context(playbackDiagnosticId)) {
             val adapters = mutableListOf<HerrinFilmSource>()
             HerrinSmbConfigStore(context).account()?.let{adapters+=HerrinSmbSource(it,smbSessions)}
             for ((slot, url, insecure, kind) in listOf(
@@ -2145,7 +2149,7 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     LaunchedEffect(screen, film.id, episode, line, spiderActive, playerRetryEpoch, tmdbState.automaticSearch,playbackNeedsRefresh) {
-        val diagnosticSession = PlaybackDiagnosticSession.newId()
+        val diagnosticSession = playbackDiagnosticId
         withContext(PlaybackDiagnosticSession.context(diagnosticSession)) {
         if (screen == "player") HerrinPlaybackDiagnosticJournal.record("SOURCE", "SELECTION_STARTED")
         spiderResolved = null
@@ -3877,7 +3881,7 @@ private fun Herrin(startup: StartupPresentation) {
                     key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
                     val historyTicket = remember(chosenMedia) { watchHistory.begin(historyScope, film.id, historyEpisode, historyLine) }
                     AuthorizedPlaybackPanel(
-                        media = chosenMedia,
+                        media = chosenMedia.copy(diagnosticSessionId = playbackDiagnosticId),
                         onNextEpisode = if (SeasonPlayback.adjacent(film, historyEpisode, historyLine, 1) != null) ({ changeEpisode(1) }) else null,
                         onPreviousEpisode = if (SeasonPlayback.adjacent(film, historyEpisode, historyLine, -1) != null) ({ changeEpisode(-1) }) else null,
                         onPlayer = {

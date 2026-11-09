@@ -44,6 +44,15 @@ internal class HerrinRemoteMediaProbe(
 
     suspend fun probe(media: PlaybackMedia): Result {
         val began = System.nanoTime()
+        val observedClient = client.newBuilder().eventListener(object: okhttp3.EventListener() {
+            override fun dnsStart(call: okhttp3.Call, domainName: String) { evidence("MEDIA_DNS_STARTED", "") }
+            override fun dnsEnd(call: okhttp3.Call, domainName: String, inetAddressList: List<java.net.InetAddress>) { evidence("MEDIA_DNS_FINISHED", "") }
+            override fun secureConnectStart(call: okhttp3.Call) { evidence("MEDIA_TLS_STARTED", "") }
+            override fun secureConnectEnd(call: okhttp3.Call, handshake: okhttp3.Handshake?) { evidence("MEDIA_TLS_FINISHED", "") }
+            override fun callFailed(call: okhttp3.Call, ioe: java.io.IOException) {
+                evidence(if (call.isCanceled()) "MEDIA_SOCKET_CANCELLED" else "MEDIA_CALL_FAILED", "")
+            }
+        }).build()
         var receivedBytes = 0
         var url = media.uri
         var headers = media.headers
@@ -64,7 +73,7 @@ internal class HerrinRemoteMediaProbe(
             }
             evidence("MEDIA_REQUEST", "HOP=$hop")
             evidence(if (isLoopback(target)) "MEDIA_TARGET_PROXY" else "MEDIA_TARGET_REMOTE", "")
-            val result = try { readSourceResponse(client,request) { reply ->
+            val result = try { readSourceResponse(observedClient,request) { reply ->
                 evidence("MEDIA_HEADERS", "MS=${((System.nanoTime()-began)/1_000_000).coerceAtMost(99999)}")
                 evidence("MEDIA_HTTP", "STATUS=${reply.code}")
                 evidence(if (reply.header("Transfer-Encoding").equals("chunked", true)) "MEDIA_CHUNKED" else "MEDIA_NOT_CHUNKED", "")

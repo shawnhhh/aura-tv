@@ -91,7 +91,7 @@ internal object PlaybackErrorReport {
         val safeOperation = Regex("route_operation=(JAR|CSP|LIVE|PUSH|CZSpp|CZSPP|CK|PARSE|PLAY|PROXY|VOD|M3U8|OTHER|MISSING|UNAVAILABLE)")
             .find(raw)?.groupValues?.get(1)
         val mediaProbe = Regex("MEDIA_PROBE_(?:INVALID_URL|UNAUTHORIZED_LOCAL|HTTP_ERROR|LOGIN_OR_TEXT|INVALID_RANGE|EMPTY_BODY|INVALID_MANIFEST|NETWORK_ERROR|PROBE_TIMEOUT)(?![A-Z_])").find(raw)?.value
-        val parserCode = Regex("PARSE_(?:INVALID_JSON|INVALID_RESULT_URL|INVALID_RESULT|INVALID_URL|TIMEOUT|DNS|CONNECT|TLS|JAR_CLASS|JAR_ABI|HTTP|FAILED)(?![A-Z_])").find(raw)?.value
+        val parserCode = Regex("PARSE_(?:WEB_REQUIRED|NO_MEDIA_URL|INVALID_JSON|INVALID_RESULT_URL|INVALID_RESULT|INVALID_URL|TIMEOUT|DNS|CONNECT|TLS|JAR_CLASS|JAR_ABI|HTTP|FAILED)(?![A-Z_])").find(raw)?.value
         val kind = when {
             mediaProbe != null -> "SOURCE_$mediaProbe"
             parserCode != null -> "SOURCE_$parserCode"

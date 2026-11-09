@@ -115,9 +115,9 @@ internal object SpiderVodCodec {
                 (index == 0 && declaredMime != null)
         }
         if (needsWebParser && playable.isEmpty())
-            return PlaybackResult.Unavailable("此线路需要网页解析器，请切换返回直链的授权线路")
+            return PlaybackResult.Unavailable("PARSE_WEB_REQUIRED：此线路需要网页解析器，请切换返回直链的授权线路")
         val uri = playable.firstOrNull()
-            ?: return PlaybackResult.Unavailable("Spider 没有返回本次授权的 HTTP(S) 直链")
+            ?: return PlaybackResult.Unavailable("PARSE_NO_MEDIA_URL：Spider 没有返回本次授权的 HTTP(S) 直链")
         val responseHeaders = TvBoxHeaderCodec.decode(
             data.optJSONObject("header") ?: data.optString("header").trim().takeIf { it.startsWith("{") }
                 ?.let { runCatching { JSONObject(it) }.getOrNull() } ?: data.optJSONObject("headers"))

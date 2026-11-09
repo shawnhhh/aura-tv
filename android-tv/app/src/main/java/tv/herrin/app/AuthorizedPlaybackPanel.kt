@@ -329,6 +329,8 @@ private fun AuthorizedPlaybackSession(
     }
     LaunchedEffect(player) {
         var tick = 0
+        var sustained = false
+        val initialPosition = player.currentPosition
         while (true) {
             delay(500)
             journey.onFrames(player.videoDecoderCounters?.renderedOutputBufferCount ?: 0,
@@ -336,6 +338,11 @@ private fun AuthorizedPlaybackSession(
             shownPosition = player.currentPosition.coerceAtLeast(0L)
             shownDuration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
             tick++
+            if (!sustained && player.isPlaying && shownPosition > initialPosition + 1_000 &&
+                (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3) {
+                sustained = true
+                HerrinPlaybackDiagnosticJournal.record("MEDIA3", "SUSTAINED_PLAYBACK", "POSITION_MS=${shownPosition.coerceAtMost(99999)}", media.diagnosticSessionId)
+            }
             if (tick % 5 == 0 &&
                 (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED))
                 reportProgress()

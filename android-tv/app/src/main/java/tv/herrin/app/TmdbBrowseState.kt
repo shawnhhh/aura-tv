@@ -31,12 +31,12 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
         rows[key] = old.copy(entries = entries, page = batch.page, hasMore = batch.hasMore,
             unknown = batch.unknown, loading = false, error = false)
     }
-    suspend fun hydrate() {
+    suspend fun hydrate(onlyPage: TmdbBrowsePage? = null) {
         // Decode all bounded first-page caches off main, then publish once. Publishing
         // after each IO suspension used to recompose the whole home up to 22 times.
         val restored = withContext(Dispatchers.IO) {
             buildMap<String, TmdbRailState> {
-                for (page in TmdbBrowsePage.entries) for (spec in TmdbRailSpec.forPage(page)) {
+                for (page in onlyPage?.let { listOf(it) } ?: TmdbBrowsePage.entries) for (spec in TmdbRailSpec.forPage(page)) {
                     val cached = try { repository.cached(spec, 1, token) }
                     catch (cancel: CancellationException) { throw cancel }
                     catch (_: Exception) { null }
