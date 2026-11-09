@@ -104,7 +104,7 @@ internal class TmdbBrowseRepository(
         }
     }
 
-    private fun collectionMap(token: String): Map<Int, Int> = collections.getOrPut(prefix(token)) {
+    private fun collectionMap(token: String): Map<Int, Int> = synchronized(collections) { collections.getOrPut(prefix(token)) {
         val saved = read(prefix(token) + "-relations") ?: JSONObject()
         val conflicts = saved.optJSONArray("ambiguous")?.let { array ->
             (0 until minOf(100, array.length())).map { array.optInt(it) }.toSet()
@@ -113,6 +113,8 @@ internal class TmdbBrowseRepository(
         val rows = saved.optJSONObject("collections") ?: JSONObject()
         rows.keys().asSequence().mapNotNull { k -> k.toIntOrNull()?.let { it to rows.optInt(k) } }
             .filter { it.first > 0 && it.first !in conflicts && it.second in TmdbAnimeIp.serialMovies.values }.take(100).toMap()
+    }
+
     }
 
     private fun learn(type: String, id: Int, proof: JSONObject, token: String) {

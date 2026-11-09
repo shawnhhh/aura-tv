@@ -242,4 +242,31 @@ class TmdbBrowseRepositoryTest {
         }finally{directory.deleteRecursively()}
     }
 
+    @Test fun conflictingSeriesEvidenceStaysUnknownAfterRepeatedWarmupAndOfflineRestart(): Unit = runBlocking {
+        val directory=Files.createTempDirectory("anime-conflict").toFile()
+        val fixture=TmdbBrowseFixture()
+        val fetcher=ArtworkJsonFetcher {url,key->
+            val path=java.net.URI(url).path.removePrefix("/3")
+            if(Regex("/movie/[0-9]+").matches(path)) {
+                val id=path.substringAfterLast('/').toInt()
+                JSONObject(fixture.load(url.replace("/movie/$id","/movie/635302"),key))
+                    .put("id",id).put("belongs_to_collection",JSONObject().put("id",700001)).toString()
+            } else JSONObject().put("page",1).put("total_pages",1).put("results",JSONArray().apply {
+                if(!path.contains("/tv"))put(JSONObject().put("id",999).put("title","Original conflict")
+                    .put("genre_ids",JSONArray().put(16)).put("vote_count",1000))
+            }).toString()
+        }
+        try {
+            val repo=TmdbBrowseRepository(fetcher,directory)
+            val spec=TmdbRailSpec(TmdbBrowsePage.ANIME,TmdbRailKind.HOT)
+            repo.load(spec,1,"fixture")
+            repeat(3){repo.warmAnimeRelations("fixture")}
+            assertEquals("电影",repo.cachedClassification("movie",999,setOf(16),"fixture"))
+            assertTrue(repo.cached(spec,1,"fixture")!!.entries.isEmpty())
+            val offline=TmdbBrowseRepository(ArtworkJsonFetcher{_,_->error("No network")},directory)
+            assertEquals("电影",offline.cachedClassification("movie",999,setOf(16),"fixture"))
+            assertEquals("动漫",offline.cachedClassification("movie",635302,setOf(16),"fixture"))
+        }finally{directory.deleteRecursively()}
+    }
+
 }
