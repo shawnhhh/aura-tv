@@ -5182,7 +5182,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 "catalogs" -> { catalogRefresh++ }
                 "live" -> { liveRefresh++; epgRefresh++ }
-                "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }
+                "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; cloudDavUrlDraft = prefs.cloudWebDavUrl; personalSourceConfigEpoch++ }
             }
         })
         SideEffect {
