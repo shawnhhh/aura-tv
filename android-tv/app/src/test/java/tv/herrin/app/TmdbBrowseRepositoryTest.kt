@@ -220,4 +220,26 @@ class TmdbBrowseRepositoryTest {
         assertTrue(requests.filter{Regex("/movie/[0-9]+").containsMatchIn(it)}.all{it.contains("append_to_response=release_dates")})
     }
 
+    @Test fun coldRestoreLoadsAllIndependentPagesOfflineWithoutLosingHundredsOfMetadataItems(): Unit = runBlocking {
+        val directory=Files.createTempDirectory("browse-cold-restore").toFile()
+        val fixture=TmdbBrowseFixture().apply { dense=true }
+        try {
+            val writer=TmdbBrowseRepository(fixture,directory)
+            for(page in TmdbBrowsePage.entries) for(spec in TmdbRailSpec.forPage(page)) writer.load(spec,1,"fixture")
+            val reads=fixture.requests.size
+            fixture.offline=true
+            val state=TmdbBrowseState(TmdbBrowseRepository(fixture,directory),"fixture")
+            state.hydrate()
+            assertEquals(reads,fixture.requests.size)
+            assertEquals(22,state.rows.size)
+            assertTrue(state.allFilms().size>=100)
+            for(page in TmdbBrowsePage.entries) for(spec in TmdbRailSpec.forPage(page)) {
+                assertEquals(1,state.row(spec).page)
+                assertFalse(state.row(spec).loading)
+                assertFalse(state.row(spec).error)
+                assertTrue(state.row(spec).entries.isNotEmpty())
+            }
+        }finally{directory.deleteRecursively()}
+    }
+
 }

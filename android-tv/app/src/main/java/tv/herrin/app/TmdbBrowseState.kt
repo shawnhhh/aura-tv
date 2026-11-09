@@ -32,12 +32,20 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
             unknown = batch.unknown, loading = false, error = false)
     }
     suspend fun hydrate() {
-        for (page in TmdbBrowsePage.entries) for (spec in TmdbRailSpec.forPage(page)) {
-            val cached = try { repository.cached(spec, 1, token) }
-            catch (cancel: CancellationException) { throw cancel }
-            catch (_: Exception) { null }
-            if (cached != null && row(spec).page == 0) publish(spec.key, cached)
+        // Decode all bounded first-page caches off main, then publish once. Publishing
+        // after each IO suspension used to recompose the whole home up to 22 times.
+        val restored = withContext(Dispatchers.IO) {
+            buildMap<String, TmdbRailState> {
+                for (page in TmdbBrowsePage.entries) for (spec in TmdbRailSpec.forPage(page)) {
+                    val cached = try { repository.cached(spec, 1, token) }
+                    catch (cancel: CancellationException) { throw cancel }
+                    catch (_: Exception) { null }
+                    if (cached != null) put(spec.key, TmdbRailState(cached.entries, cached.page,
+                        cached.hasMore, unknown = cached.unknown))
+                }
+            }
         }
+        rows.putAll(restored.filterKeys { (rows[it]?.page ?: 0) == 0 })
     }
     suspend fun refresh(page: TmdbBrowsePage, force: Boolean = false) = coroutineScope {
         if (token.isBlank()) return@coroutineScope
