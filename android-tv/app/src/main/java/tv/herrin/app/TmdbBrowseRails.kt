@@ -34,7 +34,7 @@ internal object TmdbBrowseFocus {
 @Composable
 internal fun TmdbBrowseRails(
     state: TmdbBrowseState, page: TmdbBrowsePage, recent: List<Film>, reduced: Boolean,
-    requester: (String) -> FocusRequester, onFocus: (Film, String) -> Unit, onOpen: (Film) -> Unit, restoreFocus: String? = null
+    requester: (String) -> FocusRequester, onFocus: (Film, String) -> Unit, onOpen: (Film, String) -> Unit, restoreFocus: String? = null
 ) {
     val scope = rememberCoroutineScope()
     val specs = TmdbRailSpec.forPage(page)
@@ -89,7 +89,7 @@ internal fun TmdbBrowseRails(
                                     }
                                     true
                                 } else false
-                            }, reduced, onFocus = { focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film) })
+                            }, reduced, onFocus = { focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
                     }
                     if (spec != null && status != null && (status.error || status.unknown > 0)) item(key = "retry") {
                         TvButton("重试此栏目", Modifier.testTag("tmdb-retry-$key"), reduced = reduced, onFocus = { focusedPoster = null }) {

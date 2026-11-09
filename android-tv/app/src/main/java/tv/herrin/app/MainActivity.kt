@@ -2469,6 +2469,7 @@ private fun Herrin(startup: StartupPresentation) {
             RemoteTrace.event { "RAIL focus not confirmed target=$target" }
         }
     }
+    var tmdbBrowseReturn by remember { mutableStateOf<PlaybackReturnContext?>(null) }
     var recentPlaybackReturn by remember { mutableStateOf<PlaybackReturnContext?>(null) }
     var pendingHistoryFilm by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(screen, pendingHistoryFilm, film.id, film.playbackEpisodes, catalogScope) {
@@ -2493,6 +2494,7 @@ private fun Herrin(startup: StartupPresentation) {
         pendingHistoryFilm = null
     }
     fun details(f: Film) {
+        if (screen == "browse") tmdbBrowseReturn = null
         tmdbState.resumeSourceFilm = null
         recentPlaybackReturn = null
         RemoteTrace.event { "DETAILS invoked film=${f.id} from=$screen" }
@@ -2676,6 +2678,11 @@ private fun Herrin(startup: StartupPresentation) {
             "detail" -> {
                 bypassGroupFilmId = null
                 if(returnScreen=="search") tmdbState.searchReturnFocus?.let{focusId=it;tmdbState.restoreSearchFocus=true}
+                if (returnScreen == "browse") tmdbBrowseReturn?.let { origin ->
+                    category = origin.category
+                    focusId = origin.focus
+                }
+                tmdbBrowseReturn = null
                 screen = returnScreen
             }
             "facets" -> {
@@ -3331,10 +3338,12 @@ private fun Herrin(startup: StartupPresentation) {
                             if (independentPage == TmdbBrowsePage.HOME) railFilms else emptyList(), reduceMotion,
                             { id -> requester(id) },
                             onFocus = { item, tag -> filmId = item.id; heroSelections[category] = item.id; focusId = tag },
-                            onOpen = { item ->
+                            onOpen = { item, tag ->
+                                val browseOrigin = PlaybackReturnContext("browse", category, tag, item.id)
                                 val recent = independentPage == TmdbBrowsePage.HOME && recentIndexFilms.any { it.id == item.id }
                                 val origin = if (recent) PlaybackReturnContext(screen, category, "card-" + displayKey(item), item.id) else null
                                 openMovie(item)
+                                tmdbBrowseReturn = browseOrigin
                                 recentPlaybackReturn = origin
                                 tmdbState.resumeSourceFilm = item.id.takeIf { recent }
                             }, restoreFocus = focusId)
