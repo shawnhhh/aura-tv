@@ -47,6 +47,7 @@ REQUIRED_CLASSES = (
     "P0RecentPlaybackReturnTest",
     "P0CachedHomeHeroTest",
     "TmdbBrowsePageTest",
+    "TmdbBrowseRefreshTest",
     "P0Top250NavigationTest",
     "HeroArtworkRetentionTest",
     "M467FongMiTrackRestoreTest",
