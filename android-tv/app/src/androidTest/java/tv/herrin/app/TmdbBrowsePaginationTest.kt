@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
@@ -28,8 +29,14 @@ class TmdbBrowsePaginationTest {
             if(uri.path.endsWith("/trending/movie/week")) {
                 val page=Regex("(?:[?&])page=([0-9]+)").find(url)!!.groupValues[1].toInt()
                 if(page>1)nextRequests.incrementAndGet()
-                JSONObject(fixture.load(url.replace("page=$page","page=1"),key))
-                    .put("page",page).put("total_pages",50).toString()
+                val payload=JSONObject(fixture.load(url.replace("page=$page","page=1"),key))
+                val rows=payload.getJSONArray("results")
+                // This fixture page contains 20 movies for this category; the generic
+                // fixture's two other-category examples must not consume API slots.
+                payload.put("results",JSONArray().apply {
+                    for(i in 0 until rows.length()) if(rows.getJSONObject(i).getInt("id") !in setOf(51,635302))
+                        put(rows.getJSONObject(i))
+                }).put("page",page).put("total_pages",50).toString()
             } else fixture.load(url,key)
         })
         val state=TmdbBrowseState(repository,"fixture")
