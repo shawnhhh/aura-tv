@@ -104,7 +104,7 @@ internal class HerrinTmdbDiscovery(
         val raw = if (fetcher === NetworkArtworkFetcher) TmdbSearchTransport.load(url, token)
             else kotlinx.coroutines.runInterruptible(Dispatchers.IO) { fetcher.load(url, token) }
             ?: throw java.io.IOException("TMDB_EMPTY_RESPONSE")
-        return parseSearchPage(raw, page)
+        return withContext(Dispatchers.IO) { parseSearchPage(raw, page) }
     }
 
     internal fun parseSearchPage(raw: String, page: Int): SearchPage {

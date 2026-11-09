@@ -133,12 +133,13 @@ internal class TmdbBrowseRepository(
         }
     }
     /** Learn series identity from reviewed serial-film IDs in the background, never from title words. */
-    suspend fun warmAnimeRelations(token: String) = coroutineScope {
+    suspend fun warmAnimeRelations(token: String) = withContext(Dispatchers.IO) { coroutineScope {
         TmdbAnimeIp.serialMovies.keys.map { id -> async {
             try { proof("movie", id, token) }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { /* Unknown stays a movie; next refresh may retry. */ }
         } }.awaitAll()
+    }
     }
     private suspend fun proof(type: String, id: Int, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + "-proof-$type-$id"

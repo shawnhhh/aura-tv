@@ -171,4 +171,15 @@ class TmdbBrowseRepositoryTest {
         assertEquals(2,result.count{it.domesticRegion=="HK"})
         assertEquals(2,result.count{it.domesticRegion=="TW"})
     }
+
+    @Test fun searchUsesCachedClassificationOffTheCallerThread(): Unit = runBlocking {
+        val caller=Thread.currentThread()
+        val discovery=HerrinTmdbDiscovery(ArtworkJsonFetcher {_,_->
+            """{"page":1,"total_pages":1,"results":[{"media_type":"movie","id":129,"title":"Original","genre_ids":[16]}]}"""
+        }, browseClassification={type,id,genres->
+            assertNotSame(caller,Thread.currentThread())
+            TmdbAnimeIp.category(type,id,genres,null,emptyMap())
+        })
+        assertEquals("电影",discovery.search("Original","fixture").films.single().category)
+    }
 }
