@@ -82,9 +82,9 @@ class Preferences(context: Context) : FavoritesStore {
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
-    /** Default full-bleed TV playback. Fit can be selected for uncropped cinema. */
+    /** Legacy crop setting; the playback surface now always preserves the complete frame. */
     var playbackFillScreen: Boolean
-        get() = prefs.getBoolean("playback_fill_screen", true)
+        get() = prefs.getBoolean("playback_fill_screen", false)
         set(value) { prefs.edit().putBoolean("playback_fill_screen", value).apply() }
     /** Explicit personal WebDAV bridge URLs; no internet-wide NAS scanning. */
     var nasWebDavUrl: String

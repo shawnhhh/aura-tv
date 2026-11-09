@@ -122,10 +122,7 @@ private fun AuthorizedPlaybackSession(
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val playbackPreferences = remember(context) { Preferences(context) }
-    var viewportMode by remember(media) {
-        mutableStateOf(PlaybackViewportMode.fromStoredFill(playbackPreferences.playbackFillScreen))
-    }
+    val viewportMode = PlaybackViewportMode.FIT
     val danmaku = rememberDanmakuSettings()
     var errorMessage by remember(media) { mutableStateOf<String?>(null) }
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
@@ -772,14 +769,8 @@ private fun AuthorizedPlaybackSession(
                 // Removed upper-left Back/Verification text never returns here.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = {
-                        viewportMode = viewportMode.toggle()
-                        playbackPreferences.playbackFillScreen =
-                            viewportMode == PlaybackViewportMode.FILL
-                        controlsInteractionEpoch++
-                    }, modifier = Modifier.testTag("transport-viewport-mode")) {
-                        Text("画面：" + viewportMode.label)
-                    }
+                    Text("画面：" + viewportMode.label,
+                        modifier = Modifier.testTag("transport-viewport-mode"))
                     if (!isLive) Button(onClick = {
                         playback.manager.setRepeatOne(player.repeatMode != Player.REPEAT_MODE_ONE)
                         uiEpoch++

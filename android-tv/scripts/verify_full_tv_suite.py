@@ -30,6 +30,7 @@ REQUIRED_CLASSES = (
     "M453BufferingRemoteFocusInstrumentedTest",
     "M454CmsOneTapRecoveryInstrumentedTest",
     "M456NativeFullscreenPlayerTest",
+    "P0PlayerDeadlineTest",
     "M457PlaybackFailureRecoveryTest",
     "M458CmsHttpPlaybackTest",
     "M459JsonParserPlaybackTest",
