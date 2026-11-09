@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -37,6 +38,8 @@ internal fun TmdbBrowseRails(
     requester: (String) -> FocusRequester, onFocus: (Film, String) -> Unit, onOpen: (Film, String) -> Unit, restoreFocus: String? = null
 ) {
     val scope = rememberCoroutineScope()
+    val navigation = remember { arrayOfNulls<Job>(1) }
+    DisposableEffect(page) { onDispose { navigation[0]?.cancel(); navigation[0] = null } }
     val specs = TmdbRailSpec.forPage(page)
     val lists = buildList<Pair<String, List<Film>>> {
         if (page == TmdbBrowsePage.HOME) add("recent" to recent)
@@ -77,7 +80,8 @@ internal fun TmdbBrowseRails(
                                     val up = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP
                                     val targetIndex = if (up) (rowIndex - 1 downTo 0).firstOrNull { lists[it].second.isNotEmpty() }
                                         else (rowIndex + 1 until lists.size).firstOrNull { lists[it].second.isNotEmpty() }
-                                    scope.launch {
+                                    navigation[0]?.cancel()
+                                    navigation[0] = scope.launch {
                                         if (targetIndex == null) { if (up) requester("play").requestFocus() }
                                         else {
                                             val (targetKey, targetFilms) = lists[targetIndex]
