@@ -17,9 +17,14 @@ import java.util.concurrent.atomic.AtomicInteger
 class SmbProtocolIntegrationTest {
     private fun account(port:Int=1445,password:String="OriginalFixtureOnly123",encryption:Boolean=port==1445)=
         HerrinSmbAccount("smb://127.0.0.1:$port/media","herrinfixture",password,encryption=encryption)
+    private fun originalMedia():ByteArray {
+        val file=listOf(Paths.get("src/androidTest/assets/synthetic.mp4"),Paths.get("app/src/androidTest/assets/synthetic.mp4"))
+            .first{Files.isRegularFile(it)}
+        return Files.readAllBytes(file)
+    }
     private val client=OkHttpClient.Builder().callTimeout(8,TimeUnit.SECONDS).build()
     @Test fun realSmb2AndEncryptedSmb3ReadTheOriginalMedia() {
-        val expected=Files.readAllBytes(Paths.get("app/src/androidTest/assets/synthetic.mp4"))
+        val expected=originalMedia()
         for(port in listOf(1445,1446)) {
             SmbAccess(account(port)).open("Original SMB.2026.mp4").use { file ->
                 assertEquals(expected.size.toLong(),file.size)
@@ -77,7 +82,7 @@ class SmbProtocolIntegrationTest {
         }
         val media=sessions.media(account(),"Original SMB.2026.mp4")
         try {
-            val original=Files.readAllBytes(Paths.get("app/src/androidTest/assets/synthetic.mp4"))
+            val original=originalMedia()
             client.newCall(Request.Builder().url(media.uri).header("Range","bytes=100-199").build()).execute().use {
                 assertEquals(206,it.code);assertArrayEquals(original.copyOfRange(100,200),it.body!!.bytes())
             }

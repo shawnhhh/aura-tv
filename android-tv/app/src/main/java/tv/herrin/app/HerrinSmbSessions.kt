@@ -36,7 +36,9 @@ internal class HerrinSmbSessions(private val openFile:(HerrinSmbAccount,String)-
     private var disposed=false
     fun media(account:HerrinSmbAccount,path:String):PlaybackMedia = synchronized(lock) {
         check(!disposed);require(account.location.contains(path))
-        val current=server?.takeIf{it.isAlive} ?: SmbServer(openFile).apply{start(5000,true);server=this}
+        val current=server?.takeIf{it.isAlive} ?: SmbServer(openFile).let { created ->
+            try{created.start(5000,true);server=created;created}catch(error:Exception){created.end();throw error}
+        }
         PlaybackMedia(current.register(account,path),allowHttpRedirects=false,
             declaredMime=when(path.substringAfterLast('.').lowercase()){
                 "mp4","m4v"->"video/mp4";"mkv"->"video/x-matroska";"ts","m2ts"->"video/mp2t";else->null
@@ -121,17 +123,19 @@ private class SmbServer(private val openFile:(HerrinSmbAccount,String)->SmbReadH
                     val n=try{active.read(buffer,position,offset,wanted)}catch(error:Exception){
                         if(reopened || closed.get())throw java.io.IOException("SMB_READ_FAILED")
                         reopened=true
-                        handles.remove(active);active.close()
-                        val replacement=openFile(resource.account,resource.path)
-                        if(replacement.size!=size || replacement.version!=first.version){replacement.close();throw java.io.IOException("SMB_FILE_CHANGED")}
-                        active=replacement;handles.add(active)
-                        active.read(buffer,position,offset,wanted)
+                        active.close();handles.remove(active)
+                        try {
+                            val replacement=openFile(resource.account,resource.path)
+                            if(replacement.size!=size || replacement.version!=first.version){replacement.close();throw java.io.IOException("SMB_FILE_CHANGED")}
+                            active=replacement;handles.add(active)
+                            active.read(buffer,position,offset,wanted)
+                        }catch(_:Exception){throw java.io.IOException("SMB_RECONNECT_FAILED")}
                     }
                     if(n<=0)throw java.io.IOException("SMB_TRUNCATED_FILE")
                     position+=n;left-=n
                     return n
                 }
-                override fun close(){if(!ended){ended=true;handles.remove(active);active.close();resource.users.decrementAndGet()}}
+                override fun close(){if(!ended){ended=true;active.close();handles.remove(active);resource.users.decrementAndGet()}}
             }
             val status=if(session.headers.containsKey("range"))Response.Status.PARTIAL_CONTENT else Response.Status.OK
             val result=newFixedLengthResponse(status,"application/octet-stream",stream,range.length)
@@ -142,7 +146,7 @@ private class SmbServer(private val openFile:(HerrinSmbAccount,String)->SmbReadH
             reader=null // Response owns its stream and closes it on disconnect/Seek.
             return result
         }catch(_:Exception){return error(Response.Status.SERVICE_UNAVAILABLE)}
-        finally{reader?.let{handles.remove(it);it.close()};if(!transferred)resource.users.decrementAndGet()}
+        finally{reader?.let{it.close();handles.remove(it)};if(!transferred)resource.users.decrementAndGet()}
     }
     fun end(){if(closed.compareAndSet(false,true)){
         expiry.cancel();handles.forEach{runCatching{it.close()}};handles.clear()

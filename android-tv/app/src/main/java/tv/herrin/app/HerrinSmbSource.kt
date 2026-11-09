@@ -75,7 +75,8 @@ internal class SmbAccess(private val account:HerrinSmbAccount):Closeable {
                 override val size=info.standardInformation.endOfFile
                 override val version=info.basicInformation.lastWriteTime.toString()
                 override fun read(buffer:ByteArray,position:Long,offset:Int,length:Int)=file.read(buffer,position,offset,length)
-                override fun close(){this@SmbAccess.close();runCatching{file.close()}}
+                private val ended=java.util.concurrent.atomic.AtomicBoolean()
+                override fun close(){if(ended.compareAndSet(false,true)){this@SmbAccess.close();runCatching{file.close()}}}
             }
         }catch(error:Exception){close();throw error}
     }
@@ -101,7 +102,7 @@ internal class HerrinSmbSource(private val account:HerrinSmbAccount,private val 
     }
     override suspend fun search(identity:HerrinFilmIdentity):List<HerrinSourceMovie> = withContext(Dispatchers.IO) {
         val job=currentCoroutineContext()
-        runInterruptible {
+        try { runInterruptible {
             SmbAccess(account).use { access ->
                 val share=access.share();val location=account.location
                 val pending=ArrayDeque<Pair<String,Int>>();pending.add(location.root to 0)
@@ -130,6 +131,11 @@ internal class HerrinSmbSource(private val account:HerrinSmbAccount,private val 
                 }
                 found
             }
+        } }catch(error:Exception){
+            // SMBJ wraps InterruptedException. Preserve coroutine cancellation before
+            // classifying provider failures; a cancelled title must not fail its parent UI.
+            job.ensureActive()
+            throw SourceCandidateFailure(SourceSearchStage.SEARCH,SmbFailure.outcome(error))
         }
     }
     private fun offer(name:String,path:String,identity:HerrinFilmIdentity):HerrinSourceMovie? {
