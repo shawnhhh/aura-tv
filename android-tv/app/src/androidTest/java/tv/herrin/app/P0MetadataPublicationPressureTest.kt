@@ -25,9 +25,9 @@ class P0MetadataPublicationPressureTest {
             val c=InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
             java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
-            seedTmdbBrowseTestCache(c, token)
+            val browseFixture=TmdbBrowseFixture().apply { dense=true }
+            seedTmdbBrowseTestCache(c, token, browseFixture)
             Preferences(c).tmdbReadToken=token
-            val browseFixture=TmdbBrowseFixture()
             MetadataFetchers.overrideForTests=ArtworkJsonFetcher { url,_ ->
                 requests.incrementAndGet()
                 if(offline.get()) throw java.net.UnknownHostException()

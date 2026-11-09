@@ -10,6 +10,7 @@ internal class TmdbBrowseFixture : ArtworkJsonFetcher {
     val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
     var offline = false
     var variant = 0
+    var dense = false
     private val identities = ConcurrentHashMap<Int, Pair<Set<Int>, String>>()
     private fun row(id: Int, type: String, genres: Set<Int>, country: String): JSONObject {
         identities[id] = genres to country
@@ -65,6 +66,12 @@ internal class TmdbBrowseFixture : ArtworkJsonFetcher {
             val id = if (type == "movie") { if (16 in genre) 635302 else if (99 in genre) 51 else 11 }
                 else { if (16 in genre) 31 else if (99 in genre) 52 else if (10764 in genre) 41 else 21 }
             output.put(row(id + if (page > 1) page * 100000 else 0, type, genre, country))
+        }
+        if (dense && !query.contains("with_origin_country")) {
+            // Distinct, evidence-backed public metadata for publication-pressure regression.
+            // The normal fixture remains intentionally small for deterministic focus assertions.
+            val base = 1_000_000 + kotlin.math.abs((path + query).hashCode() % 50_000) * 20
+            repeat(19) { output.put(row(base + it, type, genre, country)) }
         }
         return JSONObject().put("page", page).put("total_pages", 3).put("results", output).toString()
     }
