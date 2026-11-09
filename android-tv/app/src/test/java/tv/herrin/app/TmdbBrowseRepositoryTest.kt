@@ -15,6 +15,29 @@ class TmdbBrowseRepositoryTest {
         JSONObject().put("results", JSONArray().put(JSONObject().put("release_dates", JSONArray().apply {
             types.forEach { (type, day) -> put(JSONObject().put("type", type).put("release_date", day)) }
         }))))
+    @Test fun hotMetadataPublishesBeforeSlowProofAndLatestStillRequiresProof(): Unit = runBlocking {
+        val proofStarted = CompletableDeferred<Unit>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        val fixture = TmdbBrowseFixture()
+        val repo = TmdbBrowseRepository(ArtworkJsonFetcher { url, token ->
+            if (Regex(".*/(movie|tv)/[0-9]+.*").matches(url)) {
+                proofStarted.complete(Unit)
+                check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            }
+            fixture.load(url,token)
+        })
+        val previews = CompletableDeferred<TmdbBrowseBatch>()
+        val pending = async { repo.load(TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT),1,"fixture", onPreview={ previews.complete(it) }) }
+        try {
+            val first = withTimeout(2000) { previews.await() }
+            assertTrue(first.entries.isNotEmpty())
+            assertTrue(first.entries.all { it.availability.state == TmdbAvailability.UNKNOWN })
+            assertFalse(pending.isCompleted)
+            assertTrue(first.entries.none { repo.eligible(TmdbRailSpec(TmdbBrowsePage.MOVIE,TmdbRailKind.LATEST),it) })
+        } finally { release.countDown() }
+        assertTrue(pending.await().entries.isNotEmpty())
+    }
+
     @Test fun releaseProofDoesNotConfuseTheatricalFutureOrUnknownWithDigital() {
         assertEquals(TmdbAvailability.THEATRICAL_ONLY, TmdbReleaseEvidence.evaluate("movie", movie(3 to "2026-01-01"), day).state)
         assertEquals(TmdbAvailability.UPCOMING, TmdbReleaseEvidence.evaluate("movie", movie(4 to "2026-11-10"), day).state)

@@ -25,6 +25,10 @@ internal class TmdbBrowseRepository(
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     private val network = Semaphore(3)
+    private val proofMemory = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Pair<Long, JSONObject>>(512, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, JSONObject>>?) = size > 512
+        })
     private val proofLocks = Array(64) { Mutex() }
     private val collections = ConcurrentHashMap<String, Map<Int, Int>>()
     private val ambiguous = ConcurrentHashMap<String, Set<Int>>()
@@ -146,12 +150,16 @@ internal class TmdbBrowseRepository(
     private suspend fun proof(type: String, id: Int, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + "-proof-$type-$id"
         return proofLocks[(key.hashCode() and Int.MAX_VALUE) % proofLocks.size].withLock {
+            proofMemory[key]?.takeIf { clock() - it.first in 0..86_400_000L }?.let {
+                return@withLock it.second
+            }
             val disk = read(key)
             val recent = disk?.takeIf { !force && clock() - it.optLong("saved") in 0..86_400_000L }?.optJSONObject("proof")
-            if (recent != null) { learn(type, id, recent, token); return@withLock recent }
+            if (recent != null) { proofMemory[key] = disk.optLong("saved") to recent; learn(type, id, recent, token); return@withLock recent }
             val fresh = get("/$type/$id" + if (type == "movie") "?append_to_response=release_dates" else "", token)
             if (fresh.optInt("id") != id) throw IOException("TMDB_ID_MISMATCH")
             safeProof(fresh).also {
+                proofMemory[key] = clock() to it
                 write(key, JSONObject().put("saved", clock()).put("proof", it))
                 learn(type, id, it, token)
             }
@@ -207,7 +215,8 @@ internal class TmdbBrowseRepository(
             (spec.kind != TmdbRailKind.RATED || entry.votes >= spec.minVotes(entry.type)) &&
             (spec.kind != TmdbRailKind.DOMESTIC || entry.countries.any { it in setOf("CN", "HK", "TW") })
 
-    suspend fun load(spec: TmdbRailSpec, page: Int, token: String, force: Boolean = false): TmdbBrowseBatch = withContext(Dispatchers.IO) {
+    suspend fun load(spec: TmdbRailSpec, page: Int, token: String, force: Boolean = false,
+        onPreview: suspend (TmdbBrowseBatch) -> Unit = {}): TmdbBrowseBatch = withContext(Dispatchers.IO) {
         require(page in 1..50)
         val key = prefix(token) + "-page-" + spec.key + "-$page"
         val old = read(key)
@@ -231,8 +240,20 @@ internal class TmdbBrowseRepository(
             }
         }
         suspend fun enrich(candidates: List<Pair<JSONObject, String>>, limit: Int): List<TmdbBrowseEntry> = coroutineScope {
+            // A HOT rail is metadata discovery. Publish safe metadata immediately;
+            // UNKNOWN remains UNKNOWN and is never admitted to LATEST or granted playback.
+            if (spec.kind == TmdbRailKind.HOT) {
+                val previews = candidates.mapNotNull { (row, type) ->
+                    val cachedProof = proofMemory[prefix(token) + "-proof-$type-${row.optInt("id")}"]
+                        ?.takeIf { clock()-it.first in 0..86_400_000L }?.second ?: JSONObject()
+                    entry(row, type, cachedProof, token)?.takeIf {
+                        spec.page == TmdbBrowsePage.HOME || it.film.category == spec.page.label
+                    }
+                }
+                if (previews.isNotEmpty()) onPreview(TmdbBrowseBatch(previews.take(20), page, more, previews.count { it.availability.state == TmdbAvailability.UNKNOWN }))
+            }
             candidates.asSequence().filter { seen.add(it.second + "-" + it.first.optInt("id")) }.take(limit).toList().map { (row, type) -> async {
-                try { entry(row, type, proof(type, row.getInt("id"), token, force), token) }
+                try { entry(row, type, proof(type, row.getInt("id"), token), token) }
                 catch (cancel: CancellationException) { throw cancel }
                 catch (_: Exception) { null }
             } }.awaitAll().also { results ->

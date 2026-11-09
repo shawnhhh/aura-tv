@@ -66,8 +66,17 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
     private suspend fun load(spec: TmdbRailSpec, page: Int, force: Boolean) {
         if (row(spec).loading) return
         rows[spec.key] = row(spec).copy(loading = true, error = false)
+        val publisher = currentCoroutineContext()
         try {
-            val batch = repository.load(spec, page, token, force)
+            val batch = repository.load(spec, page, token, force) { preview ->
+                withContext(publisher) {
+                    // Cached or focused content stays in place during refresh.
+                    if (row(spec).entries.isEmpty()) {
+                        publish(spec.key, preview)
+                        rows[spec.key] = row(spec).copy(loading = true)
+                    }
+                }
+            }
             if (page == 1 && focused == spec.key && row(spec).entries.isNotEmpty()) {
                 pending[spec.key] = batch
                 rows[spec.key] = row(spec).copy(loading = false)
