@@ -30,12 +30,12 @@ class M453BufferingRemoteFocusInstrumentedTest {
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         server.start()
         val media = PlaybackMedia(server.url("/clean-player.mp4").toString())
-        val playerStarts = java.util.concurrent.atomic.AtomicInteger()
+        val players = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
         try {
             // This is the actual consumer player entry, NOT PlaybackTestActivity
             // with its explicit isolated testDiagnostics=true.
             compose.setContent {
-                AuthorizedPlaybackPanel(media = media, onPlayer = { playerStarts.incrementAndGet() }, onBack = {})
+                AuthorizedPlaybackPanel(media = media, onPlayer = { players.add(it) }, onBack = {})
             }
             compose.waitUntil(7_000) {
                 runCatching {
@@ -73,7 +73,7 @@ class M453BufferingRemoteFocusInstrumentedTest {
             compose.onNodeWithTag("transport-viewport-mode")
                 .assertTextEquals("画面：完整显示（等比例）")
                 .assert(hasClickAction().not())
-            org.junit.Assert.assertEquals("Opening settings must not restart the sole player", 1, playerStarts.get())
+            compose.runOnIdle { org.junit.Assert.assertEquals("Opening settings must retain the sole player identity", 1, players.size) }
 
             // An expanded submenu must permit UP to return to the previous
             // row. The old parent key interceptor hid every control on UP,
