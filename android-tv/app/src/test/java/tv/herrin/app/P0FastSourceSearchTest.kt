@@ -18,6 +18,21 @@ class P0FastSourceSearchTest {
         override suspend fun details(candidate:HerrinSourceMovie):Film?=candidate.film
         override suspend fun canPlay(detailed:Film)=true
     }
+    @Test fun completedSearchRetainsItsIndependentMediaValidationBudget(): Unit = runBlocking {
+        val source = object: HerrinFilmSource {
+            override val id = "cms:preferred"
+            override val type = HerrinSourceType.TVBOX_CMS
+            override suspend fun search(identity: HerrinFilmIdentity) = listOf(HerrinSourceMovie(id,type,movie(),"movie"))
+        }
+        val began = System.nanoTime()
+        val result = HerrinFilmRouter(listOf(source), source.id).find(request, streaming=true) { offers ->
+            delay(3_100) // Previously killed by the encompassing 3s preferred-search timer.
+            offers
+        }
+        assertEquals(listOf(source.id), result.options.map { it.sourceId })
+        assertTrue((System.nanoTime()-began)/1_000_000 < 4_500)
+    }
+
     @Test fun sixTwelveAndFortyFiveNodesReachFirstThirdSeventhAndEighthWithoutQualityWait()=runBlocking {
         for(count in listOf(6,12,45)) for(hit in listOf(1,3,7,8).filter{it<=count}){
             val session=Session(hit)
