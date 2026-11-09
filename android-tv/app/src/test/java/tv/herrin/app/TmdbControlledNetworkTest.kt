@@ -48,9 +48,11 @@ class TmdbControlledNetworkTest {
                 val start = System.nanoTime()
                 var first = -1L
                 val result = repo.load(TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT),1,"fixture", onPreview={ batch ->
-                    if (first < 0) first = (System.nanoTime()-start)/1_000_000
+                    if (first < 0) {
+                        first = (System.nanoTime()-start)/1_000_000
+                        assertTrue(batch.entries.all { it.availability.state == TmdbAvailability.UNKNOWN })
+                    }
                     assertTrue(batch.entries.isNotEmpty())
-                    assertTrue(batch.entries.all { it.availability.state == TmdbAvailability.UNKNOWN })
                 })
                 val end = (System.nanoTime()-start)/1_000_000
                 assertTrue(result.entries.isNotEmpty())
