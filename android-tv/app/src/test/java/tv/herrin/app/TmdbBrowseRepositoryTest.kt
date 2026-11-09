@@ -105,11 +105,14 @@ class TmdbBrowseRepositoryTest {
         state.refresh(TmdbBrowsePage.MOVIE)
         val first=state.row(spec).entries.map{it.film.id}
         assertTrue(first.isNotEmpty());state.focus(spec.key)
+        fixture.variant=1
         state.refresh(TmdbBrowsePage.MOVIE,true)
         assertEquals(first,state.row(spec).entries.map{it.film.id})
         state.focus(null)
+        val updated=state.row(spec).entries.map{it.film.id}
+        assertNotEquals(first,updated)
         fixture.offline=true;state.refresh(TmdbBrowsePage.MOVIE,true)
-        assertTrue(state.row(spec).error);assertEquals(first,state.row(spec).entries.map{it.film.id})
+        assertTrue(state.row(spec).error);assertEquals(updated,state.row(spec).entries.map{it.film.id})
         fixture.offline=false;state.retry(spec);assertFalse(state.row(spec).error)
         state.more(spec);assertEquals(2,state.row(spec).page)
         assertEquals(state.row(spec).entries.size,state.row(spec).entries.map{it.film.id}.distinct().size)
@@ -124,5 +127,37 @@ class TmdbBrowseRepositoryTest {
         })
         TmdbBrowseState(repo,"fixture").refresh(TmdbBrowsePage.HOME)
         assertTrue(maximum.get() in 1..3)
+    }
+
+    @Test fun backgroundVerifiedCollectionReclassifiesAndPersistsUnknownMovieWithoutChangingItsType() = runBlocking {
+        val directory=Files.createTempDirectory("anime-relations").toFile()
+        val fixture=TmdbBrowseFixture()
+        val fetcher=ArtworkJsonFetcher { url,token ->
+            val path=java.net.URI(url).path.removePrefix("/3")
+            if (path.matches(Regex("/(movie|tv)/[0-9]+"))) {
+                if(path=="/movie/999") JSONObject(fixture.load(url.replace("/movie/999","/movie/635302"),token)).put("id",999).toString()
+                else fixture.load(url,token)
+            } else JSONObject().put("page",1).put("total_pages",1).put("results",JSONArray().apply{
+                if(!path.contains("/tv"))put(JSONObject().put("id",999).put("title","Original unknown")
+                    .put("genre_ids",JSONArray().put(16)).put("vote_count",1000))
+            }).toString()
+        }
+        try {
+            val repo=TmdbBrowseRepository(fetcher,directory)
+            val spec=TmdbRailSpec(TmdbBrowsePage.ANIME,TmdbRailKind.HOT)
+            assertTrue(repo.load(spec,1,"fixture").entries.isEmpty())
+            repo.warmAnimeRelations("fixture")
+            val cached=repo.cached(spec,1,"fixture")!!.entries.single()
+            assertEquals("动漫",cached.film.category);assertEquals("movie",cached.type);assertNull(cached.film.tmdbTvId)
+            val offline=TmdbBrowseRepository(ArtworkJsonFetcher{_,_->error("Cache must not require network")},directory)
+            assertEquals("tmdb-movie-999",offline.cached(spec,1,"fixture")!!.entries.single().film.id)
+        }finally{directory.deleteRecursively()}
+    }
+    @Test fun imageSizesAndUnknownStatusRemainExplicit() {
+        val film=HerrinTmdbDiscovery().parsePage("""{"results":[{"id":129,"title":"Original","genre_ids":[16],"poster_path":"/poster.jpg","backdrop_path":"/hero.jpg"}]}""","movie").single()
+        assertTrue(film.artworkUrl!!.contains("/w500/"))
+        assertTrue(film.backdropUrl!!.contains("/original/"))
+        assertEquals("电影",film.category)
+        assertEquals(TmdbAvailability.UNKNOWN,TmdbReleaseEvidence.evaluate("movie",JSONObject(),day).state)
     }
 }

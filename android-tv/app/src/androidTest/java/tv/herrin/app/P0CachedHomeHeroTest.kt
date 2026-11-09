@@ -15,6 +15,7 @@ class P0CachedHomeHeroTest {
         override fun before() {
             val c=InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
+            clearTmdbBrowseTestCache(c)
             val dir=java.io.File(c.filesDir,"tmdb-home-pages");dir.deleteRecursively()
             val parser=HerrinTmdbDiscovery(ArtworkJsonFetcher { url,_->
                 val (id,genres)=when {
@@ -28,12 +29,13 @@ class P0CachedHomeHeroTest {
                 """{"results":[{"id":$id,"title":"Original $id","name":"Original $id","genre_ids":[$genres],"release_date":"2026-01-01","first_air_date":"2026-01-01"}]}"""
             },cacheDir=dir)
             runBlocking { parser.sections.forEach { parser.load(it,"fixture") } }
+            seedTmdbBrowseTestCache(c, "fixture")
             Preferences(c).apply { tmdbReadToken="fixture";tvBoxWarehouseUrl="http://127.0.0.1:1/fixture.json" }
         }
         override fun after() {
             val c=InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
-            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively()
+            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
         }
     }
     @get:Rule(order=1) val compose=createAndroidComposeRule<MainActivity>()

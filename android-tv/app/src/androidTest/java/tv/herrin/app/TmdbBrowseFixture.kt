@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal class TmdbBrowseFixture : ArtworkJsonFetcher {
     val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
     var offline = false
+    var variant = 0
     private val identities = ConcurrentHashMap<Int, Pair<Set<Int>, String>>()
     private fun row(id: Int, type: String, genres: Set<Int>, country: String): JSONObject {
         identities[id] = genres to country
@@ -32,7 +33,7 @@ internal class TmdbBrowseFixture : ArtworkJsonFetcher {
                 .put("last_air_date", "2026-02-01").put("number_of_episodes", 12)
             else d.put("release_dates", JSONObject().put("results", JSONArray().put(JSONObject().put("release_dates",
                 JSONArray().put(JSONObject().put("type", 4).put("release_date", "2026-01-01T00:00:00Z"))))))
-            if (id in TmdbAnimeIp.serialMovies) d.put("belongs_to_collection", JSONObject().put("id", 700001))
+            if (id in TmdbAnimeIp.serialMovies) d.put("belongs_to_collection", JSONObject().put("id", if(id==635302)700001 else 700002))
             return d.toString()
         }
         if (path.endsWith("configuration")) return "{\"images\":{}}"
@@ -47,14 +48,14 @@ internal class TmdbBrowseFixture : ArtworkJsonFetcher {
         }
         val output = JSONArray()
         if (path == "/trending/all/week") {
-            output.put(row(11, "movie", setOf(28), "CN")).put(row(21, "tv", setOf(18), "CN"))
+            output.put(row(11 + variant, "movie", setOf(28), "CN")).put(row(21, "tv", setOf(18), "CN"))
         } else if (query.contains("with_origin_country")) {
             val base = mapOf("CN" to 100, "HK" to 200, "TW" to 300).getValue(country) +
                 (if (type == "tv") 1000 else 0) + (if (16 in genre) 10000 else if (99 in genre) 20000 else if (10764 in genre) 30000 else 0)
             repeat(12) { output.put(row(base + (page - 1) * 20 + it, type, genre, country)) }
         } else if (path.contains("trending")) {
             if (type == "movie") {
-                output.put(row(11, type, setOf(28), country)).put(row(51, type, setOf(99), country))
+                output.put(row(11 + variant, type, setOf(28), country)).put(row(51, type, setOf(99), country))
                     .put(row(635302, type, setOf(16), "JP"))
             } else {
                 output.put(row(21, type, setOf(18), country)).put(row(31, type, setOf(16), "JP"))

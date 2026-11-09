@@ -27,6 +27,7 @@ internal class TmdbBrowseRepository(
     private val network = Semaphore(3)
     private val proofLocks = ConcurrentHashMap<String, Mutex>()
     private val collections = ConcurrentHashMap<String, Map<Int, Int>>()
+    private val ambiguous = ConcurrentHashMap<String, Set<Int>>()
     private val parser = HerrinTmdbDiscovery()
     private fun prefix(token: String) = MessageDigest.getInstance("SHA-256")
         .digest(("browse-v2|zh-CN|$token").toByteArray()).joinToString("") { "%02x".format(it) }
@@ -104,18 +105,31 @@ internal class TmdbBrowseRepository(
     }
 
     private fun collectionMap(token: String): Map<Int, Int> = collections.getOrPut(prefix(token)) {
-        val rows = read(prefix(token) + "-relations")?.optJSONObject("collections") ?: JSONObject()
+        val saved = read(prefix(token) + "-relations") ?: JSONObject()
+        val conflicts = saved.optJSONArray("ambiguous")?.let { array ->
+            (0 until minOf(100, array.length())).map { array.optInt(it) }.toSet()
+        }.orEmpty()
+        ambiguous[prefix(token)] = conflicts
+        val rows = saved.optJSONObject("collections") ?: JSONObject()
         rows.keys().asSequence().mapNotNull { k -> k.toIntOrNull()?.let { it to rows.optInt(k) } }
-            .filter { it.first > 0 && it.second in TmdbAnimeIp.serialMovies.values }.take(100).toMap()
+            .filter { it.first > 0 && it.first !in conflicts && it.second in TmdbAnimeIp.serialMovies.values }.take(100).toMap()
     }
+
     private fun learn(type: String, id: Int, proof: JSONObject, token: String) {
         if (type != "movie" || id !in TmdbAnimeIp.serialMovies) return
         val collection = proof.optJSONObject("belongs_to_collection")?.optInt("id", 0) ?: 0
         if (collection <= 0) return
         synchronized(collections) {
-            val learned = (collectionMap(token) + (collection to TmdbAnimeIp.serialMovies.getValue(id))).toList().takeLast(100).toMap()
+            val current = collectionMap(token)
+            val expected = TmdbAnimeIp.serialMovies.getValue(id)
+            val conflicts = (ambiguous[prefix(token)].orEmpty() +
+                if (current[collection] != null && current[collection] != expected) setOf(collection) else emptySet()).take(100).toSet()
+            ambiguous[prefix(token)] = conflicts
+            val learned = (if (collection in conflicts) current - collection else current + (collection to expected))
+                .toList().takeLast(100).toMap()
             collections[prefix(token)] = learned
-            write(prefix(token) + "-relations", JSONObject().put("collections", JSONObject(learned.mapKeys { it.key.toString() })))
+            write(prefix(token) + "-relations", JSONObject().put("collections", JSONObject(learned.mapKeys { it.key.toString() }))
+                .put("ambiguous", JSONArray(conflicts.toList())))
         }
     }
     /** Learn series identity from reviewed serial-film IDs in the background, never from title words. */
