@@ -184,4 +184,40 @@ class TmdbBrowseRepositoryTest {
         })
         assertEquals("电影",discovery.search("Original","fixture").films.single().category)
     }
+    @Test fun repositoryFiltersReleaseEvidenceWithoutReorderingTheSurvivingWeeklyTrend(): Unit = runBlocking {
+        val requests=mutableListOf<String>()
+        val fetcher=ArtworkJsonFetcher { url,_ ->
+            synchronized(requests){ requests += url }
+            val path=java.net.URI(url).path.removePrefix("/3")
+            val detail=Regex("/(movie|tv)/([0-9]+)").matchEntire(path)
+            if(detail!=null) {
+                val id=detail.groupValues[2].toInt()
+                if(detail.groupValues[1]=="tv") JSONObject().put("id",id).put("first_air_date","2026-01-01")
+                    .put("status",if(id==5)"Planned" else "Ended").put("number_of_episodes",if(id==5)0 else 12)
+                    .put("last_air_date",if(id==5)JSONObject.NULL else "2026-02-01").toString()
+                else when(id){
+                    1 -> movie(3 to "2026-01-01")
+                    2 -> movie(4 to "2099-01-01")
+                    3 -> JSONObject()
+                    else -> movie(4 to "2026-01-01")
+                }.put("id",id).toString()
+            } else JSONObject().put("page",1).put("total_pages",1).put("results",JSONArray().apply {
+                val ids=if(path=="/trending/all/week")listOf(1,2,3,4,5,6)
+                    else if(url.contains("vote_count.gte"))listOf(7,8) else emptyList()
+                ids.forEach { id -> put(JSONObject().put("id",id).put("title","Original $id").put("name","Original $id")
+                    .put("media_type",if(id in 5..6)"tv" else "movie").put("genre_ids",JSONArray().put(18))
+                    .put("vote_average",9.5).put("vote_count",if(id==7)299 else 300)) }
+            }).toString()
+        }
+        val repo=TmdbBrowseRepository(fetcher)
+        val hot=repo.load(TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT),1,"fixture")
+        assertEquals(listOf("tmdb-movie-4","tmdb-tv-6"),hot.entries.map{it.film.id})
+        assertEquals(2,hot.unknown) // Unknown movie and unconfirmed TV episode/status.
+        val rated=repo.load(TmdbRailSpec(TmdbBrowsePage.MOVIE,TmdbRailKind.RATED),1,"fixture")
+        assertEquals(listOf("tmdb-movie-8"),rated.entries.map{it.film.id})
+        assertTrue(requests.any{it.contains("/trending/all/week")})
+        assertTrue(requests.any{it.contains("vote_count.gte=300")})
+        assertTrue(requests.filter{Regex("/movie/[0-9]+").containsMatchIn(it)}.all{it.contains("append_to_response=release_dates")})
+    }
+
 }
