@@ -26,15 +26,12 @@ import kotlinx.coroutines.withContext
 import java.net.NetworkInterface
 
 internal class NoLanAddress : java.io.IOException()
-internal fun openLanConfigServer(context: Context, applied: (String) -> Unit): LanConfigServer =
-    openLanConfigServer(context, false, applied)
-
-internal fun openLanConfigServer(context: Context, quickHttp: Boolean, applied: (String) -> Unit): LanConfigServer {
+internal fun openLanConfigServer(context: Context, applied: (String) -> Unit): LanConfigServer {
     val host = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().asSequence()
         .filter { it.isUp && !it.isLoopback }.flatMap { it.inetAddresses.toList().asSequence() }
         .firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }?.hostAddress
         ?: throw NoLanAddress()
-    return LanConfigServer(context, host, quickHttp, applied)
+    return LanConfigServer(context, host, applied)
 }
 internal fun configurationQr(value: String): Bitmap {
     val matrix = QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 480, 480)
@@ -46,34 +43,30 @@ internal fun configurationQr(value: String): Bitmap {
 @Composable
 internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
     serverFactory: (Context, (String) -> Unit) -> LanConfigServer = ::openLanConfigServer,
-    qrFactory: (String) -> Bitmap = ::configurationQr,
-    quickServerFactory: (Context, (String) -> Unit) -> LanConfigServer =
-        { context, applied -> openLanConfigServer(context, true, applied) }) {
+    qrFactory: (String) -> Bitmap = ::configurationQr) {
     val context = LocalContext.current
     val callback by rememberUpdatedState(onApplied)
     var server by remember { mutableStateOf<LanConfigServer?>(null) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pending by remember { mutableStateOf(false) }
-    var quickHttp by remember { mutableStateOf(false) }
     var epoch by remember { mutableIntStateOf(0) }
     var failed by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("正在开启临时 HTTPS 服务…") }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    LaunchedEffect(epoch, quickHttp) {
+    LaunchedEffect(epoch) {
         var created: LanConfigServer? = null
         bitmap = null; failed = false; pending = false
-        message = if (quickHttp) "正在开启临时 HTTP 服务…" else "正在开启临时 HTTPS 服务…"
+        message = "正在开启临时 HTTPS 服务…"
         try {
             val started = withContext(Dispatchers.IO) {
-                (if (quickHttp) quickServerFactory(context) { module -> main.post { callback(module) } }
-                else serverFactory(context) { module -> main.post { callback(module) } })
+                serverFactory(context) { module -> main.post { callback(module) } }
                     .also { created = it }.apply { start(5000, true) }
             }
             check(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
             server = started
             bitmap = withContext(Dispatchers.Default) { qrFactory(started.qr) }
-            message = if (quickHttp) "配对 3 分钟有效；服务开启后最多 5 分钟，退出立即关闭。" else "配对 3 分钟有效；确认后闲置 30 分钟结束。"
+            message = "配对 3 分钟有效；服务最长 30 分钟，退出或转入后台立即关闭。"
             while (!started.pairing.expired()) {
                 pending = started.pairing.pending()
                 delay(350)
@@ -87,7 +80,7 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
             failed = true; message = "服务启动或二维码生成失败。请重试，或使用遥控器手动配置。"
         } finally {
             created?.end()
-            // A cancelled mode's cleanup must never clear the next mode's UI.
+            // A cancelled attempt must not clear the next attempt's UI.
             if (server === created) {
                 server = null; bitmap = null; pending = false
             }
@@ -115,19 +108,16 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
                         else Text(if (failed) "二维码不可用" else "正在准备二维码…", color = Color.Black)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(if (quickHttp) "仅添加和修改公开影视源，不接受任何敏感配置。" else "四个模块共用会话：TMDB、影视源、直播、NAS。", fontSize = 16.sp, color = Color.White)
+                        Text("共用配对会话：TMDB、影视源、直播、NAS / 云盘。", fontSize = 16.sp, color = Color.White)
                         server?.let { current ->
                             Text(current.origin, fontSize = 17.sp, color = Color.White, modifier = Modifier.testTag("phone-config-address"))
-                            if (!quickHttp) Text("证书 SHA-256：\n${current.fingerprint}", fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFD4D4D6))
+                            Text("证书 SHA-256：\n${current.fingerprint}", fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFD4D4D6))
                         }
-                        Text(if (quickHttp) "HTTP 明文传输，仅供可信家庭局域网临时使用。勿填写账号、密码、Token 或私密链接；配对码不能防止局域网中间人攻击。" else "自签名 HTTPS 需要在手机核对完整证书指纹。Safari 等浏览器可能限制访问；无法核对时请手动配置。", fontSize = 14.sp, lineHeight = 20.sp, color = Color(0xFFD4D4D6))
+                        Text("设备会安全保留自签名证书；IP 变化或到期时更新。固定指纹不代表 Safari 自动信任，请核对证书；不能核对时使用遥控器。无警告访问需要系统信任且地址匹配的证书，不能关闭 TLS 校验。", fontSize = 14.sp, lineHeight = 20.sp, color = Color(0xFFD4D4D6))
                         Text(message, fontSize = 14.sp, lineHeight = 20.sp, color = Color.White, modifier = Modifier.testTag("phone-config-status"))
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    TvButton(if (quickHttp) "返回 HTTPS 配置" else "局域网快速配置", Modifier.testTag("phone-config-http")) {
-                        server?.end(); quickHttp = !quickHttp
-                    }
                     if (pending) TvButton("确认此手机配对", Modifier.testTag("phone-config-approve")) { server?.pairing?.confirm() }
                     if (failed) TvButton("重试", Modifier.testTag("phone-config-retry")) { epoch++ }
                     TvButton("结束配置", Modifier.testTag("phone-config-close"), onClick = onDismiss)

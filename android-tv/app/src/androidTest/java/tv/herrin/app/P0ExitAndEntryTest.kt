@@ -101,7 +101,7 @@ class P0ExitAndEntryTest {
         compose.waitForIdle();assertFalse(compose.activity.isFinishing)
     }
 
-    @Test fun phoneHttpSaveRefreshesTvWithoutRemoteApply() {
+    @Test fun phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply() {
         ready()
         okhttp3.mockwebserver.MockWebServer().use { fixture ->
             fixture.start()
@@ -109,21 +109,23 @@ class P0ExitAndEntryTest {
                 .setBody("""{"sites":[{"name":"扫码刷新样本","api":"${fixture.url("/cms")}"}]}"""))
             compose.onNodeWithTag("settings").performClick()
             compose.onNodeWithTag("phone-config-main").performClick()
-            compose.onNodeWithTag("phone-config-http").performClick()
+            compose.onNodeWithTag("phone-config-http").assertDoesNotExist()
             var decoded: String? = null
             compose.waitUntil(5000) {
                 decoded = runCatching {
-                    compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring=true)
+                    compose.onNodeWithTag("phone-config-address").assertTextContains("https://", substring=true)
                     val pixels = compose.onNodeWithTag("phone-config-qr").assertIsDisplayed().captureToImage().toPixelMap()
                     val colors = IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }
                     com.google.zxing.MultiFormatReader().decode(com.google.zxing.BinaryBitmap(
                         com.google.zxing.common.HybridBinarizer(com.google.zxing.RGBLuminanceSource(pixels.width, pixels.height, colors)))).text
-                }.getOrNull()?.takeIf { it.startsWith("http://") }
+                }.getOrNull()?.takeIf { it.startsWith("https://") }
                 decoded != null
             }
             val qr = requireNotNull(decoded)
             val origin = qr.substringBefore("/#")
-            val client = okhttp3.OkHttpClient()
+            val identity=LanTlsIdentity(InstrumentationRegistry.getInstrumentation().targetContext).load(java.net.URI(origin).host)
+            val trust=okhttp3.tls.HandshakeCertificates.Builder().addTrustedCertificate(identity.certificate).build()
+            val client=okhttp3.OkHttpClient.Builder().sslSocketFactory(trust.sslSocketFactory(),trust.trustManager).build()
             fun post(path: String, data: org.json.JSONObject, key: String = ""): org.json.JSONObject =
                 client.newCall(okhttp3.Request.Builder().url(origin + path).header("Origin", origin)
                     .header("X-Herrin-Session", key).post(data.toString().toRequestBody("application/json".toMediaType())).build())

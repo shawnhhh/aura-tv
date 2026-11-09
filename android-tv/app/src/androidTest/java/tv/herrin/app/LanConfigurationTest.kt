@@ -37,9 +37,14 @@ class LanConfigurationTest {
             assertFalse(org.json.JSONObject(state.second).has("token"))
             val prefs = Preferences(InstrumentationRegistry.getInstrumentation().targetContext)
             val previous = prefs.tvBoxWarehouseUrl
+            val trustedRoot=prefs.tvBoxTrustedSpiderRootUrl
+            val trustedJar=prefs.tvBoxTrustedSpiderJarSpec
             try {
                 assertEquals(200, post("/sources", org.json.JSONObject().put("url", "http://饭太硬.net/tv").toString(), session).first)
                 assertEquals(TvBoxUrl.normalize("http://饭太硬.net/tv", true), prefs.tvBoxWarehouseUrl)
+                assertEquals(trustedRoot,prefs.tvBoxTrustedSpiderRootUrl)
+                assertEquals(trustedJar,prefs.tvBoxTrustedSpiderJarSpec)
+                assertFalse(TvBoxSpiderPolicy.mayRun(false,prefs.tvBoxWarehouseUrl,"new.jar",trustedRoot,trustedJar))
             } finally { prefs.tvBoxWarehouseUrl = previous }
             assertEquals(200, post("/end", "{}", session).first)
             try { assertEquals(403, post("/status", "{}", session).first) }

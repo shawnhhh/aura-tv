@@ -31,27 +31,27 @@ class P0QrFailureTest {
         compose.waitForIdle();assertFalse(server!!.isAlive)
     }
 
-    @Test fun switchingToHttpClosesHttpsAndDismissClosesHttp() {
-        var secure: LanConfigServer? = null
-        var quick: LanConfigServer? = null
+    @Test fun reopeningKeepsHttpsFingerprintWithFreshPairingAndDismissClosesListener() {
+        val servers=java.util.concurrent.CopyOnWriteArrayList<LanConfigServer>()
         var open by mutableStateOf(true)
         compose.setContent { MaterialTheme {
-            if (open) LanConfigDialog({ open = false }, {},
-                serverFactory = { c, cb -> LanConfigServer(c, "127.0.0.1", cb).also { secure = it } },
-                quickServerFactory = { c, cb -> LanConfigServer(c, "127.0.0.1", true, cb).also { quick = it } })
+            if(open) LanConfigDialog({open=false},{},serverFactory={c,cb->
+                LanConfigServer(c,"127.0.0.1",cb).also{servers.add(it)}
+            })
         } }
-        compose.waitUntil(5000) { secure?.isAlive == true }
-        compose.onNodeWithTag("phone-config-http").performClick()
-        compose.waitUntil(5000) {
-            quick?.isAlive == true && runCatching {
-                compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring = true)
-            }.isSuccess
-        }
-        assertFalse(secure!!.isAlive)
-        compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring = true)
+        compose.waitUntil(5000){servers.firstOrNull()?.isAlive==true}
+        compose.onNodeWithTag("phone-config-http").assertDoesNotExist()
+        compose.onNodeWithTag("phone-config-address").assertTextContains("https://",substring=true)
+        val first=servers.first()
         compose.onNodeWithTag("phone-config-close").performClick()
-        compose.waitForIdle()
-        assertFalse(quick!!.isAlive)
+        compose.waitForIdle();assertFalse(first.isAlive)
+        compose.runOnIdle { open=true }
+        compose.waitUntil(5000){servers.size==2 && servers.last().isAlive}
+        assertEquals(first.fingerprint,servers.last().fingerprint)
+        assertNotEquals(first.pairing.pairing,servers.last().pairing.pairing)
+        compose.onNodeWithTag("phone-config-address").assertTextContains("https://",substring=true)
+        compose.onNodeWithTag("phone-config-close").performClick()
+        compose.waitForIdle();assertFalse(servers.last().isAlive)
     }
 
     @Test fun backgroundingOwnerClosesListener() {

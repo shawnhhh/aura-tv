@@ -13,6 +13,7 @@ REQUIRED_CLASSES = (
     "HerrinSplashTest",
     "LanConfigurationTest",
     "LanHttpConfigurationTest",
+    "LanTlsIdentityTest",
     "P0QrFailureTest",
     "P0ExitAndEntryTest",
     "AdditionalServiceConfigsTest",

@@ -9,80 +9,46 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
+/** Legacy test identity retained: plaintext now cannot reach any configuration endpoint. */
 class LanHttpConfigurationTest {
-    @Test fun publicSourcesOnlyAndSocketCloses() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val prefs = Preferences(context)
-        val oldUrl = prefs.tvBoxWarehouseUrl
-        val rawPrefs = context.getSharedPreferences("herrin", 0)
-        val oldExtra = rawPrefs.getString("services_sources", null)
-        val oldRoot = prefs.tvBoxTrustedSpiderRootUrl
-        val oldJar = prefs.tvBoxTrustedSpiderJarSpec
-        val events = java.util.concurrent.CopyOnWriteArrayList<String>()
-        val server = LanConfigServer(context, "127.0.0.1", quickHttp = true) { events.add(it) }
-        val client = OkHttpClient.Builder().callTimeout(3, java.util.concurrent.TimeUnit.SECONDS).build()
-        var endpoint = ""
+    @Test fun cleartextCannotSubmitSourcesOrSensitiveCredentialsAndSocketCloses() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs=Preferences(context)
+        val before=listOf(prefs.tmdbReadToken,prefs.tvBoxWarehouseUrl,prefs.nasWebDavUrl,
+            prefs.tvBoxTrustedSpiderRootUrl,prefs.tvBoxTrustedSpiderJarSpec)
+        val credentials=HerrinPersonalCredentialStore(context,"nas").load()
+        val events=java.util.concurrent.CopyOnWriteArrayList<String>()
+        val server=LanConfigServer(context,"127.0.0.1"){events.add(it)}
+        val client=OkHttpClient.Builder().callTimeout(2,java.util.concurrent.TimeUnit.SECONDS).build()
         try {
-            rawPrefs.edit().remove("services_sources").commit()
-            server.start(5000, true)
-            endpoint = server.origin
-            assertTrue(server.qr.startsWith("http://127.0.0.1:"))
-            client.newCall(Request.Builder().url(endpoint).build()).execute().use {
-                assertEquals(200, it.code)
-                assertTrue(it.body!!.string().contains("不能防止局域网中间人攻击"))
+            server.start(5000,true)
+            val plain=server.origin.replace("https:","http:")
+            val body=JSONObject().put("token","sensitive").put("username","account").put("password","secret")
+                .put("url","http://饭太硬.net/tv").toString()
+            for(path in listOf("/pair","/sources","/entries/save","/entries/batch","/tmdb","/nas","/live")) {
+                try {
+                    client.newCall(Request.Builder().url(plain+path).header("Origin",plain)
+                        .post(body.toRequestBody("application/json".toMediaType())).build()).execute().use {
+                        fail("Plaintext reached a TLS-only endpoint: $path")
+                    }
+                }catch(_:java.io.IOException) { }
             }
-            fun post(path: String, input: JSONObject = JSONObject(), key: String = ""): Pair<Int, String> =
-                client.newCall(Request.Builder().url(endpoint + path).header("Origin", endpoint)
-                    .header("X-Herrin-Session", key)
-                    .post(input.toString().toRequestBody("application/json".toMediaType())).build())
-                    .execute().use { it.code to it.body!!.string() }
-            val pair = JSONObject().put("pairing", server.pairing.pairing)
-            assertTrue(JSONObject(post("/pair", pair).second).getBoolean("pending"))
-            assertEquals(403, post("/sources", JSONObject().put("url", "http://饭太硬.net/tv")).first)
-            server.pairing.confirm()
-            val key = JSONObject(post("/pair", pair).second).getString("session")
-            assertEquals(200, post("/sources", JSONObject().put("url", "http://饭太硬.net/tv"), key).first)
-            assertEquals(TvBoxUrl.normalize("http://饭太硬.net/tv", true), prefs.tvBoxWarehouseUrl)
-            assertEquals(listOf("sources"), events.toList())
-            assertEquals(200, post("/entries/batch", JSONObject().put("urls",
-                "http://饭太硬.net/a\nhttps://example.org/b\nhttp://饭太硬.net/a"), key).first)
-            assertEquals(2, AdditionalServiceConfigs(context).list("sources").size)
-            val entry = JSONObject().put("module", "sources").put("name", "公开源").put("url", "http://example.org/c")
-            assertEquals(200, post("/entries/save", entry, key).first)
-            assertEquals(400, post("/entries/save", JSONObject(entry.toString()).put("password", "secret"), key).first)
-            for (path in listOf("/tmdb", "/tmdb/test", "/nas", "/nas/test", "/live", "/status",
-                "/catalogs", "/catalogs/save", "/catalogs/activate", "/entries/delete", "/unknown")) {
-                assertEquals(path, 400, post(path, JSONObject().put("token", "secret"), key).first)
-            }
-            for (module in listOf("nas", "live", "cloud")) {
-                assertEquals(400, post("/entries", JSONObject().put("module", module), key).first)
-            }
-            for (url in listOf("http://user:password@example.org/a", "http://example.org/a?key=secret",
-                "http://example.org/token/secret", "javascript:alert(1)", "http://example.org/a#secret")) {
-                assertEquals(url, 400, post("/sources", JSONObject().put("url", url), key).first)
-            }
-            assertEquals(oldRoot, prefs.tvBoxTrustedSpiderRootUrl)
-            assertEquals(oldJar, prefs.tvBoxTrustedSpiderJarSpec)
-            assertFalse(TvBoxSpiderPolicy.mayRun(false, prefs.tvBoxWarehouseUrl, "new.jar", oldRoot, oldJar))
-            assertEquals(200, post("/end", key = key).first)
-            assertTrue(server.pairing.expired())
-        } finally {
-            server.end()
-            prefs.tvBoxWarehouseUrl = oldUrl
-            val edit = rawPrefs.edit()
-            if (oldExtra == null) edit.remove("services_sources") else edit.putString("services_sources", oldExtra)
-            edit.commit()
-        }
+            assertTrue(events.isEmpty())
+            assertFalse(server.pairing.pending())
+            assertEquals(before,listOf(prefs.tmdbReadToken,prefs.tvBoxWarehouseUrl,prefs.nasWebDavUrl,
+                prefs.tvBoxTrustedSpiderRootUrl,prefs.tvBoxTrustedSpiderJarSpec))
+            assertEquals(credentials,HerrinPersonalCredentialStore(context,"nas").load())
+        }finally{server.end()}
+        assertFalse(server.isAlive)
         try {
-            client.newCall(Request.Builder().url(endpoint).build()).execute().close()
-            fail("Listener must be closed")
-        } catch (_: java.io.IOException) { }
+            client.newCall(Request.Builder().url(server.origin.replace("https:","http:")).build()).execute().close()
+            fail("Listener must close")
+        }catch(_:java.io.IOException) { }
     }
-
-    @Test fun wildcardListenerIsRejected() {
-        try {
-            LanConfigServer(InstrumentationRegistry.getInstrumentation().targetContext, "0.0.0.0", true) {}
-            fail("Wildcard bind must be rejected")
-        } catch (_: IllegalArgumentException) { }
+    @Test fun wildcardAndPublicListenersAreRejected() {
+        for(host in listOf("0.0.0.0","8.8.8.8","::")) {
+            try{LanConfigServer(InstrumentationRegistry.getInstrumentation().targetContext,host){};fail("Public bind")}
+            catch(_:IllegalArgumentException) { }
+        }
     }
 }

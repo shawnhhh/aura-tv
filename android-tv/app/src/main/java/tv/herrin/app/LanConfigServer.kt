@@ -3,35 +3,25 @@ package tv.herrin.app
 import android.content.Context
 import fi.iki.elonen.NanoHTTPD
 import okhttp3.tls.HandshakeCertificates
-import okhttp3.tls.HeldCertificate
 import org.json.JSONObject
 import java.net.URI
 import java.security.MessageDigest
 
-/** Ephemeral, locally bound configuration. Cleartext exposes only public source editing. */
+/** Short-lived, locally bound HTTPS configuration; transport never grants Spider execution. */
 internal class LanConfigServer(
     private val context: Context, val host: String,
-    val quickHttp: Boolean,
     private val applied: (String) -> Unit
 ) : NanoHTTPD(host, 0) {
-    constructor(context: Context, host: String, applied: (String) -> Unit) :
-        this(context, host, false, applied)
-    val pairing = ConfigPairingSession(maxLifetimeMs = if (quickHttp) 5 * 60_000L else Long.MAX_VALUE)
+    val pairing = ConfigPairingSession(maxLifetimeMs = 30 * 60_000L)
     private val reaper by lazy { java.util.Timer("lan-config-expiry", true) }
-    internal val certificate = HeldCertificate.Builder().commonName("HERRIN local configuration")
-        .addSubjectAlternativeName(host).build()
+    internal val certificate = LanTlsIdentity(context).load(host)
     val fingerprint: String = MessageDigest.getInstance("SHA-256").digest(certificate.certificate.encoded)
         .joinToString(":") { "%02X".format(it) }
-    val origin: String get() = "${if (quickHttp) "http" else "https"}://$host:$listeningPort"
+    val origin: String get() = "https://$host:$listeningPort"
     val qr: String get() = "$origin/#${pairing.pairing}"
     init {
-        if (quickHttp) {
-            val address = java.net.InetAddress.getByName(host)
-            require(address is java.net.Inet4Address && (address.isSiteLocalAddress || address.isLoopbackAddress))
-        } else {
-            val tls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
-            makeSecure(tls.sslContext().serverSocketFactory, null)
-        }
+        val tls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
+        makeSecure(tls.sslContext().serverSocketFactory, null)
         reaper.scheduleAtFixedRate(object : java.util.TimerTask() {
             override fun run() { if (pairing.expired()) end() }
         }, 250L, 250L)
@@ -49,7 +39,7 @@ internal class LanConfigServer(
         if (session.method == Method.GET && session.uri in setOf("/", "/center.js", "/center.css")) {
             val file = when (session.uri) { "/" -> "center.html"; else -> session.uri.drop(1) }
             val type = when (file) { "center.html" -> "text/html; charset=utf-8"; "center.js" -> "application/javascript"; else -> "text/css" }
-            return response(Response.Status.OK, context.assets.open("config/${if (quickHttp && file != "center.css") file.replace("center", "quick") else file}").bufferedReader().use { it.readText() }, type)
+            return response(Response.Status.OK, context.assets.open("config/$file").bufferedReader().use { it.readText() }, type)
         }
         if (session.method != Method.POST || session.headers["origin"] != origin ||
             session.headers["content-type"]?.substringBefore(';') != "application/json" ||
@@ -60,7 +50,6 @@ internal class LanConfigServer(
             val body = HashMap<String, String>()
             session.parseBody(body)
             val input = JSONObject(body["postData"].orEmpty())
-            if (quickHttp) QuickConfigPolicy.validate(session.uri, input)
             if (session.uri == "/pair") {
                 val key = input.optString("pairing")
                 if (!pairing.request(key)) return response(Response.Status.FORBIDDEN, "{}")
@@ -75,16 +64,10 @@ internal class LanConfigServer(
             if (session.uri in setOf("/entries", "/entries/save", "/entries/delete")) {
                 val module = input.getString("module")
                 require(module in setOf("sources", "live", "nas"))
-                if (quickHttp && input.optString("id").isNotBlank())
-                    require(extra.list(module).any { it.id == input.getString("id") && QuickConfigPolicy.visible(it) })
                 if (session.uri == "/entries/save") extra.save(module, input)
                 if (session.uri == "/entries/delete") extra.remove(module, input.getString("id"))
                 if (session.uri != "/entries") applied(module)
-                return response(Response.Status.OK, JSONObject().put("entries", if (quickHttp) org.json.JSONArray().apply {
-                    extra.list(module).filter(QuickConfigPolicy::visible).forEach {
-                        put(JSONObject().put("id", it.id).put("name", it.name).put("url", it.url).put("enabled", it.enabled))
-                    }
-                } else extra.publicList(module)).toString())
+                return response(Response.Status.OK, JSONObject().put("entries", extra.publicList(module)).toString())
             }
             val output = when (session.uri) {
                 "/catalogs" -> JSONObject().put("entries", org.json.JSONArray(CatalogProfileCodec.encode(CatalogProfiles(context).list())))
@@ -119,12 +102,26 @@ internal class LanConfigServer(
                     val connected = kotlinx.coroutines.runBlocking { HerrinWebDavSource(account).testConnection() }
                     JSONObject().put("result", if (connected) "WebDAV 已连接" else "连接失败")
                 }
+                "/cloud/test" -> {
+                    val login=HerrinPersonalCredentialStore(context,"cloud").load()
+                    val connected=kotlinx.coroutines.runBlocking {
+                        HerrinWebDavSource(HerrinWebDavAccount("云盘",prefs.cloudWebDavUrl,login.first,login.second)).testConnection()
+                    }
+                    JSONObject().put("result",if(connected)"WebDAV 已连接" else "连接失败")
+                }
+                "/cloud" -> {
+                    val url=address(input.getString("url"))
+                    if(url.isNotBlank())HerrinWebDavSource(HerrinWebDavAccount("云盘",url))
+                    require(HerrinPersonalCredentialStore(context,"cloud").save(input.getString("username"),input.getString("password")))
+                    prefs.cloudWebDavUrl=url
+                    applied("nas");JSONObject().put("ok",true)
+                }
                 "/end" -> { pairing.close(); JSONObject().put("ok", true) }
                 "/status" -> JSONObject().put("endpoint", TmdbEndpoints.current)
                     .put("tokenConfigured", prefs.tmdbReadToken.isNotBlank())
                     .put("tvbox", prefs.tvBoxWarehouseUrl).put("m3u", prefs.livePlaylistUrl)
                     .put("epg", prefs.liveEpgUrl).put("nas", prefs.nasWebDavUrl)
-                    .put("nasProtocol", "WebDAV")
+                    .put("cloud",prefs.cloudWebDavUrl).put("nasProtocol", "WebDAV")
                 "/tmdb/test" -> JSONObject().put("result", TmdbConnectivityProbe.checkDetailed(prefs.tmdbReadToken).text)
                 "/tmdb" -> {
                     val token = input.getString("token").trim()
