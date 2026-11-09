@@ -60,7 +60,9 @@ class P0PreferredSourceOrderTest {
         val calls = mutableListOf<String>()
         val events = mutableListOf<SourceSearchEvent>()
         val result = withTimeout(2_500) {
-            HerrinFilmRouter(listOf(source("cms", HerrinSourceType.TVBOX_CMS, calls)))
+            // Keep the original 1.8s deadline and 2.5s assertion envelope as an injected
+            // verification-stage budget; production no longer borrows the SEARCH timer.
+            HerrinFilmRouter(listOf(source("cms", HerrinSourceType.TVBOX_CMS, calls)), validationBudgetMs = 1_800L)
                 .find(identity, streaming = true, onEvent = { events += it }) { awaitCancellation() }
         }
         assertTrue(result.options.isEmpty())

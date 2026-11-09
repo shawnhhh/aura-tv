@@ -71,7 +71,9 @@ internal data class HerrinFilmLookupResult(
  * A cloud "4K" filename cannot outrank a verified NAS 1080p resource.
  * Within a source tier, quality labels only break ties between matches.
  */
-internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, private val preferredSourceId: String? = null) {
+internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, private val preferredSourceId: String? = null,
+    private val validationBudgetMs: Long = 17_000L) {
+    init { require(validationBudgetMs in 1..17_000L) }
     /**
      * Verify actual resource usability before accepting a priority tier.
      * If every matched NAS/cloud offer is unusable, continue to TVBox.
@@ -197,12 +199,13 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
             if (found.outcome !in setOf(SourceSearchOutcome.RATE_LIMITED, SourceSearchOutcome.AUTH_REQUIRED))
                 health?.record(source.id, SourceSearchStage.SEARCH, found.outcome, found.elapsed)
             onEvent(SourceSearchEvent(source.id, SourceSearchStage.SEARCH, found.outcome,
-                found.elapsed, completed, sources.size))
+                found.elapsed, completed + if (found.offers.isEmpty()) 1 else 0, sources.size, nodeComplete = found.offers.isEmpty()))
+            if (found.offers.isEmpty()) { completed++; return emptyList() }
             val began = System.nanoTime()
             // Existing per-phase bounds: details 4s + parse 9s + media 4s.
             // This is independent of the 1-2s passive search deadline.
             val accepted = if (found.offers.isEmpty()) emptyList() else
-                withTimeoutOrNull(17_000L) { accept(found.offers).filter { it in found.offers } }
+                withTimeoutOrNull(validationBudgetMs) { accept(found.offers).filter { it in found.offers } }
             completed++
             if (accepted == null) {
                 errors[source.id] = SourceSearchOutcome.TIMEOUT.name
