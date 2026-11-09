@@ -111,6 +111,7 @@ internal object TmdbDomesticAllocator {
     /** Repeated 8/2/2 blocks. A co-production can occupy only one slot; shortages spill to remaining pools. */
     fun allocate(entries: List<TmdbBrowseEntry>, limit: Int = 12): List<TmdbBrowseEntry> {
         val candidates = entries.filter { it.countries.any { country -> country in setOf("CN", "HK", "TW") } }.distinctBy { it.film.id }
+        val rank = candidates.mapIndexed { index, entry -> entry.film.id to index }.toMap()
         val used = hashSetOf<String>()
         val result = mutableListOf<TmdbBrowseEntry>()
         val pattern = List(8) { "CN" } + List(2) { "HK" } + List(2) { "TW" }
@@ -138,7 +139,7 @@ internal object TmdbDomesticAllocator {
             for (entry in candidates) if (block.size < slots.size && used.add(entry.film.id))
                 block += entry.copy(domesticRegion = entry.countries.first { it in setOf("CN", "HK", "TW") })
             if (block.isEmpty()) break
-            result += block
+            result += block.sortedWith(compareBy<TmdbBrowseEntry> { slots.indexOf(it.domesticRegion) }.thenBy { rank.getValue(it.film.id) })
         }
         return result
     }

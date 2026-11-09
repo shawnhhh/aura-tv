@@ -55,6 +55,7 @@ class TmdbBrowseRepositoryTest {
             (41..50).map { domesticEntry(it,setOf("TW")) }+domesticEntry(1,setOf("CN","HK","TW"))
         val result=TmdbDomesticAllocator.allocate(rows,24)
         assertEquals(24,result.size);assertEquals(24,result.map{it.film.id}.distinct().size)
+        assertEquals("tmdb-movie-1",result.first().film.id)
         result.chunked(12).forEach { block ->
             assertEquals(8,block.count{"CN" in it.countries})
             assertEquals(2,block.count{"HK" in it.countries})
