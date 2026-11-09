@@ -53,6 +53,7 @@ internal fun TmdbBrowseRails(
                 val status = spec?.let(state::row)
                 val rail = state.scrolls.getOrPut(key) { LazyListState() }
                 var focusedPoster by remember { mutableStateOf<String?>(null) }
+                var requestedForFocus by remember { mutableStateOf<String?>(null) }
                 Text(spec?.title ?: "最近播放", color = Color.White, fontSize = 18.sp,
                     modifier = Modifier.testTag("tmdb-heading-$key"))
                 if (films.isEmpty()) Text(when {
@@ -93,7 +94,7 @@ internal fun TmdbBrowseRails(
                                     }
                                     true
                                 } else false
-                            }, reduced, onFocus = { focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
+                            }, reduced, onFocus = { requestedForFocus = null; focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
                     }
                     if (spec != null && status != null && (status.error || status.unknown > 0)) item(key = "retry") {
                         TvButton("重试此栏目", Modifier.testTag("tmdb-retry-$key"), reduced = reduced, onFocus = { focusedPoster = null }) {
@@ -109,8 +110,12 @@ internal fun TmdbBrowseRails(
                 }
                 if (spec != null) LaunchedEffect(key, films.size, status?.hasMore, status?.loading) {
                     snapshotFlow { (rail.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) to focusedPoster }.distinctUntilChanged().collect { (last, focused) ->
-                        if (films.size >= 6 && focused != null && films.takeLast(2).any { it.id == focused } && last >= films.size - 2 && status?.hasMore == true && !status.loading && !status.error)
-                            state.more(spec)
+                        if (films.size >= 6 && focused != null && requestedForFocus != focused && films.takeLast(2).any { it.id == focused } && last >= films.size - 2 && status?.hasMore == true && !status.loading && !status.error) {
+                            requestedForFocus = focused
+                            // Loading changes this observer's keys. The request must outlive
+                            // that observer, and duplicate pages cannot retrigger it forever.
+                            scope.launch { state.more(spec) }
+                        }
                     }
                 }
             }
