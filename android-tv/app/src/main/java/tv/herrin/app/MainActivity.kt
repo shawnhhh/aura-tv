@@ -93,7 +93,8 @@ import tv.herrin.app.nativeplayback.FongMiSessionAuthorization
 internal object LaunchMotion {
     const val WORDMARK_HOLD_MS = 1800L
     const val FADE_MS = 340
-    const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + FADE_MS
+    const val BREATH_MS = 2400L
+    const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + BREATH_MS + FADE_MS
 }
 
 /** Elapsed uptime from Activity launch to first interactive home.
@@ -174,8 +175,6 @@ class MainActivity : ComponentActivity() {
         presentation=startup
         if(android.os.Build.VERSION.SDK_INT>=31) {
             splashScreen.setOnExitAnimationListener { native ->
-                val icon=native.iconView
-                if(icon!=null && icon.width>0) startup.wordmarkWidthDp=icon.width*.6f/resources.displayMetrics.density
                 window.decorView.postOnAnimation {
                     androidx.core.view.OneShotPreDrawListener.add(window.decorView){StartupTiming.brandExit();native.remove()}
                 }
@@ -2768,10 +2767,9 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     HerrinScreenCanvas {
-        // Compose the lightweight home structure behind the fading logo, but
-        // defer the large image decode until the logo is completely gone.
-        // On resource-limited TVs this avoids competing with first-frame UI.
-        if (!splash && screen != "player" && screen != "live-player" &&
+        // Home and IO-backed artwork prepare under the full wordmark while it
+        // breathes. Fade reveals an existing underlay instead of an empty frame.
+        if ((!splash || startup.prepareHome) && screen != "player" && screen != "live-player" &&
             (!sourceConfigured || films.isNotEmpty())) {
             HeroArtworkTransition(backdropFilm.takeIf { it.id == displayFilm.id } ?: displayFilm,
                 reduced = reduceMotion, modifier = Modifier.fillMaxSize())
@@ -5188,11 +5186,10 @@ private fun Herrin(startup: StartupPresentation) {
         SideEffect {
             startup.reduced = reduceMotion
             // The navigation/home skeleton is already committed in this
-            // composition. Waiting for disk hydration or a non-empty grouped
-            // projection can deadlock the splash when prior tests/history leave
-            // a non-empty film list but the async projection has not published.
-            // TMDB/cache data is loaded progressively after the first home frame.
-            startup.homeReady = true
+            // composition. Only the bounded local cache read is required; never
+            // wait for a network response or a non-empty grouped projection.
+            // While it finishes, the complete wordmark keeps breathing.
+            startup.homeReady = tmdbState.cacheHydrated
             startup.restoreBrowseFocus={
                 if(!startup.showing &&screen=="browse" &&!lanConfigOpen &&!exitConfirmation &&
                     !(category=="直播" &&liveSearchExpanded)) {

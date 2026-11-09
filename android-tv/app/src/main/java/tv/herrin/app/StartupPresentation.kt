@@ -54,14 +54,13 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
     }
     LaunchedEffect(state.showing) {
         if (!state.showing) {
-            withFrameNanos { }; state.artworkReady=true;StartupTiming.artworkStart()
             withFrameNanos { }; state.networkReady=true;StartupTiming.networkStart()
         }
     }
-    LaunchedEffect(state.showing) {
-        if (!state.showing) {
-            // Optional IO work must never hold the first branded frame, first
-            // home composition, or dismissal of the splash curtain.
+    LaunchedEffect(state.prepareHome,state.preferences) {
+        if (state.prepareHome && state.preferences!=null) {
+            // Warm artwork after full reveal, during the independent breath.
+            // The underlay must already exist when the curtain starts fading.
             withContext(Dispatchers.IO) {
                 runCatching {
                     DemoCatalog().titles().take(2).forEach {
@@ -69,6 +68,7 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
                     }
                 }
             }
+            state.artworkReady=true;StartupTiming.artworkStart()
         }
     }
     Box(Modifier.fillMaxSize().drawWithContent { StartupTiming.firstDraw(); drawContent() }) {

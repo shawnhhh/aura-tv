@@ -23,8 +23,13 @@ import kotlin.math.cos
 
 internal object WordmarkMotion {
     const val REVEAL_MS = 1800f
+    const val BREATH_MS = 2400f
+    const val MIN_READY_MS = REVEAL_MS + BREATH_MS
     fun brightness(elapsedMs: Float): Float = if (elapsedMs < REVEAL_MS) 1f else
-        (0.85 + 0.15 * cos((elapsedMs - REVEAL_MS) / 2400.0 * 2 * Math.PI)).toFloat()
+        (0.85 + 0.15 * cos((elapsedMs - REVEAL_MS) / BREATH_MS * 2 * Math.PI)).toFloat()
+    fun glow(elapsedMs: Float): Float = if(elapsedMs<REVEAL_MS)0f else
+        ((1-cos((elapsedMs-REVEAL_MS)/BREATH_MS*2*Math.PI))*.5).toFloat()
+    fun ready(elapsedMs: Float) = elapsedMs >= MIN_READY_MS
     fun reveal(elapsedMs: Float): Float = (elapsedMs / REVEAL_MS).coerceIn(0f, 1f)
 }
 
@@ -40,12 +45,18 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     // Input callbacks must complete in the same dispatch, even when a test or
     // the system pauses the animation clock. Effects and held OK share one gate.
     val ready=remember { booleanArrayOf(false) }
+    val announced=remember { booleanArrayOf(false) }
+    fun revealOnce() {
+        if(announced[0])return
+        announced[0]=true
+        StartupTiming.wordmarkVisible()
+        StartupTiming.wordmarkComplete()
+        visible() // Construct the home behind the curtain while one full breath runs.
+    }
     fun completeOnce() {
         if(ready[0])return
         ready[0]=true
-        StartupTiming.wordmarkVisible()
-        StartupTiming.wordmarkComplete()
-        visible()
+        revealOnce()
         onDone()
     }
     LaunchedEffect(reduced,skipped) {
@@ -65,27 +76,26 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
                 reportedVisible = true
                 StartupTiming.wordmarkVisible()
             }
-            if (!reportedReady && elapsed.floatValue >= WordmarkMotion.REVEAL_MS) {
+            if(elapsed.floatValue>=WordmarkMotion.REVEAL_MS)revealOnce()
+            if (!reportedReady && WordmarkMotion.ready(elapsed.floatValue)) {
                 reportedReady = true
-                // No home UI mutation from the draw phase or before full reveal.
                 completeOnce()
             }
         }
     }
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("splash")
         .focusRequester(focus).onPreviewKeyEvent {
-            if (it.type == KeyEventType.KeyDown && it.key in listOf(Key.Enter, Key.DirectionCenter)) {
+            if (it.type == KeyEventType.KeyDown && it.key in listOf(Key.Enter, Key.DirectionCenter, Key.Back)) {
                 skipped=true
                 elapsed.floatValue=WordmarkMotion.REVEAL_MS
                 completeOnce()
                 true
             } else false
         }.focusable(), contentAlignment = Alignment.Center) {
-        androidx.compose.foundation.Canvas(Modifier.width(widthDp.dp).height((widthDp*.2f).dp)
+        androidx.compose.foundation.Canvas(Modifier.width(widthDp.dp).height((widthDp*.25f).dp)
             .testTag("splash-wordmark").semantics { contentDescription="HERRIN" }) {
             renderer.draw(drawContext.canvas.nativeCanvas,size.width,size.height,
                 if(reduced ||skipped)WordmarkMotion.REVEAL_MS else elapsed.floatValue)
-            StartupTiming.wordmarkVisible()
         }
     }
 }

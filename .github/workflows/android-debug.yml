@@ -67,3 +67,7 @@ jobs:
             android-tv/app/build/reports/
             android-tv/build/acceptance/
           if-no-files-found: ignore
+
+  android12-startup:
+    needs: debug
+    uses: ./.github/workflows/android-startup.yml
