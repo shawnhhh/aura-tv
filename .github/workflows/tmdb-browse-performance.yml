@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/tmdb-browse-performance.yml'
+      - 'android-tv/app/src/main/java/tv/herrin/app/TmdbBrowse*.kt'
       - '.github/scripts/tmdb_performance_ab.*'
   workflow_dispatch:
 permissions:
@@ -24,7 +25,7 @@ jobs:
           path: candidate
       - uses: actions/checkout@v4
         with:
-          ref: 6e5364817a11923ccb299a0b4f3b8c5cf5614fd0
+          ref: 599d58d821b46bc364c2f325bd6e7a4220705d8b
           path: baseline
       - uses: actions/setup-java@v4
         with:
@@ -36,7 +37,7 @@ jobs:
           # This same-repository P0 PR may populate its PR-scoped dependency cache.
           # Fork PRs stay read-only; no cache is written into the base branch.
           cache-read-only: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !(github.event_name == 'pull_request' && github.head_ref == 'codex/herrin-global-search-20261107' && github.event.pull_request.head.repo.full_name == github.repository) }}
-      - name: Build stage one and stage two with their corresponding instrumentation APKs
+      - name: Build TCL feedback baseline and candidate with their corresponding instrumentation APKs
         run: |
           gradle -p baseline/android-tv :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
           gradle -p candidate/android-tv :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace

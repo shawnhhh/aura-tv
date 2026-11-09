@@ -16,6 +16,7 @@ import java.net.URL
 import java.security.MessageDigest
 
 /** Original compiled DEX JAR -> real :spider loader/Init/playerContent -> HTTP -> Media3. */
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 @RunWith(AndroidJUnit4::class)
 class M467JarPlaybackEndToEndTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -39,16 +40,22 @@ class M467JarPlaybackEndToEndTest {
         val bridge = TvBoxSpiderBridge(inst.targetContext)
         var oldUri: String? = null
         try {
-            for (round in 0..1) {
+            for (round in 0..2) {
                 val catalog = bridge.browse(site, config)
                 assertTrue("Real DEX initializer/home must run: $catalog", catalog is SpiderResult.Ready)
                 val films = (catalog as SpiderResult.Ready).value
                 assertEquals(1, films.size)
                 val details = bridge.details(films.single())
                 assertTrue(details is SpiderResult.Ready)
-                val film = (details as SpiderResult.Ready).value
-                for ((episode, route) in listOf(1 to "instance", 2 to "static")) {
-                    val resolved = bridge.play(film, episode, "spider-0", true)
+                var film = (details as SpiderResult.Ready).value
+                val selections = listOf(1 to "spider-0", 1 to "spider-0", 2 to "spider-0", 1 to "spider-0", 1 to "spider-1", 1 to "spider-0")
+                val sessions = mutableSetOf<String>()
+                for ((index, selection) in selections.withIndex()) {
+                    val (episode, line) = selection
+                    val route = if (episode == 2) "static" else "instance"
+                    val session = PlaybackDiagnosticSession.newId()
+                    assertTrue(sessions.add(session))
+                    val resolved = kotlinx.coroutines.withContext(PlaybackDiagnosticSession.context(session)) { bridge.play(film, episode, line, true) }
                     assertTrue("Actual JAR playerContent must resolve: $resolved", resolved is PlaybackResult.Ready)
                     val media = (resolved as PlaybackResult.Ready).media
                     val request = URL(media.uri).openConnection() as HttpURLConnection
@@ -60,7 +67,8 @@ class M467JarPlaybackEndToEndTest {
                             request.getHeaderField("Content-Language"))
                         assertArrayEquals(mediaBytes, request.inputStream.use { it.readBytes() })
                     } finally { request.disconnect() }
-                    if (round == 1 && oldUri != null) assertNotEquals(oldUri, media.uri)
+                    assertEquals(session, media.diagnosticSessionId)
+                    if (round > 0 && index == 0 && oldUri != null) assertNotEquals(oldUri, media.uri)
                     val intent = Intent(inst.targetContext, PlaybackTestActivity::class.java)
                         .putExtra("fixture", media.uri)
                     ActivityScenario.launch<PlaybackTestActivity>(intent).use { scenario ->
@@ -71,8 +79,29 @@ class M467JarPlaybackEndToEndTest {
                             }
                             frames > 3
                         }
+                        var initialPosition = 0L
+                        scenario.onActivity { initialPosition = it.player.currentPosition.toLong() }
+                        compose.waitUntil(8_000) {
+                            var advanced = false
+                            scenario.onActivity { advanced = it.player.currentPosition > initialPosition + 500 }
+                            advanced
+                        }
+                        scenario.onActivity { it.player.pause(); it.player.seekTo(2_000) }
+                        compose.waitUntil(8_000) {
+                            var sought = false
+                            scenario.onActivity { sought = !it.player.playWhenReady && it.player.currentPosition == 2_000L }
+                            sought
+                        }
                     }
                     oldUri = media.uri
+                    if (index == 0 || index == 4) {
+                        // Detail return: release the old worker/proxy, then start a new approved operation.
+                        inst.runOnMainSync { bridge.releasePlayback() }
+                        bridge.awaitPlaybackReleaseForInstrumentation()
+                        assertFalse(SpiderProxyPlayback.ping(media.uri))
+                        val fresh = bridge.browse(site, config) as SpiderResult.Ready
+                        film = (bridge.details(fresh.value.single()) as SpiderResult.Ready).value
+                    }
                 }
                 bridge.close()
                 val closed = oldUri!!
