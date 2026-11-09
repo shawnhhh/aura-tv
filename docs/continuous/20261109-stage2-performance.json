@@ -1,0 +1,517 @@
+{
+  "scope": "每个作业内在同一AVD进行ABBA。不同作业的绝对时间不可直接比较；缓存夹具不同于真实线上TMDB。不是TCL实机性能或光子延迟。",
+  "runs": [
+    {
+      "run": 42577916829,
+      "summary": {
+        "baseline": "6e5364817a11923ccb299a0b4f3b8c5cf5614fd0",
+        "candidate": "1be6bb58c53e6dfe150f8da69a82170fc583ca19",
+        "device": "one Android TV API30 x86 tv_1080p AVD, SwiftShader",
+        "order": [
+          "A1",
+          "B1",
+          "B2",
+          "A2"
+        ],
+        "physical_TCL_tested": false,
+        "tests_per_leg": 6,
+        "observations": {
+          "A1": {
+            "process_to_activity_ms": 3787,
+            "activity_to_first_draw_ms": 649,
+            "first_draw_to_wordmark_ms": 0,
+            "wordmark_complete_ms": 1098,
+            "activity_to_home_ms": 1670,
+            "home_init_ms": 1100,
+            "artwork_start_ms": 1669,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 3097,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 17.08,
+                "key_to_draw_p95_ms": 50.34,
+                "key_to_draw_p99_ms": 57.78,
+                "key_to_focus_p99_ms": 20.43,
+                "key_to_focus_p50_ms": 3.94,
+                "key_to_focus_p95_ms": 18.96,
+                "end_to_idle_p95_ms": 289,
+                "frame_p95_ms": 234.23,
+                "frames_total": 79,
+                "frames_over_16_67ms": 79,
+                "frames_over_33_33ms": 79,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 12.64,
+                "key_to_draw_p95_ms": 38.34,
+                "key_to_draw_p99_ms": 40.3,
+                "key_to_focus_p99_ms": 38.58,
+                "key_to_focus_p50_ms": 2.65,
+                "key_to_focus_p95_ms": 30.3,
+                "end_to_idle_p95_ms": 229
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 47,
+                "redraw_p95_ms": 179.55,
+                "navigation_p95_ms": 184.94,
+                "navigation_to_redraw_ratio": 1.03
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 4475
+              }
+            }
+          },
+          "B1": {
+            "process_to_activity_ms": 1744,
+            "activity_to_first_draw_ms": 538,
+            "first_draw_to_wordmark_ms": 1,
+            "wordmark_complete_ms": 887,
+            "activity_to_home_ms": 1552,
+            "home_init_ms": 889,
+            "artwork_start_ms": 1552,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 2032,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 15.05,
+                "key_to_draw_p95_ms": 66.61,
+                "key_to_draw_p99_ms": 82.12,
+                "key_to_focus_p99_ms": 90.14,
+                "key_to_focus_p50_ms": 4.38,
+                "key_to_focus_p95_ms": 43.58,
+                "end_to_idle_p95_ms": 253,
+                "frame_p95_ms": 190.6,
+                "frames_total": 79,
+                "frames_over_16_67ms": 79,
+                "frames_over_33_33ms": 79,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 14.59,
+                "key_to_draw_p95_ms": 31.68,
+                "key_to_draw_p99_ms": 48.76,
+                "key_to_focus_p99_ms": 46.82,
+                "key_to_focus_p50_ms": 3.11,
+                "key_to_focus_p95_ms": 18.64,
+                "end_to_idle_p95_ms": 262
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 48,
+                "redraw_p95_ms": 147.63,
+                "navigation_p95_ms": 182.87,
+                "navigation_to_redraw_ratio": 1.24
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 3014
+              }
+            }
+          },
+          "B2": {
+            "process_to_activity_ms": 2664,
+            "activity_to_first_draw_ms": 681,
+            "first_draw_to_wordmark_ms": 0,
+            "wordmark_complete_ms": 1125,
+            "activity_to_home_ms": 2079,
+            "home_init_ms": 1127,
+            "artwork_start_ms": 2078,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 2929,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 15.54,
+                "key_to_draw_p95_ms": 46.33,
+                "key_to_draw_p99_ms": 47.47,
+                "key_to_focus_p99_ms": 45.21,
+                "key_to_focus_p50_ms": 5.96,
+                "key_to_focus_p95_ms": 44.95,
+                "end_to_idle_p95_ms": 208,
+                "frame_p95_ms": 187.51,
+                "frames_total": 79,
+                "frames_over_16_67ms": 79,
+                "frames_over_33_33ms": 79,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 14.05,
+                "key_to_draw_p95_ms": 28.17,
+                "key_to_draw_p99_ms": 29.28,
+                "key_to_focus_p99_ms": 12.01,
+                "key_to_focus_p50_ms": 3.57,
+                "key_to_focus_p95_ms": 11.59,
+                "end_to_idle_p95_ms": 224
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 48,
+                "redraw_p95_ms": 158.26,
+                "navigation_p95_ms": 171.83,
+                "navigation_to_redraw_ratio": 1.09
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 2958
+              }
+            }
+          },
+          "A2": {
+            "process_to_activity_ms": 1286,
+            "activity_to_first_draw_ms": 530,
+            "first_draw_to_wordmark_ms": 0,
+            "wordmark_complete_ms": 932,
+            "activity_to_home_ms": 1373,
+            "home_init_ms": 936,
+            "artwork_start_ms": 1373,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 2333,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 12.7,
+                "key_to_draw_p95_ms": 43.63,
+                "key_to_draw_p99_ms": 56.18,
+                "key_to_focus_p99_ms": 70.03,
+                "key_to_focus_p50_ms": 3.2,
+                "key_to_focus_p95_ms": 43.47,
+                "end_to_idle_p95_ms": 224,
+                "frame_p95_ms": 181.74,
+                "frames_total": 79,
+                "frames_over_16_67ms": 79,
+                "frames_over_33_33ms": 79,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 14.42,
+                "key_to_draw_p95_ms": 37.16,
+                "key_to_draw_p99_ms": 43.12,
+                "key_to_focus_p99_ms": 35.24,
+                "key_to_focus_p50_ms": 3.02,
+                "key_to_focus_p95_ms": 7.9,
+                "end_to_idle_p95_ms": 200
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 48,
+                "redraw_p95_ms": 169.2,
+                "navigation_p95_ms": 182.36,
+                "navigation_to_redraw_ratio": 1.08
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 2966
+              }
+            }
+          }
+        },
+        "comparison_ms": {
+          "activity_to_first_draw_ms": {
+            "baseline_mean": 589.5,
+            "candidate_mean": 609.5,
+            "delta_ms": 20
+          },
+          "activity_to_home_ms": {
+            "baseline_mean": 1521.5,
+            "candidate_mean": 1815.5,
+            "delta_ms": 294
+          },
+          "cached_navigation_11_transitions_ms": {
+            "baseline_mean": 2715,
+            "candidate_mean": 2480.5,
+            "delta_ms": -234.5
+          }
+        },
+        "scope": "Cached pages: original mixed cache vs independent evidence-filtered rails; same Hero IDs and assertion bounds. Remote demo test sources identical. Includes test synchronization, not photon latency."
+      }
+    },
+    {
+      "run": 42579917582,
+      "summary": {
+        "baseline": "6e5364817a11923ccb299a0b4f3b8c5cf5614fd0",
+        "candidate": "3529679c40563a924f058bec87a06b67ff66a497",
+        "device": "one Android TV API30 x86 tv_1080p AVD, SwiftShader",
+        "order": [
+          "A1",
+          "B1",
+          "B2",
+          "A2"
+        ],
+        "physical_TCL_tested": false,
+        "tests_per_leg": 6,
+        "observations": {
+          "A1": {
+            "process_to_activity_ms": 4023,
+            "activity_to_first_draw_ms": 951,
+            "first_draw_to_wordmark_ms": 1,
+            "wordmark_complete_ms": 1713,
+            "activity_to_home_ms": 2667,
+            "home_init_ms": 1717,
+            "artwork_start_ms": 2666,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 4346,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 15.28,
+                "key_to_draw_p95_ms": 43.34,
+                "key_to_draw_p99_ms": 51.42,
+                "key_to_focus_p99_ms": 32.69,
+                "key_to_focus_p50_ms": 5.67,
+                "key_to_focus_p95_ms": 12.84,
+                "end_to_idle_p95_ms": 302,
+                "frame_p95_ms": 277.22,
+                "frames_total": 80,
+                "frames_over_16_67ms": 80,
+                "frames_over_33_33ms": 80,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 14.43,
+                "key_to_draw_p95_ms": 27.81,
+                "key_to_draw_p99_ms": 34.26,
+                "key_to_focus_p99_ms": 27.29,
+                "key_to_focus_p50_ms": 5.45,
+                "key_to_focus_p95_ms": 21.07,
+                "end_to_idle_p95_ms": 267
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 48,
+                "redraw_p95_ms": 205.94,
+                "navigation_p95_ms": 245.48,
+                "navigation_to_redraw_ratio": 1.19
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 6934
+              }
+            }
+          },
+          "B1": {
+            "process_to_activity_ms": 2974,
+            "activity_to_first_draw_ms": 783,
+            "first_draw_to_wordmark_ms": 2,
+            "wordmark_complete_ms": 1363,
+            "activity_to_home_ms": 1939,
+            "home_init_ms": 1365,
+            "artwork_start_ms": 1939,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 3624,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 16.13,
+                "key_to_draw_p95_ms": 37.35,
+                "key_to_draw_p99_ms": 62.42,
+                "key_to_focus_p99_ms": 63.3,
+                "key_to_focus_p50_ms": 6.13,
+                "key_to_focus_p95_ms": 41.75,
+                "end_to_idle_p95_ms": 317,
+                "frame_p95_ms": 274.48,
+                "frames_total": 80,
+                "frames_over_16_67ms": 80,
+                "frames_over_33_33ms": 80,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 14.96,
+                "key_to_draw_p95_ms": 41.88,
+                "key_to_draw_p99_ms": 43.67,
+                "key_to_focus_p99_ms": 54,
+                "key_to_focus_p50_ms": 5.18,
+                "key_to_focus_p95_ms": 37.29,
+                "end_to_idle_p95_ms": 264
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 47,
+                "redraw_p95_ms": 209.28,
+                "navigation_p95_ms": 259,
+                "navigation_to_redraw_ratio": 1.24
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 6666
+              }
+            }
+          },
+          "B2": {
+            "process_to_activity_ms": 4079,
+            "activity_to_first_draw_ms": 1093,
+            "first_draw_to_wordmark_ms": 1,
+            "wordmark_complete_ms": 1767,
+            "activity_to_home_ms": 2465,
+            "home_init_ms": 1771,
+            "artwork_start_ms": 2464,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 3874,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 16.37,
+                "key_to_draw_p95_ms": 47.68,
+                "key_to_draw_p99_ms": 64.98,
+                "key_to_focus_p99_ms": 19.42,
+                "key_to_focus_p50_ms": 6.63,
+                "key_to_focus_p95_ms": 16.89,
+                "end_to_idle_p95_ms": 323,
+                "frame_p95_ms": 268.16,
+                "frames_total": 79,
+                "frames_over_16_67ms": 79,
+                "frames_over_33_33ms": 79,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 13.25,
+                "key_to_draw_p95_ms": 27.49,
+                "key_to_draw_p99_ms": 45.47,
+                "key_to_focus_p99_ms": 43.37,
+                "key_to_focus_p50_ms": 5.91,
+                "key_to_focus_p95_ms": 15.44,
+                "end_to_idle_p95_ms": 250
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 47,
+                "redraw_p95_ms": 189.75,
+                "navigation_p95_ms": 199.4,
+                "navigation_to_redraw_ratio": 1.05
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 5291
+              }
+            }
+          },
+          "A2": {
+            "process_to_activity_ms": 1681,
+            "activity_to_first_draw_ms": 729,
+            "first_draw_to_wordmark_ms": 1,
+            "wordmark_complete_ms": 1316,
+            "activity_to_home_ms": 1967,
+            "home_init_ms": 1318,
+            "artwork_start_ms": 1966,
+            "network_start_ms": -1,
+            "system_brand_exit_ms": -1,
+            "cached_navigation_11_transitions_ms": 3237,
+            "remote": {
+              "horizontal": {
+                "events": 40,
+                "focus_success": 40,
+                "focus_draw_samples": 40,
+                "key_to_draw_p50_ms": 17.65,
+                "key_to_draw_p95_ms": 40.18,
+                "key_to_draw_p99_ms": 61.54,
+                "key_to_focus_p99_ms": 59.74,
+                "key_to_focus_p50_ms": 7.86,
+                "key_to_focus_p95_ms": 57.86,
+                "end_to_idle_p95_ms": 308,
+                "frame_p95_ms": 230.13,
+                "frames_total": 80,
+                "frames_over_16_67ms": 80,
+                "frames_over_33_33ms": 80,
+                "long_frame_pct": 100
+              },
+              "vertical": {
+                "events": 32,
+                "focus_success": 32,
+                "focus_draw_samples": 32,
+                "key_to_draw_p50_ms": 17.07,
+                "key_to_draw_p95_ms": 42.1,
+                "key_to_draw_p99_ms": 75.69,
+                "key_to_focus_p99_ms": 64.9,
+                "key_to_focus_p50_ms": 6.19,
+                "key_to_focus_p95_ms": 15.37,
+                "end_to_idle_p95_ms": 252
+              },
+              "frame_baseline": {
+                "redraw_frames": 24,
+                "navigation_frames": 47,
+                "redraw_p95_ms": 193.97,
+                "navigation_p95_ms": 228.23,
+                "navigation_to_redraw_ratio": 1.18
+              },
+              "burst": {
+                "events": 120,
+                "last_focus_correct": 1,
+                "burst_to_final_focus_ms": 5806
+              }
+            }
+          }
+        },
+        "comparison_ms": {
+          "activity_to_first_draw_ms": {
+            "baseline_mean": 840,
+            "candidate_mean": 938,
+            "delta_ms": 98
+          },
+          "activity_to_home_ms": {
+            "baseline_mean": 2317,
+            "candidate_mean": 2202,
+            "delta_ms": -115
+          },
+          "cached_navigation_11_transitions_ms": {
+            "baseline_mean": 3791.5,
+            "candidate_mean": 3749,
+            "delta_ms": -42.5
+          }
+        },
+        "scope": "Cached pages: original mixed cache vs independent evidence-filtered rails; same Hero IDs and assertion bounds. Remote demo test sources identical. Includes test synchronization, not photon latency."
+      }
+    }
+  ]
+}

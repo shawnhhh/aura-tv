@@ -1,0 +1,415 @@
+{
+  "repository": "shawnhhh/aura-tv",
+  "branch": "codex/herrin-global-search-20261107",
+  "baseline": "9e2a33a2e43b1d50ac77997c08326c5ae32a387e",
+  "observed_at": "2026-11-09T07:37:00Z",
+  "commits": [
+    {
+      "sha": "0162382b64421c4c5b336c48f0973b5fc79ccb8b",
+      "subject": "feat(tmdb): add independent evidence-filtered browse rails and page state",
+      "runs": [
+        {
+          "id": 42572683879,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42572683879"
+        },
+        {
+          "id": 42572683878,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42572683878"
+        }
+      ]
+    },
+    {
+      "sha": "d29db8093101d209913163c70da18a46093a5c8f",
+      "subject": "test(tmdb): cover independent pages, evidence caches and native TV focus",
+      "runs": [
+        {
+          "id": 42573281539,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42573281539"
+        },
+        {
+          "id": 42573281652,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42573281652"
+        }
+      ]
+    },
+    {
+      "sha": "db5cbfeb6ee4af934e4086f9829b479d39c22df1",
+      "subject": "fix(tmdb): share cached IP classification and bound incremental focus loading",
+      "runs": [
+        {
+          "id": 42573744944,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42573744944"
+        },
+        {
+          "id": 42573744936,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42573744936"
+        }
+      ]
+    },
+    {
+      "sha": "832d6b056023d9087ae2c92049ba6d37e377587f",
+      "subject": "fix(tmdb): preserve co-production quotas and detail return focus",
+      "runs": [
+        {
+          "id": 42573982057,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42573982057"
+        },
+        {
+          "id": 42573982062,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42573982062"
+        }
+      ]
+    },
+    {
+      "sha": "1ac12ac210a5317c5d8d1f9f1cc1d3124a553bf7",
+      "subject": "fix(tmdb): retain popularity order within allocated domestic regions",
+      "runs": [
+        {
+          "id": 42574047373,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574047373"
+        },
+        {
+          "id": 42574047357,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574047357"
+        }
+      ]
+    },
+    {
+      "sha": "741396c2f10f181fcfcba28d9445080fd9661a76",
+      "subject": "test(tmdb): enforce JUnit void methods so every browse contract executes",
+      "runs": [
+        {
+          "id": 42574131546,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574131546"
+        },
+        {
+          "id": 42574131547,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574131547"
+        }
+      ]
+    },
+    {
+      "sha": "1667f9399306ded1e3e4740ca07e5c69f2094d5e",
+      "subject": "refactor(tmdb): bound proof locks and record stage two implementation",
+      "runs": [
+        {
+          "id": 42574597417,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574597417"
+        },
+        {
+          "id": 42574597237,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574597237"
+        }
+      ]
+    },
+    {
+      "sha": "42d6869f34c9a013fbc19adc9e9acfbcaa553202",
+      "subject": "fix(tmdb): keep background association and search cache parsing off main",
+      "runs": [
+        {
+          "id": 42574822665,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574822665"
+        },
+        {
+          "id": 42574822666,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42574822666"
+        }
+      ]
+    },
+    {
+      "sha": "4eb5d952f6c9d5aaf14d2d8be145fac21cddbe27",
+      "subject": "feat(tmdb): verify Naruto movie and OVA serial-IP correction IDs",
+      "runs": [
+        {
+          "id": 42575102028,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42575102028"
+        },
+        {
+          "id": 42575101833,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42575101833"
+        }
+      ]
+    },
+    {
+      "sha": "e053298daae3e1bdf62cc946d6458a4014fd7c1e",
+      "subject": "test(tmdb): preserve hundred-item publication pressure with independent rail caches",
+      "runs": [
+        {
+          "id": 42575510171,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42575510171"
+        },
+        {
+          "id": 42575510179,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42575510179"
+        }
+      ]
+    },
+    {
+      "sha": "a47a98a9aab98ad85121a5a6b456e30f07ad6a42",
+      "subject": "test(tmdb): verify weekly trend release filtering and client vote threshold end to end",
+      "runs": [
+        {
+          "id": 42575678722,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42575678722"
+        },
+        {
+          "id": 42575678775,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42575678775"
+        }
+      ]
+    },
+    {
+      "sha": "7486da79ce9570c5a63f1f86dd82411095d97e51",
+      "subject": "test(tv): preserve poster focus during changed TMDB background refresh",
+      "runs": [
+        {
+          "id": 42576056517,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576056517"
+        },
+        {
+          "id": 42576056522,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576056522"
+        }
+      ]
+    },
+    {
+      "sha": "71d47180b7df57bbf5e77b66dd24aca6bee6a864",
+      "subject": "fix(tv): restore the originating TMDB rail poster after closing details",
+      "runs": []
+    },
+    {
+      "sha": "52c00d2f5e191714f87be12322febae1515f6cf9",
+      "subject": "ci(tmdb): compare stage one and independent rails in one TV emulator ABBA",
+      "runs": [
+        {
+          "id": 42576406426,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576406426"
+        },
+        {
+          "id": 42576406202,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576406202"
+        },
+        {
+          "id": 42576406167,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576406167"
+        }
+      ]
+    },
+    {
+      "sha": "9c61f8d997a8f12abb3d403048ec107c94728d70",
+      "subject": "fix(tv): cancel superseded TMDB vertical focus transfers on page exit",
+      "runs": [
+        {
+          "id": 42576700568,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576700568"
+        },
+        {
+          "id": 42576701481,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576701481"
+        },
+        {
+          "id": 42576700795,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42576700795"
+        }
+      ]
+    },
+    {
+      "sha": "1be6bb58c53e6dfe150f8da69a82170fc583ca19",
+      "subject": "fix(ci): parse Android epoch timestamp padding in TMDB ABBA evidence",
+      "runs": [
+        {
+          "id": 42577916821,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42577916821"
+        },
+        {
+          "id": 42577916829,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42577916829"
+        },
+        {
+          "id": 42577916828,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42577916828"
+        }
+      ]
+    },
+    {
+      "sha": "a2d78fb293eed65690b2b16ea34163e05a0a28fa",
+      "subject": "perf(tmdb): publish the bounded offline browse cache in one state update",
+      "runs": [
+        {
+          "id": 42579203089,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579203089"
+        },
+        {
+          "id": 42579203107,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579203107"
+        },
+        {
+          "id": 42579203112,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579203112"
+        }
+      ]
+    },
+    {
+      "sha": "22ed85bcd06ba5b47910b11139547663873a69ec",
+      "subject": "fix(tmdb): serialize anime relation cache initialization and preserve conflicts",
+      "runs": [
+        {
+          "id": 42579394932,
+          "name": "HERRIN Android TV Emulator",
+          "status": "in_progress",
+          "conclusion": null,
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579394932"
+        },
+        {
+          "id": 42579394947,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579394947"
+        },
+        {
+          "id": 42579394910,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579394910"
+        }
+      ]
+    },
+    {
+      "sha": "3529679c40563a924f058bec87a06b67ff66a497",
+      "subject": "fix(tmdb): keep incremental requests alive and stop duplicate-page cascades",
+      "runs": [
+        {
+          "id": 42579917582,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "in_progress",
+          "conclusion": null,
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579917582"
+        },
+        {
+          "id": 42579917570,
+          "name": "HERRIN Android TV Emulator",
+          "status": "in_progress",
+          "conclusion": null,
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579917570"
+        },
+        {
+          "id": 42579917583,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42579917583"
+        }
+      ]
+    }
+  ]
+}
