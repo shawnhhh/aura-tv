@@ -49,6 +49,7 @@ internal fun TmdbBrowseRails(
                 val spec = specs.firstOrNull { it.key == key }
                 val status = spec?.let(state::row)
                 val rail = state.scrolls.getOrPut(key) { LazyListState() }
+                var focusedPoster by remember { mutableStateOf<String?>(null) }
                 Text(spec?.title ?: "最近播放", color = Color.White, fontSize = 18.sp,
                     modifier = Modifier.testTag("tmdb-heading-$key"))
                 if (films.isEmpty()) Text(when {
@@ -82,23 +83,23 @@ internal fun TmdbBrowseRails(
                                     }
                                     true
                                 } else false
-                            }, reduced, onFocus = { state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film) })
+                            }, reduced, onFocus = { focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film) })
                     }
                     if (spec != null && status != null && (status.error || status.unknown > 0)) item(key = "retry") {
-                        TvButton("重试此栏目", Modifier.testTag("tmdb-retry-$key"), reduced = reduced) {
+                        TvButton("重试此栏目", Modifier.testTag("tmdb-retry-$key"), reduced = reduced, onFocus = { focusedPoster = null }) {
                             if (!status.loading) scope.launch { state.retry(spec) }
                         }
                     }
                     if (spec != null && status != null && status.hasMore) item(key = "next") {
                         TvButton(if (status.loading) "加载中…" else if (status.error) "重试此栏目" else "加载更多",
-                            Modifier.testTag("tmdb-more-$key"), reduced = reduced) {
+                            Modifier.testTag("tmdb-more-$key"), reduced = reduced, onFocus = { focusedPoster = null }) {
                             if (!status.loading) scope.launch { if (status.error) state.retry(spec) else state.more(spec) }
                         }
                     }
                 }
                 if (spec != null) LaunchedEffect(key, films.size, status?.hasMore, status?.loading) {
-                    snapshotFlow { rail.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }.distinctUntilChanged().collect { last ->
-                        if (films.size >= 6 && last >= films.size - 2 && status?.hasMore == true && !status.loading && !status.error)
+                    snapshotFlow { (rail.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) to focusedPoster }.distinctUntilChanged().collect { (last, focused) ->
+                        if (films.size >= 6 && focused != null && films.takeLast(2).any { it.id == focused } && last >= films.size - 2 && status?.hasMore == true && !status.loading && !status.error)
                             state.more(spec)
                     }
                 }

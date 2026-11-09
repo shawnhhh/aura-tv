@@ -173,6 +173,12 @@ internal class TmdbBrowseRepository(
             TmdbReleaseEvidence.evaluate(type, proof, today()), row.optInt("vote_count"),
             row.optDouble("popularity", 0.0).takeIf { it.isFinite() } ?: 0.0, safeRow(row), proof)
     }
+    /** Cache-only classification for TMDB search; caller parses metadata off the UI thread. */
+    fun cachedClassification(type: String, id: Int, genres: Set<Int>, token: String): String {
+        val detail = read(prefix(token) + "-proof-$type-$id")?.optJSONObject("proof")
+        return TmdbAnimeIp.category(type, id, genres, detail?.optJSONObject("belongs_to_collection")?.optInt("id"),
+            collectionMap(token))
+    }
     suspend fun cached(spec: TmdbRailSpec, page: Int, token: String): TmdbBrowseBatch? = withContext(Dispatchers.IO) {
         val json = read(prefix(token) + "-page-" + spec.key + "-$page") ?: return@withContext null
         decodeBatch(spec, page, token, json)

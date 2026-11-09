@@ -1109,9 +1109,12 @@ private fun Herrin(startup: StartupPresentation) {
             metadataRescanEpoch++
         }
     }
-    val tmdbDiscovery = remember(context) { HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages")) }
     val tmdbBrowseRepository = remember(context, MetadataFetchers.current) {
         TmdbBrowseRepository(MetadataFetchers.current, java.io.File(context.filesDir, "tmdb-browse-v2"))
+    }
+    val tmdbDiscovery = remember(context, metadataToken, tmdbBrowseRepository) {
+        HerrinTmdbDiscovery(fetcher = MetadataFetchers.current, cacheDir = java.io.File(context.filesDir, "tmdb-home-pages"),
+            browseClassification = { type, id, genres -> tmdbBrowseRepository.cachedClassification(type, id, genres, metadataToken) })
     }
     val tmdbBrowseState = remember(metadataToken, tmdbBrowseRepository) { TmdbBrowseState(tmdbBrowseRepository, metadataToken) }
     LaunchedEffect(tmdbBrowseState) {

@@ -23,7 +23,8 @@ internal class HerrinTmdbDiscovery(
     private val fetcher: ArtworkJsonFetcher = NetworkArtworkFetcher,
     private val clock: () -> Long = System::currentTimeMillis,
     private val cacheDir: java.io.File? = null,
-    private val language: String = "zh-CN"
+    private val language: String = "zh-CN",
+    private val browseClassification: ((String, Int, Set<Int>) -> String)? = null
 ) {
     private data class Cached(val until: Long, val entries: List<Film>)
     private val cache = ConcurrentHashMap<String, Cached>()
@@ -248,7 +249,7 @@ internal class HerrinTmdbDiscovery(
                 id = "tmdb-" + type + "-" + id,
                 title = title,
                 subtitle = original.takeIf { it != title }.orEmpty(),
-                category = TmdbAnimeIp.category(type, id, ids.toSet(), null, emptyMap()),
+                category = browseClassification?.invoke(type, id, ids.toSet()) ?: TmdbAnimeIp.category(type, id, ids.toSet(), null, emptyMap()),
                 year = year,
                 synopsis = item.optString("overview").trim().take(2_000),
                 artwork = R.drawable.photofilm_orbit,
