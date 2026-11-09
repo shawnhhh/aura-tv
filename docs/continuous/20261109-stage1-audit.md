@@ -54,3 +54,11 @@ H.264 MP4 和 MKV 解码计数、截图四个编码边框及实际红色内画�
 原播放/授权/代理/Header/搜索/返回/性能门禁保持；新增 P0PlayerDeadlineTest 加入必跑类门禁。
 实际 CI ID、计数与 APK 写回续跑记录和 PR；未完成之前不标记阶段一完成。
 TCL 实机、第三方节点、真实高码率网络环境：待真机验收。
+
+## 首轮回归记录
+
+[d02ad39 设备CI](https://github.com/shawnhhh/aura-tv/actions/runs/42559008201)：245项中仅2项失败。
+M456三种实际解码/SurfaceView/截图边框测试全部通过；原比例UI测试仍要求toggle裁切，
+已更新为只读完整画面、无点击裁切操作、唯一播放器不重启，并在实际“单集循环”控件保留D-pad UP/展开收起断言。
+新期限测试将MockWebServer.url的反向DNS构造移出主线程，修复夹具NetworkOnMainThreadException；
+保留原300ms期限、4s观察上限、STATE_IDLE与释放后无旧回调断言，不放宽时限。

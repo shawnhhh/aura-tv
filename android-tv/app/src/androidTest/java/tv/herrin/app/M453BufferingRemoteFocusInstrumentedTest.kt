@@ -30,11 +30,12 @@ class M453BufferingRemoteFocusInstrumentedTest {
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         server.start()
         val media = PlaybackMedia(server.url("/clean-player.mp4").toString())
+        val playerStarts = java.util.concurrent.atomic.AtomicInteger()
         try {
             // This is the actual consumer player entry, NOT PlaybackTestActivity
             // with its explicit isolated testDiagnostics=true.
             compose.setContent {
-                AuthorizedPlaybackPanel(media = media, onBack = {})
+                AuthorizedPlaybackPanel(media = media, onPlayer = { playerStarts.incrementAndGet() }, onBack = {})
             }
             compose.waitUntil(7_000) {
                 runCatching {
@@ -69,23 +70,18 @@ class M453BufferingRemoteFocusInstrumentedTest {
                     compose.onNodeWithTag("danmaku-controls").assertExists()
                 }.isSuccess
             }
-            val before = compose.onNodeWithTag("transport-viewport-mode")
-                .fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Text]
-                .joinToString(" ") { it.text }
-            compose.onNodeWithTag("transport-viewport-mode").performClick()
-            val after = compose.onNodeWithTag("transport-viewport-mode")
-                .fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Text]
-                .joinToString(" ") { it.text }
-            org.junit.Assert.assertNotEquals("Aspect mode must toggle without a player restart",
-                before, after)
+            compose.onNodeWithTag("transport-viewport-mode")
+                .assertTextEquals("画面：完整显示（等比例）")
+                .assert(hasClickAction().not())
+            org.junit.Assert.assertEquals("Opening settings must not restart the sole player", 1, playerStarts.get())
 
             // An expanded submenu must permit UP to return to the previous
             // row. The old parent key interceptor hid every control on UP,
             // making multi-row TV settings awkward or impossible to navigate.
-            compose.onNodeWithTag("transport-viewport-mode")
+            compose.onNodeWithTag("transport-repeat")
                 .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             compose.waitForIdle()
-            compose.onNodeWithTag("transport-viewport-mode").assertIsFocused()
+            compose.onNodeWithTag("transport-repeat").assertIsFocused()
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
                 KeyEvent.KEYCODE_DPAD_UP)
             compose.waitForIdle()

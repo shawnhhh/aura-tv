@@ -18,10 +18,11 @@ class P0PlayerDeadlineTest {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
             server.start()
+            val address = server.url("/blocked.mp4").toString()
             lateinit var adapter: HerrinPlaybackAdapter
             val errors = LinkedBlockingQueue<PlaybackException>()
             inst.runOnMainSync {
-                adapter = HerrinPlaybackAdapter(inst.targetContext, PlaybackMedia(server.url("/blocked.mp4").toString()))
+                adapter = HerrinPlaybackAdapter(inst.targetContext, PlaybackMedia(address))
                 adapter.manager.onTimeout = { errors.offer(it) }
                 adapter.manager.start(com.fongmi.android.tv.player.media.PlaySpec("deadline", adapter.media), timeout = 300)
             }
