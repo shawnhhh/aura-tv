@@ -34,7 +34,12 @@ internal class LanTlsIdentity(
     internal val directory: File=File(context.noBackupFilesDir,"lan-tls-v1"),
     private val clock: ()->Long=System::currentTimeMillis
 ) {
-    companion object { private val lock=Any(); private const val ALIAS="herrin-lan-tls-envelope-v1" }
+    companion object {
+        private val lock=Any()
+        private const val ALIAS="herrin-lan-tls-envelope-v1"
+        private data class Cached(val path: String, val host: String, val envelope: ByteArray, val identity: HeldCertificate)
+        private var cached: Cached? = null // One current identity; no private material in preferences or logs.
+    }
     private fun key(): SecretKey {
         val store=KeyStore.getInstance("AndroidKeyStore").apply{load(null)}
         (store.getKey(ALIAS,null) as? SecretKey)?.let{return it}
@@ -48,12 +53,18 @@ internal class LanTlsIdentity(
         LanConfigIdentityPolicy.address(host)
         directory.mkdirs()
         val file=AtomicFile(File(directory,"identity.gcm"))
+        val path = directory.canonicalPath
+        val envelope = runCatching { file.openRead().use { input ->
+            require(input.available() in 29..32768); input.readBytes()
+        } }.getOrNull()
+        cached?.takeIf { it.path == path && it.host == host && envelope != null &&
+            java.security.MessageDigest.isEqual(it.envelope, envelope) }?.let { current ->
+            if (runCatching { current.identity.certificate.checkValidity(Date(clock())) }.isSuccess)
+                return@synchronized current.identity
+        }
         val wrapping=key() // Failure is surfaced to the manual-configuration fallback, never plaintext storage.
         val saved=runCatching {
-            val bytes=file.openRead().use { input ->
-                require(input.available() in 29..32768)
-                input.readBytes()
-            }
+            val bytes=requireNotNull(envelope)
             val cipher=Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE,wrapping,GCMParameterSpec(128,bytes.copyOfRange(0,12)))
             val identity=HeldCertificate.decode(String(cipher.doFinal(bytes.copyOfRange(12,bytes.size)),Charsets.UTF_8))
@@ -61,7 +72,7 @@ internal class LanTlsIdentity(
             require(identity.certificate.subjectAlternativeNames.orEmpty().any { it[0]==7 && it[1]==host })
             identity
         }.getOrNull()
-        if(saved!=null)return@synchronized saved
+        if(saved!=null) { cached=Cached(path,host,requireNotNull(envelope),saved); return@synchronized saved }
         val now=clock()
         val fresh=HeldCertificate.Builder().commonName("HERRIN local configuration")
             .addSubjectAlternativeName(host).validityInterval(now-300_000L,now+365L*24*60*60*1000).build()
@@ -71,6 +82,7 @@ internal class LanTlsIdentity(
         val output=file.startWrite()
         try { output.write(encrypted); file.finishWrite(output) }
         catch(error: Exception){file.failWrite(output);throw error}
+        cached=Cached(path,host,encrypted,fresh)
         fresh
     }
 }

@@ -10,7 +10,7 @@ import java.util.ArrayDeque
  */
 internal object HerrinPlaybackDiagnosticJournal {
     private val events = ArrayDeque<String>(256)
-    private val stageCodes = setOf("LOOKUP", "SOURCE", "SPIDER", "PROXY", "MEDIA3", "RECOVERY")
+    private val stageCodes = setOf("LOOKUP", "SOURCE", "SPIDER", "PROXY", "MEDIA3", "RECOVERY", "CONFIG")
     private val eventCode = Regex("[A-Z][A-Z0-9_]{1,63}")
     private val detailCode = Regex("[A-Z][A-Z0-9_]{1,31}(?:=[0-9]{1,5})?")
     @Synchronized fun record(stage: String, event: String, detail: String = "", session: String? = PlaybackDiagnosticSession.id()) {

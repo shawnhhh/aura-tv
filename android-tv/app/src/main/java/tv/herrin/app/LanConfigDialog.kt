@@ -58,14 +58,22 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
         var created: LanConfigServer? = null
         bitmap = null; failed = false; pending = false
         message = "正在开启临时 HTTPS 服务…"
+        // Publish the modal's skeleton before certificate/KeyStore or interface work starts.
+        withFrameNanos { }
+        val diagnosticStart = android.os.SystemClock.elapsedRealtime()
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "DIALOG_VISIBLE")
         try {
             val started = withContext(Dispatchers.IO) {
                 serverFactory(context) { module -> main.post { callback(module) } }
                     .also { created = it }.apply { start(5000, true) }
             }
             check(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+            HerrinPlaybackDiagnosticJournal.record("CONFIG", "HTTPS_LISTENING",
+                "MS=${(android.os.SystemClock.elapsedRealtime()-diagnosticStart).coerceAtMost(99999)}")
             server = started
             bitmap = withContext(Dispatchers.Default) { qrFactory(started.qr) }
+            HerrinPlaybackDiagnosticJournal.record("CONFIG", "QR_VISIBLE",
+                "MS=${(android.os.SystemClock.elapsedRealtime()-diagnosticStart).coerceAtMost(99999)}")
             message = "配对 3 分钟有效；服务最长 30 分钟，退出或转入后台立即关闭。"
             while (!started.pairing.expired()) {
                 pending = started.pairing.pending()
