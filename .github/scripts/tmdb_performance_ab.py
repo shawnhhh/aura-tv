@@ -17,7 +17,7 @@ for leg in ('A1', 'B1', 'B2', 'A2'):
         assert f'OK ({count} test' in result and 'INSTRUMENTATION_CODE: -1' in result, (leg, group, result)
         assert 'FAILURES!!!' not in result and 'INSTRUMENTATION_FAILED' not in result, (leg, group)
     log = (root / f'{leg}-home-logcat.txt').read_text()
-    switches = re.findall(r'^([0-9.]+)[^\n]*HerrinCachedHero[^\n]*asserting_category=', log, re.M)
+    switches = re.findall(r'^[ \t]*([0-9]+(?:\.[0-9]+)?)[^\n]*HerrinCachedHero[^\n]*asserting_category=', log, re.M)
     assert len(switches) == 12, (leg, switches)
     startup = re.findall(r'HerrinStartup\s*:[^\n]*process_to_activity_ms=[^\n]+', log)
     assert startup, leg
