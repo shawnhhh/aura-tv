@@ -37,6 +37,8 @@ class TmdbBrowseRepositoryTest {
         assertEquals("电影",TmdbAnimeIp.category("movie",980477,setOf(16),null,emptyMap()))
         assertEquals("电影",TmdbAnimeIp.category("movie",999,setOf(16),null,emptyMap()))
         assertEquals("动漫",TmdbAnimeIp.category("movie",635302,setOf(16),null,emptyMap()))
+        assertEquals("动漫",TmdbAnimeIp.category("movie",317442,setOf(16),null,emptyMap()))
+        assertEquals("动漫",TmdbAnimeIp.category("movie",1017204,setOf(16),null,emptyMap()))
         assertEquals("动漫",TmdbAnimeIp.category("movie",999,setOf(16),7,mapOf(7 to 85937)))
         assertEquals("电影",TmdbAnimeIp.category("movie",999,setOf(28),7,mapOf(7 to 85937)))
         val fixture=TmdbBrowseFixture()

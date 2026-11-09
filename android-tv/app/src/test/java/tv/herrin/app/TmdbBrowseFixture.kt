@@ -33,7 +33,7 @@ internal class TmdbBrowseFixture : ArtworkJsonFetcher {
                 .put("last_air_date", "2026-02-01").put("number_of_episodes", 12)
             else d.put("release_dates", JSONObject().put("results", JSONArray().put(JSONObject().put("release_dates",
                 JSONArray().put(JSONObject().put("type", 4).put("release_date", "2026-01-01T00:00:00Z"))))))
-            if (id in TmdbAnimeIp.serialMovies) d.put("belongs_to_collection", JSONObject().put("id", if(id==635302)700001 else 700002))
+            if (id in TmdbAnimeIp.serialMovies) d.put("belongs_to_collection", JSONObject().put("id", if(id==635302)700001 else if(id in setOf(317442,1017204))700003 else 700002))
             return d.toString()
         }
         if (path.endsWith("configuration")) return "{\"images\":{}}"

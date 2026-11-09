@@ -91,7 +91,11 @@ internal object TmdbAnimeIp {
     // Canonical TMDB pages document these reviewed movie -> serial-TV associations.
     // https://www.themoviedb.org/movie/635302 -> /tv/85937 (Demon Slayer)
     // https://www.themoviedb.org/movie/900667 and /movie/568012 -> /tv/37854 (One Piece)
-    val serialMovies = mapOf(635302 to 85937, 900667 to 37854, 568012 to 37854)
+    // Wikidata Q6966481 (TMDB 317442), Q12500134 (TV 31910); Naruto OVA collection movie 1017204.
+    // https://www.wikidata.org/wiki/Q6966481 ; https://www.wikidata.org/wiki/Q12500134
+    // https://letterboxd.com/film/naruto-ova-12-the-day-naruto-became-hokage/details/
+    val serialMovies = mapOf(635302 to 85937, 900667 to 37854, 568012 to 37854,
+        317442 to 31910, 1017204 to 31910)
     val standaloneMovies = setOf(129, 980477) // Spirited Away; Ne Zha 2
     fun category(type: String, id: Int, genres: Set<Int>, collection: Int?, verifiedCollections: Map<Int, Int>): String {
         if (type == "movie" && id in standaloneMovies) return "电影"
