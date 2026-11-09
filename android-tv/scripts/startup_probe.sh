@@ -2,6 +2,8 @@
 set -euo pipefail
 apk="$1"
 evidence="$2"
+# CI installs FFmpeg explicitly; fail before starting a probe if unavailable.
+command -v ffmpeg >/dev/null
 mkdir -p "$evidence"
 collect_startup() {
     code=$?
