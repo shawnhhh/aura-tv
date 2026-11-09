@@ -6,10 +6,15 @@ import org.junit.Test
 
 class M455PlaybackViewportModeTest {
     @Test fun oldDefaultCropSettingCannotCropAnUpgrade() {
-        for (legacy in listOf(true, false)) {
-            assertEquals(PlaybackViewportMode.FIT, PlaybackViewportMode.fromStoredFill(legacy))
-            assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, PlaybackViewportMode.fromStoredFill(legacy).resizeMode)
-        }
+        assertEquals(PlaybackViewportMode.FIT, PlaybackViewportMode.fromStoredFill(true))
+        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, PlaybackViewportMode.fromStoredFill(true).resizeMode)
+    }
+    @Test fun newInstallAndPreviousFitChoicePreserveOriginalPicture() {
+        assertEquals(PlaybackViewportMode.FIT, PlaybackViewportMode.fromStoredFill(false))
+        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, PlaybackViewportMode.fromStoredFill(false).resizeMode)
+    }
+    @Test fun noSelectableModeCanCropOrStretch() {
         assertEquals(listOf(PlaybackViewportMode.FIT), PlaybackViewportMode.entries)
+        assertEquals("完整显示（等比例）", PlaybackViewportMode.FIT.label)
     }
 }
