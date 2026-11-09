@@ -1,4 +1,4 @@
-"""Stage-one vs independent-rail observation on one AVD, never a TCL speed claim."""
+"""TCL feedback baseline vs candidate observation on one AVD, never a TCL speed claim."""
 import json
 import pathlib
 import re
@@ -43,7 +43,7 @@ summary = {
     'candidate': subprocess.check_output(['git', '-C', 'candidate', 'rev-parse', 'HEAD'], text=True).strip(),
     'device': 'one Android TV API30 x86 tv_1080p AVD, SwiftShader', 'order': ['A1', 'B1', 'B2', 'A2'],
     'physical_TCL_tested': False, 'tests_per_leg': 6, 'observations': observations, 'comparison_ms': comparison,
-    'scope': 'Cached pages: original mixed cache vs independent evidence-filtered rails; same Hero IDs and assertion bounds. Remote demo test sources identical. Includes test synchronization, not photon latency.',
+    'scope': 'Cached pages: pre-feedback 599d58d versus candidate independent rails; same Hero IDs and assertion bounds. Remote demo test sources identical. Includes test synchronization, not photon latency.',
 }
 (root / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 print('HERRIN_TMDB_ABBA=' + json.dumps(summary, ensure_ascii=False))
