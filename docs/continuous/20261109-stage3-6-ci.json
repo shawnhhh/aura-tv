@@ -1,0 +1,158 @@
+{
+  "repository": "shawnhhh/aura-tv",
+  "branch": "codex/herrin-global-search-20261107",
+  "observed_at": "2026-11-09 10:12:06 UTC",
+  "scope": "Historical Actions snapshots through the M2TS implementation; exact delivery HEAD runs are linked in Draft PR #84 and in same-commit generated Chinese acceptance artifacts. Empty runs are not passes.",
+  "commits": [
+    {
+      "sha": "8ab13211bc021b5cd7c14b1ba69926e08547bac3",
+      "subject": "fix(smb): expose BDAV packets as a seekable transport stream for the existing player",
+      "runs": [
+        {
+          "id": 42598778476,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "in_progress",
+          "conclusion": null,
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42598778476"
+        },
+        {
+          "id": 42598778619,
+          "name": "HERRIN Android Debug",
+          "status": "in_progress",
+          "conclusion": null,
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42598778619"
+        },
+        {
+          "id": 42598778418,
+          "name": "HERRIN Android TV Emulator",
+          "status": "in_progress",
+          "conclusion": null,
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42598778418"
+        }
+      ]
+    },
+    {
+      "sha": "10bcf0b9355b620250da538460f3c12c189eeef9",
+      "subject": "test(acceptance): require encrypted SMB3 and publish phase-specific evidence",
+      "runs": []
+    },
+    {
+      "sha": "376382c1229853a5e61c489a0a90aa873e962ce9",
+      "subject": "fix(smb): propagate wrapped cancellation and resolve protocol fixture paths",
+      "runs": [
+        {
+          "id": 42596586883,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42596586883"
+        },
+        {
+          "id": 42596586846,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42596586846"
+        },
+        {
+          "id": 42596586852,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42596586852"
+        }
+      ]
+    },
+    {
+      "sha": "5a3a875ee2c1fb817d290a2f987a60257c781224",
+      "subject": "feat(nas): integrate SMB2 and SMB3 discovery with secure range streaming and real protocol tests",
+      "runs": [
+        {
+          "id": 42595390240,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42595390240"
+        },
+        {
+          "id": 42595390291,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42595390291"
+        },
+        {
+          "id": 42595390195,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42595390195"
+        }
+      ]
+    },
+    {
+      "sha": "f9d77d1de0fe48164323cc54847da607161c5f12",
+      "subject": "feat(startup): reveal from center then breathe white light over a prepared home",
+      "runs": [
+        {
+          "id": 42591963643,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42591963643"
+        },
+        {
+          "id": 42591963466,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42591963466"
+        },
+        {
+          "id": 42591963462,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42591963462"
+        }
+      ]
+    },
+    {
+      "sha": "4a9ecf094266296ae7f55d546cd3d324a18b068f",
+      "subject": "fix(config): refresh both TV personal-source editors after HTTPS phone saves",
+      "runs": []
+    },
+    {
+      "sha": "44f8bb009981f678b5cd6070a0460c5668e79b4f",
+      "subject": "feat(config): keep HTTPS-only pairing with encrypted persistent device certificates",
+      "runs": [
+        {
+          "id": 42590528624,
+          "name": "HERRIN TMDB Same Device ABBA",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42590528624"
+        },
+        {
+          "id": 42590528523,
+          "name": "HERRIN Android Debug",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42590528523"
+        },
+        {
+          "id": 42590528563,
+          "name": "HERRIN Android TV Emulator",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42590528563"
+        }
+      ]
+    },
+    {
+      "sha": "d6ac12bd87fd09a18a77bdcc99a562eede8adfaa",
+      "subject": "docs: preserve TMDB regression history and record continuous stage three to five strategy",
+      "runs": []
+    }
+  ]
+}

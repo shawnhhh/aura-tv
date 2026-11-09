@@ -4,7 +4,7 @@
 
 ## 分支与交付对应
 
-仅在codex/herrin-global-search-20261107与Draft PR #84追加普通提交，不合并主分支、不强推。最终SHA取产生通过报告/Debug APK的实际Git HEAD。最新APK下载HERRIN-debug-apk，校验和见同作业中文报告；它不应与不同提交的APK混用。全部CI链接保存在本目录阶段CI索引及PR，失败与重试记录保留。
+仅在codex/herrin-global-search-20261107与Draft PR #84追加普通提交，不合并主分支、不强推。最终SHA取产生通过报告/Debug APK的实际Git HEAD。最新APK下载HERRIN-debug-apk，校验和见同作业中文报告；它不应与不同提交的APK混用。全部CI链接保存在本目录20261109-stage2-ci.json、20261109-stage3-6-ci.json及PR，失败与重试记录保留。
 
 ## 完成实现
 
