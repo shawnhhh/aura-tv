@@ -34,7 +34,7 @@ chmod 644 "$fixture_root/data/"*.*
 if ! id herrinfixture >/dev/null 2>&1; then sudo useradd --system --no-create-home --shell /usr/sbin/nologin herrinfixture; fi
 for variant in 2 3; do
   mkdir -p "$fixture_root/state$variant" "$fixture_root/run$variant" "$fixture_root/private$variant" "$fixture_root/cache$variant"
-  if [[ "$variant" == 3 ]]; then minimum=SMB3_00; maximum=SMB3_11; port=1445; else minimum=SMB2_02; maximum=SMB2_10; port=1446; fi
+  if [[ "$variant" == 3 ]]; then minimum=SMB3_00; maximum=SMB3_11; port=1445; encryption=required; else minimum=SMB2_02; maximum=SMB2_10; port=1446; encryption=desired; fi
   cat > "$fixture_root/smb$variant.conf" <<CONFIG
 [global]
 server role = standalone server
@@ -46,7 +46,7 @@ smb ports = $port
 server min protocol = $minimum
 server max protocol = $maximum
 server signing = mandatory
-smb encrypt = desired
+smb encrypt = $encryption
 passdb backend = smbpasswd:$fixture_root/auth/smbpasswd
 state directory = $fixture_root/state$variant
 private dir = $fixture_root/private$variant
@@ -77,6 +77,6 @@ for port in (1445,1446):
             with socket.create_connection(('127.0.0.1',port),timeout=.5): break
         except OSError: time.sleep(.2)
     else: raise RuntimeError('Controlled SMB fixture did not listen')
-print('SMB fixture ready: authenticated read-only SMB3 on 1445, SMB2 on 1446, original MP4 and sparse >5GiB file')
+print('SMB fixture ready: authenticated read-only encryption-required SMB3 on 1445, SMB2 on 1446, original MP4 and sparse >5GiB file')
 PY
 /usr/sbin/smbd --version

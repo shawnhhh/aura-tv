@@ -13,7 +13,7 @@ document.querySelector('#pair').onclick=async()=>{
  pairing='';document.querySelector('#trust').hidden=true;document.querySelector('#manager').hidden=false;
  const r=await call('/status');document.querySelector('#endpoint').textContent=r.endpoint+' · '+(r.tokenConfigured?'已配置':'未配置');
  document.querySelector('#sources [name=url]').value=r.tvbox;document.querySelector('#live [name=m3u]').value=r.m3u;document.querySelector('#live [name=epg]').value=r.epg;document.querySelector('#nas [name=url]').value=r.nas;document.querySelector('#cloud [name=url]').value=r.cloud||'';document.querySelector('#smb [name=url]').value=r.smb?.url||'';document.querySelector('#smb [name=encryption]').checked=!!r.smb?.encryption;
- status.textContent='已配对，四个模块共用会话；闲置 30 分钟后关闭';
+ status.textContent='已配对，各模块共用会话；最长 30 分钟，退出电视配置页立即结束';
  }catch(e){status.textContent=e.message;}finally{polling=false;}
 };
 let module='tmdb';

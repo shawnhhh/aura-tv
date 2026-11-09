@@ -28,6 +28,25 @@ for name, folder in [('JVM', 'app/build/test-results/testDebugUnitTest'),
             for i, tag in enumerate(('failure', 'error', 'skipped'), 1):
                 counts[i] += case.find(tag) is not None
     lines.append(f"| {name} | {' | '.join(map(str, counts))} |")
+# Concrete stage-three-to-five cases, with actual JUnit outcomes rather than build inference.
+groups = {
+    'HTTPS/证书/配对': {'LanConfigIdentityPolicyTest','LanConfigurationTest','LanHttpConfigurationTest','LanTlsIdentityTest','P0QrFailureTest','P0ExitAndEntryTest'},
+    '启动显现/呼吸/过渡': {'WordmarkMotionTest','M439LaunchMotionPolicyTest','HerrinSplashTest','P0StartupFrameProbeTest'},
+    'SMB策略/真实协议/加密/Seek/解码': {'SmbPolicyTest','SmbProtocolIntegrationTest','SmbConfigSecurityTest','SmbRealPlaybackTest'},
+}
+lines += ['', '## 第三至第五阶段实际用例回执', '', '| 专项 | 本作业执行 | 失败/错误 | 跳过 |', '| --- | ---: | ---: | ---: |']
+for label, classes in groups.items():
+    cases=[]
+    for folder in ('app/build/test-results/testDebugUnitTest','app/build/outputs/androidTest-results'):
+        for path in (root/folder).rglob('TEST-*.xml'):
+            cases += [case for case in ET.parse(path).getroot().iter('testcase')
+                if (case.get('classname') or '').rsplit('.',1)[-1] in classes]
+    failed=sum(case.find('failure') is not None or case.find('error') is not None for case in cases)
+    skipped=sum(case.find('skipped') is not None for case in cases)
+    lines.append(f'| {label} | {len(cases)} | {failed} | {skipped} |')
+lines += ['', 'SMB 正向用例连接受控、认证、签名的真实 Samba SMB2/SMB3 服务；稀疏 5GiB 文件只证明偏移读取，不能冒充真实 5GiB MKV 解码或 4K 吞吐。',
+          '启动 1800ms 显现 + 2400ms 同步呼吸 + 340ms 淡出是正常动画设计；减少动态/用户明确跳过例外。Compose 驱动的 ABBA 不能冒充冷启动实际动画时长。',
+          'TLS 自签名身份持久化不等于 Safari 自动信任。真实 TCL / iPhone / 家庭 NAS / 第三方私有节点仍待真机验收。']
 lines += ['', '当前作业未执行的测试组显示 0；完整结论须联合 Debug 和 Emulator 两个作业。', '',
           '## 可安装 APK', '', '在 Debug 工作流的 Artifacts 中下载 `HERRIN-debug-apk`，解压后通过 Android TV 安装或 `adb install -r app-debug.apk` 安装。']
 controlled=[]
@@ -64,6 +83,8 @@ lines += ['', '## 验收边界', '',
           '- 授权仅使用原创模拟服务；未验收第三方网盘账号和具体私有影视源。',
           '- 弹幕仅在用户开启并使用插件明确提供的协议地址时加载；故障不阻断播放。',
           '- TMDB 使用模拟响应自动回归；线上刮削需用户合法 Read Access Token。',
+          '- SMB2/3 由CI受控Samba真实协议验证，原媒体解码和Seek以SmbRealPlaybackTest实际JUnit/logcat为准；不代表用户NAS吞吐。',
+          '- 白字逐帧图片见wordmark-*.png；Android12启动另见同提交API31工作流视频/时序，不以录屏作为性能来源。',
           '- 未验收 TCL T7L Ultra 真机、4K 输出、Dolby Vision、HDR10+、电视音响或平台 DRM。',
           '- 所有功能、限制及手工验收步骤见仓库 docs/M4_37_CONSUMER_TV_ACCEPTANCE_ZH.md。']
 (out / '验收报告.md').write_text('\n'.join(lines) + '\n')

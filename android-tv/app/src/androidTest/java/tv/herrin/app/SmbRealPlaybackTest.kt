@@ -15,6 +15,10 @@ class SmbRealPlaybackTest {
         HerrinSmbSessions().use { sessions ->
             val source=HerrinSmbSource(account,sessions)
             assertTrue(source.testConnection())
+            val large=sessions.media(account,"Large.2026.mkv")
+            okhttp3.OkHttpClient().newCall(okhttp3.Request.Builder().url(large.uri).header("Range","bytes=5368709120-").build()).execute().use {
+                assertEquals(206,it.code);assertEquals("HERRIN-LARGE-SEEK-END",it.body!!.string())
+            }
             val offers=source.search(HerrinFilmIdentity(123,"movie",listOf("Original SMB"),2026))
             assertTrue(offers.isNotEmpty())
             val media=(source.playback(offers.first()) as PlaybackResult.Ready).media
@@ -58,7 +62,9 @@ class SmbRealPlaybackTest {
                 val source=HerrinSmbSource(account,sessions)
                 val offers=source.search(HerrinFilmIdentity(123,"movie",listOf(name),2026))
                 assertTrue("SMB media file must be found: $extension",offers.isNotEmpty())
-                val media=(source.playback(offers.first()) as PlaybackResult.Ready).media
+                val exact=offers.first{it.film.subtitle=="$name.2026"}
+                val media=(source.playback(exact) as PlaybackResult.Ready).media
+                assertEquals(if(extension=="mkv")"video/x-matroska" else "video/mp2t",media.declaredMime)
                 ActivityScenario.launch<PlaybackTestActivity>(Intent(inst.targetContext,PlaybackTestActivity::class.java).putExtra("fixture",media.uri)).use { scenario ->
                     var frames=0;var error:String?=null
                     val deadline=System.currentTimeMillis()+20000

@@ -70,6 +70,8 @@ for payload in re.findall(r'HerrinStartupProbe[^\n]*?(\{[^\n]+\})', log):
            for stage in ('reveal', 'breathing', 'handoff') if stage in probe}
     })
 summary['source_recovery_evidence'] = re.findall(r'HerrinSourceRecovery[^\n]*', log)
+summary['smb_evidence'] = re.findall(r'HerrinSmbEvidence[^\n]*', log)
+summary['wordmark_evidence'] = re.findall(r'HerrinWordmarkEvidence[^\n]*', log)
 summary['source_feedback_evidence'] = re.findall(r'HerrinSourceFeedback[^\n]*', log)
 (out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',
