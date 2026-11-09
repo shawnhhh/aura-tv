@@ -62,3 +62,8 @@ M456三种实际解码/SurfaceView/截图边框测试全部通过；原比例UI�
 已更新为只读完整画面、无点击裁切操作、唯一播放器不重启，并在实际“单集循环”控件保留D-pad UP/展开收起断言。
 新期限测试将MockWebServer.url的反向DNS构造移出主线程，修复夹具NetworkOnMainThreadException；
 保留原300ms期限、4s观察上限、STATE_IDLE与释放后无旧回调断言，不放宽时限。
+
+[f286ce2设备CI](https://github.com/shawnhhh/aura-tv/actions/runs/42560561012)：245项中244通过，
+新比例、超时取消、唯一播放器及遥控器断言全部通过；仅既有扫码截图解码出现NotFoundException。
+将原5秒等待“节点存在”强化为同一5秒内真实截图必须可解码且为HTTP模式，
+保留后续真实电视配对/HTTP保存/自动刷新全部断言；没有拿原始生成字符串代替截图，也未增加超时。

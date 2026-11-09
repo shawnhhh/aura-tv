@@ -110,14 +110,18 @@ class P0ExitAndEntryTest {
             compose.onNodeWithTag("settings").performClick()
             compose.onNodeWithTag("phone-config-main").performClick()
             compose.onNodeWithTag("phone-config-http").performClick()
+            var decoded: String? = null
             compose.waitUntil(5000) {
-                runCatching { compose.onNodeWithTag("phone-config-qr").assertIsDisplayed() }.isSuccess &&
-                    runCatching { compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring=true) }.isSuccess
+                decoded = runCatching {
+                    compose.onNodeWithTag("phone-config-address").assertTextContains("http://", substring=true)
+                    val pixels = compose.onNodeWithTag("phone-config-qr").assertIsDisplayed().captureToImage().toPixelMap()
+                    val colors = IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }
+                    com.google.zxing.MultiFormatReader().decode(com.google.zxing.BinaryBitmap(
+                        com.google.zxing.common.HybridBinarizer(com.google.zxing.RGBLuminanceSource(pixels.width, pixels.height, colors)))).text
+                }.getOrNull()?.takeIf { it.startsWith("http://") }
+                decoded != null
             }
-            val pixels = compose.onNodeWithTag("phone-config-qr").captureToImage().toPixelMap()
-            val colors = IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }
-            val qr = com.google.zxing.MultiFormatReader().decode(com.google.zxing.BinaryBitmap(
-                com.google.zxing.common.HybridBinarizer(com.google.zxing.RGBLuminanceSource(pixels.width, pixels.height, colors)))).text
+            val qr = requireNotNull(decoded)
             val origin = qr.substringBefore("/#")
             val client = okhttp3.OkHttpClient()
             fun post(path: String, data: org.json.JSONObject, key: String = ""): org.json.JSONObject =
