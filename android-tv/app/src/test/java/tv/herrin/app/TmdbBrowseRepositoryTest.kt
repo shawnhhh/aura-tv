@@ -32,7 +32,7 @@ class TmdbBrowseRepositoryTest {
         detail.put("first_air_date","2027-01-01")
         assertEquals(TmdbAvailability.UPCOMING, TmdbReleaseEvidence.evaluate("tv",detail,day).state)
     }
-    @Test fun animeUsesReviewedIdAndCollectionMembershipAndRetainsMovieIdentity() = runBlocking {
+    @Test fun animeUsesReviewedIdAndCollectionMembershipAndRetainsMovieIdentity(): Unit = runBlocking {
         assertEquals("电影",TmdbAnimeIp.category("movie",129,setOf(16),null,emptyMap()))
         assertEquals("电影",TmdbAnimeIp.category("movie",980477,setOf(16),null,emptyMap()))
         assertEquals("电影",TmdbAnimeIp.category("movie",999,setOf(16),null,emptyMap()))
@@ -78,7 +78,7 @@ class TmdbBrowseRepositoryTest {
         }
         assertEquals(listOf("热门推荐","国内热门"),TmdbRailSpec.forPage(TmdbBrowsePage.HOME).map{it.title})
     }
-    @Test fun everyRailFetchesCachesAndPaginatesWithoutPrivateSourceCalls() = runBlocking {
+    @Test fun everyRailFetchesCachesAndPaginatesWithoutPrivateSourceCalls(): Unit = runBlocking {
         val fixture=TmdbBrowseFixture();val directory=Files.createTempDirectory("tmdb-browse").toFile()
         try {
             val repo=TmdbBrowseRepository(fixture,directory)
@@ -100,7 +100,7 @@ class TmdbBrowseRepositoryTest {
             } }
         } finally { directory.deleteRecursively() }
     }
-    @Test fun stateRetainsFocusedOrderAndCacheOnFailureAndCanRetry() = runBlocking {
+    @Test fun stateRetainsFocusedOrderAndCacheOnFailureAndCanRetry(): Unit = runBlocking {
         val fixture=TmdbBrowseFixture();val repo=TmdbBrowseRepository(fixture)
         val state=TmdbBrowseState(repo,"fixture");val spec=TmdbRailSpec(TmdbBrowsePage.MOVIE,TmdbRailKind.HOT)
         state.refresh(TmdbBrowsePage.MOVIE)
@@ -118,7 +118,7 @@ class TmdbBrowseRepositoryTest {
         state.more(spec);assertEquals(2,state.row(spec).page)
         assertEquals(state.row(spec).entries.size,state.row(spec).entries.map{it.film.id}.distinct().size)
     }
-    @Test fun networkConcurrencyIsBoundedAndRunsOffCallerThread() = runBlocking {
+    @Test fun networkConcurrencyIsBoundedAndRunsOffCallerThread(): Unit = runBlocking {
         val original=Thread.currentThread();val active=AtomicInteger();val maximum=AtomicInteger()
         val fixture=TmdbBrowseFixture()
         val repo=TmdbBrowseRepository(ArtworkJsonFetcher{url,token->
@@ -130,7 +130,7 @@ class TmdbBrowseRepositoryTest {
         assertTrue(maximum.get() in 1..3)
     }
 
-    @Test fun backgroundVerifiedCollectionReclassifiesAndPersistsUnknownMovieWithoutChangingItsType() = runBlocking {
+    @Test fun backgroundVerifiedCollectionReclassifiesAndPersistsUnknownMovieWithoutChangingItsType(): Unit = runBlocking {
         val directory=Files.createTempDirectory("anime-relations").toFile()
         val fixture=TmdbBrowseFixture()
         val fetcher=ArtworkJsonFetcher { url,token ->
