@@ -160,4 +160,14 @@ class TmdbBrowseRepositoryTest {
         assertEquals("电影",film.category)
         assertEquals(TmdbAvailability.UNKNOWN,TmdbReleaseEvidence.evaluate("movie",JSONObject(),day).state)
     }
+
+    @Test fun coProductionMatchingDoesNotConsumeTheOnlyHongKongSlotsForTheMainlandQuota() {
+        val rows=(1..8).map{domesticEntry(it,setOf("CN","HK"))}+
+            (9..16).map{domesticEntry(it,setOf("CN"))}+(17..18).map{domesticEntry(it,setOf("TW"))}
+        val result=TmdbDomesticAllocator.allocate(rows,12)
+        assertEquals(12,result.size);assertEquals(12,result.map{it.film.id}.distinct().size)
+        assertEquals(8,result.count{it.domesticRegion=="CN"})
+        assertEquals(2,result.count{it.domesticRegion=="HK"})
+        assertEquals(2,result.count{it.domesticRegion=="TW"})
+    }
 }

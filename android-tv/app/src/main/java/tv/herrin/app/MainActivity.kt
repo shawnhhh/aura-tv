@@ -3056,6 +3056,7 @@ private fun Herrin(startup: StartupPresentation) {
                             onFocus = { tmdbBrowseState.focus(null); focusId = it },
                             onSelect = { selected ->
                                 category = selected
+                                if (tmdbPrimary && TmdbBrowsePage.from(selected) != null) heroSelections.remove(selected)
                                 val candidates = if (tmdbPrimary && TmdbBrowsePage.from(selected) != null) tmdbBrowseState.films(TmdbBrowsePage.from(selected)!!)
                                 else if (selected == "Top 250") tmdbState.tmdbTop250Films else catalogFilms.filter {
                                     selected == "首页" || it.category == selected || selected in it.genres
@@ -3336,7 +3337,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 openMovie(item)
                                 recentPlaybackReturn = origin
                                 tmdbState.resumeSourceFilm = item.id.takeIf { recent }
-                            })
+                            }, restoreFocus = focusId)
                     } else {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {

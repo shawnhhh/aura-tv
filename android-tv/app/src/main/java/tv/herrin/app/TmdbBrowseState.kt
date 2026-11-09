@@ -45,7 +45,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
         if (page == TmdbBrowsePage.ANIME) launch {
             repository.warmAnimeRelations(token)
             // Newly verified collection membership can reclassify cached candidates without waiting on a page fetch.
-            for (spec in TmdbRailSpec.forPage(page)) repository.cached(spec, 1, token)?.let { batch ->
+            for (spec in TmdbRailSpec.forPage(page)) if (row(spec).page <= 1) repository.cached(spec, 1, token)?.let { batch ->
                 if (focused == spec.key) pending[spec.key] = batch else publish(spec.key, batch)
             }
         }

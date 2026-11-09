@@ -79,5 +79,6 @@ class TmdbBrowsePageTest {
         compose.onNodeWithTag("film-detail-list").assertExists()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("tmdb-heading-home-hot").assertExists()
+        compose.waitUntil(5000){runCatching{compose.onNodeWithTag("card-tmdb-movie-11").assertIsFocused()}.isSuccess}
     }
 }

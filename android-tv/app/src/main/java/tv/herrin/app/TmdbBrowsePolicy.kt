@@ -105,26 +105,40 @@ internal object TmdbAnimeIp {
 
 internal data class TmdbBrowseEntry(
     val film: Film, val type: String, val countries: Set<String>, val availability: TmdbReleaseProof,
-    val votes: Int, val popularity: Double, val raw: JSONObject, val proof: JSONObject
+    val votes: Int, val popularity: Double, val raw: JSONObject, val proof: JSONObject, val domesticRegion: String? = null
 )
 internal object TmdbDomesticAllocator {
     /** Repeated 8/2/2 blocks. A co-production can occupy only one slot; shortages spill to remaining pools. */
     fun allocate(entries: List<TmdbBrowseEntry>, limit: Int = 12): List<TmdbBrowseEntry> {
-        val pools = listOf("CN", "HK", "TW").associateWith { country ->
-            ArrayDeque(entries.filter { country in it.countries }.distinctBy { it.film.id })
-        }
+        val candidates = entries.filter { it.countries.any { country -> country in setOf("CN", "HK", "TW") } }.distinctBy { it.film.id }
         val used = hashSetOf<String>()
         val result = mutableListOf<TmdbBrowseEntry>()
         val pattern = List(8) { "CN" } + List(2) { "HK" } + List(2) { "TW" }
-        fun take(country: String): TmdbBrowseEntry? {
-            val pool = pools.getValue(country)
-            while (pool.isNotEmpty()) { val next = pool.removeFirst(); if (used.add(next.film.id)) return next }
-            return null
-        }
-        repeat(limit.coerceIn(0, 200)) { index ->
-            val preferred = pattern[index % pattern.size]
-            val next = take(preferred) ?: listOf("CN", "HK", "TW").firstNotNullOfOrNull(::take)
-            if (next != null) result += next
+        val count = limit.coerceIn(0, 200)
+        while (result.size < count) {
+            val slots = pattern.take(minOf(12, count - result.size))
+            val assigned = arrayOfNulls<TmdbBrowseEntry>(slots.size)
+            val owner = mutableMapOf<String, Int>()
+            fun match(slot: Int, visited: MutableSet<String>): Boolean {
+                for (entry in candidates) {
+                    if (entry.film.id in used || slots[slot] !in entry.countries || !visited.add(entry.film.id)) continue
+                    val previous = owner[entry.film.id]
+                    if (previous == null || match(previous, visited)) {
+                        owner[entry.film.id] = slot
+                        assigned[slot] = entry
+                        return true
+                    }
+                }
+                return false
+            }
+            slots.indices.forEach { match(it, hashSetOf()) }
+            val block = mutableListOf<TmdbBrowseEntry>()
+            assigned.forEachIndexed { i, entry -> if (entry != null && used.add(entry.film.id))
+                block += entry.copy(domesticRegion = slots[i]) }
+            for (entry in candidates) if (block.size < slots.size && used.add(entry.film.id))
+                block += entry.copy(domesticRegion = entry.countries.first { it in setOf("CN", "HK", "TW") })
+            if (block.isEmpty()) break
+            result += block
         }
         return result
     }

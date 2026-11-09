@@ -34,7 +34,7 @@ internal object TmdbBrowseFocus {
 @Composable
 internal fun TmdbBrowseRails(
     state: TmdbBrowseState, page: TmdbBrowsePage, recent: List<Film>, reduced: Boolean,
-    requester: (String) -> FocusRequester, onFocus: (Film, String) -> Unit, onOpen: (Film) -> Unit
+    requester: (String) -> FocusRequester, onFocus: (Film, String) -> Unit, onOpen: (Film) -> Unit, restoreFocus: String? = null
 ) {
     val scope = rememberCoroutineScope()
     val specs = TmdbRailSpec.forPage(page)
@@ -64,6 +64,12 @@ internal fun TmdbBrowseRails(
                     contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     itemsIndexed(films, key = { _, f -> f.id }) { index, film ->
                         val tag = TmdbBrowseFocus.tag(page, key, film.id, hasRecent)
+                        LaunchedEffect(tag) {
+                            if (tag == restoreFocus) {
+                                withFrameNanos { }
+                                runCatching { requester(tag).requestFocus() }
+                            }
+                        }
                         Poster(film, Modifier.testTag(tag).focusRequester(requester(tag))
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
