@@ -32,7 +32,7 @@ for name, folder in [('JVM', 'app/build/test-results/testDebugUnitTest'),
 groups = {
     'HTTPS/证书/配对': {'LanConfigIdentityPolicyTest','LanConfigurationTest','LanHttpConfigurationTest','LanTlsIdentityTest','P0QrFailureTest','P0ExitAndEntryTest'},
     '启动显现/呼吸/过渡': {'WordmarkMotionTest','M439LaunchMotionPolicyTest','HerrinSplashTest','P0StartupFrameProbeTest'},
-    'SMB策略/真实协议/加密/Seek/解码': {'SmbPolicyTest','SmbProtocolIntegrationTest','SmbConfigSecurityTest','SmbRealPlaybackTest'},
+    'SMB策略/真实协议/加密/Seek/解码': {'SmbPolicyTest','SmbM2tsHandleTest','SmbProtocolIntegrationTest','SmbConfigSecurityTest','SmbRealPlaybackTest'},
 }
 lines += ['', '## 第三至第五阶段实际用例回执', '', '| 专项 | 本作业执行 | 失败/错误 | 跳过 |', '| --- | ---: | ---: | ---: |']
 for label, classes in groups.items():

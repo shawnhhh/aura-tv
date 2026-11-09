@@ -71,13 +71,14 @@ internal class SmbAccess(private val account:HerrinSmbAccount):Closeable {
             val file=share().openFile(path,EnumSet.of(AccessMask.GENERIC_READ),EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
                 SMB2ShareAccess.ALL,SMB2CreateDisposition.FILE_OPEN,EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE))
             val info=file.fileInformation
-            return object:SmbReadHandle {
+            val handle=object:SmbReadHandle {
                 override val size=info.standardInformation.endOfFile
                 override val version=info.basicInformation.lastWriteTime.toString()
                 override fun read(buffer:ByteArray,position:Long,offset:Int,length:Int)=file.read(buffer,position,offset,length)
                 private val ended=java.util.concurrent.atomic.AtomicBoolean()
                 override fun close(){if(ended.compareAndSet(false,true)){this@SmbAccess.close();runCatching{file.close()}}}
             }
+            return if(path.substringAfterLast('.').equals("m2ts",ignoreCase=true))SmbM2tsHandle.adapt(handle) else handle
         }catch(error:Exception){close();throw error}
     }
     override fun close() {
