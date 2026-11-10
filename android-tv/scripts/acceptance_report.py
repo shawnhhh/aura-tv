@@ -1,3 +1,4 @@
+import os
 """Emit a factual Chinese CI acceptance report from JUnit files and artifact hashes."""
 from pathlib import Path
 import hashlib
@@ -48,7 +49,11 @@ lines += ['', 'SMB 正向用例连接受控、认证、签名的真实 Samba SMB
           '启动 1800ms 显现 + 2400ms 同步呼吸 + 340ms 淡出是正常动画设计；减少动态/用户明确跳过例外。Compose 驱动的 ABBA 不能冒充冷启动实际动画时长。',
           'TLS 自签名身份持久化不等于 Safari 自动信任。真实 TCL / iPhone / 家庭 NAS / 第三方私有节点仍待真机验收。']
 lines += ['', '当前作业未执行的测试组显示 0；完整结论须联合 Debug 和 Emulator 两个作业。', '',
-          '## 可安装 APK', '', '在 Debug 工作流的 Artifacts 中下载 `HERRIN-debug-apk`，解压后通过 Android TV 安装或 `adb install -r app-debug.apk` 安装。']
+          '## APK 工件', '',
+          ('本P0分支真实节点尚未通过，CI不上传APK；临时安装包仅用于本轮诊断，不是验收交付。'
+           if (os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')) in
+               {'codex/herrin-global-search-20261107','codex/herrin-p0-live-playback-20261110'}
+           else '在 Debug 工作流的 Artifacts 中下载 `HERRIN-debug-apk`，解压后通过 Android TV 安装或 `adb install -r app-debug.apk` 安装。')]
 controlled=[]
 for path in (root / 'app/build/test-results/testDebugUnitTest').rglob('TEST-*.xml'):
     for node in ET.parse(path).getroot().iter('system-out'):
