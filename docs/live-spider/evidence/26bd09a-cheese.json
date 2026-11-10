@@ -1,0 +1,249 @@
+{
+  "node": "奶酪",
+  "verdict": "FAIL_PLAYBACK",
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "supported_64": [
+      "x86_64",
+      "arm64-v8a"
+    ],
+    "supported_32": [
+      "x86",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "build_cpu_abi": "arm64-v8a",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a",
+    "native_library_dir": "/data/app/~~JZ_PFl9aKkyknFBU0qYuoA==/tv.herrin.app-WcSkiZ0zVaVW9KAjVGlGRg==/lib/arm64"
+  },
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 1114
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 5415
+    },
+    {
+      "stage": "search",
+      "result": "PASS",
+      "elapsed_ms": 802
+    },
+    {
+      "stage": "film_match",
+      "result": "PASS",
+      "elapsed_ms": 101
+    },
+    {
+      "stage": "details",
+      "result": "PASS",
+      "elapsed_ms": 301
+    },
+    {
+      "stage": "episodes",
+      "result": "PASS",
+      "elapsed_ms": 100
+    },
+    {
+      "stage": "resolve_0",
+      "result": "PASS",
+      "elapsed_ms": 601
+    },
+    {
+      "stage": "real_media_bytes_0",
+      "result": "FAILED_OR_PENDING",
+      "error": "MEDIA_NETWORK_ERROR",
+      "elapsed_ms": 1605
+    },
+    {
+      "stage": "diagnostic_extended_media_0",
+      "result": "FAILED_OR_PENDING",
+      "error": "EXTENDED_MEDIA_HTTP_ERROR",
+      "elapsed_ms": 3211
+    }
+  ],
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "first_frame": false,
+  "seek_verified": false,
+  "plugin_initialized": true,
+  "playback_host_scope": "PRODUCTION_PANEL_WITH_TEST_CATALOG_HOST",
+  "details_ui_verified": false,
+  "site_key": "奶酪",
+  "site_name": "🧀奶酪┃秒播",
+  "spider_api": "csp_T4Guard",
+  "node_count": 48,
+  "declared_jar_md5": "9d5f341aa5f3353b50cc3bc16b4f3e8a",
+  "home_film_count": 0,
+  "active_site_after_home": true,
+  "search_count": 1,
+  "film_identity_verified": true,
+  "episode_count": 29,
+  "alternate_line_available": false,
+  "selection_failures": [
+    {
+      "selection": 0,
+      "episode": 1,
+      "stage": "diagnostic_extended_media_0",
+      "code": "EXTENDED_MEDIA_HTTP_ERROR"
+    }
+  ],
+  "production_media_events": [
+    {
+      "event": "LOCAL_AUTH_READY",
+      "current_site_matches": true
+    },
+    {
+      "event": "MEDIA_REQUEST",
+      "detail": "HOP=0"
+    },
+    {
+      "event": "MEDIA_TARGET_PROXY",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_CALL_FAILED",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_CONNECT_IO_TIMEOUT",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_IO_TIMEOUT",
+      "detail": ""
+    }
+  ],
+  "production_media_gate_failed": true,
+  "production_media_failure": "MEDIA_NETWORK_ERROR",
+  "extended_media_events": [
+    {
+      "event": "LOCAL_AUTH_READY",
+      "current_site_matches": true
+    },
+    {
+      "event": "MEDIA_REQUEST",
+      "detail": "HOP=0"
+    },
+    {
+      "event": "MEDIA_TARGET_PROXY",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_HEADERS",
+      "detail": "MS=3192"
+    },
+    {
+      "event": "MEDIA_HTTP",
+      "detail": "STATUS=502"
+    },
+    {
+      "event": "MEDIA_NOT_CHUNKED",
+      "detail": ""
+    }
+  ],
+  "failure_stage": "diagnostic_extended_media_0",
+  "failure_code": "EXTENDED_MEDIA_HTTP_ERROR",
+  "proxy_callback_shapes": [
+    {
+      "outcome": "CALLBACK_ARRAY",
+      "length": 3,
+      "mime_kind": "HLS",
+      "types": [
+        "java.lang.Integer",
+        "java.lang.String",
+        "java.io.ByteArrayInputStream"
+      ],
+      "status": 200
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_URL_REFERENCE"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_TARGET_HTTPS"
+    },
+    {
+      "outcome": "CALLBACK_ARRAY",
+      "length": 3,
+      "mime_kind": "HLS",
+      "types": [
+        "java.lang.Integer",
+        "java.lang.String",
+        "java.io.ByteArrayInputStream"
+      ],
+      "status": 200
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_URL_REFERENCE"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_TARGET_HTTPS"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_HTTP_403"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_DENIAL_HTML"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "PROXY_CALLBACK_OR_REWRITE_FAILED"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_HTTP_403"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_DENIAL_HTML"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "PROXY_CALLBACK_OR_REWRITE_FAILED"
+    }
+  ],
+  "blocked": true,
+  "blocker": "UPSTREAM_MEDIA_ACCESS_DENIED",
+  "sdk_network_scope": "SDK_OKHTTP_ONLY",
+  "sdk_network_evidence": [],
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 4160
+      }
+    ],
+    "response_chars": 4160,
+    "shape": "JSON_LIST"
+  },
+  "elapsed_ms": 13603,
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+49609ms SPIDER INITIALIZE_STARTED\nT+54962ms SPIDER INITIALIZE_RETURNED MS=5353\nT+55029ms SPIDER SEARCH_STARTED\nT+55741ms SPIDER SEARCH_RETURNED MS=711\nT+55928ms SPIDER DETAILS_EPISODES_STARTED\nT+56193ms SPIDER DETAILS_EPISODES_RETURNED MS=265\nT+56377ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESOLVE_STARTED\nT+56891ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESOLVE_RETURNED MS=514\nT+56891ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER PARSER_DIRECT\nT+56891ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESPONSE_URL_STRING\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESPONSE_PARSE VALUE=0\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESPONSE_JX VALUE=0\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER HEADER_FALLBACK\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER PARSER_DIRECT\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESPONSE_URL_STRING\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESPONSE_PARSE VALUE=0\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER RESPONSE_JX VALUE=0\nT+56892ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER HEADER_FALLBACK\nT+56893ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 SPIDER PLAYER_CONTENT_RETURNED\nT+56894ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 PROXY HEALTH_STARTED\nT+56907ms SID=aa51d42f-345e-4b1e-b428-3778a4b52e30 PROXY HEALTH_READY"
+}

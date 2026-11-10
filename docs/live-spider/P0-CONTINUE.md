@@ -114,3 +114,40 @@ codex/herrin-p0-live-playback-20261110 until phase verification. No full CI reru
 or acceptance APK has been generated for these repairs. Pending: inspect new
 runs, resolve real source blockers legitimately; fix/retest TMDB after concrete
 reproduction; then same-HEAD full JVM/Lint/Debug/TV/ABBA; APK only after real+CI.
+
+## 最新断点（f7d9434代码完成定向，完整PR回归待启动）
+
+- 最后真实双节点26bd09a /run42814282343 /job129823257320：奶酪仍HTTPS403 HTML→本机502，FAIL_PLAYBACK+BLOCKED；玩偶普通/quick各0字符，FAIL_PLAYBACK，根因未确定。两者首帧/Seek均false，无真实QR，禁止记任何播放/授权通过。完整安全JSON已入evidence/目录。
+- 公开异常被动分类cb2aee4 /run42812579978 /job129817462751：匹配1个真实插件进程，未见所筛选的公开SDK/TLS/DNS异常；这不是完整原生网络可见性。
+- 26bd09a收紧验收：真实60秒及进度/渲染帧、Seek新帧、详情年份确认、可用换线。发现当前测试宿主Back只证明播放器回调，现已禁止当详情通过；下一步仍须接实际MainActivity详情导航，当前会用PRODUCTION_DETAILS_UI_NOT_VERIFIED拒绝虚假验收。
+- TMDB夹具过期之外还有取消替换刷新被loading直接丢弃。f7d9434按栏目Mutex排队；新增取消替换JVM回归。run42815327241 /job129826837608已success：JVM相关类；TV相邻5/5、慢焦点16125ms的原刷新用例1/1。原15/10/5秒断言未放宽。旧失败run42813770339保留，不能把早期仅修夹具当作已解决全部问题。
+- 已核实集成目标仍79999f3且是当前修复分支祖先，准备普通快进集成，保持PR84 Draft。不要force push，不合并main/master。
+- 普通CI增加本P0分支APK工件禁发；Debug/TV测试仍可构建临时诊断安装包。真实源未通过前不发布验收APK。
+- 已建立正式一次自动续跑，计划2026-11-10 16:57 UTC，继承环境详情未返回；不能保证届时额度或机器可用，不能宣称当前后台在持续执行。先检查是否已有写入者，避免并发覆盖。
+
+下一轮先执行/读取：
+
+```sh
+cd /workspace/aura-tv
+git status --short
+git branch --show-current
+git log -1 --format='%H %s'
+# 用GitHub连接器读取PR84最新head/draft及该精确head的完整CI。
+# 最新真实双节点的已结束日志：job129823257320；不要无变化重跑403。
+# TMDB定向已通过：job129826837608，不要重复构建这一组。
+```
+
+仅在有新修复/新合法来源证据、已配置SDK/NDK/Gradle及设备时：
+
+```sh
+# 只构建一次诊断包，复用两个节点；不要开启默认三测试架构基线。
+cd /workspace/aura-tv
+bash android-tv/scripts/build_live_arm_canary.sh
+(cd android-tv && gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi=arm64-v8a :app:assembleDebug :app:assembleDebugAndroidTest)
+mkdir -p diagnostic-apks/arm64-v8a
+cp android-tv/app/build/outputs/apk/debug/app-debug.apk diagnostic-apks/arm64-v8a/
+cp android-tv/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk diagnostic-apks/arm64-v8a/
+LIVE_NODES=both LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_PREBUILT_APKS=diagnostic-apks LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_p0_selected_nodes.sh
+```
+
+本地当前无Android SDK/KVM，不应伪称上述设备命令已在此执行；真实执行使用Actions。

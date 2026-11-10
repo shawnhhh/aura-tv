@@ -56,7 +56,10 @@ jobs:
       - name: Generate Chinese acceptance record
         if: always()
         run: python3 scripts/acceptance_report.py
+      # P0 real nodes remain blocked. Compile/install diagnostics as needed,
+      # but do not distribute this branch's build as an acceptance APK.
       - uses: actions/upload-artifact@v4
+        if: ${{ !contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
         with:
           name: HERRIN-debug-apk
           path: android-tv/app/build/outputs/apk/debug/*.apk

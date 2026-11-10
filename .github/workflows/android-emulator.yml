@@ -69,7 +69,7 @@ jobs:
         working-directory: android-tv
         run: python3 scripts/acceptance_report.py
       - name: Collect emulator screenshots and UI test reports
-        if: always()
+        if: ${{ always() && !contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
         uses: actions/upload-artifact@v4
         with:
           name: HERRIN-emulator-evidence
@@ -80,5 +80,17 @@ jobs:
             android-tv/app/build/outputs/androidTest-results/
             android-tv/app/build/outputs/apk/debug/*.apk
             android-tv/app/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Collect P0 reports without acceptance APKs
+        if: ${{ always() && contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          path: |
+            android-tv/build/emulator-evidence/
+            android-tv/build/acceptance/
+            android-tv/app/build/reports/androidTests/
+            android-tv/app/build/outputs/androidTest-results/
           if-no-files-found: warn
           retention-days: 14
