@@ -207,7 +207,10 @@ class FanTaiYingRealNodesTest {
             report.put("alternate_line_available", alternate != null)
             val sequence = mutableListOf(first to first.lines[0], first to first.lines[0], second to second.lines[0])
             if (alternate != null) sequence.add(first to alternate)
+            val selectionFailures = JSONArray()
+            report.put("selection_failures", selectionFailures)
             for ((index, choice) in sequence.withIndex()) {
+                try {
                 val session = PlaybackDiagnosticSession.newId()
                 val resolved = step("resolve_$index") {
                     withContext(PlaybackDiagnosticSession.context(session)) {
@@ -249,6 +252,18 @@ class FanTaiYingRealNodesTest {
                     report.put("player_is_extended_budget_diagnostic", true)
                 }
                 verifyPlayer(resolved, index)
+                } catch (error: Stop) {
+                    if (error.code == "AUTH_FLOW_PASS_PLAYBACK_PENDING" || error.code.startsWith("AUTH_")) throw error
+                    selectionFailures.put(JSONObject().put("selection", index).put("episode", choice.first.number)
+                        .put("stage", currentStage).put("code", error.code))
+                    compose.runOnIdle { media = null }
+                    compose.waitForIdle()
+                }
+            }
+            if (selectionFailures.length() > 0) {
+                val firstFailure = selectionFailures.getJSONObject(0)
+                currentStage = firstFailure.getString("stage")
+                throw Stop(firstFailure.getString("code"))
             }
             if (report.optBoolean("production_media_gate_failed")) {
                 currentStage = "production_media_gate"

@@ -95,6 +95,24 @@ public final class NativeFongMiProxyTest {
         assertEquals(502, NativeFongMiProxy.fromUpstreamResponse(new Object[]{200, "text/plain"}).getStatus().getRequestStatus());
     }
 
+    @Test public void failureDiagnosticsCannotReplaceHlsRejection() throws Exception {
+        java.util.List<String> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        try (NativeFongMiProxy proxy = new NativeFongMiProxy("approved", params ->
+                new Object[]{200, "application/vnd.apple.mpegurl", new ByteArrayInputStream(
+                    "private provider error instead of a playlist".getBytes(java.nio.charset.StandardCharsets.UTF_8))}, null)) {
+            proxy.setDiagnostic(new NativeFongMiProxy.Diagnostic() {
+                @Override public void httpResponse(int status, boolean range) {}
+                @Override public void failure(String code) {
+                    events.add(code);
+                    throw new AssertionError("recorder failed");
+                }
+            });
+            assertEquals(502, responseCode(proxy.siteUrl()));
+            assertTrue(events.contains("HLS_MANIFEST_REJECTED"));
+            assertTrue(events.contains("PROXY_CALLBACK_OR_REWRITE_FAILED"));
+        }
+    }
+
     private static HttpURLConnection connection(String url) throws Exception {
         HttpURLConnection http = (HttpURLConnection) URI.create(url).toURL().openConnection();
         http.setConnectTimeout(3000);

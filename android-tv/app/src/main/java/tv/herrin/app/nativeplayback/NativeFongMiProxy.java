@@ -114,7 +114,7 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         Diagnostic sink = diagnostic;
         if (sink != null && diagnosticBudget.getAndDecrement() > 0) {
             try { sink.failure(code); }
-            catch (RuntimeException ignored) { /* Diagnostics never alter a response. */ }
+            catch (Throwable ignored) { /* Diagnostics never alter a response. */ }
         }
     }
 
