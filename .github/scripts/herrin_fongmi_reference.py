@@ -2,7 +2,8 @@
 
 Public UI + documented /action setting/search only. No DB injection, resigning,
 native hooks, private media endpoints, broad-source search or video selection.
-UI XML stays in memory; no QR image/content or raw logcat is published.
+UI XML is temporary on the disposable device and removed; no QR image/content
+or raw logcat is published.
 """
 from pathlib import Path
 import hashlib
@@ -22,6 +23,7 @@ report = dict(scope='OFFICIAL_REFERENCE_SEARCH_UI_ONLY_NO_MEDIA', herrin_accepta
               verdict='REFERENCE_BLOCKED', release='FongMi/Release 5.8.7', warehouse=WAREHOUSE,
               targets=[], stages=[])
 stage = 'install'
+parents = {}
 
 def adb(*args, timeout=15, check=True):
     p = subprocess.run(['adb', *args], capture_output=True, text=True, timeout=timeout)
@@ -32,15 +34,20 @@ def key(code):
     adb('shell', 'input', 'keyevent', str(code))
 
 def ui():
+    global parents
     adb('shell', 'uiautomator', 'dump', '/data/local/tmp/p0-reference.xml', timeout=15)
     data = adb('exec-out', 'cat', '/data/local/tmp/p0-reference.xml')
-    nodes=list(ET.fromstring(data).iter('node'))
+    root=ET.fromstring(data)
+    parents={child:parent for parent in root.iter() for child in parent}
+    nodes=list(root.iter('node'))
     known={'vod','vod_home','title','positive','negative','search','select','cancel','mode','text',
            'permission_allow_button','permission_allow_foreground_only_button','button1','button2'}
     report['last_ui_shape'] = dict(known_controls=sorted({n.get('resource-id','').split('/')[-1]
         for n in nodes if n.get('resource-id','').split('/')[-1] in known}),
         known_labels=sorted({n.get('text') for n in nodes if n.get('text') in
-            {'设置','設定','Setting','Settings','允许','允許','Allow','确定','確定','同意'}}))
+            {'设置','設定','Setting','Settings','允许','允許','Allow','确定','確定','同意'}}),
+        known_focused_controls=sorted({n.get('resource-id','').split('/')[-1] for n in nodes
+            if n.get('focused')=='true' and n.get('resource-id','').split('/')[-1] in known}))
     return nodes
 
 def reset_site_scroll():
@@ -51,11 +58,6 @@ def reset_site_scroll():
     x=(b[0]+b[2])//2
     for _ in range(10):
         adb('shell','input','swipe',str(x),str(b[1]+30),str(x),str(b[3]-30),'100')
-
-def tap(node):
-    b = list(map(int, re.findall(r'\d+', node.get('bounds', ''))))
-    if len(b) != 4 or b[2] <= b[0] or b[3] <= b[1]: raise RuntimeError('UI_TARGET_HAS_NO_BOUNDS')
-    adb('shell', 'input', 'tap', str((b[0]+b[2])//2), str((b[1]+b[3])//2))
 
 def find(nodes, *, rid=None, texts=(), contains=None):
     for n in nodes:
@@ -75,8 +77,17 @@ def click(*, rid=None, texts=(), contains=None, scroll=False, budget=18):
         if auth(nodes): raise RuntimeError('REFERENCE_AUTH_UI_REQUIRES_PERSONAL_ACTION_UNVERIFIED')
         n = find(nodes, rid=rid, texts=texts, contains=contains)
         if n is not None:
-            tap(n)
-            return
+            # Use the real TV/keyboard focus path. Touch coordinates on leanback
+            # cards/buttons may only focus them; never double-activate toggles.
+            target=n
+            while target.get('focusable')!='true' and target in parents:
+                target=parents[target]
+            if target.get('focusable')!='true':raise RuntimeError('REFERENCE_CONTROL_NOT_FOCUSABLE')
+            if any(child.get('focused')=='true' for child in target.iter()):
+                key(23)
+                return
+            key(61)  # Standard keyboard focus-forward, no app-private API.
+            continue
         if scroll:
             recycler = find(nodes, rid='recycler')
             if recycler is not None:
@@ -116,11 +127,6 @@ try:
     mark('open_settings')
     # Upstream leanback/res/values/strings.xml names home_setting "Setting".
     click(texts=('设置','設定','Setting','Settings'),budget=25)
-    # Leanback's first touch can focus a card without activating it.
-    # Only confirm while still on that unchanged home, never double-toggle a site.
-    time.sleep(.5)
-    if find(ui(),rid='vod') is None:
-        key(23)
     click(rid='vod')
     mark('real_warehouse_configuration')
     action('setting',text=WAREHOUSE,name='P0 official reference')
@@ -131,7 +137,7 @@ try:
     click(rid='search')
     click(rid='cancel')  # Official SiteAdapter.cancelAll(), not dialog Back.
     for name in TARGETS:
-        click(contains=name,scroll=True,budget=28)
+        click(contains=name,scroll=True,budget=45)
         # Return the official list to its start before finding the next target.
         reset_site_scroll()
     report['search_scope_set_via_official_ui']=list(TARGETS)
