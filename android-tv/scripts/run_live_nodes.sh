@@ -27,6 +27,7 @@ if os.environ.get('GITHUB_STEP_SUMMARY'):
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
         out.write('\n'.join(lines) + '\n')
 SUMMARY
+    python3 android-tv/scripts/live_spider_methods.py || true
     # Do not collect provider logcat, private QR graphics, tokens or URLs.
     exit "$result"
 }
