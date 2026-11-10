@@ -10,6 +10,7 @@ permissions:
   contents: read
 jobs:
   actual-nodes:
+    if: ${{ !contains(github.event.head_commit.message, '[arm-eval-only]') }}
     strategy:
       fail-fast: false
       matrix:
@@ -84,8 +85,9 @@ jobs:
           uname -m > evidence/host-arch.txt
           sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)
           avd_manager="$(dirname "$sdk_manager")/avdmanager"
+          yes | "$sdk_manager" --licenses > evidence/licenses.log 2>&1 || true
           "$sdk_manager" 'emulator' 'platform-tools' 'system-images;android-30;google_apis;arm64-v8a' > evidence/sdk.log 2>&1 || { cat evidence/sdk.log; exit 1; }
-          echo no | "$avd_manager" create avd --force --name HerrinArm64Evaluation --package 'system-images;android-30;google_apis;arm64-v8a' > evidence/avd.log 2>&1
+          echo no | "$avd_manager" create avd --force --name HerrinArm64Evaluation --package 'system-images;android-30;google_apis;arm64-v8a' > evidence/avd.log 2>&1 || { cat evidence/avd.log; exit 1; }
           set +e
           timeout 90 "$ANDROID_HOME/emulator/emulator" -avd HerrinArm64Evaluation -accel off -no-window -no-snapshot -noaudio -gpu swiftshader_indirect > evidence/engine.log 2>&1
           status=$?
