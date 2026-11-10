@@ -440,13 +440,14 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private var activeSiteClick: String = ""
     private var activeHttpHost: SpiderHttpSessionHost? = null
     private var activeNativeProxy: NativeFongMiProxy? = null
+    private var activeNetworkTrace: AutoCloseable? = null
 
     private data class RetiredResources(val spider: Spider?, val http: SpiderHttpSessionHost?,
-            val runtime: FongMiScriptRuntimes?, val proxies: List<NativeFongMiProxy>) {
+            val runtime: FongMiScriptRuntimes?, val proxies: List<NativeFongMiProxy>, val networkTrace: AutoCloseable?) {
         fun release() = SpiderRuntimeCompat.cleanup(
             proxies.map { proxy -> { proxy.close() } } + listOf(
                 { SpiderRuntimeCompat.dispose(spider) }, { runtime?.close(); Unit },
-                { http?.clear(); Unit }))
+                { http?.clear(); Unit }, { networkTrace?.close(); Unit }))
     }
 
     private fun checkOpen(ticket: Long) = synchronized(lifecycle) {
@@ -542,9 +543,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         retired?.release()
         checkOpen(ticket)
         val spider = reused ?: run {
+            synchronized(lifecycle) { checkOpen(ticket); activeNetworkTrace=SpiderNetworkTrace.start(context) }
             if (scriptApi != null) {
                 Runtime.set(context.applicationContext)
-                Runtime.setActivity { null }
+                Runtime.setActivity { SpiderNetworkTrace.event("ACTIVITY_REQUEST_UNAVAILABLE"); null }
                 val host = SpiderHttpSessionHost()
                 val runtime = FongMiScriptRuntimes(context)
                 try {
@@ -577,8 +579,10 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             Runtime.set(context.applicationContext)
             // An isolated Service cannot provide the foreground Activity from
             // the main process. Do not pretend the Application is an Activity.
-            Runtime.setActivity { null }
-            Runtime.setToast { android.util.Log.i("HerrinCatVod", "Plugin notification suppressed") }
+            Runtime.setActivity { SpiderNetworkTrace.event("ACTIVITY_REQUEST_UNAVAILABLE"); null }
+            Runtime.setToast { text ->
+                SpiderNetworkTrace.event(if(listOf("登录","扫码","授权").any(text::contains)) "PLUGIN_AUTH_NOTIFICATION" else "PLUGIN_NOTIFICATION")
+            }
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.NATIVE)
             // Extract ABI-matched JNI only to the DEX search directory. FongMi's
             // JarLoader does NOT eagerly System.load() an arbitrary JAR asset;
@@ -804,8 +808,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
     private fun detachLocked(): RetiredResources {
         epoch++
         val retired = RetiredResources(active, activeHttpHost, activeScriptRuntime,
-            listOfNotNull(activeNativeProxy, initializingProxy).distinct())
+            listOfNotNull(activeNativeProxy, initializingProxy).distinct(), activeNetworkTrace)
         initializingProxy = null
+        activeNetworkTrace = null
         activeNativeProxy = null
         CatVodProxy.set(-1, "")
         active = null

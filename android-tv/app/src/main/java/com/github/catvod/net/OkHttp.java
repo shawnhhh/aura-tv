@@ -214,6 +214,8 @@ public class OkHttp {
         // validation. The upstream version bypasses both checks globally.
         OkHttpClient.Builder builder = new OkHttpClient.Builder().addInterceptor(requestInterceptor()).addInterceptor(authInterceptor()).addInterceptor(new ProxyRedirectInterceptor(selector)).addNetworkInterceptor(responseInterceptor()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).dns(dns()).followRedirects(false);
         HttpLoggingInterceptor logging = new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY);
+        // HERRIN: passive fixed-code diagnostics; TLS/headers/dispatch are unchanged.
+        builder.eventListenerFactory(call -> tv.herrin.app.SpiderNetworkTrace.listener());
         builder.proxyAuthenticator(authenticator());
         //builder.addNetworkInterceptor(logging);
         builder.proxySelector(selector);

@@ -104,7 +104,7 @@ class FanTaiYingRealNodesTest {
         var job: Deferred<T>? = null
         try {
             job = scope.async { withTimeout(budget) { block() } }
-            while (!requireNotNull(job).isCompleted) {
+            while (!requireNotNull(job).isCompleted || SpiderAuthorizationUi.requests.value != null) {
                 if (SpiderAuthorizationUi.requests.value != null) {
                     row.put("authorization_observed", true)
                     try {
@@ -151,7 +151,7 @@ class FanTaiYingRealNodesTest {
             .put("authorized_title", "小城良方").put("authorized_year", 2026)
             .put("first_frame", false).put("seek_verified", false).put("plugin_initialized", false)
         val bridge = TvBoxSpiderBridge(context)
-        for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt", "spider-search-shape.json"))
+        for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt", "spider-search-shape.json", "spider-network-shape.json"))
             File(context.filesDir, file).delete()
         HerrinPlaybackDiagnosticJournal.clear()
         var backRequests = 0
@@ -314,6 +314,7 @@ class FanTaiYingRealNodesTest {
                     report.put("blocked", true).put("blocker", "UPSTREAM_MEDIA_ACCESS_DENIED")
                 }
             }
+            runCatching { report.put("sdk_network_scope", "SDK_OKHTTP_ONLY").put("sdk_network_evidence", JSONArray(File(context.filesDir, "spider-network-shape.json").readText())) }
             runCatching { report.put("search_response_shape", JSONObject(File(context.filesDir, "spider-search-shape.json").readText())) }
             report.put("elapsed_ms", SystemClock.elapsedRealtime() - begin)
                 .put("safe_player_journal", HerrinPlaybackDiagnosticJournal.export())
