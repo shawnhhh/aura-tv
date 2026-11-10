@@ -116,6 +116,11 @@ try:
     mark('open_settings')
     # Upstream leanback/res/values/strings.xml names home_setting "Setting".
     click(texts=('设置','設定','Setting','Settings'),budget=25)
+    # Leanback's first touch can focus a card without activating it.
+    # Only confirm while still on that unchanged home, never double-toggle a site.
+    time.sleep(.5)
+    if find(ui(),rid='vod') is None:
+        key(23)
     click(rid='vod')
     mark('real_warehouse_configuration')
     action('setting',text=WAREHOUSE,name='P0 official reference')
