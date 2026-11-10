@@ -1,3 +1,13 @@
+# 最新断点优先（2026-11-10 16:56 UTC）
+
+P0仍未完成。源代码86d3192；PR84当前已验证应用HEAD adfbea4。空首页正式MainActivity两例已通过c8572a1；真实玩偶仍SOURCE_EMPTY_RESPONSE。奶酪标准ARMv7正式FongMi/Media3 HTTP首读已明确READY→本机502/上游403 HTML，未出帧。保留失败与安全JSON；旧常规715/257/24通过不能冒充新HEAD。
+
+**先读[本轮最新中文检查点](20261110-P0-checkpoint.zh-CN.md)及最新PR/CI，再按未完成项继续。下方为历史记录，包含过期的“待运行/旧HEAD”，不能覆盖最新实证。**
+
+16:57一次续跑已停用，因为当前已恢复执行，避免并发写入。没有启用额外后台任务。
+
+---
+
 # P0 未完成：真实播放修复续跑
 
 基线HEAD：79999f3538b5adc5337efff15befdc187d520bb5。主开发分支 codex/herrin-global-search-20261107，Draft PR #84；当前专项临时分支 codex/herrin-p0-live-playback-20261110。
