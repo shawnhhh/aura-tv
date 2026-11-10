@@ -75,7 +75,10 @@ class TmdbBrowsePageTest {
         compose.onNodeWithTag("tmdb-heading-home-hot").assertTextEquals("热门推荐")
         compose.onNodeWithTag("tmdb-heading-home-domestic").assertTextEquals("国内热门")
         compose.onNodeWithText("大陆 : 香港 : 台湾").assertDoesNotExist()
-        compose.onNodeWithTag("card-tmdb-movie-11").performScrollTo().performClick()
+        compose.onNodeWithTag("card-tmdb-movie-11").performScrollTo()
+            .performSemanticsAction(SemanticsActions.RequestFocus){it()}
+        compose.onNodeWithTag("card-tmdb-movie-11").assertIsFocused()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("film-detail-list").assertExists()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("tmdb-heading-home-hot").assertExists()

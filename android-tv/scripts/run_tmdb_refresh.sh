@@ -26,5 +26,7 @@ PY
 }
 # Reproduce the neighboring classes in the original suite, then exercise the
 # exact same assertions with a provider response deliberately held >15 seconds.
-run_target neighbors tv.herrin.app.TmdbBrowsePageTest,tv.herrin.app.TmdbBrowsePaginationTest,tv.herrin.app.TmdbBrowseRefreshTest false 5
-run_target slow-focus tv.herrin.app.TmdbBrowseRefreshTest true 1
+result=0
+run_target neighbors tv.herrin.app.TmdbBrowsePageTest,tv.herrin.app.TmdbBrowsePaginationTest,tv.herrin.app.TmdbBrowseRefreshTest false 5 || result=1
+run_target slow-focus tv.herrin.app.TmdbBrowseRefreshTest true 1 || result=1
+exit "$result"
