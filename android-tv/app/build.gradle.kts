@@ -24,6 +24,12 @@ android {
     // The ordinary 113-case TV suite never downloads or executes remote Spider code.
     if (project.providers.gradleProperty("herrinLiveSourceTest").orNull == "true") {
         sourceSets.getByName("androidTest").java.srcDir("src/liveAndroidTest/java")
+        sourceSets.getByName("androidTest").assets.srcDir("build/live-probe-assets")
+    }
+    // Opt-in test package: let Android's package manager select its ARM native bridge.
+    // Only the original arithmetic canary is packaged; no provider JAR/native code is modified.
+    if (project.providers.gradleProperty("herrinArmTranslationTest").orNull == "true") {
+        sourceSets.getByName("main").jniLibs.srcDir("build/live-probe-jni")
     }
     // Optional stable self-distribution signature. Never commit keys or passwords.
     // Missing values produce normal debug builds; the release workflow refuses
