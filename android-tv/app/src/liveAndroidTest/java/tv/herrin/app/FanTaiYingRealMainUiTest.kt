@@ -331,6 +331,21 @@ class FanTaiYingRealMainUiTest {
                 .put("driver_failure_structure",SpiderFailureTrace.structure(error))
                 .put("worker_exit",SpiderExitDiagnostics.recent(context))
         } finally {
+            if(report.optString("failure_code").startsWith("MEDIA_PROBE_") && !report.optBoolean("media3_created")) {
+                // Observe the EXISTING server callback after the failed caller.
+                // No retry, new request, timeout change or verdict promotion.
+                val observationStart=SystemClock.elapsedRealtime()
+                while(SystemClock.elapsedRealtime()-observationStart<8_000) {
+                    val rows=runCatching{JSONArray(File(context.filesDir,"spider-proxy-shapes.json").readText())}.getOrNull()
+                    if(rows!=null && (0 until rows.length()).any {
+                        val row=rows.optJSONObject(it)
+                        row!=null && row.optString("outcome")=="HOST_PROXY_RESPONSE" && row.optInt("status")!=204
+                    })break
+                    Thread.sleep(100)
+                }
+                report.put("post_failure_observation_only",true)
+                    .put("post_failure_observation_ms",SystemClock.elapsedRealtime()-observationStart)
+            }
             runCatching {
                 val input = compose.onNodeWithTag("search-input").fetchSemanticsNode().config
                     .getOrElse(SemanticsProperties.EditableText) { androidx.compose.ui.text.AnnotatedString("") }

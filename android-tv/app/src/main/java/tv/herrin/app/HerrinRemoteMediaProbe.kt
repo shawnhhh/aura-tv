@@ -44,10 +44,29 @@ internal class HerrinRemoteMediaProbe(
 
     suspend fun probe(media: PlaybackMedia): Result {
         val began = System.nanoTime()
+        val ioPhase = java.util.concurrent.atomic.AtomicReference("NO_CONNECT_EVENT")
         val observedClient = client.newBuilder().eventListener(object: okhttp3.EventListener() {
-            override fun dnsStart(call: okhttp3.Call, domainName: String) { evidence("MEDIA_DNS_STARTED", "") }
+            override fun dnsStart(call: okhttp3.Call, domainName: String) { ioPhase.set("DNS"); evidence("MEDIA_DNS_STARTED", "") }
             override fun dnsEnd(call: okhttp3.Call, domainName: String, inetAddressList: List<java.net.InetAddress>) { evidence("MEDIA_DNS_FINISHED", "") }
-            override fun secureConnectStart(call: okhttp3.Call) { evidence("MEDIA_TLS_STARTED", "") }
+            override fun connectStart(call: okhttp3.Call, inetSocketAddress: java.net.InetSocketAddress, proxy: java.net.Proxy) {
+                ioPhase.set("CONNECT")
+                evidence("MEDIA_CONNECT_STARTED", "")
+                evidence(if(proxy.type()==java.net.Proxy.Type.DIRECT) "MEDIA_TRANSPORT_DIRECT" else "MEDIA_TRANSPORT_VIA_PROXY", "")
+            }
+            override fun connectEnd(call: okhttp3.Call, inetSocketAddress: java.net.InetSocketAddress, proxy: java.net.Proxy, protocol: okhttp3.Protocol?) {
+                ioPhase.set("REQUEST_HEADERS"); evidence("MEDIA_CONNECT_FINISHED", "")
+            }
+            override fun connectFailed(call: okhttp3.Call, inetSocketAddress: java.net.InetSocketAddress, proxy: java.net.Proxy, protocol: okhttp3.Protocol?, ioe: java.io.IOException) {
+                evidence("MEDIA_CONNECT_FAILED", "")
+            }
+            override fun requestHeadersEnd(call: okhttp3.Call, request: Request) {
+                ioPhase.set("RESPONSE_HEADERS"); evidence("MEDIA_REQUEST_HEADERS_SENT", "")
+            }
+            override fun responseHeadersEnd(call: okhttp3.Call, response: okhttp3.Response) {
+                ioPhase.set("RESPONSE_BODY"); evidence("MEDIA_RESPONSE_HEADERS_RECEIVED", "")
+            }
+            override fun responseBodyStart(call: okhttp3.Call) { evidence("MEDIA_RESPONSE_BODY_STARTED", "") }
+            override fun secureConnectStart(call: okhttp3.Call) { ioPhase.set("TLS"); evidence("MEDIA_TLS_STARTED", "") }
             override fun secureConnectEnd(call: okhttp3.Call, handshake: okhttp3.Handshake?) { evidence("MEDIA_TLS_FINISHED", "") }
             override fun callFailed(call: okhttp3.Call, ioe: java.io.IOException) {
                 evidence(if (call.isCanceled()) "MEDIA_SOCKET_CANCELLED" else "MEDIA_CALL_FAILED", "")
@@ -173,7 +192,7 @@ internal class HerrinRemoteMediaProbe(
                     return@readSourceResponse Result.LOGIN_OR_TEXT
                 Result.MEDIA
             } } catch(cancel:CancellationException){evidence("MEDIA_CANCELLED_CALLER", "");throw cancel} catch(error:Exception){
-                evidence("MEDIA_CONNECT_IO_" + ioCode(error), "")
+                evidence("MEDIA_FAILURE_" + ioPhase.get(), "")
                 evidence("MEDIA_IO_" + ioCode(error), "")
                 if(strictHttpFailure &&error is SourceHttpFailure)throw error
                 return Result.NETWORK_ERROR

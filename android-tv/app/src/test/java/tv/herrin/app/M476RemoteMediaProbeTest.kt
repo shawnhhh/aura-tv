@@ -11,6 +11,32 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicInteger
 
 class M476RemoteMediaProbeTest {
+    /** Original protocol fixture: phases must not mislabel a read timeout as connection failure. */
+    @Test fun delayedHeadersAndBodyHaveDifferentIoFailureStages() = runBlocking {
+        for (delayHeaders in listOf(true,false)) MockWebServer().use { server ->
+            val reply=MockResponse().setHeader("Content-Type","application/vnd.apple.mpegurl")
+                .setBody("#EXTM3U\n#EXTINF:1,\noriginal.ts\n")
+            if(delayHeaders)reply.setHeadersDelay(500,java.util.concurrent.TimeUnit.MILLISECONDS)
+            else reply.setBodyDelay(500,java.util.concurrent.TimeUnit.MILLISECONDS)
+            server.enqueue(reply); server.start()
+            val events=java.util.Collections.synchronizedList(mutableListOf<String>())
+            val client=okhttp3.OkHttpClient.Builder().proxy(java.net.Proxy.NO_PROXY)
+                .retryOnConnectionFailure(false).connectTimeout(500,java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(100,java.util.concurrent.TimeUnit.MILLISECONDS)
+                .callTimeout(1500,java.util.concurrent.TimeUnit.MILLISECONDS).build()
+            val result=HerrinRemoteMediaProbe(client,authorizeLocal={true},evidence={ code,_->events.add(code) })
+                .probe(PlaybackMedia(server.url("/original.m3u8").toString()))
+            assertEquals(HerrinRemoteMediaProbe.Result.NETWORK_ERROR,result)
+            assertTrue(events.contains("MEDIA_TRANSPORT_DIRECT"))
+            assertTrue(events.contains("MEDIA_CONNECT_FINISHED"))
+            assertTrue(events.contains("MEDIA_REQUEST_HEADERS_SENT"))
+            assertTrue(events.contains(if(delayHeaders) "MEDIA_FAILURE_RESPONSE_HEADERS" else "MEDIA_FAILURE_RESPONSE_BODY"))
+            assertEquals(!delayHeaders,events.contains("MEDIA_RESPONSE_HEADERS_RECEIVED"))
+            assertFalse(events.contains("MEDIA_CONNECT_FAILED"))
+            assertEquals(1,server.requestCount)
+        }
+    }
+
     @Test fun slowChunkedBinaryStopsAtConclusiveSignatureWithoutWaitingForOneKilobyte(): Unit = runBlocking {
         for (prefix in listOf(byteArrayOf(0,0,0,24,102,116,121,112), byteArrayOf(0x1a,0x45,0xdf.toByte(),0xa3.toByte()))) {
             MockWebServer().use { server ->
