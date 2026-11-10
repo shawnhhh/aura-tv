@@ -11,6 +11,8 @@ for abi in arm64-v8a armeabi-v7a; do
     "$compiler_dir/$target-clang" -shared -fPIC -O2 android-tv/test-fixtures/arm-canary/probe.c -o "$output/libherrinarmprobe.so"
     "$compiler_dir/llvm-readelf" -h "$output/libherrinarmprobe.so" > "$output/elf.txt"
 done
-# Only ARM64 in this package: installing it is a real package-manager capability check.
-mkdir -p android-tv/app/build/live-probe-jni/arm64-v8a
-cp android-tv/app/build/live-probe-assets/native-probe/arm64-v8a/libherrinarmprobe.so android-tv/app/build/live-probe-jni/arm64-v8a/
+# The opt-in build applies an ABI filter to ALL native dependencies, including Compose.
+for abi in arm64-v8a armeabi-v7a; do
+    mkdir -p "android-tv/app/build/live-probe-jni/$abi"
+    cp "android-tv/app/build/live-probe-assets/native-probe/$abi/libherrinarmprobe.so" "android-tv/app/build/live-probe-jni/$abi/"
+done

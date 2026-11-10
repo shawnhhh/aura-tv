@@ -37,22 +37,31 @@ adb shell getprop ro.dalvik.vm.isa.arm >> evidence/native-bridge.txt
 adb shell getprop ro.dalvik.vm.isa.arm64 >> evidence/native-bridge.txt
 adb shell ls /system/lib64/libndk_translation.so /system/lib/libndk_translation.so /system/lib64/libhoudini.so /system/lib/libhoudini.so > evidence/bridge-files.txt 2>&1 || true
 if [[ -n "${LIVE_PREBUILT_APKS:-}" ]]; then
-    if [[ "${ARM_PACKAGE:-false}" == true ]]; then variant=arm; else variant=plain; fi
+    if [[ "${ARM_PACKAGE:-false}" == true ]]; then variant="${LIVE_INSTALL_ABI:?ARM package ABI required}"; else variant=plain; fi
     apk_dir="$repo_root/$LIVE_PREBUILT_APKS/$variant"
 else
     bash android-tv/scripts/build_live_arm_canary.sh
     (cd android-tv && gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" :app:assembleDebug :app:assembleDebugAndroidTest) 2>&1 | tee evidence/build.log
     apk_dir="$repo_root/android-tv/app/build/outputs/apk"
 fi
+install_args=()
+instrument_args=()
+if [[ -n "${LIVE_INSTALL_ABI:-}" ]]; then
+    install_args=(--abi "$LIVE_INSTALL_ABI")
+    instrument_args=(--abi "$LIVE_INSTALL_ABI")
+fi
 if [[ -n "${LIVE_PREBUILT_APKS:-}" ]]; then
-    adb install -r "$apk_dir/app-debug.apk" | tee evidence/install.txt
-    adb install -r "$apk_dir/app-debug-androidTest.apk"
+    adb install "${install_args[@]}" -r "$apk_dir/app-debug.apk" | tee evidence/install.txt
+    adb install "${install_args[@]}" -r "$apk_dir/app-debug-androidTest.apk"
 else
     adb install -r "$apk_dir/debug/app-debug.apk" | tee evidence/install.txt
     adb install -r "$apk_dir/androidTest/debug/app-debug-androidTest.apk"
 fi
 adb shell dumpsys package tv.herrin.app | grep -E 'primaryCpuAbi|secondaryCpuAbi|nativeLibraryDir' > evidence/package-abi.txt || true
-adb shell am instrument -w -r -e class tv.herrin.app.FanTaiYingRealNodesTest tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/instrumentation.txt
+if [[ -n "${LIVE_INSTALL_ABI:-}" ]]; then
+    grep -F "primaryCpuAbi=$LIVE_INSTALL_ABI" evidence/package-abi.txt
+fi
+adb shell am instrument "${instrument_args[@]}" -w -r -e class tv.herrin.app.FanTaiYingRealNodesTest tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/instrumentation.txt
 python3 - <<'PY'
 import json
 from pathlib import Path

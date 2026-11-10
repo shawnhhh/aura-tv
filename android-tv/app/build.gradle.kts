@@ -30,6 +30,8 @@ android {
     // Only the original arithmetic canary is packaged; no provider JAR/native code is modified.
     if (project.providers.gradleProperty("herrinArmTranslationTest").orNull == "true") {
         sourceSets.getByName("main").jniLibs.srcDir("build/live-probe-jni")
+        defaultConfig.ndk.abiFilters.add(
+            project.providers.gradleProperty("herrinLiveAbi").orNull ?: "arm64-v8a")
     }
     // Optional stable self-distribution signature. Never commit keys or passwords.
     // Missing values produce normal debug builds; the release workflow refuses

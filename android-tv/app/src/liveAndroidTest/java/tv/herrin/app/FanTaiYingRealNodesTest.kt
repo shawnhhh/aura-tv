@@ -38,7 +38,7 @@ class FanTaiYingRealNodesTest {
     private fun safe(s: String) = s.replace(Regex("(?i)https?://[^\\s<>]+"), "[URL]")
         .replace(Regex("(?i)(token|cookie|authorization|password)\\s*[:=]\\s*\\S+"), "$1=[redacted]").take(220)
     private fun write(name: String, value: JSONObject) {
-        File(context.filesDir, "live-node-$name.json").writeText(value.toString(2))
+        File(context.filesDir, "live-node-$name.json").writeText(value.toString(2) + "\n")
         android.util.Log.i("HerrinLiveNode", value.toString())
     }
     private fun device() = JSONObject().put("sdk", Build.VERSION.SDK_INT)
