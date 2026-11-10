@@ -36,3 +36,45 @@ and this new native crash are separate observed failures; do not infer a fix.
 Report: /workspace/reports/herrin-p0-20261110/6edf804-cheese.json.
 Next run adds only safe native crash module/signal classification and strict
 five-operation/60-second acceptance; never uploads raw provider crash logs.
+
+## dab76a5 true Cheese retest / 42790701662 / 129743068737
+
+No native crash on this run. Callback is exactly Object[3]: Integer200, HLS
+MIME, ByteArrayInputStream. Both default/extended attempts reject the HLS
+**header**, HLS_HEADER_INVALID; not a nested-reference rejection. The extended
+probe reaches HOST localhost502 at2230ms; current session health remains READY.
+No frame/Seek. First-stage stop now works. Tests/build passed; real acceptance
+correctly failed. Safe native crash summary is empty.
+
+57e8873 Wanou run42791018232 /129745130357 stopped before emulator because
+new unit test missed Assert.fail import. Corrected in25607c3; that run is not
+a provider verdict. 57e8873 actual runtime change: always call home(true) then
+homeVideoContent, and let an empty catalog publish the initialized session.
+Search empty body is SOURCE_EMPTY_RESPONSE, not JSONObject crash or no resources.
+
+6ba4216 real Cheese next: remove probe-injected Range for HLS/native proxies to
+match FongMi manifest requests; bounded byte reads and all auth checks retained.
+Adds fixed XML/gzip/URL/base64/access-denied body classifications. No timeouts
+increased. Both node runs pending; next inspect runs42791806426 (Wanou25607c3)
+and42791877350 (Cheese6ba4216). Strict acceptance workflow stays red on failure.
+
+## 6ba4216 resumed evidence and next repair
+
+Cheese run42791877350 /job129747089719: same real29 episodes, playerContent,
+current proxy READY. HLS body is HLS_BODY_URL (begins with HTTP(S)), not an
+actual manifest. Original callback200/HLS/ByteArrayInputStream is rejected by
+host as502. Range removal did not solve it. No frame. One safe crash-buffer
+entry SIGILL with libc/libndk_translation modules was also recorded; not proof
+that every proxy error is a native crash.
+
+Wanou run42791806426 /job129746849269: init6413ms, home0, active_site_after_home
+true, search9ms worker/101ms stage gives SOURCE_EMPTY_RESPONSE; no QR or native
+crash. Empty home session loss fixed; original node root cause still unresolved.
+
+Next repair resolves ONLY a validated single URL carried by this approved HLS
+callback, inside the existing native proxy. Public DNS, bounded response, no
+credentials forwarded, same-origin redirect and HLS child/key references only.
+Reject HTML/invalid media, private destinations, foreign redirects, credential
+origin ambiguity. Does not invent a manifest/video or bypass login. Real node
+retest must determine whether remote content is playable. Targeted unit tests
+are protocol fixtures only and cannot establish provider playback success.

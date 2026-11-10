@@ -463,6 +463,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             }
             override fun failure(code: String) { SpiderProxyDiagnostics.failure(context, code) }
         })
+        proxy.setManifestResolver(SpiderManifestReference(diagnostic = { code -> SpiderProxyDiagnostics.failure(context, code) }))
         initializingProxy = proxy
         CatVodProxy.set(proxy.port(), proxy.sessionToken())
     }
