@@ -19,6 +19,7 @@ class TmdbBrowseRefreshTest {
     private val entered=java.util.concurrent.atomic.AtomicInteger()
     private val returned=java.util.concurrent.atomic.AtomicInteger()
     private val errors=java.util.concurrent.atomic.AtomicInteger()
+    private val interrupted=java.util.concurrent.atomic.AtomicInteger()
     private val changedRows=java.util.concurrent.atomic.AtomicInteger()
     private var errorsBeforeRelease=0
     private val firstEnteredAt=java.util.concurrent.atomic.AtomicLong()
@@ -53,6 +54,8 @@ class TmdbBrowseRefreshTest {
                                 val rows=JSONObject(raw).optJSONArray("results")
                                 if(rows!=null && (0 until rows.length()).any{rows.optJSONObject(it)?.optInt("id")==12}) changedRows.incrementAndGet()
                             }
+                        } catch(cancel:InterruptedException) {
+                            interrupted.incrementAndGet(); throw cancel
                         } catch(error:Exception) { errors.incrementAndGet(); throw error }
                     }
                 }
@@ -65,6 +68,7 @@ class TmdbBrowseRefreshTest {
             // Synthetic fixture counters only. Preserve every original assertion.
             File(c.filesDir,"tmdb-refresh-diagnostic.json").writeText(JSONObject()
                 .put("entered",entered.get()).put("returned",returned.get()).put("errors",errors.get())
+                .put("cancelled_requests",interrupted.get())
                 .put("held_before_release",holdBeforeRelease).put("errors_before_release",errorsBeforeRelease)
                 .put("fixture_wait_before_release_ms",waitBeforeReleaseMs)
                 .put("responses_with_changed_id",changedRows.get())
