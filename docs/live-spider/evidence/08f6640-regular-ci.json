@@ -1,0 +1,58 @@
+{
+  "head": "08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7",
+  "scope": "REGULAR_CONTROLLED_CI_NOT_REAL_PROVIDER_ACCEPTANCE",
+  "p0_completed": false,
+  "real_playback_pass": false,
+  "acceptance_apk_published": false,
+  "jvm": {
+    "tests": 715,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "run": 42859957975,
+    "job": 129983098680
+  },
+  "lint": "PASS",
+  "debug": "PASS_DIAGNOSTIC_ONLY",
+  "api31": {
+    "result": "PASS",
+    "run": 42859957975,
+    "job": 129987965134,
+    "sampled_startup_frames": 32,
+    "node_video_frames": false
+  },
+  "tv": {
+    "tests": 259,
+    "failed": 0,
+    "skipped": 0,
+    "mandatory_classes": 68,
+    "main_fatal": false,
+    "run": 42859957535,
+    "job": 129983100680,
+    "original_tmdb_refresh": "PASS",
+    "empty_home_main_activity": 2
+  },
+  "abba": {
+    "tests": 24,
+    "run": 42859957426,
+    "job": 129983098814,
+    "comparison_ms": {
+      "activity_to_first_draw_ms": {
+        "baseline_mean": 670,
+        "candidate_mean": 700.5,
+        "delta_ms": 30.5
+      },
+      "activity_to_home_ms": {
+        "baseline_mean": 2860,
+        "candidate_mean": 2283,
+        "delta_ms": -577
+      },
+      "cached_navigation_11_transitions_ms": {
+        "baseline_mean": 3642.5,
+        "candidate_mean": 3612.5,
+        "delta_ms": -30
+      }
+    },
+    "physical_TCL_tested": false
+  }
+}

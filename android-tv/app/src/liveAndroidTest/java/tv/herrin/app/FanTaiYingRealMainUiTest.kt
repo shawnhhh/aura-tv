@@ -102,24 +102,25 @@ class FanTaiYingRealMainUiTest {
         stages.put(row)
         try {
             action()
-            while (SystemClock.elapsedRealtime()-start < budget) {
+            // Compose LaunchedEffect delays use the test frame clock. A raw
+            // Thread.sleep loop freezes the production search debounce even
+            // while wall time passes. Media3/60s evidence still uses real time.
+            try { compose.waitUntil(budget) {
                 if (SpiderAuthorizationUi.requests.value != null) {
                     qr(false)
                     row.put("qr_decoded",true).put("cancel_pass",true)
                     restoreAfterAuthorization(afterCancelTag)
                     retry()
-                    val deadline = SystemClock.elapsedRealtime()+30_000
-                    while (SpiderAuthorizationUi.requests.value == null && SystemClock.elapsedRealtime()<deadline) Thread.sleep(100)
-                    if (SpiderAuthorizationUi.requests.value == null) throw Stop("AUTH_BACK_REOPEN_NOT_OBSERVED")
+                    try { compose.waitUntil(30_000) { SpiderAuthorizationUi.requests.value != null } }
+                    catch (_: ComposeTimeoutException) { throw Stop("AUTH_BACK_REOPEN_NOT_OBSERVED") }
                     qr(true)
                     restoreAfterAuthorization(afterCancelTag)
                     row.put("back_pass",true).put("result","AUTH_FLOW_PASS_PLAYBACK_PENDING")
                     throw Stop("AUTH_FLOW_PASS_PLAYBACK_PENDING")
                 }
-                if (done()) { row.put("result","PASS"); return }
-                Thread.sleep(100)
-            }
-            throw Stop("STAGE_TIMEOUT")
+                done()
+            } } catch (_: ComposeTimeoutException) { throw Stop("STAGE_TIMEOUT") }
+            row.put("result","PASS")
         } catch (error: Throwable) {
             if (!row.has("result")) row.put("result","FAILED").put("failure_code",if(error is Stop)error.code else error.javaClass.simpleName)
             throw error
