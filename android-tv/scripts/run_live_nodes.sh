@@ -14,8 +14,12 @@ collect() {
     done
     # Emit only fixed classifications from Android's crash buffer. Raw native
     # traces can contain provider credentials and must never become artifacts.
-    python3 android-tv/scripts/live_native_crash.py > evidence/native-crash-summary.json || true
-    cat evidence/native-crash-summary.json
+    crash_summary="evidence/native-crash-summary-${LIVE_NODE:-all}.json"
+    python3 android-tv/scripts/live_native_crash.py > "$crash_summary" || true
+    cat "$crash_summary"
+    error_summary="evidence/spider-error-shapes-${LIVE_NODE:-all}.json"
+    python3 android-tv/scripts/live_spider_error_shapes.py > "$error_summary" || true
+    cat "$error_summary"
     cat evidence/system-abilist.txt evidence/native-bridge.txt evidence/bridge-files.txt evidence/package-abi.txt 2>/dev/null || true
     python3 - <<'SUMMARY'
 import json, os
@@ -37,7 +41,8 @@ SUMMARY
     if [[ "${LIVE_REQUIRE_ACCEPTANCE:-false}" == true ]]; then
         if ! python3 android-tv/scripts/verify_live_node_acceptance.py --node "${LIVE_NODE:?selected node required}" --directory evidence; then result=1; fi
     fi
-    # Do not collect provider logcat, private QR graphics, tokens or URLs.
+    # Never persist provider logcat, private QR graphics, tokens or URLs.
+    # The classifier above reads logs only in memory and exports fixed shapes.
     exit "$result"
 }
 trap collect EXIT
@@ -74,6 +79,8 @@ fi
 test_selector=tv.herrin.app.FanTaiYingRealNodesTest
 if [[ "${LIVE_NODE:-}" == cheese ]]; then test_selector+='#cheeseRealNode'; fi
 if [[ "${LIVE_NODE:-}" == wanou ]]; then test_selector+='#wanouGegeRealNode'; fi
+# Disposable CI emulator only: scope fixed error classifications to this invocation.
+adb logcat -c
 adb shell am instrument "${instrument_args[@]}" -w -r -e class "$test_selector" tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/instrumentation.txt
 python3 - <<'PY'
 import json, os
