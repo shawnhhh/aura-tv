@@ -78,3 +78,39 @@ Reject HTML/invalid media, private destinations, foreign redirects, credential
 origin ambiguity. Does not invent a manifest/video or bypass login. Real node
 retest must determine whether remote content is playable. Targeted unit tests
 are protocol fixtures only and cannot establish provider playback success.
+
+## Resume through 7376077 (2026-11-10)
+
+- e235e3b resolver production Kotlin compiled, but its new fixture used Java-SAM
+  syntax for Kotlin OkHttp Dns; fixed in77212ee. Target unit suite/build then
+  passed; real Cheese run42808187811/job129802639382 failed as it should.
+- Cheese callback URL passed strict single-reference validation. Fetching its
+  original media reference reached real **upstream HTTP403**, twice; proxy
+  was READY. The new resolver correctly did not accept/transform the403 body
+  into media. Still no decoded frame. Saved77212ee-cheese.json locally.
+- 0b2769f adds scheme and fixed403 reason markers (HTTPS-required, domain-policy,
+  standard expired/mismatched signature, access denied, HTML/JSON/unspecified),
+  no raw content or credentials. Report flags blocked upstream401/403 and
+  acceptance stays red. Do not bypass this denial or fake successful playback.
+- 3d6ef25 restores pinned SDK two-argument -> three-argument page1 delegation.
+  Target unit suite/build passed. Real Wanou run42808331029/job129803115440
+  STILL EMPTY_BODY, both overload owners BaseSpiderGuard, worker search8ms;
+  active_site_after_home=true, home0, no QR. SDK compatibility fixed but not
+  this node's root cause. Saved3d6ef25-wanou.json.
+- 284cae6 adds passive fixed SDK HTTP status/DNS/TLS/timeouts and Activity/auth
+  prerequisite observation with source-owned lifetime (no request data). It
+  also observes a QR even if the Spider operation already returned. Real Wanou
+  run pending. SDK-only network evidence is not native network visibility.
+- Original TMDB refresh test at8413039 passed isolated (run42807989220,
+  job129801983177). Counters entered12/returned10/errors2 at teardown,
+  changed-response1, cached_changed=true. This does NOT fix the full-suite
+  prior regression or establish flakiness.
+- 7376077 runs opt-in16second hold BEFORE fixture release to test whether its
+  own15second await expires prematurely. Original15/10/5second UI assertions
+  are untouched. Expected reproduction may be red; inspect errors_before_release.
+
+PR84 still draft/unmerged, actual PR head79999f3; repairs remain on requested
+codex/herrin-p0-live-playback-20261110 until phase verification. No full CI rerun
+or acceptance APK has been generated for these repairs. Pending: inspect new
+runs, resolve real source blockers legitimately; fix/retest TMDB after concrete
+reproduction; then same-HEAD full JVM/Lint/Debug/TV/ABBA; APK only after real+CI.
