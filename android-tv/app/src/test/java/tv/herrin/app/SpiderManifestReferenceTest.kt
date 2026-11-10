@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 /** Original HTTP protocol fixtures only; never real provider/playback evidence. */
 class SpiderManifestReferenceTest {
     private fun client() = OkHttpClient.Builder()
-        .dns(Dns { listOf(InetAddress.getByName("127.0.0.1")) })
+        .dns(object : Dns { override fun lookup(hostname: String) = listOf(InetAddress.getByName("127.0.0.1")) })
         .followRedirects(false).followSslRedirects(false)
         .callTimeout(2, TimeUnit.SECONDS).build()
 
