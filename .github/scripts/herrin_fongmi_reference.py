@@ -40,7 +40,7 @@ def ui():
     report['last_ui_shape'] = dict(known_controls=sorted({n.get('resource-id','').split('/')[-1]
         for n in nodes if n.get('resource-id','').split('/')[-1] in known}),
         known_labels=sorted({n.get('text') for n in nodes if n.get('text') in
-            {'设置','設定','Settings','允许','允許','Allow','确定','確定','同意'}}))
+            {'设置','設定','Setting','Settings','允许','允許','Allow','确定','確定','同意'}}))
     return nodes
 
 def reset_site_scroll():
@@ -59,6 +59,7 @@ def tap(node):
 
 def find(nodes, *, rid=None, texts=(), contains=None):
     for n in nodes:
+        if n.get('package') not in ('', None, PACKAGE):continue
         if rid and n.get('resource-id') == PACKAGE+':id/'+rid: return n
         if texts and n.get('text') in texts: return n
         if contains and contains in n.get('text', ''): return n
@@ -113,7 +114,8 @@ try:
     adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
     adb('forward','tcp:19978','tcp:9978')
     mark('open_settings')
-    click(texts=('设置','設定','Settings'),budget=25)
+    # Upstream leanback/res/values/strings.xml names home_setting "Setting".
+    click(texts=('设置','設定','Setting','Settings'),budget=25)
     click(rid='vod')
     mark('real_warehouse_configuration')
     action('setting',text=WAREHOUSE,name='P0 official reference')
@@ -158,6 +160,8 @@ except Exception as error:
     if isinstance(error,HTTPError):report['http_status']=error.code
 finally:
     report['elapsed_ms']=round((time.monotonic()-begin)*1000)
+    try:report['official_app_process_alive']=bool(adb('shell','pidof',PACKAGE,check=False).strip())
+    except Exception:pass
     try:adb('shell','rm','-f','/data/local/tmp/p0-reference.xml',check=False)
     except Exception:pass
     Path('reference-evidence').mkdir(exist_ok=True)
