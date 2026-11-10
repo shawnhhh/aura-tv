@@ -263,12 +263,14 @@ class FanTaiYingRealMainUiTest {
                 val journal=HerrinPlaybackDiagnosticJournal.export()
                 for (code in listOf("SOURCE_EMPTY_RESPONSE","SOURCE_AUTH_REQUIRED","SOURCE_ACCESS_DENIED","SOURCE_SESSION_EXPIRED","SOURCE_SEARCH_FAILED"))
                     if (journal.contains("SOURCE $code")) throw Stop(code)
-                compose.onAllNodes(hasText(title) and hasClickAction()).fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodes(hasTestTagPrefix("card-") and hasText(title) and hasClickAction())
+                    .fetchSemanticsNodes().isNotEmpty()
             })
             hideIme()
             val openTitle = {
-                val target=compose.onNode(hasText(title) and hasClickAction())
+                val target=compose.onNode(hasTestTagPrefix("card-") and hasText(title) and hasClickAction())
                 target.performSemanticsAction(SemanticsActions.RequestFocus)
+                target.assertIsFocused()
                 key(KeyEvent.KEYCODE_DPAD_CENTER)
             }
             step("details_and_episodes",45_000,"film-detail-list",action=openTitle,retry={

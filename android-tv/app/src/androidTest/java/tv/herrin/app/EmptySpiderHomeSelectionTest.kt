@@ -148,10 +148,13 @@ class EmptySpiderHomeSelectionTest {
         compose.waitForIdle()
         awaitIme(true)
         compose.onNodeWithTag("search-input").performTextReplacement("Original synthetic fixture")
+        val resultCard = SemanticsMatcher("actual result card") {
+            it.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { "" }.startsWith("card-")
+        } and hasText("Original synthetic fixture") and hasClickAction()
         compose.waitUntil(10_000) { runCatching {
-            compose.onNode(hasText("Original synthetic fixture") and hasClickAction()).assertExists()
+            compose.onNode(resultCard).assertExists()
         }.isSuccess }
-        val result = compose.onNode(hasText("Original synthetic fixture") and hasClickAction())
+        val result = compose.onNode(resultCard)
         result.performSemanticsAction(SemanticsActions.RequestFocus)
         compose.runOnUiThread {
             compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
@@ -160,6 +163,8 @@ class EmptySpiderHomeSelectionTest {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
         }
         awaitIme(false)
+        result.performSemanticsAction(SemanticsActions.RequestFocus)
+        result.assertIsFocused()
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.waitUntil(10_000) { runCatching {
             compose.onNodeWithTag("film-detail-list").assertIsDisplayed()
