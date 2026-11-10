@@ -17,6 +17,10 @@ import java.util.concurrent.TimeUnit
 class TmdbBrowseRefreshTest {
     private val token="SyntheticBrowseRefreshReadAccess"
     private val release=CountDownLatch(1)
+    private val entered=java.util.concurrent.atomic.AtomicInteger()
+    private val returned=java.util.concurrent.atomic.AtomicInteger()
+    private val errors=java.util.concurrent.atomic.AtomicInteger()
+    private val changedRows=java.util.concurrent.atomic.AtomicInteger()
     @get:Rule(order=0) val fixture=object:ExternalResource() {
         override fun before() {
             val c=InstrumentationRegistry.getInstrumentation().targetContext
@@ -34,8 +38,15 @@ class TmdbBrowseRefreshTest {
                     url.contains("/configuration") -> "{\"images\":{}}"
                     url.contains("/search/") -> "{\"results\":[]}"
                     else -> {
-                        check(release.await(15,TimeUnit.SECONDS)){"Refresh fixture was not released"}
-                        changed.load(url,key)
+                        entered.incrementAndGet()
+                        try {
+                            check(release.await(15,TimeUnit.SECONDS)){"Refresh fixture was not released"}
+                            changed.load(url,key).also { raw ->
+                                returned.incrementAndGet()
+                                val rows=JSONObject(raw).optJSONArray("results")
+                                if(rows!=null && (0 until rows.length()).any{rows.optJSONObject(it)?.optInt("id")==12}) changedRows.incrementAndGet()
+                            }
+                        } catch(error:Exception) { errors.incrementAndGet(); throw error }
                     }
                 }
             }
@@ -43,8 +54,13 @@ class TmdbBrowseRefreshTest {
         }
         override fun after() {
             release.countDown()
-            MetadataFetchers.overrideForTests=null
             val c=InstrumentationRegistry.getInstrumentation().targetContext
+            // Synthetic fixture counters only. Preserve every original assertion.
+            File(c.filesDir,"tmdb-refresh-diagnostic.json").writeText(JSONObject()
+                .put("entered",entered.get()).put("returned",returned.get()).put("errors",errors.get())
+                .put("responses_with_changed_id",changedRows.get())
+                .put("cached_changed_id",cachedTmdbBrowseTestFilms(c,token).any{it.id=="tmdb-movie-12"}).toString())
+            MetadataFetchers.overrideForTests=null
             c.getSharedPreferences("herrin",0).edit().clear().commit()
             clearTmdbBrowseTestCache(c)
         }
