@@ -154,7 +154,10 @@ class FanTaiYingRealNodesTest {
         } }
         try {
             val config = step("config") {
-                TvBoxConfigRepository(context).loadUserWarehouse("http://www.饭太硬.net/tv")
+                when (val loaded = TvBoxConfigRepository(context).loadUserWarehouse("http://www.饭太硬.net/tv")) {
+                    is TvBoxConfig.Error -> throw Stop(loaded.reason)
+                    else -> loaded
+                }
             } as? TvBoxConfig.Single ?: throw Stop("REAL_SINGLE_CONFIG_UNAVAILABLE")
             if (config.fromCache) throw Stop("CACHE_NOT_REAL_NETWORK")
             val site = config.sites.singleOrNull { it.name.contains(name) } ?: throw Stop("TARGET_SITE_NOT_UNIQUE")

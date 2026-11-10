@@ -21,7 +21,7 @@ adb shell getprop ro.dalvik.vm.isa.arm64 >> evidence/native-bridge.txt
 adb shell ls /system/lib64/libndk_translation.so /system/lib/libndk_translation.so /system/lib64/libhoudini.so /system/lib/libhoudini.so > evidence/bridge-files.txt 2>&1 || true
 bash android-tv/scripts/build_live_arm_canary.sh
 cd android-tv
-gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace > ../evidence/build.log 2>&1
+gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace > ../evidence/build.log 2>&1 || { tail -n 120 ../evidence/build.log; exit 1; }
 adb install -r app/build/outputs/apk/debug/app-debug.apk | tee ../evidence/install.txt
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 cd ..
