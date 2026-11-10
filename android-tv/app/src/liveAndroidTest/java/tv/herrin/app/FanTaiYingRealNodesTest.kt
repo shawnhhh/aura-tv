@@ -150,6 +150,8 @@ class FanTaiYingRealNodesTest {
             .put("device", device()).put("stages", stages)
             .put("authorized_title", "小城良方").put("authorized_year", 2026)
             .put("first_frame", false).put("seek_verified", false).put("plugin_initialized", false)
+            .put("playback_host_scope", "PRODUCTION_PANEL_WITH_TEST_CATALOG_HOST")
+            .put("details_ui_verified", false)
         val bridge = TvBoxSpiderBridge(context)
         for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt", "spider-search-shape.json", "spider-network-shape.json"))
             File(context.filesDir, file).delete()
@@ -188,10 +190,15 @@ class FanTaiYingRealNodesTest {
             val film = step("film_match") {
                 found.firstOrNull { candidate ->
                     val offer = HerrinSourceMovie("spider:" + site.key, HerrinSourceType.TVBOX_SPIDER, candidate, "tv")
-                    HerrinFilmIdentityMatch.matches(identity, offer) && candidate.year.toIntOrNull() == 2026
+                    HerrinFilmIdentityMatch.matches(identity, offer) && candidate.year.toIntOrNull().let { it == null || it == 2026 }
                 } ?: throw Stop("AUTHORIZED_TITLE_YEAR_NOT_MATCHED")
             }
-            val detail = step("details") { ready(bridge.details(film)) }
+            val detail = step("details") { ready(bridge.details(film)).also { loaded ->
+                if(loaded.year.toIntOrNull()!=2026 || !HerrinFilmIdentityMatch.matches(identity,
+                    HerrinSourceMovie("spider:"+site.key,HerrinSourceType.TVBOX_SPIDER,loaded,"tv")))
+                    throw Stop("AUTHORIZED_TITLE_YEAR_NOT_VERIFIED_IN_DETAILS")
+                report.put("film_identity_verified",true)
+            } }
             val episodes = step("episodes") { detail.playbackEpisodes.filter { it.lines.isNotEmpty() }.also {
                 if (it.size < 2) throw Stop("MULTIPLE_EPISODES_UNAVAILABLE")
             } }
@@ -200,9 +207,10 @@ class FanTaiYingRealNodesTest {
             val second = episodes[1]
             val alternate = first.lines.getOrNull(1)
             report.put("alternate_line_available", alternate != null)
-            val sequence = listOf(first to first.lines[0], first to first.lines[0], second to second.lines[0],
+            val sequence = mutableListOf(first to first.lines[0], first to first.lines[0], second to second.lines[0],
                 first to first.lines[0], first to first.lines[0])
-            val operations = listOf("first_episode", "replay_same_episode", "next_episode", "return_first_episode", "replay_after_details")
+            val operations = mutableListOf("first_episode", "replay_same_episode", "next_episode", "return_first_episode", "replay_after_details")
+            if(alternate!=null) { sequence+=first to alternate; operations+="alternate_line" }
             var currentDetail = detail
             val selectionFailures = JSONArray()
             report.put("selection_failures", selectionFailures)
@@ -216,16 +224,23 @@ class FanTaiYingRealNodesTest {
                         compose.waitUntil(5_000) { backRequests > 0 && media == null }
                         bridge.awaitPlaybackReleaseForInstrumentation()
                         compose.waitForIdle()
-                        report.put("returned_to_details", true)
+                        report.put("player_back_callback_verified", true)
+                        // A panel callback alone is NOT proof of the production
+                        // details screen. Full UI navigation remains required.
+                        if(runCatching { compose.onNodeWithTag("film-detail-list").assertIsDisplayed() }.isFailure)
+                            throw Stop("PRODUCTION_DETAILS_UI_NOT_VERIFIED")
+                        report.put("returned_to_details", true).put("details_ui_verified",true)
                     }
                     step("reapply_after_details") { ready(bridge.browse(site, config, searchOnly = true)) }
                     val fresh = step("search_after_details") { ready(bridge.search(site, "小城良方")) }
                         .firstOrNull { candidate ->
                             HerrinFilmIdentityMatch.matches(identity,
                                 HerrinSourceMovie("spider:" + site.key, HerrinSourceType.TVBOX_SPIDER, candidate, "tv")) &&
-                                candidate.year.toIntOrNull() == 2026
+                                candidate.year.toIntOrNull().let { it == null || it == 2026 }
                         } ?: throw Stop("AUTHORIZED_TITLE_YEAR_NOT_MATCHED_AFTER_DETAILS")
-                    currentDetail = step("details_after_return") { ready(bridge.details(fresh)) }
+                    currentDetail = step("details_after_return") { ready(bridge.details(fresh)).also {
+                        if(it.year.toIntOrNull()!=2026) throw Stop("AUTHORIZED_YEAR_NOT_VERIFIED_AFTER_DETAILS")
+                    } }
                 }
                 val session = PlaybackDiagnosticSession.newId()
                 val resolved = step("resolve_$index") {
@@ -345,9 +360,11 @@ class FanTaiYingRealNodesTest {
                 initialFrames = player!!.videoDecoderCounters?.renderedOutputBufferCount ?: 0
             }
             val requiredMs = if (index == 0) 60_000L else 10_000L
+            val continuousWallStart=SystemClock.elapsedRealtime()
             compose.waitUntil(requiredMs + 15_000) {
                 var advanced = false
-                compose.runOnIdle { advanced = player!!.isPlaying && player!!.currentPosition > start + requiredMs }
+                compose.runOnIdle { advanced = player!!.isPlaying && player!!.currentPosition > start + requiredMs &&
+                    SystemClock.elapsedRealtime()-continuousWallStart>=requiredMs }
                 advanced
             }
             var actualContinuousMs = 0L
@@ -357,6 +374,7 @@ class FanTaiYingRealNodesTest {
                 continuousFrameDelta = (player!!.videoDecoderCounters?.renderedOutputBufferCount ?: 0) - initialFrames
                 check(continuousFrameDelta >= (requiredMs / 1_000).toInt()) { "VIDEO_FRAMES_DID_NOT_CONTINUE" }
             }
+            val continuousWallElapsed=SystemClock.elapsedRealtime()-continuousWallStart
             var paused = 0L
             compose.runOnIdle { player!!.pause(); paused = player!!.currentPosition }
             Thread.sleep(800)
@@ -368,7 +386,12 @@ class FanTaiYingRealNodesTest {
                 resumed
             }
             var target = 0L
+            var beforeSeekFrames=0
+            var beforeSeekCounters: Any?=null
+            var seekRenderedFrameDelta=0
             compose.runOnIdle {
+                beforeSeekCounters=player!!.videoDecoderCounters
+                beforeSeekFrames=player!!.videoDecoderCounters?.renderedOutputBufferCount ?: 0
                 check(player!!.isCurrentMediaItemSeekable) { "MEDIA_NOT_SEEKABLE" }
                 target = minOf(player!!.duration / 2, paused + 10_000)
                 check(target > paused + 2_000) { "INSUFFICIENT_DURATION_FOR_SEEK" }
@@ -377,12 +400,18 @@ class FanTaiYingRealNodesTest {
             }
             compose.waitUntil(12_000) {
                 var sought = false
-                compose.runOnIdle { sought = player!!.isPlaying && player!!.currentPosition >= target && player!!.currentPosition < target + 5_000 }
+                compose.runOnIdle {
+                    val counters=player!!.videoDecoderCounters
+                    seekRenderedFrameDelta=(counters?.renderedOutputBufferCount ?: 0)-if(counters===beforeSeekCounters) beforeSeekFrames else 0
+                    sought = player!!.isPlaying && player!!.currentPosition >= target && player!!.currentPosition < target + 5_000 && seekRenderedFrameDelta>=3
+                }
                 sought
             }
             val row = JSONObject().put("selection", index).put("episode", episode).put("operation", operation)
                 .put("seek_target_ms", target).put("continuous_ms_minimum", requiredMs)
                 .put("continuous_ms_actual", actualContinuousMs).put("continuous_frame_delta", continuousFrameDelta)
+                .put("continuous_wall_ms_actual",continuousWallElapsed)
+                .put("seek_rendered_frame_delta",seekRenderedFrameDelta)
                 .put("pause_resume_verified", true).put("seek_verified", true)
             compose.runOnIdle { row.put("frames", player!!.videoDecoderCounters?.renderedOutputBufferCount)
                 .put("position_ms", player!!.currentPosition) }
