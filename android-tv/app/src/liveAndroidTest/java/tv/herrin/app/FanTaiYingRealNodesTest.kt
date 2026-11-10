@@ -151,6 +151,9 @@ class FanTaiYingRealNodesTest {
             .put("authorized_title", "小城良方").put("authorized_year", 2026)
             .put("first_frame", false).put("seek_verified", false).put("plugin_initialized", false)
         val bridge = TvBoxSpiderBridge(context)
+        for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt"))
+            File(context.filesDir, file).delete()
+        HerrinPlaybackDiagnosticJournal.clear()
         compose.setContent { MaterialTheme {
             Text("Real node test host")
             media?.let { AuthorizedPlaybackPanel(it, onPlayer = { created -> player = created }, onBack = { media = null }) }
@@ -171,7 +174,20 @@ class FanTaiYingRealNodesTest {
             // No ABI guard here: ALWAYS attempt the production worker on every image.
             step("spider_initialization", 95_000) { ready(bridge.browse(site, config, searchOnly = true)) }
             report.put("plugin_initialized", true)
-            val found = step("search") { ready(bridge.search(site, "小城良方")) }
+            val found = try {
+                step("search") { ready(bridge.search(site, "小城良方")) }
+            } catch (error: Stop) {
+                if (!error.code.contains("JSONException") || name != "玩偶哥哥") throw error
+                report.put("search_without_home_failure", error.code)
+                // Match explicit site selection: browse the real home before searching.
+                // This changes activation state; it is not a blind retry or an API/guard bypass.
+                val home = step("normal_home_activation", 95_000) { bridge.browse(site, config) }
+                when (home) {
+                    is SpiderResult.Ready -> report.put("home_film_count", home.value.size)
+                    is SpiderResult.Failure -> report.put("home_browse_failure", safe(home.message))
+                }
+                step("search_after_home") { ready(bridge.search(site, "小城良方")) }
+            }
             report.put("search_count", found.size)
             val identity = HerrinFilmIdentity(1, "tv", listOf("小城良方"), 2026)
             val film = step("film_match") {
@@ -258,6 +274,9 @@ class FanTaiYingRealNodesTest {
             compose.runOnIdle { media = null }
             bridge.close()
             scope.cancel()
+            runCatching {
+                report.put("proxy_callback_shapes", JSONArray(File(context.filesDir, "spider-proxy-shapes.json").readText()))
+            }
             report.put("elapsed_ms", SystemClock.elapsedRealtime() - begin)
                 .put("safe_player_journal", HerrinPlaybackDiagnosticJournal.export())
             write(fileName, report)

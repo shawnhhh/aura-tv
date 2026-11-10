@@ -29,6 +29,7 @@ jobs:
           mkdir -p live-build/plain live-build/arm64-v8a live-build/armeabi-v7a evidence
           bash android-tv/scripts/build_live_arm_canary.sh
           cd android-tv
+          gradle :app:testDebugUnitTest --tests tv.herrin.app.SpiderProxyDiagnosticsTest
           gradle -PherrinLiveSourceTest=true :app:assembleDebug :app:assembleDebugAndroidTest 2>&1 | tee ../evidence/build-plain.log
           cp app/build/outputs/apk/debug/app-debug.apk ../live-build/plain/
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk ../live-build/plain/

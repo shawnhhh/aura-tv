@@ -568,11 +568,11 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             }.getOrNull()?.takeIf { java.lang.reflect.Modifier.isStatic(it.modifiers) }
             val staticCallback = staticProxyMethod?.let { method ->
                 NativeFongMiProxy.SpiderCallback { params ->
-                    method.invoke(null, params) as? Array<Any?>
+                    SpiderProxyDiagnostics.observe(context) { method.invoke(null, params) as? Array<Any?> }
                 }
             }
             val localProxy = NativeFongMiProxy(site.key, { params ->
-                created.get()?.proxy(params)
+                SpiderProxyDiagnostics.observe(context) { created.get()?.proxy(params) }
             }, staticCallback)
             try {
                 if (cached != null && localProxy.hasStaticHandler())
