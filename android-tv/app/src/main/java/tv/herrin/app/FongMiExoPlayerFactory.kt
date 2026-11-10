@@ -90,13 +90,16 @@ internal object FongMiExoPlayerFactory {
     fun mediaSourceFactory(context: Context, media: PlaybackMedia): ExoMediaSourceFactory {
         // Request credentials remain per playback session. A global shared factory or
         // an upstream shared URL-only cache would cross Herrin's authorization boundary.
-        val http = DefaultHttpDataSource.Factory()
+        return ExoMediaSourceFactory(DefaultDataSource.Factory(context, httpDataSourceFactory(media)))
+    }
+
+    /** Same HTTP request stack/settings for the player and opt-in real-source diagnostics. */
+    internal fun httpDataSourceFactory(media: PlaybackMedia): DefaultHttpDataSource.Factory =
+        DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(media.allowHttpRedirects)
             .setConnectTimeoutMs(12_000)
             .setReadTimeoutMs(12_000)
             .setDefaultRequestProperties(FongMiPlaybackItemSupport.extractHeaders(mediaItem(media)))
-        return ExoMediaSourceFactory(DefaultDataSource.Factory(context, http))
-    }
 
     fun mediaItem(media: PlaybackMedia, uri: String = media.uri,
                   mimeOverride: String? = media.declaredMime): MediaItem =

@@ -279,9 +279,20 @@ class FanTaiYingRealNodesTest {
                 } catch (error: Stop) {
                     if (!error.code.startsWith("MEDIA_")) throw error
                     report.put("production_media_gate_failed", true).put("production_media_failure", error.code)
-                    step("diagnostic_extended_media_$index", 25_000) {
-                        val result = probeClient(true).probe(resolved)
-                        if (result != HerrinRemoteMediaProbe.Result.MEDIA) throw Stop("EXTENDED_MEDIA_${result.name}")
+                    try {
+                        step("diagnostic_extended_media_$index", 25_000) {
+                            val result = probeClient(true).probe(resolved)
+                            if (result != HerrinRemoteMediaProbe.Result.MEDIA) throw Stop("EXTENDED_MEDIA_${result.name}")
+                        }
+                    } catch (extended: Stop) {
+                        if (!extended.code.startsWith("EXTENDED_MEDIA_")) throw extended
+                        report.put("extended_media_failure", extended.code)
+                        // A different client must not turn the original gate failure into PASS.
+                        // Compare the ACTUAL production Media3 HTTP factory, including platform
+                        // defaults, rather than guessing a browser/device User-Agent.
+                        step("diagnostic_production_http_$index", 18_000) {
+                            productionHttpDiagnostic(resolved, site.key)
+                        }
                     }
                     report.put("player_is_extended_budget_diagnostic", true)
                 }
@@ -335,6 +346,45 @@ class FanTaiYingRealNodesTest {
                 .put("safe_player_journal", HerrinPlaybackDiagnosticJournal.export())
             write(fileName, report)
         }
+    }
+
+    private suspend fun productionHttpDiagnostic(resolved: PlaybackMedia, siteKey: String) {
+        val evidence = JSONObject().put("scope", "PRODUCTION_FONGMI_HTTP_DATASOURCE_DIAGNOSTIC_ONLY")
+        report.put("production_http_diagnostic", evidence)
+        val start = SystemClock.elapsedRealtime()
+        val health = tv.herrin.app.nativeplayback.FongMiSessionAuthorization.inspect(resolved.uri, siteKey)
+        evidence.put("local_health", health.name)
+        if (health != tv.herrin.app.nativeplayback.NativeFongMiRoute.Health.READY)
+            throw Stop("PRODUCTION_HTTP_LOCAL_${health.name}")
+        try {
+            runInterruptible(Dispatchers.IO) {
+                val source = FongMiExoPlayerFactory.httpDataSourceFactory(resolved).createDataSource()
+                try {
+                    source.open(androidx.media3.datasource.DataSpec.Builder().setUri(resolved.uri).build())
+                    evidence.put("http_status", source.responseCode)
+                    val prefix = ByteArray(16)
+                    var count = 0
+                    while (count < prefix.size) {
+                        val n = source.read(prefix, count, prefix.size-count)
+                        if (n < 0) break
+                        if (n == 0) continue
+                        count += n
+                    }
+                    evidence.put("prefix_bytes", count)
+                    val text = String(prefix, 0, count, Charsets.UTF_8).trimStart('\uFEFF',' ','\r','\n','\t')
+                    val manifest = text.startsWith("#EXTM3U\n") || text.startsWith("#EXTM3U\r\n")
+                    evidence.put("hls_prefix", manifest)
+                    if (!manifest) throw Stop("PRODUCTION_HTTP_MANIFEST_PREFIX_INVALID")
+                    evidence.put("result", "MANIFEST_PREFIX_READ_NOT_VIDEO_OR_PLAYBACK_PASS")
+                } finally { source.close() }
+            }
+        } catch (failure: androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+            evidence.put("http_status", failure.responseCode).put("result", "HTTP_ERROR")
+            throw Stop("PRODUCTION_HTTP_${failure.responseCode.coerceIn(100,599)}")
+        } catch (failure: java.io.IOException) {
+            evidence.put("result", "IO_ERROR").put("exception_type", failure.javaClass.simpleName)
+            throw Stop("PRODUCTION_HTTP_IO_ERROR")
+        } finally { evidence.put("elapsed_ms",SystemClock.elapsedRealtime()-start) }
     }
 
     private fun verifyPlayer(resolved: PlaybackMedia, index: Int, episode: Int, operation: String) {
