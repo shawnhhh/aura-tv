@@ -40,7 +40,7 @@ def ui():
     root=ET.fromstring(data)
     parents={child:parent for parent in root.iter() for child in parent}
     nodes=list(root.iter('node'))
-    known={'vod','vod_home','title','positive','negative','search','select','cancel','mode','text',
+    known={'vod','vodHome','vodUrl','title','positive','negative','search','select','cancel','mode','text',
            'permission_allow_button','permission_allow_foreground_only_button','button1','button2'}
     report['last_ui_shape'] = dict(known_controls=sorted({n.get('resource-id','').split('/')[-1]
         for n in nodes if n.get('resource-id','').split('/')[-1] in known}),
@@ -133,7 +133,7 @@ try:
     click(rid='positive')
     time.sleep(5)
     mark('restrict_search_to_two_authorized_nodes')
-    click(rid='vod_home',budget=25)
+    click(rid='vodHome',budget=25)
     click(rid='search')
     click(rid='cancel')  # Official SiteAdapter.cancelAll(), not dialog Back.
     for name in TARGETS:
