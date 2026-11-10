@@ -65,13 +65,13 @@ class EmptySpiderHomeSelectionTest {
             compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")
         }.isSuccess }
     }
-    private fun assertSelectedEmptySource() {
+    private fun assertSelectedEmptySource(advanced: Boolean = false) {
+        val expected = "TVBox " + (if (advanced) "Spider " else "") +
+            "Original empty-home fixture · 0 部；该影视点首页暂未返回影片，可继续搜索或检查来源授权"
         try {
-        compose.waitUntil(15_000) { runCatching {
-            compose.onNodeWithTag("source-empty-status").assertIsDisplayed()
-                .assertTextContains("Original empty-home fixture")
-                .assertTextContains("首页暂未返回影片")
-        }.isSuccess }
+            compose.waitUntil(15_000) { runCatching {
+                compose.onNodeWithTag("source-empty-status").assertIsDisplayed().assertTextEquals(expected)
+            }.isSuccess }
         } catch (failure: Throwable) {
             // This invocation has only the original fixture, no external provider/login.
             val state = compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12).take(12_000)
@@ -79,7 +79,7 @@ class EmptySpiderHomeSelectionTest {
                 "\nworker_stage=" + SpiderStartupTrace.recent(context) +
                 "\nworker_failure=" + SpiderFailureTrace.recent(context), failure)
         }
-        compose.onNodeWithTag("source-empty-status").assertTextContains("可继续搜索")
+        compose.onNodeWithTag("source-empty-status").assertTextEquals(expected)
         compose.onNodeWithTag("details").assertDoesNotExist()
         compose.onNodeWithTag("play").assertDoesNotExist()
         val prefs = Preferences(context)
@@ -111,7 +111,7 @@ class EmptySpiderHomeSelectionTest {
         activate("settings-advanced")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-spider-0"))
         activate("tvbox-spider-0")
-        assertSelectedEmptySource()
+        assertSelectedEmptySource(advanced = true)
         activate("search")
         compose.onNodeWithTag("search-input").assertIsDisplayed()
     }

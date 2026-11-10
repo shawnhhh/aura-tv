@@ -22,6 +22,7 @@ REQUIRED_CLASSES = (
     "P0StartupFrameProbeTest",
     "P0SpiderDeadlineRecoveryTest",
     "P0SourceSearchLifecycleTest",
+    "EmptySpiderHomeSelectionTest",
     "P0DiscoveryProtocolTest",
     "P0CmsCandidateParserTest",
     "HerrinUiSmokeTest",

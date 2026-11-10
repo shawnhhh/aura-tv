@@ -287,6 +287,7 @@ class FanTaiYingRealNodesTest {
                     } catch (extended: Stop) {
                         if (!extended.code.startsWith("EXTENDED_MEDIA_")) throw extended
                         report.put("extended_media_failure", extended.code)
+                        if (!tv.herrin.app.nativeplayback.NativeFongMiRoute.isNativeProxy(resolved.uri)) throw extended
                         // A different client must not turn the original gate failure into PASS.
                         // Compare the ACTUAL production Media3 HTTP factory, including platform
                         // defaults, rather than guessing a browser/device User-Agent.
