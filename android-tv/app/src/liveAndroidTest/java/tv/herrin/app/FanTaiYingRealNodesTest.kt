@@ -154,9 +154,14 @@ class FanTaiYingRealNodesTest {
         for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt"))
             File(context.filesDir, file).delete()
         HerrinPlaybackDiagnosticJournal.clear()
+        var backRequests = 0
         compose.setContent { MaterialTheme {
             Text("Real node test host")
-            media?.let { AuthorizedPlaybackPanel(it, onPlayer = { created -> player = created }, onBack = { media = null }) }
+            media?.let { AuthorizedPlaybackPanel(it, onPlayer = { created -> player = created }, onBack = {
+                media = null
+                backRequests++
+                bridge.releasePlayback()
+            }) }
             SpiderAuthorizationHost()
         } }
         try {
@@ -205,16 +210,37 @@ class FanTaiYingRealNodesTest {
             val second = episodes[1]
             val alternate = first.lines.getOrNull(1)
             report.put("alternate_line_available", alternate != null)
-            val sequence = mutableListOf(first to first.lines[0], first to first.lines[0], second to second.lines[0])
-            if (alternate != null) sequence.add(first to alternate)
+            val sequence = listOf(first to first.lines[0], first to first.lines[0], second to second.lines[0],
+                first to first.lines[0], first to first.lines[0])
+            val operations = listOf("first_episode", "replay_same_episode", "next_episode", "return_first_episode", "replay_after_details")
+            var currentDetail = detail
             val selectionFailures = JSONArray()
             report.put("selection_failures", selectionFailures)
             for ((index, choice) in sequence.withIndex()) {
                 try {
+                if (index == 4) {
+                    step("return_to_details", 15_000) {
+                        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                        Thread.sleep(300)
+                        if (backRequests == 0) inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                        compose.waitUntil(5_000) { backRequests > 0 && media == null }
+                        bridge.awaitPlaybackReleaseForInstrumentation()
+                        compose.waitForIdle()
+                        report.put("returned_to_details", true)
+                    }
+                    step("reapply_after_details") { ready(bridge.browse(site, config, searchOnly = true)) }
+                    val fresh = step("search_after_details") { ready(bridge.search(site, "小城良方")) }
+                        .firstOrNull { candidate ->
+                            HerrinFilmIdentityMatch.matches(identity,
+                                HerrinSourceMovie("spider:" + site.key, HerrinSourceType.TVBOX_SPIDER, candidate, "tv")) &&
+                                candidate.year.toIntOrNull() == 2026
+                        } ?: throw Stop("AUTHORIZED_TITLE_YEAR_NOT_MATCHED_AFTER_DETAILS")
+                    currentDetail = step("details_after_return") { ready(bridge.details(fresh)) }
+                }
                 val session = PlaybackDiagnosticSession.newId()
                 val resolved = step("resolve_$index") {
                     withContext(PlaybackDiagnosticSession.context(session)) {
-                        when (val result = bridge.play(detail, choice.first.number, choice.second.id, true)) {
+                        when (val result = bridge.play(currentDetail, choice.first.number, choice.second.id, true)) {
                             is PlaybackResult.Ready -> result.media
                             is PlaybackResult.Unavailable -> throw Stop(safe(result.reason))
                         }
@@ -254,13 +280,15 @@ class FanTaiYingRealNodesTest {
                     }
                     report.put("player_is_extended_budget_diagnostic", true)
                 }
-                verifyPlayer(resolved, index)
+                verifyPlayer(resolved, index, choice.first.number, operations[index])
                 } catch (error: Stop) {
                     if (error.code == "AUTH_FLOW_PASS_PLAYBACK_PENDING" || error.code.startsWith("AUTH_")) throw error
                     selectionFailures.put(JSONObject().put("selection", index).put("episode", choice.first.number)
                         .put("stage", currentStage).put("code", error.code))
                     compose.runOnIdle { media = null }
                     compose.waitForIdle()
+                    // Fix the first failing stage before testing the next acceptance stage.
+                    throw error
                 }
             }
             if (selectionFailures.length() > 0) {
@@ -271,10 +299,6 @@ class FanTaiYingRealNodesTest {
             if (report.optBoolean("production_media_gate_failed")) {
                 currentStage = "production_media_gate"
                 throw Stop("PRODUCTION_MEDIA_GATE_FAILED_EXTENDED_DIAGNOSTIC_ONLY")
-            }
-            if (alternate == null) {
-                currentStage = "line_switch"
-                throw Stop("ALTERNATE_LINE_UNAVAILABLE")
             }
             report.put("verdict", "REAL_PLAYBACK_PASS")
         } catch (error: Throwable) {
@@ -301,7 +325,7 @@ class FanTaiYingRealNodesTest {
         }
     }
 
-    private fun verifyPlayer(resolved: PlaybackMedia, index: Int) {
+    private fun verifyPlayer(resolved: PlaybackMedia, index: Int, episode: Int, operation: String) {
         // AuthorizedPlaybackPanel owns HerrinPlaybackAdapter -> pinned FongMi PlayerManager -> Media3.
         // No test-created ExoPlayer, alternative surface, rewritten stream or fixture media.
         step("first_frame_$index", 55_000) {
@@ -318,12 +342,23 @@ class FanTaiYingRealNodesTest {
         }
         step("continuous_pause_seek_$index", 110_000) {
             var start = 0L
-            compose.runOnIdle { start = player!!.currentPosition }
+            var initialFrames = 0
+            compose.runOnIdle {
+                start = player!!.currentPosition
+                initialFrames = player!!.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+            }
             val requiredMs = if (index == 0) 60_000L else 10_000L
             compose.waitUntil(requiredMs + 15_000) {
                 var advanced = false
                 compose.runOnIdle { advanced = player!!.isPlaying && player!!.currentPosition > start + requiredMs }
                 advanced
+            }
+            var actualContinuousMs = 0L
+            var continuousFrameDelta = 0
+            compose.runOnIdle {
+                actualContinuousMs = player!!.currentPosition - start
+                continuousFrameDelta = (player!!.videoDecoderCounters?.renderedOutputBufferCount ?: 0) - initialFrames
+                check(continuousFrameDelta >= (requiredMs / 1_000).toInt()) { "VIDEO_FRAMES_DID_NOT_CONTINUE" }
             }
             var paused = 0L
             compose.runOnIdle { player!!.pause(); paused = player!!.currentPosition }
@@ -348,13 +383,16 @@ class FanTaiYingRealNodesTest {
                 compose.runOnIdle { sought = player!!.isPlaying && player!!.currentPosition >= target && player!!.currentPosition < target + 5_000 }
                 sought
             }
-            val row = JSONObject().put("selection", index).put("seek_target_ms", target).put("continuous_ms_minimum", requiredMs)
+            val row = JSONObject().put("selection", index).put("episode", episode).put("operation", operation)
+                .put("seek_target_ms", target).put("continuous_ms_minimum", requiredMs)
+                .put("continuous_ms_actual", actualContinuousMs).put("continuous_frame_delta", continuousFrameDelta)
+                .put("pause_resume_verified", true).put("seek_verified", true)
             compose.runOnIdle { row.put("frames", player!!.videoDecoderCounters?.renderedOutputBufferCount)
                 .put("position_ms", player!!.currentPosition) }
             report.optJSONArray("playback_evidence")?.put(row) ?: report.put("playback_evidence", JSONArray().put(row))
             report.put("seek_verified", true)
         }
-        compose.runOnIdle { media = null }
+        // Keep the actual player mounted until the next selection or real Back action.
         compose.waitForIdle()
     }
 }

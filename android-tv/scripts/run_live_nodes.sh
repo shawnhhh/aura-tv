@@ -12,6 +12,10 @@ collect() {
         adb exec-out run-as tv.herrin.app cat "files/live-node-$name.json" > "evidence/$name.json" || true
         cat "evidence/$name.json"
     done
+    # Emit only fixed classifications from Android's crash buffer. Raw native
+    # traces can contain provider credentials and must never become artifacts.
+    python3 android-tv/scripts/live_native_crash.py > evidence/native-crash-summary.json || true
+    cat evidence/native-crash-summary.json
     cat evidence/system-abilist.txt evidence/native-bridge.txt evidence/bridge-files.txt evidence/package-abi.txt 2>/dev/null || true
     python3 - <<'SUMMARY'
 import json, os

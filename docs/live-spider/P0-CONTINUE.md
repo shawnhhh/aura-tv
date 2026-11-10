@@ -24,3 +24,15 @@ LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_METHOD_METADAT
 ```
 
 已有完整回归失败必须最终核查：TmdbBrowseRefreshTest.changedNetworkOrderPublishesOnlyAfterTheFocusedRailIsLeft，TmdbBrowseRefreshTest.kt:62，等待刷新缓存tmdb-movie-12超时10秒。历史统一CI：JVM702/702、Lint/Debug/API31与ABBA24/24通过；TV256/257。没有将其根因认定为flaky。阶段修复完成前不反复跑全量构建，最后统一完整CI并更新结果。
+
+## 6edf804 targeted run (2026-11-10 09:21 UTC)
+
+Run 42789190811 / job 129737962251 failed the real acceptance gate.
+Cheese: init/search/year/29 episodes and playerContent succeeded. First media
+read ended NETWORK_ERROR; Android ApplicationExitInfo reports native (JNI/so)
+crash. Later URI health is CONNECT_REFUSED with current_site_matches=true,
+not evidence of an unauthorized foreign URI. No decoded frame. Prior HLS 502
+and this new native crash are separate observed failures; do not infer a fix.
+Report: /workspace/reports/herrin-p0-20261110/6edf804-cheese.json.
+Next run adds only safe native crash module/signal classification and strict
+five-operation/60-second acceptance; never uploads raw provider crash logs.
