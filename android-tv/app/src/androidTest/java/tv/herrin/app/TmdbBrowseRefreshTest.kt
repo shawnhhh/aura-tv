@@ -21,6 +21,8 @@ class TmdbBrowseRefreshTest {
     private val returned=java.util.concurrent.atomic.AtomicInteger()
     private val errors=java.util.concurrent.atomic.AtomicInteger()
     private val changedRows=java.util.concurrent.atomic.AtomicInteger()
+    private var errorsBeforeRelease=0
+    private val holdBeforeRelease=InstrumentationRegistry.getArguments().getString("tmdbHoldRefresh")=="true"
     @get:Rule(order=0) val fixture=object:ExternalResource() {
         override fun before() {
             val c=InstrumentationRegistry.getInstrumentation().targetContext
@@ -58,6 +60,7 @@ class TmdbBrowseRefreshTest {
             // Synthetic fixture counters only. Preserve every original assertion.
             File(c.filesDir,"tmdb-refresh-diagnostic.json").writeText(JSONObject()
                 .put("entered",entered.get()).put("returned",returned.get()).put("errors",errors.get())
+                .put("held_before_release",holdBeforeRelease).put("errors_before_release",errorsBeforeRelease)
                 .put("responses_with_changed_id",changedRows.get())
                 .put("cached_changed_id",cachedTmdbBrowseTestFilms(c,token).any{it.id=="tmdb-movie-12"}).toString())
             MetadataFetchers.overrideForTests=null
@@ -73,6 +76,8 @@ class TmdbBrowseRefreshTest {
         }.isSuccess}
         compose.onNodeWithTag("card-tmdb-movie-11").performScrollTo()
             .performSemanticsAction(SemanticsActions.RequestFocus){it()}
+        if(holdBeforeRelease) Thread.sleep(16000) // Opt-in reproduction of a slow TV establishing focus.
+        errorsBeforeRelease=errors.get()
         release.countDown()
         val c=InstrumentationRegistry.getInstrumentation().targetContext
         compose.waitUntil(10000){cachedTmdbBrowseTestFilms(c,token).any{it.id=="tmdb-movie-12"}}
