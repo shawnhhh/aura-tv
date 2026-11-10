@@ -103,17 +103,17 @@ class FanTaiYingRealNodesTest {
         var job: Deferred<T>? = null
         try {
             job = scope.async { withTimeout(budget) { block() } }
-            while (!job.isCompleted) {
+            while (!requireNotNull(job).isCompleted) {
                 if (SpiderAuthorizationUi.requests.value != null) {
                     row.put("authorization_observed", true)
                     try {
                         checkQrAndDismiss(false)
                         row.put("qr_decoded", true).put("cancel_pass", true)
-                        job.cancel()
+                        job?.cancel()
                         // A second genuine provider operation tests dialog Back separately.
                         job = scope.async { withTimeout(budget) { block() } }
                         val until = SystemClock.elapsedRealtime() + 25_000
-                        while (!job.isCompleted && SpiderAuthorizationUi.requests.value == null && SystemClock.elapsedRealtime() < until) Thread.sleep(100)
+                        while (!requireNotNull(job).isCompleted && SpiderAuthorizationUi.requests.value == null && SystemClock.elapsedRealtime() < until) Thread.sleep(100)
                         if (SpiderAuthorizationUi.requests.value == null) throw Stop("AUTH_BACK_REOPEN_NOT_OBSERVED")
                         checkQrAndDismiss(true)
                         row.put("back_pass", true)

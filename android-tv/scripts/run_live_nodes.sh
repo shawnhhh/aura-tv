@@ -11,6 +11,22 @@ collect() {
         cat "evidence/$name.json"
     done
     cat evidence/system-abilist.txt evidence/native-bridge.txt evidence/bridge-files.txt evidence/package-abi.txt 2>/dev/null || true
+    python3 - <<'SUMMARY'
+import json, os
+from pathlib import Path
+lines = ['## Real provider outcomes (workflow success is evidence collection only)',
+         '| Node | Verdict | Stage |', '| --- | --- | --- |']
+for key in ('wanou', 'cheese'):
+    try:
+        data = json.loads(Path(f'evidence/{key}.json').read_text())
+        lines.append(f"| {data['node']} | {data['verdict']} | {data.get('failure_stage', 'completed')} |")
+    except (OSError, ValueError, KeyError):
+        lines.append(f'| {key} | TEST_INFRASTRUCTURE_FAILED | no complete node report |')
+print('\n'.join(lines))
+if os.environ.get('GITHUB_STEP_SUMMARY'):
+    with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+        out.write('\n'.join(lines) + '\n')
+SUMMARY
     # Do not collect provider logcat, private QR graphics, tokens or URLs.
     exit "$result"
 }
