@@ -38,6 +38,42 @@ class TmdbBrowseRepositoryTest {
         assertTrue(pending.await().entries.isNotEmpty())
     }
 
+    @Test fun replacementRefreshWaitsForCancelledOwnerAndStillUpdatesFocusedRailCache(): Unit = runBlocking {
+        val directory=Files.createTempDirectory("tmdb-replace-refresh").toFile()
+        val spec=TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT)
+        val entered=CompletableDeferred<Unit>()
+        val release=java.util.concurrent.CountDownLatch(1)
+        val firstOnly=java.util.concurrent.atomic.AtomicBoolean(true)
+        val changed=TmdbBrowseFixture().apply { variant=1 }
+        var initial:Job?=null
+        try {
+            TmdbBrowseRepository(TmdbBrowseFixture(),directory).load(spec,1,"fixture")
+            val repo=TmdbBrowseRepository(ArtworkJsonFetcher { url,key ->
+                if(url.contains("/trending/all/week") &&firstOnly.compareAndSet(true,false)) {
+                    entered.complete(Unit)
+                    // Deliberately model a transport still retiring after cancel.
+                    // The test owner always releases it in finally.
+                    while(true) try { release.await(); break } catch(_:InterruptedException) { }
+                }
+                changed.load(url,key)
+            },directory)
+            val state=TmdbBrowseState(repo,"fixture")
+            state.hydrate(TmdbBrowsePage.HOME);state.focus(spec.key)
+            initial=launch { state.refresh(TmdbBrowsePage.HOME,true) }
+            withTimeout(2000) { entered.await() }
+            initial.cancel()
+            val replacement=async { state.refresh(TmdbBrowsePage.HOME,true) }
+            delay(50)
+            release.countDown()
+            initial.join()
+            withTimeout(5000) { replacement.await() }
+            assertTrue("replacement must write the new first page",repo.cached(spec,1,"fixture")!!.entries.any{it.film.id=="tmdb-movie-12"})
+            assertEquals("focused posters retain their old order","tmdb-movie-11",state.row(spec).entries.first().film.id)
+            state.focus(null)
+            assertEquals("new page appears after focus leaves","tmdb-movie-12",state.row(spec).entries.first().film.id)
+        } finally { release.countDown();initial?.cancelAndJoin();directory.deleteRecursively() }
+    }
+
     @Test fun releaseProofDoesNotConfuseTheatricalFutureOrUnknownWithDigital() {
         assertEquals(TmdbAvailability.THEATRICAL_ONLY, TmdbReleaseEvidence.evaluate("movie", movie(3 to "2026-01-01"), day).state)
         assertEquals(TmdbAvailability.UPCOMING, TmdbReleaseEvidence.evaluate("movie", movie(4 to "2026-11-10"), day).state)

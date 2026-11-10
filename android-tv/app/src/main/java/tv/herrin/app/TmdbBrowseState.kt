@@ -3,6 +3,8 @@ package tv.herrin.app
 import androidx.compose.runtime.*
 import androidx.compose.foundation.lazy.LazyListState
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal data class TmdbRailState(
     val entries: List<TmdbBrowseEntry> = emptyList(), val page: Int = 0,
@@ -15,6 +17,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
     val rows = mutableStateMapOf<String, TmdbRailState>()
     val scrolls = mutableMapOf<String, LazyListState>()
     private val pending = mutableMapOf<String, TmdbBrowseBatch>()
+    private val loads = mutableMapOf<String, Mutex>()
     private var focused: String? = null
     fun row(spec: TmdbRailSpec) = rows[spec.key] ?: TmdbRailState()
     fun films(page: TmdbBrowsePage) = TmdbRailSpec.forPage(page).flatMap { row(it).entries.map(TmdbBrowseEntry::film) }.distinctBy(Film::id)
@@ -63,8 +66,11 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
         if (!current.loading && current.hasMore) load(spec, (current.page + 1).coerceAtLeast(1), false)
     }
     suspend fun retry(spec: TmdbRailSpec) = load(spec, if (row(spec).page == 0) 1 else row(spec).page, true)
-    private suspend fun load(spec: TmdbRailSpec, page: Int, force: Boolean) {
-        if (row(spec).loading) return
+    private suspend fun load(spec: TmdbRailSpec, page: Int, force: Boolean) = loads.getOrPut(spec.key) { Mutex() }.withLock {
+        // A replacement LaunchedEffect can start before the cancelled owner's
+        // finally/catch finishes. Wait for that owner instead of dropping refresh.
+        currentCoroutineContext().ensureActive()
+        if (page > 1 && !force && row(spec).page >= page) return@withLock
         rows[spec.key] = row(spec).copy(loading = true, error = false)
         val publisher = currentCoroutineContext()
         try {

@@ -90,6 +90,7 @@ jobs:
         run: |
           python3 android-tv/scripts/build_m467_spider_fixture.py
           cd android-tv
+          gradle --build-cache :app:testDebugUnitTest --tests 'tv.herrin.app.TmdbBrowseRepositoryTest'
           gradle --build-cache :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Enable KVM
         run: |
