@@ -68,6 +68,10 @@ fi
 if [[ "${LIVE_PRODUCTION_HTTP_FIRST:-false}" == true ]]; then
     instrument_args+=(-e p0ProductionHttpFirst true)
 fi
+if [[ "${LIVE_MAIN_UI:-false}" == true ]]; then
+    [[ "${LIVE_DISPOSABLE_DEVICE:-false}" == true ]] || { echo 'DISPOSABLE_DEVICE_CONFIRMATION_REQUIRED'; exit 1; }
+    instrument_args+=(-e herrinDisposableDevice true)
+fi
 if [[ -n "${LIVE_PREBUILT_APKS:-}" ]]; then
     adb install "${install_args[@]}" -r "$apk_dir/app-debug.apk" | tee evidence/install.txt
     adb install "${install_args[@]}" -r "$apk_dir/app-debug-androidTest.apk"
@@ -80,6 +84,7 @@ if [[ -n "${LIVE_INSTALL_ABI:-}" ]]; then
     grep -F "primaryCpuAbi=$LIVE_INSTALL_ABI" evidence/package-abi.txt
 fi
 test_selector=tv.herrin.app.FanTaiYingRealNodesTest
+if [[ "${LIVE_MAIN_UI:-false}" == true ]]; then test_selector=tv.herrin.app.FanTaiYingRealMainUiTest; fi
 if [[ "${LIVE_NODE:-}" == cheese ]]; then test_selector+='#cheeseRealNode'; fi
 if [[ "${LIVE_NODE:-}" == wanou ]]; then test_selector+='#wanouGegeRealNode'; fi
 # Disposable CI emulator only: scope fixed error classifications to this invocation.

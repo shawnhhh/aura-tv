@@ -887,7 +887,10 @@ internal class TvBoxSpiderBridge(context: Context) {
             JSONObject().put("film", SpiderIpc.film(film)), invocation)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> try {
-                SpiderResult.Ready(SpiderIpc.readFilm(response.value.getJSONObject("film")))
+                val detail = SpiderIpc.readFilm(response.value.getJSONObject("film"))
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "DETAILS_RETURNED", "COUNT=${detail.playbackEpisodes.size.coerceAtMost(99999)}")
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "DETAIL_LINES_RETURNED", "COUNT=${detail.playbackEpisodes.firstOrNull()?.lines?.size?.coerceAtMost(99999) ?: 0}")
+                SpiderResult.Ready(detail)
             } catch (error: Exception) {
                 SpiderResult.Failure("Spider 详情无效：" + SpiderFailureDetails.message(error))
             }
