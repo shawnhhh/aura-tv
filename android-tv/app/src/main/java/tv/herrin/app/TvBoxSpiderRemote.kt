@@ -60,6 +60,7 @@ internal object SpiderIpc {
         .put("name", site.name).put("key", site.key)
         .put("spiderApi", site.spiderApi ?: "").put("scriptApi", site.scriptApi ?: "")
         .put("ext", site.extension).put("apiType", site.apiType)
+        .put("searchable", site.searchable).put("quickSearch", site.quickSearch)
         .put("jar", site.jar ?: "").put("click", site.click)
         .put("header", JSONObject(site.headers))
 
@@ -75,6 +76,8 @@ internal object SpiderIpc {
                     api.substringBefore('?').endsWith(".py", true)))
         },
         extension = obj.optString("ext").take(64_000),
+        searchable = obj.takeIf { it.has("searchable") }?.optInt("searchable"),
+        quickSearch = obj.takeIf { it.has("quickSearch") }?.optInt("quickSearch"),
         click = obj.optString("click").take(4096), apiType = obj.optInt("apiType",1),
         jar = obj.optString("jar").takeIf { it.isNotBlank() },
         headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))

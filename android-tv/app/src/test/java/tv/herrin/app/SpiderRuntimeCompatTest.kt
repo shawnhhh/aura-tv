@@ -67,6 +67,8 @@ class SpiderRuntimeCompatTest {
             spiderVodId = "vod?opaque=one", playbackEpisodes = listOf(
                 PlaybackEpisode(120, "第 120 集", listOf(PlaybackLine("spider-2", "线路二", "id?a=1&b=2")))))
         val restored = SpiderIpc.readFilm(SpiderIpc.film(film))
+        val declared = site.copy(searchable=0,quickSearch=1)
+        assertEquals(declared,SpiderIpc.readSite(SpiderIpc.site(declared)))
         assertEquals(film.spiderVodId, restored.spiderVodId)
         assertEquals(film.playbackEpisodes, restored.playbackEpisodes)
         val media = PlaybackMedia("https://example.org/main", headers = mapOf("Cookie" to "session=value"),

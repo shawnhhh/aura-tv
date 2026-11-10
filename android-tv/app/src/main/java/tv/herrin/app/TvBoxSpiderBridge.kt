@@ -686,7 +686,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         }
         val owner = activeAuthority ?: error("Spider 来源授权已失效")
         val response = spider.searchContent(keyword, false)
-        SpiderSearchTrace.record(context, spider, keyword.length, response)
+        SpiderSearchTrace.record(context, spider, site, keyword.length, response)
         val root = SpiderVodCodec.searchRoot(response)
         SpiderVodCodec.listing(response, site).map(owner::sign).also { films ->
             lastSearchCounts = root.getJSONArray("list").length() to films.size

@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      LIVE_NODES: ${{ contains(github.event.head_commit.message, '[both-nodes]') && 'both' || '' }}
       LIVE_NODE: ${{ inputs.node || (contains(github.event.head_commit.message, '[wanou]') && 'wanou' || 'cheese') }}
       ARM_PACKAGE: 'true'
       LIVE_INSTALL_ABI: arm64-v8a
@@ -62,11 +63,11 @@ jobs:
           ram-size: 3072M
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash android-tv/scripts/run_live_nodes.sh
+          script: bash android-tv/scripts/run_p0_selected_nodes.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p0-real-playback-${{ env.LIVE_NODE }}-diagnostics
+          name: p0-real-playback-${{ env.LIVE_NODES || env.LIVE_NODE }}-diagnostics
           path: evidence/
           retention-days: 30
 
