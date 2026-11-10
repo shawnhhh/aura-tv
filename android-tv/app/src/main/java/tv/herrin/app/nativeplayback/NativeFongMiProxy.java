@@ -91,7 +91,10 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             URLEncoder.encode(siteKey, StandardCharsets.UTF_8);
     }
 
-    public interface Diagnostic { void httpResponse(int status, boolean range); }
+    public interface Diagnostic {
+        void httpResponse(int status, boolean range);
+        default void failure(String code) {}
+    }
     private volatile Diagnostic diagnostic;
     private final java.util.concurrent.atomic.AtomicInteger diagnosticBudget = new java.util.concurrent.atomic.AtomicInteger(16);
     public void setDiagnostic(Diagnostic diagnostic) { this.diagnostic = diagnostic; }
@@ -105,6 +108,14 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             catch (RuntimeException ignored) { /* Diagnostics cannot alter the media response. */ }
         }
         return response;
+    }
+
+    private void diagnosticFailure(String code) {
+        Diagnostic sink = diagnostic;
+        if (sink != null && diagnosticBudget.getAndDecrement() > 0) {
+            try { sink.failure(code); }
+            catch (RuntimeException ignored) { /* Diagnostics never alter a response. */ }
+        }
     }
 
     private Response dispatch(IHTTPSession session) {
@@ -140,6 +151,7 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             return fromUpstreamResponse(rewriteHls(callback.proxy(params)));
         } catch (Throwable failure) {
             // Never disclose plugin URLs, credentials or stack traces on wire.
+            diagnosticFailure("PROXY_CALLBACK_OR_REWRITE_FAILED");
             return error(BAD_GATEWAY);
         }
     }
@@ -199,6 +211,7 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
             int size;
             while ((size = probe.read(chunk)) != -1) {
                 if (content.size() + size > NativeFongMiHls.MAX_MANIFEST_BYTES) {
+                    diagnosticFailure("HLS_MANIFEST_SIZE_LIMIT");
                     throw new IOException("HLS manifest exceeded safe size");
                 }
                 content.write(chunk, 0, size);
@@ -208,7 +221,10 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         }
         String rewritten = NativeFongMiHls.rewrite(
             new String(content.toByteArray(), StandardCharsets.UTF_8), siteKey, this);
-        if (rewritten == null) throw new IOException("Invalid approved HLS playlist");
+        if (rewritten == null) {
+            diagnosticFailure("HLS_MANIFEST_REJECTED");
+            throw new IOException("Invalid approved HLS playlist");
+        }
         Object[] copy = response.clone();
         copy[1] = "application/vnd.apple.mpegurl";
         copy[2] = new ByteArrayInputStream(rewritten.getBytes(StandardCharsets.UTF_8));

@@ -17,6 +17,13 @@ internal object SpiderProxyDiagnostics {
         else if (value is Array<*>) {
             put("outcome", "CALLBACK_ARRAY")
             put("length", value.size)
+            val mime = (value.getOrNull(1) as? String).orEmpty().lowercase()
+            put("mime_kind", when {
+                mime.contains("mpegurl") || mime.contains("m3u8") -> "HLS"
+                mime.startsWith("video/") -> "VIDEO"
+                mime.startsWith("text/") -> "TEXT"
+                else -> "OTHER"
+            })
             put("types", JSONArray(value.take(5).map { it?.javaClass?.name?.take(180) ?: "null" }))
             val code = value.firstOrNull() as? Number
             if (code != null) put("status", code.toInt().coerceIn(0, 999))
@@ -38,6 +45,11 @@ internal object SpiderProxyDiagnostics {
         persist(context, shape(value, failure))
         if (failure != null) SpiderFailureTrace.record(context, failure)
     }, block)
+
+    fun failure(context: Context, code: String) {
+        require(code.matches(Regex("[A-Z][A-Z0-9_]{1,63}")))
+        persist(context, JSONObject().put("outcome", "HOST_PROXY_FAILURE").put("code", code))
+    }
 
     @Synchronized private fun persist(context: Context, row: JSONObject) {
         val file = File(context.filesDir, NAME)

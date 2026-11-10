@@ -429,10 +429,13 @@ internal class TvBoxSpiderWorker(private val context: Context) {
 
     private fun installProxy(ticket: Long, proxy: NativeFongMiProxy) = synchronized(lifecycle) {
         checkOpen(ticket)
-        proxy.setDiagnostic { status, range ->
-            HerrinPlaybackDiagnosticJournal.record("PROXY", "HTTP_RESPONSE", "STATUS=$status")
-            if (range) HerrinPlaybackDiagnosticJournal.record("PROXY", "RANGE_REQUEST")
-        }
+        proxy.setDiagnostic(object : NativeFongMiProxy.Diagnostic {
+            override fun httpResponse(status: Int, range: Boolean) {
+                HerrinPlaybackDiagnosticJournal.record("PROXY", "HTTP_RESPONSE", "STATUS=$status")
+                if (range) HerrinPlaybackDiagnosticJournal.record("PROXY", "RANGE_REQUEST")
+            }
+            override fun failure(code: String) { SpiderProxyDiagnostics.failure(context, code) }
+        })
         initializingProxy = proxy
         CatVodProxy.set(proxy.port(), proxy.sessionToken())
     }
