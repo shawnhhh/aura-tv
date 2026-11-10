@@ -177,22 +177,12 @@ class FanTaiYingRealNodesTest {
             report.put("spider_api", site.spiderApi).put("node_count", config.sites.size)
             report.put("declared_jar_md5", (site.jar ?: config.spiderJar).orEmpty().substringAfter(";md5;", "").take(32))
             // No ABI guard here: ALWAYS attempt the production worker on every image.
-            step("spider_initialization", 95_000) { ready(bridge.browse(site, config, searchOnly = true)) }
-            report.put("plugin_initialized", true)
-            val found = try {
-                step("search") { ready(bridge.search(site, "小城良方")) }
-            } catch (error: Stop) {
-                if (!error.code.contains("JSONException") || name != "玩偶哥哥") throw error
-                report.put("search_without_home_failure", error.code)
-                // Match explicit site selection: browse the real home before searching.
-                // This changes activation state; it is not a blind retry or an API/guard bypass.
-                val home = step("normal_home_activation", 95_000) { bridge.browse(site, config) }
-                when (home) {
-                    is SpiderResult.Ready -> report.put("home_film_count", home.value.size)
-                    is SpiderResult.Failure -> report.put("home_browse_failure", safe(home.message))
-                }
-                step("search_after_home") { ready(bridge.search(site, "小城良方")) }
+            val initialHome = step("spider_initialization", 95_000) {
+                ready(bridge.browse(site, config, searchOnly = name != "玩偶哥哥"))
             }
+            report.put("plugin_initialized", true).put("home_film_count", initialHome.size)
+                .put("active_site_after_home", bridge.approvedActiveSiteKey() == site.key)
+            val found = step("search") { ready(bridge.search(site, "小城良方")) }
             report.put("search_count", found.size)
             val identity = HerrinFilmIdentity(1, "tv", listOf("小城良方"), 2026)
             val film = step("film_match") {

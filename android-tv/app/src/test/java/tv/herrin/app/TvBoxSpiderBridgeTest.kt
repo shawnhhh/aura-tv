@@ -219,6 +219,34 @@ class TvBoxSpiderBridgeTest {
         assertEquals("备用首页", films.single().title)
     }
 
+    @Test fun `empty home publishes a usable empty catalog after all ordered hooks`() {
+        val calls = mutableListOf<String>()
+        assertTrue(SpiderCatalogBrowser.browse(site,
+            home = { filter -> calls += "home:$filter"; "" },
+            homeVideos = { calls += "video"; "" }, category = { error("no categories") }).isEmpty())
+        assertEquals(listOf("home:true", "video", "home:false"), calls)
+    }
+
+    @Test fun `home video hook always runs and takes precedence as in FongMi`() {
+        val calls = mutableListOf<String>()
+        val films = SpiderCatalogBrowser.browse(site,
+            home = { calls += "home"; """{"list":[{"vod_id":"home","vod_name":"首页"}]}""" },
+            homeVideos = { calls += "video"; """{"list":[{"vod_id":"video","vod_name":"推荐"}]}""" },
+            category = { error("not needed") })
+        assertEquals(listOf("home", "video"), calls)
+        assertEquals("video", films.single().spiderVodId)
+    }
+
+    @Test fun `search distinguishes empty body from an explicit empty results list`() {
+        assertEquals(0, SpiderVodCodec.searchRoot("""{"list":[]}""").getJSONArray("list").length())
+        for ((payload, expected) in listOf("" to "SOURCE_EMPTY_RESPONSE", "no" to "SOURCE_RESPONSE_INVALID",
+            "{}" to "SOURCE_INTERFACE_ERROR", """{"code":401}""" to "SOURCE_AUTH_REQUIRED",
+            """{"code":403}""" to "SOURCE_ACCESS_DENIED", """{"code":419}""" to "SOURCE_SESSION_EXPIRED")) {
+            try { SpiderVodCodec.searchRoot(payload); fail("must reject $expected") }
+            catch (error: IllegalStateException) { assertTrue(error.message.orEmpty().startsWith(expected)) }
+        }
+    }
+
     @Test fun `native guard filename matches ABI specific library name`() {
         assertEquals("assets/ftyguard_v8.so", SpiderNativeLibraryPlan.assetForAbi("arm64-v8a"))
         assertEquals("assets/ftyguard_v7.so", SpiderNativeLibraryPlan.assetForAbi("armeabi-v7a"))

@@ -36,6 +36,21 @@ internal sealed interface SpiderResult<out T> {
 }
 
 internal object SpiderVodCodec {
+    /** Empty transport bodies are not a valid no-results list or proof of login. */
+    fun searchRoot(payload: String): JSONObject {
+        check(payload.isNotBlank()) { "SOURCE_EMPTY_RESPONSE：站点搜索返回空内容，尚不能判断资源或授权状态" }
+        val root = try { JSONObject(payload) } catch (_: Exception) {
+            error("SOURCE_RESPONSE_INVALID：站点搜索返回无效 JSON")
+        }
+        when (root.optInt("code", root.optInt("status", 0))) {
+            401 -> error("SOURCE_AUTH_REQUIRED：站点接口要求授权")
+            403 -> error("SOURCE_ACCESS_DENIED：站点接口拒绝访问")
+            419 -> error("SOURCE_SESSION_EXPIRED：站点接口会话已失效")
+        }
+        check(root.optJSONArray("list") != null) { "SOURCE_INTERFACE_ERROR：站点搜索缺少结果列表" }
+        return root
+    }
+
     fun listing(json: String, site: TvBoxSite): List<Film> {
         val array = JSONObject(json).optJSONArray("list") ?: return emptyList()
         return (0 until minOf(array.length(), 80)).mapNotNull { index ->
@@ -181,6 +196,7 @@ internal object SpiderCatalogBrowser {
                category: (String) -> String): List<Film> {
         val failures = mutableListOf<String>()
         val categories = linkedMapOf<String, String>()
+        var completedResponse = false
 
         fun attempt(label: String, block: () -> String): List<Film> {
             val payload = try { block() }
@@ -191,9 +207,13 @@ internal object SpiderCatalogBrowser {
                 failures += "$label：${SpiderFailureDetails.message(error).take(90)}"
                 return emptyList()
             }
-            if (payload.isBlank()) return emptyList()
+            if (payload.isBlank()) {
+                completedResponse = true // Optional Spider home methods default to an empty string.
+                return emptyList()
+            }
             return try {
                 val root = JSONObject(payload)
+                completedResponse = true
                 val groups = root.optJSONArray("class")
                 if (groups != null) for (index in 0 until minOf(groups.length(), 80)) {
                     val group = groups.optJSONObject(index) ?: continue
@@ -208,8 +228,12 @@ internal object SpiderCatalogBrowser {
             }
         }
 
-        attempt("首页", { home(true) }).takeIf { it.isNotEmpty() }?.let { return it }
-        attempt("首页推荐", homeVideos).takeIf { it.isNotEmpty() }?.let { return it }
+        // Pinned FongMi SiteApi always calls BOTH, in this order. The video
+        // call can establish provider state even when home already has films.
+        val homeFilms = attempt("首页", { home(true) })
+        val videoFilms = attempt("首页推荐", homeVideos)
+        videoFilms.takeIf { it.isNotEmpty() }?.let { return it }
+        homeFilms.takeIf { it.isNotEmpty() }?.let { return it }
         // TVBox plugins differ on whether a filtered home call exposes a catalog.
         attempt("首页无筛选", { home(false) }).takeIf { it.isNotEmpty() }?.let { return it }
 
@@ -221,6 +245,9 @@ internal object SpiderCatalogBrowser {
             attempt("分类 ${name.ifBlank { id }.take(24)}", { category(id) })
                 .takeIf { it.isNotEmpty() }?.let { return it }
         }
+        // init has already succeeded. An optional, empty catalog must publish
+        // that same runtime so search/login can continue without losing state.
+        if (completedResponse) return emptyList()
         val reason = failures.take(3).joinToString("；").take(250)
         error(if (reason.isNotEmpty()) "Spider 无影片；$reason" else
             "Spider 首页及 ${minOf(categories.size, MAX_CATEGORIES)} 个分类均无影片")
@@ -629,7 +656,14 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             activeGrant = originSecret
         }
         if (loadHome) SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.HOME)
-        val films = if (!loadHome) emptyList() else SpiderCatalogBrowser.browse(site, spider::homeContent, spider::homeVideoContent) { id ->
+        val films = if (!loadHome) emptyList() else SpiderCatalogBrowser.browse(site, { filter ->
+            HerrinPlaybackDiagnosticJournal.record("SPIDER", if (filter) "HOME_FILTER" else "HOME_NO_FILTER")
+            spider.homeContent(filter)
+        }, {
+            HerrinPlaybackDiagnosticJournal.record("SPIDER", "HOME_VIDEO")
+            spider.homeVideoContent()
+        }) { id ->
+            HerrinPlaybackDiagnosticJournal.record("SPIDER", "HOME_CATEGORY")
             spider.categoryContent(id, "1", false, hashMapOf())
         }
         checkOpen(ticket)
@@ -647,8 +681,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         }
         val owner = activeAuthority ?: error("Spider 来源授权已失效")
         val response = spider.searchContent(keyword, false)
+        val root = SpiderVodCodec.searchRoot(response)
         SpiderVodCodec.listing(response, site).map(owner::sign).also { films ->
-            lastSearchCounts = (JSONObject(response).optJSONArray("list")?.length() ?: 0) to films.size
+            lastSearchCounts = root.getJSONArray("list").length() to films.size
             DiscoveryProtocolTrace.record(site.key, "SPIDER_SEARCH_FALSE", lastSearchCounts.first, films.size, keyword)
         }
     }

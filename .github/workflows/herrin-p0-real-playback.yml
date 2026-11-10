@@ -41,7 +41,7 @@ jobs:
           mkdir -p evidence diagnostic-apks/arm64-v8a
           bash android-tv/scripts/build_live_arm_canary.sh
           cd android-tv
-          gradle --build-cache :app:testDebugUnitTest --tests 'tv.herrin.app.nativeplayback.NativeFongMiHlsTest' --tests 'tv.herrin.app.nativeplayback.NativeFongMiProxyTest' --tests 'tv.herrin.app.SpiderProxyDiagnosticsTest'
+          gradle --build-cache :app:testDebugUnitTest --tests 'tv.herrin.app.nativeplayback.NativeFongMiHlsTest' --tests 'tv.herrin.app.nativeplayback.NativeFongMiProxyTest' --tests 'tv.herrin.app.SpiderProxyDiagnosticsTest' --tests 'tv.herrin.app.TvBoxSpiderBridgeTest'
           gradle --build-cache -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi=arm64-v8a :app:assembleDebug :app:assembleDebugAndroidTest
           cp app/build/outputs/apk/debug/app-debug.apk ../diagnostic-apks/arm64-v8a/
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk ../diagnostic-apks/arm64-v8a/
