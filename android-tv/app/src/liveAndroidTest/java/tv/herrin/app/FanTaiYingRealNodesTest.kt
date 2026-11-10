@@ -151,7 +151,7 @@ class FanTaiYingRealNodesTest {
             .put("authorized_title", "小城良方").put("authorized_year", 2026)
             .put("first_frame", false).put("seek_verified", false).put("plugin_initialized", false)
         val bridge = TvBoxSpiderBridge(context)
-        for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt"))
+        for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt", "spider-search-shape.json"))
             File(context.filesDir, file).delete()
         HerrinPlaybackDiagnosticJournal.clear()
         var backRequests = 0
@@ -309,6 +309,7 @@ class FanTaiYingRealNodesTest {
             runCatching {
                 report.put("proxy_callback_shapes", JSONArray(File(context.filesDir, "spider-proxy-shapes.json").readText()))
             }
+            runCatching { report.put("search_response_shape", JSONObject(File(context.filesDir, "spider-search-shape.json").readText())) }
             report.put("elapsed_ms", SystemClock.elapsedRealtime() - begin)
                 .put("safe_player_journal", HerrinPlaybackDiagnosticJournal.export())
             write(fileName, report)

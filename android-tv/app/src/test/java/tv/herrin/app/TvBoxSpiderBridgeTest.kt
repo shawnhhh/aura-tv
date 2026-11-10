@@ -248,6 +248,19 @@ class TvBoxSpiderBridgeTest {
         }
     }
 
+    @Test fun `FongMi first page dispatch reaches paginated-only Spider implementation`() {
+        val paged = object : com.github.catvod.crawler.Spider() {
+            override fun searchContent(key: String, quick: Boolean, pg: String): String {
+                assertEquals("授权片名", key)
+                assertFalse(quick)
+                assertEquals("1", pg)
+                return """{"list":[{"vod_id":"one","vod_name":"授权片名"}]}"""
+            }
+        }
+        assertEquals("one", SpiderVodCodec.listing(paged.searchContent("授权片名", false), site).single().spiderVodId)
+        paged.js.close()
+    }
+
     @Test fun `native guard filename matches ABI specific library name`() {
         assertEquals("assets/ftyguard_v8.so", SpiderNativeLibraryPlan.assetForAbi("arm64-v8a"))
         assertEquals("assets/ftyguard_v7.so", SpiderNativeLibraryPlan.assetForAbi("armeabi-v7a"))

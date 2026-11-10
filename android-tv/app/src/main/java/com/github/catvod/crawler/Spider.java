@@ -123,12 +123,14 @@ public abstract class Spider {
         return "";
     }
 
+    // FongMi/TV 305dff2 SiteApi calls this overload on the first page.
+    // Preserve virtual dispatch for plugins implementing only paged search.
     public String searchContent(String key, boolean quick) throws Exception {
-        return "";
+        return searchContent(key, quick, "1");
     }
 
     public String searchContent(String key, boolean quick, String pg) throws Exception {
-        return "";
+        return "{\"list\":[]}";
     }
 
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {
