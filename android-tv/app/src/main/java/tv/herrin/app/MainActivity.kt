@@ -818,7 +818,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 break
                             }
                         }
-                        is SpiderResult.Ready -> if (result.value.isNotEmpty()) {
+                        is SpiderResult.Ready -> {
                             chosen = site to result.value
                             chosenSpider = true
                             prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
@@ -843,8 +843,10 @@ private fun Herrin(startup: StartupPresentation) {
                 providerStatus = "TVBox ${chosen.first.name} · ${chosen.second.size} 部"
                 tvBoxVodScope = if (chosenSpider) "spider:${chosen.first.key}:${chosen.first.jar ?: config.spiderJar}"
                     else "tvbox:${chosen.first.apiUrl}"
-                filmId = chosen.second.first().id
-                tvBoxStatus += "；已自动导入 ${chosen.first.name}，首页已切换到影视源内容"
+                chosen.second.firstOrNull()?.let { filmId = it.id }
+                tvBoxStatus += if (chosenSpider && chosen.second.isEmpty())
+                    "；已恢复 ${chosen.first.name}，首页暂未返回影片，可继续搜索或检查来源授权"
+                else "；已自动导入 ${chosen.first.name}，首页已切换到影视源内容"
                 vodImportFeedback = "成功"
             } else {
                 providerFilms = null
@@ -2935,12 +2937,14 @@ private fun Herrin(startup: StartupPresentation) {
                                             providerFilms = result.value
                                             providerStatus = "TVBox ${site.name} · ${result.value.size} 部"
                                             tvBoxVodScope = "spider:${site.key}:${selected.spiderJar}"
-                                            filmId = result.value.first().id
+                                            result.value.firstOrNull()?.let { filmId = it.id }
                                             prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
                                             prefs.tvBoxTrustedSpiderJarSpec = site.jar ?: selected.spiderJar.orEmpty()
                                             category = "首页"
                                             screen = "browse"
-                                            tvBoxStatus = "已导入 ${site.name} 的影片目录"
+                                            tvBoxStatus = if (result.value.isEmpty())
+                                                "已启用 ${site.name}；首页暂未返回影片，可继续搜索或检查来源授权"
+                                            else "已导入 ${site.name} 的影片目录"
                                         }
                                     }
                                 }
@@ -3288,7 +3292,9 @@ private fun Herrin(startup: StartupPresentation) {
                         Spacer(Modifier.height(135.dp))
                         Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.testTag("source-empty-title"))
-                        Text(providerStatus + "；请进入设置选择站点", fontSize = 15.sp, lineHeight = 23.sp,
+                        Text(providerStatus + if (spiderActive)
+                            "；该影视点首页暂未返回影片，可继续搜索或检查来源授权"
+                            else "；请进入设置选择站点", fontSize = 15.sp, lineHeight = 23.sp,
                             color = Color(0xFFCDD8E6), modifier = Modifier.testTag("source-empty-status"))
                         Spacer(Modifier.height(24.dp))
                     } else {
@@ -4514,12 +4520,14 @@ private fun Herrin(startup: StartupPresentation) {
                                                         providerFilms = loaded.value
                                                         providerStatus = "TVBox Spider ${site.name} · ${loaded.value.size} 部"
                                                         tvBoxVodScope = "spider:${site.key}:${preview.spiderJar}"
-                                                        filmId = loaded.value.first().id
+                                                        loaded.value.firstOrNull()?.let { filmId = it.id }
                                                         prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
                                                         prefs.tvBoxTrustedSpiderJarSpec = site.jar ?: preview.spiderJar.orEmpty()
                                                         category = "首页"
                                                         screen = "browse"
-                                                        tvBoxStatus = "已读取 ${loaded.value.size} 部；打开详情获取选集，选择线路后解析播放"
+                                                        tvBoxStatus = if (loaded.value.isEmpty())
+                                                            "已启用 ${site.name}；首页暂未返回影片，可继续搜索或检查来源授权"
+                                                        else "已读取 ${loaded.value.size} 部；打开详情获取选集，选择线路后解析播放"
                                                     }
                                                 }
                                             }

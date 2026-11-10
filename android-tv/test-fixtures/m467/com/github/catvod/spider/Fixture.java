@@ -9,9 +9,11 @@ import java.util.HashMap;
 public final class Fixture extends Spider {
     private Map<String, Object> lifecycle;
     private Context fixtureContext;
+    private boolean emptyHome;
     @Override public void init(Context context, String extend) {
         if (!Init.initialized) throw new IllegalStateException("JAR Init was not invoked");
         fixtureContext = context;
+        emptyHome = "empty-home".equals(extend);
         lifecycle = LifecycleGate.state(context);
         LifecycleGate.count(lifecycle, "inits");
         LifecycleGate.pause(lifecycle, "init", this);
@@ -21,6 +23,7 @@ public final class Fixture extends Spider {
     }
     @Override public String homeContent(boolean filter) {
         LifecycleGate.count(lifecycle, "homes");
+        if (emptyHome) return "{\"list\":[]}";
         return "{\"list\":[{\"vod_id\":\"fixture\",\"vod_name\":\"Original synthetic fixture\"}]}";
     }
     @Override public String searchContent(String keyword, boolean quick) {
@@ -40,6 +43,7 @@ public final class Fixture extends Spider {
             for (;;) { try { Thread.sleep(1000); } catch (InterruptedException ignored) {} }
         }
         LifecycleGate.count(lifecycle, "searches");
+        if (emptyHome) return "{\"list\":[{\"vod_id\":\"fixture\",\"vod_name\":\"Original synthetic fixture\"}]}";
         return homeContent(false);
     }
     @Override public String detailContent(List<String> ids) {
