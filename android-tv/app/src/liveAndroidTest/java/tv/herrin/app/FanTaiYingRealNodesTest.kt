@@ -45,6 +45,7 @@ class FanTaiYingRealNodesTest {
         .put("supported_abis", JSONArray(Build.SUPPORTED_ABIS.toList()))
         .put("supported_64", JSONArray(Build.SUPPORTED_64_BIT_ABIS.toList()))
         .put("supported_32", JSONArray(Build.SUPPORTED_32_BIT_ABIS.toList()))
+        .put("os_arch", System.getProperty("os.arch")).put("build_cpu_abi", Build.CPU_ABI)
         .put("process_64bit", Process.is64Bit()).put("production_selected_abi", SpiderRuntimeCompat.processAbi())
         .put("native_library_dir", context.applicationInfo.nativeLibraryDir)
 
@@ -57,6 +58,7 @@ class FanTaiYingRealNodesTest {
                 val packaged = File(context.applicationInfo.nativeLibraryDir, "libherrinarmprobe.so")
                 val file = if (abi == "arm64-v8a" && packaged.exists()) packaged else {
                     val out = File(context.codeCacheDir, "canary-$abi.so")
+                    if (out.exists()) check(out.delete())
                     inst.context.assets.open("native-probe/$abi/libherrinarmprobe.so").use { input ->
                         out.outputStream().use { input.copyTo(it) }
                     }
@@ -122,7 +124,8 @@ class FanTaiYingRealNodesTest {
                 if (SystemClock.elapsedRealtime() - start > budget + 5_000) throw Stop("OPERATION_TIMEOUT")
                 Thread.sleep(100)
             }
-            val value = runBlocking { job.await() }
+            val completed = requireNotNull(job)
+            val value = runBlocking { completed.await() }
             row.put("result", "PASS")
             return value
         } catch (error: Throwable) {
@@ -145,7 +148,7 @@ class FanTaiYingRealNodesTest {
         report = JSONObject().put("node", name).put("verdict", "FAIL_PLAYBACK")
             .put("device", device()).put("stages", stages)
             .put("authorized_title", "小城良方").put("authorized_year", 2026)
-            .put("first_frame", false).put("seek_verified", false)
+            .put("first_frame", false).put("seek_verified", false).put("plugin_initialized", false)
         val bridge = TvBoxSpiderBridge(context)
         compose.setContent { MaterialTheme {
             Text("Real node test host")
@@ -163,6 +166,7 @@ class FanTaiYingRealNodesTest {
             val site = config.sites.singleOrNull { it.name.contains(name) } ?: throw Stop("TARGET_SITE_NOT_UNIQUE")
             report.put("site_key", site.key).put("site_name", site.name)
             report.put("spider_api", site.spiderApi).put("node_count", config.sites.size)
+            report.put("declared_jar_md5", (site.jar ?: config.spiderJar).orEmpty().substringAfter(";md5;", "").take(32))
             // No ABI guard here: ALWAYS attempt the production worker on every image.
             step("spider_initialization", 95_000) { ready(bridge.browse(site, config, searchOnly = true)) }
             report.put("plugin_initialized", true)

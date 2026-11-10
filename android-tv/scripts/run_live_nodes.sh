@@ -10,6 +10,7 @@ collect() {
         adb exec-out run-as tv.herrin.app cat "files/live-node-$name.json" > "evidence/$name.json" || true
         cat "evidence/$name.json"
     done
+    cat evidence/system-abilist.txt evidence/native-bridge.txt evidence/bridge-files.txt evidence/package-abi.txt 2>/dev/null || true
     # Do not collect provider logcat, private QR graphics, tokens or URLs.
     exit "$result"
 }
@@ -21,7 +22,7 @@ adb shell getprop ro.dalvik.vm.isa.arm64 >> evidence/native-bridge.txt
 adb shell ls /system/lib64/libndk_translation.so /system/lib/libndk_translation.so /system/lib64/libhoudini.so /system/lib/libhoudini.so > evidence/bridge-files.txt 2>&1 || true
 bash android-tv/scripts/build_live_arm_canary.sh
 cd android-tv
-gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace > ../evidence/build.log 2>&1 || { tail -n 120 ../evidence/build.log; exit 1; }
+gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace > ../evidence/build.log 2>&1 || { rg -n '(^e:|error:|What went wrong|Execution failed|Compilation error)' ../evidence/build.log || true; tail -n 20 ../evidence/build.log; exit 1; }
 adb install -r app/build/outputs/apk/debug/app-debug.apk | tee ../evidence/install.txt
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 cd ..

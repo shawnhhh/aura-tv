@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - mode: tv-x86_64
+          - mode: tv-x86
             target: android-tv
             arch: x86
             profile: tv_1080p
@@ -82,8 +82,10 @@ jobs:
         run: |
           mkdir -p evidence
           uname -m > evidence/host-arch.txt
-          sdkmanager 'emulator' 'platform-tools' 'system-images;android-30;google_apis;arm64-v8a' > evidence/sdk.log 2>&1
-          echo no | avdmanager create avd --force --name HerrinArm64Evaluation --package 'system-images;android-30;google_apis;arm64-v8a' > evidence/avd.log 2>&1
+          sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)
+          avd_manager="$(dirname "$sdk_manager")/avdmanager"
+          "$sdk_manager" 'emulator' 'platform-tools' 'system-images;android-30;google_apis;arm64-v8a' > evidence/sdk.log 2>&1 || { cat evidence/sdk.log; exit 1; }
+          echo no | "$avd_manager" create avd --force --name HerrinArm64Evaluation --package 'system-images;android-30;google_apis;arm64-v8a' > evidence/avd.log 2>&1
           set +e
           timeout 90 "$ANDROID_HOME/emulator/emulator" -avd HerrinArm64Evaluation -accel off -no-window -no-snapshot -noaudio -gpu swiftshader_indirect > evidence/engine.log 2>&1
           status=$?
