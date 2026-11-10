@@ -1,0 +1,26 @@
+# P0 未完成：真实播放修复续跑
+
+基线HEAD：79999f3538b5adc5337efff15befdc187d520bb5。主开发分支 codex/herrin-global-search-20261107，Draft PR #84；当前专项临时分支 codex/herrin-p0-live-playback-20261110。
+
+硬性标准：玩偶哥哥 REAL_PLAYBACK_PASS 或真实QR/cancel/Back已验且等待私人扫码的 AUTH_FLOW_PASS_PLAYBACK_PENDING（仍是阶段性）；奶酪必须 REAL_PLAYBACK_PASS。必须实际出帧、连续60秒、暂停恢复、Seek、同集重播/第2集/回第1集/返回详情再播。未达标不能宣布P0完成，不生成验收APK。不使用Superpowers，不合并main/master，不放宽媒体/本机归属/登录/DRM校验。
+
+已验证且不要重跑：Android11 Google APIs x86_64 可通过标准包ABI选择执行ARM64和ARMv7 JNI及两个Spider初始化。实时节点：玩偶 / csp_WoGGGuard；奶酪 / csp_T4Guard。测试授权片目《小城良方》（2026），多集。奶酪搜索/身份/29集/playerContent通过；首集HLS_MANIFEST_REJECTED、本机HTTP502；重播及第2集本机归属检查失败。玩偶搜索空文本，首页无目录后宿主源描述被清空。
+
+先修奶酪：拆分HLS头错误、回环引用重写拒绝、回调和I/O生命周期；再追踪FongMiSessionAuthorization具体Health失败，不允许跳过UNAUTHORIZED_LOCAL。后修玩偶：对照固定FongMi上游调用顺序，保留空首页下已成功初始化的执行会话，区分空结果/授权/接口错误/会话失效/无资源。
+
+本轮初始修改：代理prefix读取异常时关闭流；新增固定HLS拒绝子码及Health细分；真实测试60秒门槛；单节点ARM64工作流，CI采集绿不再等同成功，真实验收JSON独立gate。仅构建用于安装测试的诊断包，不上传/发布验收APK。
+
+精确续跑：
+
+```sh
+cd /workspace/aura-tv
+git status --short
+git log -1 --format='%H %s'
+# 在已配置SDK/NDK/Gradle和ARM64或Google APIs转译设备的环境，实时奶酪：
+LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
+# 玩偶对应：LIVE_NODE=wanou，其余相同。
+# GitHub专项只监听当前临时分支；普通修复提交跑奶酪，提交信息含[wanou]才选择玩偶。
+# 现场数据：evidence/cheese.json 或 evidence/wanou.json；失败必须继续修复或明确BLOCKED并保留实证。
+```
+
+已有完整回归失败必须最终核查：TmdbBrowseRefreshTest.changedNetworkOrderPublishesOnlyAfterTheFocusedRailIsLeft，TmdbBrowseRefreshTest.kt:62，等待刷新缓存tmdb-movie-12超时10秒。历史统一CI：JVM702/702、Lint/Debug/API31与ABBA24/24通过；TV256/257。没有将其根因认定为flaky。阶段修复完成前不反复跑全量构建，最后统一完整CI并更新结果。

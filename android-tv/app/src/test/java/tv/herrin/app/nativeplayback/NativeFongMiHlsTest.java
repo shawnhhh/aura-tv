@@ -104,6 +104,14 @@ public final class NativeFongMiHlsTest {
         }
     }
 
+    @Test public void distinguishesInvalidBodyFromRejectedReferenceWithoutLeakingContent() {
+        assertEquals("HLS_BODY_EMPTY", NativeFongMiHls.rejectionCode(""));
+        assertEquals("HLS_BODY_JSON", NativeFongMiHls.rejectionCode("{\"token\":\"PRIVATE\"}"));
+        assertEquals("HLS_BODY_HTML", NativeFongMiHls.rejectionCode("<!doctype html>PRIVATE"));
+        assertEquals("HLS_HEADER_INVALID", NativeFongMiHls.rejectionCode("PRIVATE"));
+        assertEquals("HLS_REFERENCE_REWRITE_REJECTED", NativeFongMiHls.rejectionCode("#EXTM3U\nPRIVATE"));
+    }
+
     private static HttpURLConnection connection(String url) throws Exception {
         HttpURLConnection req = (HttpURLConnection) URI.create(url).toURL().openConnection();
         req.setConnectTimeout(3000);

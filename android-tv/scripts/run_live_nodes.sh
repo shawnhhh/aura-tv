@@ -6,7 +6,9 @@ collect() {
     result=$?
     trap - EXIT
     cd "$repo_root"
-    for name in capabilities wanou cheese; do
+    report_names=(capabilities wanou cheese)
+    if [[ -n "${LIVE_NODE:-}" ]]; then report_names=("$LIVE_NODE"); fi
+    for name in "${report_names[@]}"; do
         adb exec-out run-as tv.herrin.app cat "files/live-node-$name.json" > "evidence/$name.json" || true
         cat "evidence/$name.json"
     done
@@ -16,7 +18,7 @@ import json, os
 from pathlib import Path
 lines = ['## Real provider outcomes (workflow success is evidence collection only)',
          '| Node | Verdict | Stage |', '| --- | --- | --- |']
-for key in ('wanou', 'cheese'):
+for key in ([os.environ['LIVE_NODE']] if os.environ.get('LIVE_NODE') else ('wanou', 'cheese')):
     try:
         data = json.loads(Path(f'evidence/{key}.json').read_text())
         lines.append(f"| {data['node']} | {data['verdict']} | {data.get('failure_stage', 'completed')} |")
@@ -27,7 +29,10 @@ if os.environ.get('GITHUB_STEP_SUMMARY'):
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
         out.write('\n'.join(lines) + '\n')
 SUMMARY
-    python3 android-tv/scripts/live_spider_methods.py || true
+    if [[ "${LIVE_METHOD_METADATA:-true}" == true ]]; then python3 android-tv/scripts/live_spider_methods.py || true; fi
+    if [[ "${LIVE_REQUIRE_ACCEPTANCE:-false}" == true ]]; then
+        if ! python3 android-tv/scripts/verify_live_node_acceptance.py --node "${LIVE_NODE:?selected node required}" --directory evidence; then result=1; fi
+    fi
     # Do not collect provider logcat, private QR graphics, tokens or URLs.
     exit "$result"
 }
@@ -62,10 +67,14 @@ adb shell dumpsys package tv.herrin.app | grep -E 'primaryCpuAbi|secondaryCpuAbi
 if [[ -n "${LIVE_INSTALL_ABI:-}" ]]; then
     grep -F "primaryCpuAbi=$LIVE_INSTALL_ABI" evidence/package-abi.txt
 fi
-adb shell am instrument "${instrument_args[@]}" -w -r -e class tv.herrin.app.FanTaiYingRealNodesTest tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/instrumentation.txt
+test_selector=tv.herrin.app.FanTaiYingRealNodesTest
+if [[ "${LIVE_NODE:-}" == cheese ]]; then test_selector+='#cheeseRealNode'; fi
+if [[ "${LIVE_NODE:-}" == wanou ]]; then test_selector+='#wanouGegeRealNode'; fi
+adb shell am instrument "${instrument_args[@]}" -w -r -e class "$test_selector" tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/instrumentation.txt
 python3 - <<'PY'
-import json
+import json, os
 from pathlib import Path
 text=Path('evidence/instrumentation.txt').read_text()
-assert 'OK (3 tests)' in text and 'INSTRUMENTATION_FAILED' not in text and 'FAILURES!!!' not in text, text
+expected = 'OK (1 test)' if os.environ.get('LIVE_NODE') else 'OK (3 tests)'
+assert expected in text and 'INSTRUMENTATION_FAILED' not in text and 'FAILURES!!!' not in text, text
 PY

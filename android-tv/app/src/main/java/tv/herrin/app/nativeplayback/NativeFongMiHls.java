@@ -16,6 +16,19 @@ public final class NativeFongMiHls {
 
     private NativeFongMiHls() {}
 
+    /** Fixed codes only; never export playlist text or private nested references. */
+    public static String rejectionCode(String playlist) {
+        if (playlist == null || playlist.isEmpty()) return "HLS_BODY_EMPTY";
+        if (playlist.length() > MAX_MANIFEST_BYTES) return "HLS_MANIFEST_SIZE_LIMIT";
+        String header = playlist.startsWith("\uFEFF") ? playlist.substring(1) : playlist;
+        header = header.stripLeading();
+        if (header.startsWith("#EXTM3U")) return "HLS_REFERENCE_REWRITE_REJECTED";
+        if (header.startsWith("{") || header.startsWith("[")) return "HLS_BODY_JSON";
+        if (header.regionMatches(true, 0, "<html", 0, 5) ||
+            header.regionMatches(true, 0, "<!doctype", 0, 9)) return "HLS_BODY_HTML";
+        return "HLS_HEADER_INVALID";
+    }
+
     public static String rewrite(String playlist, String siteKey, NativeFongMiProxy proxy) {
         if (playlist == null || playlist.length() > MAX_MANIFEST_BYTES) return null;
         String header = playlist.startsWith("\uFEFF") ? playlist.substring(1) : playlist;

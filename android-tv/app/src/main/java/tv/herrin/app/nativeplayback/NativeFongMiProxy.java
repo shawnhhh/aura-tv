@@ -189,7 +189,13 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         byte[] first = new byte[10];
         int count = 0;
         while (count < first.length) {
-            int bytes = probe.read(first, count, first.length - count);
+            int bytes;
+            try { bytes = probe.read(first, count, first.length - count); }
+            catch (IOException | RuntimeException | Error failure) {
+                try { probe.close(); } catch (IOException closeFailure) { failure.addSuppressed(closeFailure); }
+                diagnosticFailure("HLS_PREFIX_READ_FAILED");
+                throw failure;
+            }
             if (bytes <= 0) break;
             count += bytes;
         }
@@ -219,10 +225,11 @@ public final class NativeFongMiProxy extends NanoHTTPD implements AutoCloseable 
         } finally {
             probe.close();
         }
-        String rewritten = NativeFongMiHls.rewrite(
-            new String(content.toByteArray(), StandardCharsets.UTF_8), siteKey, this);
+        String playlist = new String(content.toByteArray(), StandardCharsets.UTF_8);
+        String rewritten = NativeFongMiHls.rewrite(playlist, siteKey, this);
         if (rewritten == null) {
             diagnosticFailure("HLS_MANIFEST_REJECTED");
+            diagnosticFailure(NativeFongMiHls.rejectionCode(playlist));
             throw new IOException("Invalid approved HLS playlist");
         }
         Object[] copy = response.clone();

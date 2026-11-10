@@ -227,7 +227,10 @@ class FanTaiYingRealNodesTest {
                         if (events.length() < 48) events.put(JSONObject().put("event", event).put("detail", value))
                     }
                     val authorize: suspend (String) -> Boolean = {
-                        tv.herrin.app.nativeplayback.FongMiSessionAuthorization.isApproved(it, site.key)
+                        val health = tv.herrin.app.nativeplayback.FongMiSessionAuthorization.inspect(it, site.key)
+                        events.put(JSONObject().put("event", "LOCAL_AUTH_" + health.name)
+                            .put("current_site_matches", bridge.approvedActiveSiteKey() == site.key))
+                        health == tv.herrin.app.nativeplayback.NativeFongMiRoute.Health.READY
                     }
                     if (!extended) return HerrinRemoteMediaProbe(authorizeLocal = authorize, evidence = evidence)
                     // Diagnostic-only budget. The normal production gate failure remains a failure.
@@ -273,7 +276,7 @@ class FanTaiYingRealNodesTest {
                 currentStage = "line_switch"
                 throw Stop("ALTERNATE_LINE_UNAVAILABLE")
             }
-            report.put("verdict", "PASS_PLAYBACK")
+            report.put("verdict", "REAL_PLAYBACK_PASS")
         } catch (error: Throwable) {
             val code = safe(error.message ?: error.javaClass.simpleName)
             val verdict = when {
@@ -313,10 +316,10 @@ class FanTaiYingRealNodesTest {
             }
             report.put("first_frame", true)
         }
-        step("continuous_pause_seek_$index", 70_000) {
+        step("continuous_pause_seek_$index", 110_000) {
             var start = 0L
             compose.runOnIdle { start = player!!.currentPosition }
-            val requiredMs = if (index == 0) 30_000L else 10_000L
+            val requiredMs = if (index == 0) 60_000L else 10_000L
             compose.waitUntil(requiredMs + 15_000) {
                 var advanced = false
                 compose.runOnIdle { advanced = player!!.isPlaying && player!!.currentPosition > start + requiredMs }
