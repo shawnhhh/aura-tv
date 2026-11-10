@@ -83,3 +83,28 @@ LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_PREBUILT_APKS=
 ```
 
 本地没有Android SDK/KVM的环境不能声称执行了设备命令。正式一次16:57 UTC续跑任务已停用：当前已于此前主动恢复，避免并发覆盖；不是后台仍在执行，也不保证额度恢复。
+
+## 08f6640 同HEAD完整常规CI最终证据
+
+应用/两开发分支/PR84 HEAD 08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7。三个工作流均completed/success：JVM715/715、Lint/Debug/API31（启动画面32帧采样）；TV259/259、68必跑类、无主进程fatal、原TmdbBrowseRefreshTest和空首页2例均passed；ABBA24/24。对应runs42859957975、42859957535、42859957426。Debug和TV工件核对为报告/启动证据，APK继续禁发。
+
+本段及机器JSON存放在独立参考诊断分支，应用HEAD保持08f以保留同HEAD证据；不能把本参考分支的文档提交当作另一次应用CI。详见evidence/08f6640-regular-ci.json、08f6640-full-tv.json、08f6640-abba.json。
+
+ABBA当次软件AVD小样本：首CPU绘制670→700.5ms（+30.5）；首页2860→2283ms（-577）；11次缓存导航3642.5→3612.5ms（-30）。旧adf头的+615ms导航退化保留历史；两轮基线/候选的小样本不推断TCL或全面提速。
+
+## 上游参考诊断（仍不是Herrin验收）
+
+官方FongMi/Release5.8.7 ARMv7 APK按发布SHA256 f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9校验，未改签或修改；只用官方UI和文档化本地setting/search接口，不读取或点击影片，不接触私人网盘登录。参考分支codex/herrin-p0-upstream-reference-20261110，工作树/workspace/aura-tv-reference。
+
+前几轮均REFERENCE_BLOCKED，不能把采集工作流success写成配置/Spider/搜索通过：
+- 9237106/run42861919229：English默认标签是Setting(单数)，定位失败。
+- b64cf4f/run42863215516：已找到标签，触摸未激活卡片。
+- 1a96913/run42864825533：进了配置界面，确认按钮未触发立即dismiss。
+- de1ccde/run42865754956：按真实焦点+确认后弹窗已关，选站ID误写vod_home；上游activity_setting.xml实际为vodHome。
+- 已改为3848b3c源码并正在验证，结果待实际JSON。全部旧失败JSON保留，目标节点比较尚未完成，不得归因源端失败。
+
+实际Herrin两节点仍同上FAIL，无视频首帧、60秒、Seek或授权QR通过。MainActivity真实节点详情返回驱动仍未补。先查新参考运行，只有新合法来源证据/修复才重跑实际节点；不要重复已过08f完整CI、48节点导入或ARMcanary基线。
+
+另查过网络权限假设：不能只看根Manifest只有INTERNET就添加权限；Media3 1.9.4 common/exoplayer库Manifest已声明ACCESS_NETWORK_STATE。尚未以最终安装包直接核验WifiState等权限，也没有证据表明Guard因权限返回空。没有据此扩大权限。
+
+若继续查native崩溃，可先做仅初始化/搜索/详情/解析、等待再关闭的生命周期隔离，观察安全固定JNI错误类型；不要为同一403反复拉媒体，也不去改NativeGuard保护/身份。ARMv7晚于失败捕获的SIGSEGV与ARM64先于第三请求的SIGILL要分别记录。

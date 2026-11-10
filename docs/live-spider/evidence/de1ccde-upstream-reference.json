@@ -1,0 +1,39 @@
+{
+  "scope": "OFFICIAL_REFERENCE_SEARCH_UI_ONLY_NO_MEDIA",
+  "herrin_acceptance": false,
+  "verdict": "REFERENCE_BLOCKED",
+  "release": "FongMi/Release 5.8.7",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "targets": [],
+  "stages": [
+    {
+      "stage": "open_settings",
+      "at_ms": 20283
+    },
+    {
+      "stage": "real_warehouse_configuration",
+      "at_ms": 42917
+    },
+    {
+      "stage": "restrict_search_to_two_authorized_nodes",
+      "at_ms": 56196
+    }
+  ],
+  "apk_sha256": "f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9",
+  "apk_modified_or_resigned": false,
+  "package_primary_abi": "armeabi-v7a",
+  "device_abis": "x86_64,x86,arm64-v8a,armeabi-v7a,armeabi",
+  "last_ui_shape": {
+    "known_controls": [
+      "vod"
+    ],
+    "known_labels": [],
+    "known_focused_controls": [
+      "vod"
+    ]
+  },
+  "failure_stage": "restrict_search_to_two_authorized_nodes",
+  "failure_code": "REFERENCE_UI_TARGET_NOT_REACHED",
+  "elapsed_ms": 81296,
+  "official_app_process_alive": true
+}
