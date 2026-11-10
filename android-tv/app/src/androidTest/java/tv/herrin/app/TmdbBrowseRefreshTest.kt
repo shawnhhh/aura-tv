@@ -22,6 +22,8 @@ class TmdbBrowseRefreshTest {
     private val errors=java.util.concurrent.atomic.AtomicInteger()
     private val changedRows=java.util.concurrent.atomic.AtomicInteger()
     private var errorsBeforeRelease=0
+    private val firstEnteredAt=java.util.concurrent.atomic.AtomicLong()
+    private var waitBeforeReleaseMs=0L
     private val holdBeforeRelease=InstrumentationRegistry.getArguments().getString("tmdbHoldRefresh")=="true"
     @get:Rule(order=0) val fixture=object:ExternalResource() {
         override fun before() {
@@ -41,6 +43,7 @@ class TmdbBrowseRefreshTest {
                     url.contains("/search/") -> "{\"results\":[]}"
                     else -> {
                         entered.incrementAndGet()
+                        firstEnteredAt.compareAndSet(0,android.os.SystemClock.elapsedRealtime())
                         try {
                             check(release.await(15,TimeUnit.SECONDS)){"Refresh fixture was not released"}
                             changed.load(url,key).also { raw ->
@@ -61,6 +64,7 @@ class TmdbBrowseRefreshTest {
             File(c.filesDir,"tmdb-refresh-diagnostic.json").writeText(JSONObject()
                 .put("entered",entered.get()).put("returned",returned.get()).put("errors",errors.get())
                 .put("held_before_release",holdBeforeRelease).put("errors_before_release",errorsBeforeRelease)
+                .put("fixture_wait_before_release_ms",waitBeforeReleaseMs)
                 .put("responses_with_changed_id",changedRows.get())
                 .put("cached_changed_id",cachedTmdbBrowseTestFilms(c,token).any{it.id=="tmdb-movie-12"}).toString())
             MetadataFetchers.overrideForTests=null
@@ -78,6 +82,7 @@ class TmdbBrowseRefreshTest {
             .performSemanticsAction(SemanticsActions.RequestFocus){it()}
         if(holdBeforeRelease) Thread.sleep(16000) // Opt-in reproduction of a slow TV establishing focus.
         errorsBeforeRelease=errors.get()
+        waitBeforeReleaseMs=firstEnteredAt.get().takeIf{it>0}?.let{android.os.SystemClock.elapsedRealtime()-it} ?: 0
         release.countDown()
         val c=InstrumentationRegistry.getInstrumentation().targetContext
         compose.waitUntil(10000){cachedTmdbBrowseTestFilms(c,token).any{it.id=="tmdb-movie-12"}}
