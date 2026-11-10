@@ -115,4 +115,38 @@ class EmptySpiderHomeSelectionTest {
         activate("search")
         compose.onNodeWithTag("search-input").assertIsDisplayed()
     }
+
+    @Test fun selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken() {
+        importOriginalFixture()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-source-sites"))
+        activate("settings-source-sites")
+        compose.onNodeWithTag("site-list").performScrollToNode(hasTestTag("site-select-0"))
+        activate("site-select-0")
+        assertSelectedEmptySource()
+        assertEquals("", Preferences(context).tmdbReadToken)
+        activate("search")
+        compose.onNodeWithTag("search-input").performTextReplacement("Original synthetic fixture")
+        compose.waitUntil(10_000) { runCatching {
+            compose.onNode(hasText("Original synthetic fixture") and hasClickAction()).assertExists()
+        }.isSuccess }
+        val result = compose.onNode(hasText("Original synthetic fixture") and hasClickAction())
+        result.performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.runOnUiThread {
+            compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+        }
+        compose.waitUntil(5_000) {
+            !compose.activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
+        }
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.waitUntil(10_000) { runCatching {
+            compose.onNodeWithTag("film-detail-list").assertIsDisplayed()
+        }.isSuccess }
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("episode-2"))
+        compose.onNodeWithTag("episode-2").assertIsDisplayed()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5_000) { runCatching {
+            compose.onNodeWithTag("search-input").assertIsDisplayed()
+                .assertTextContains("Original synthetic fixture", substring = true)
+        }.isSuccess }
+    }
 }
