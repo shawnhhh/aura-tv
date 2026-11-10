@@ -66,11 +66,19 @@ class EmptySpiderHomeSelectionTest {
         }.isSuccess }
     }
     private fun assertSelectedEmptySource() {
+        try {
         compose.waitUntil(15_000) { runCatching {
             compose.onNodeWithTag("source-empty-status").assertIsDisplayed()
                 .assertTextContains("Original empty-home fixture")
                 .assertTextContains("首页暂未返回影片")
         }.isSuccess }
+        } catch (failure: Throwable) {
+            // This invocation has only the original fixture, no external provider/login.
+            val state = compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12).take(12_000)
+            throw AssertionError("ORIGINAL_EMPTY_HOME_UI_DIAGNOSTIC\n" + state +
+                "\nworker_stage=" + SpiderStartupTrace.recent(context) +
+                "\nworker_failure=" + SpiderFailureTrace.recent(context), failure)
+        }
         compose.onNodeWithTag("source-empty-status").assertTextContains("可继续搜索")
         compose.onNodeWithTag("details").assertDoesNotExist()
         compose.onNodeWithTag("play").assertDoesNotExist()
