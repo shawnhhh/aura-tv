@@ -60,7 +60,8 @@ class FanTaiYingRealMainUiTest {
     private fun key(code: Int) = inst.sendKeyDownUpSync(code)
     private fun activate(tag: String) {
         compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus)
-        compose.onNodeWithTag(tag).assertIsFocused()
+        try { compose.waitUntil(5_000) { runCatching { compose.onNodeWithTag(tag).assertIsFocused() }.isSuccess } }
+        catch (_: ComposeTimeoutException) { throw Stop("DRIVER_CONTROL_FOCUS_NOT_RETAINED") }
         key(KeyEvent.KEYCODE_DPAD_CENTER)
     }
     private fun text(tag: String): String = compose.onNodeWithTag(tag).fetchSemanticsNode().config
@@ -82,6 +83,7 @@ class FanTaiYingRealMainUiTest {
 
     private fun qr(back: Boolean) {
         compose.waitUntil(5_000) { displayed("spider-authorization-qr") }
+        val request = SpiderAuthorizationUi.requests.value ?: throw Stop("AUTH_REQUEST_NOT_CURRENT")
         val pixels = compose.onNodeWithTag("spider-authorization-qr").captureToImage().toPixelMap()
         val colors = IntArray(pixels.width*pixels.height) { i ->
             val c = pixels[i%pixels.width,i/pixels.width]
@@ -89,7 +91,8 @@ class FanTaiYingRealMainUiTest {
         }
         val decoded = MultiFormatReader().decode(BinaryBitmap(HybridBinarizer(RGBLuminanceSource(pixels.width,pixels.height,colors))))
         check(decoded.barcodeFormat == BarcodeFormat.QR_CODE && decoded.text.isNotBlank())
-        check(SpiderAuthorizationUi.requests.value != null)
+        check(SpiderAuthorizationUi.requests.value === request)
+        request.options.qr?.let { check(decoded.text == it) }
         if (back) key(KeyEvent.KEYCODE_BACK) else compose.onNodeWithTag("spider-authorization-cancel").performClick()
         compose.waitUntil(5_000) { SpiderAuthorizationUi.requests.value == null }
     }
@@ -105,7 +108,9 @@ class FanTaiYingRealMainUiTest {
             // Compose LaunchedEffect delays use the test frame clock. A raw
             // Thread.sleep loop freezes the production search debounce even
             // while wall time passes. Media3/60s evidence still uses real time.
-            try { compose.waitUntil(budget) {
+            val remaining = budget - (SystemClock.elapsedRealtime()-start)
+            if (remaining <= 0) throw Stop("STAGE_TIMEOUT")
+            try { compose.waitUntil(remaining) {
                 if (SpiderAuthorizationUi.requests.value != null) {
                     qr(false)
                     row.put("qr_decoded",true).put("cancel_pass",true)
@@ -170,13 +175,22 @@ class FanTaiYingRealMainUiTest {
     }
     private fun episode(number: Int) {
         val list = compose.onNodeWithTag("film-detail-list")
-        runCatching { list.performScrollToNode(hasTestTag("episode-$number")) }
-        if (exists("episode-$number")) { activate("episode-$number"); return }
-        list.performScrollToNode(hasTestTag("season-browser"))
-        compose.onNodeWithTag("season-cards").performScrollToIndex(number-1)
-        val cards = compose.onAllNodes(hasTestTagPrefix("season-card-")).fetchSemanticsNodes()
+        report.put("episode_selection_attempt",number).put("episode_driver_action","SCROLL_TO_EPISODES")
+        list.performScrollToNode(hasTestTag("episode-$number") or hasTestTag("season-browser") or hasTestTag("group-season-browser"))
+        if (exists("episode-$number")) {
+            report.put("episode_ui_kind","SOURCE_EPISODE_BUTTON").put("episode_driver_action","ACTIVATE_EPISODE_BUTTON")
+            activate("episode-$number"); return
+        }
+        val grouped = exists("group-season-browser")
+        val row = if(grouped) "group-season-cards" else "season-cards"
+        val prefix = if(grouped) "group-season-card-" else "season-card-"
+        report.put("episode_ui_kind",if(grouped) "GROUPED_SEASON" else "SOURCE_SEASON")
+            .put("episode_driver_action","SCROLL_EPISODE_ROW")
+        compose.onNodeWithTag(row).performScrollToIndex(number-1)
+        val cards = compose.onAllNodes(hasTestTagPrefix(prefix)).fetchSemanticsNodes()
         val tag = cards.mapNotNull { it.config.getOrElse(SemanticsProperties.TestTag) { "" } }
             .singleOrNull { it.endsWith("-${number-1}") } ?: throw Stop("REAL_EPISODE_UI_NOT_FOUND")
+        report.put("episode_driver_action","ACTIVATE_SEASON_EPISODE_CARD")
         activate(tag)
     }
     private fun hasTestTagPrefix(prefix: String) = SemanticsMatcher("tag starts with $prefix") {
@@ -314,6 +328,7 @@ class FanTaiYingRealMainUiTest {
             val code=if(error is Stop)error.code else error.javaClass.simpleName
             report.put("verdict",if(code=="AUTH_FLOW_PASS_PLAYBACK_PENDING")code else "FAIL_PLAYBACK")
                 .put("failure_stage",currentStage).put("failure_code",code)
+                .put("driver_failure_structure",SpiderFailureTrace.structure(error))
                 .put("worker_exit",SpiderExitDiagnostics.recent(context))
         } finally {
             runCatching {
@@ -332,7 +347,7 @@ class FanTaiYingRealMainUiTest {
                     report.put("blocked",true).put("blocker","UPSTREAM_MEDIA_ACCESS_DENIED")
             }
             runCatching{report.put("search_response_shape",JSONObject(File(context.filesDir,"spider-search-shape.json").readText()))}
-            runCatching{report.put("sdk_network_scope","SDK_OKHTTP_ONLY")
+            runCatching{report.put("sdk_network_scope","PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED")
                 .put("sdk_network_evidence",JSONArray(File(context.filesDir,"spider-network-shape.json").readText()))}
             report.put("safe_player_journal",HerrinPlaybackDiagnosticJournal.export())
                 .put("observed_network_media_bytes_after_listener",bytes.get()).put("elapsed_ms",SystemClock.elapsedRealtime()-start)

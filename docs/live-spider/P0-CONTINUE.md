@@ -1,4 +1,35 @@
-# 最新断点优先（2026-11-10 16:56 UTC）
+# 最新断点优先：MainActivity真实驱动（2026-11-10 18:52 UTC）
+
+**P0未完成。PR84仍Draft、未合并；集成头08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7，与最新开发头不同。** 此集成头的JVM715/715、Lint/Debug/API31、TV259/259（原TMDB断言保留且通过）、ABBA24/24已全部通过：runs42859957975、42859957535、42859957426，安全摘要见evidence/08f6640-*.json。不要重复同HEAD完整CI或48节点/ARM能力基线。ABBA只是软件AVD小样本，不能声称全面提速。
+
+开发分支已补当前明确选定、已授权Java Spider在无TMDB Token时的正式搜索，并增加 `FanTaiYingRealMainUiTest`：真实MainActivity配置/选站/搜索/详情/正式PlayerView，只读观察现有Media3，无注入影片/媒体/独立播放器。已配置TMDB路径及正式媒体校验不变。原创空首页UI三例在9c4f591/run42876168824/job130039922318通过；这只是原创夹具回归，不能当真实节点结果。
+
+真实Main驱动两处错误已保留证据：699482a误认输入框为影片结果，搜索PASS已明确作废；9c4f591/e0c4c47为搜索超时、没有IPC SEARCH_STARTED。e0实证为输入4字且准确、Activity RESUMED、SEARCH_ROUTE_SELECTED_SPIDER。代码检查发现手写Thread.sleep轮询未推进Compose测试时钟，冻结正式LaunchedEffect的350ms防抖；578a0c0改用compose.waitUntil，不改真实播放的SystemClock/进度/出帧门槛。
+
+**578a0c0/run42878654352/job130048672048已结束：时钟修正验证有效，两个节点均有真实SEARCH_STARTED/RETURNED。** 奶酪真实MainActivity搜索611ms、2026身份及29集详情1471ms通过；首次播放动作322ms在选集UI驱动AssertionError停止，尚未PLAY/RESOLVE，不能称新媒体失败。玩偶搜索423ms，普通/quick实际均0字符，SOURCE_EMPTY_RESPONSE，仍无QR。安全JSON见evidence/578a0c0-main-ui-*.json。后续仅补驱动对真实季集/分组季集控件的支持、精确固定动作/异常结构及公开授权回调事件；未改变pending-operation/会话归属、网络或播放器。继续查看此后最新双节点专项，先让奶酪完成真正选集/解析，再检查玩偶授权调用。不要把这些开发头称为完整CI全绿，不抢先集成未验证修复。
+
+较早但有效的媒体证据仍是：奶酪标准ARMv7正式HTTP首读READY→本机502→上游403 HTML，来源拒绝原因未解。两者没有真实媒体解码/60秒/Seek通过。新Main驱动的9c4/e0超时是驱动问题，不能当新一次源端403或空响应；578才实际重现玩偶空正文。无新合法证据不重复同一403，不猜造UA/Referer、不改插件保护、登录或DRM。
+
+独立官方FongMi参考客户端只做到搜索范围UI控制焦点阻塞：3848b3c/run42867039176/job130008047096，REFERENCE_BLOCKED；没有目标搜索/媒体，不得推断官方来源结果。证据已保存独立参考分支6e687aa，停止重复参考UI构建。
+
+精确现场续跑（已配置SDK/Gradle、标准ARM或支持ARM转译的**一次性测试设备**，会清理本应用测试配置，不用于私人已登录电视）：
+
+```sh
+cd /workspace/aura-tv
+git status --short --branch
+git log -1 --format='%H %s'
+# 先用GitHub连接器读取上述运行；已授权gh环境也可：
+gh run view 42878654352 --repo shawnhhh/aura-tv --log
+# 只有修复或新合法证据需要重验时：
+LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
+# 玩偶改LIVE_NODE=wanou；结果evidence/cheese.json或wanou.json。严禁默认YGP。
+```
+
+阶段修复验证后再普通快进集成，并在最终同HEAD统一完整CI。真实播放/CI未同时达标，不生成验收APK。正式16:57自动续跑已暂停，避免当前执行者并发写入；没有声称后台持续开发。
+
+---
+
+# 历史断点（2026-11-10 16:56 UTC）
 
 P0仍未完成。源代码86d3192；PR84当前已验证应用HEAD adfbea4。空首页正式MainActivity两例已通过c8572a1；真实玩偶仍SOURCE_EMPTY_RESPONSE。奶酪标准ARMv7正式FongMi/Media3 HTTP首读已明确READY→本机502/上游403 HTML，未出帧。保留失败与安全JSON；旧常规715/257/24通过不能冒充新HEAD。
 

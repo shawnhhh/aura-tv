@@ -278,7 +278,9 @@ class TvBoxSpiderService : Service() {
                 arg1 = operationId; arg2 = dialogId
                 replyTo = incoming
                 data = Bundle().apply { if (payload != null) putString("payload", payload) }
-            }) }
+            }) }.onSuccess {
+                SpiderNetworkTrace.event(if (payload == null) "AUTH_DIALOG_CLOSE_SENT" else "AUTH_DIALOG_SHOW_SENT")
+            }.onFailure { SpiderNetworkTrace.event("AUTH_DIALOG_SEND_FAILED") }
         }
     }
     private val incoming: Messenger = Messenger(Handler(Looper.getMainLooper()) { message ->
@@ -454,15 +456,19 @@ class TvBoxSpiderService : Service() {
             .runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
         check(process == "$packageName:spider") { "Spider must run in its dedicated process" }
         CatVodRuntime.setDialog { options, callback ->
+            SpiderNetworkTrace.event("AUTH_DIALOG_REQUESTED")
             if (authCaller == null) java.util.concurrent.CompletableFuture<String>().apply {
+                SpiderNetworkTrace.event("AUTH_DIALOG_NO_ACTIVE_OPERATION")
                 completeExceptionally(IllegalStateException("No active authorization operation"))
             } else try {
                 authorization.show(options, callback).also { result ->
+                    SpiderNetworkTrace.event("AUTH_DIALOG_ACCEPTED")
                     val deadline = watchdog.schedule({ result.complete(null) },
                         SpiderAuthorizationProtocol.TIMEOUT_MS, TimeUnit.MILLISECONDS)
                     result.whenComplete { _, _ -> deadline.cancel(false) }
                 }
             } catch (_: Exception) {
+                SpiderNetworkTrace.event("AUTH_DIALOG_PROTOCOL_REJECTED")
                 java.util.concurrent.CompletableFuture<String>().apply {
                     completeExceptionally(IllegalArgumentException("Unsupported authorization dialog"))
                 }
@@ -553,10 +559,15 @@ internal class TvBoxSpiderBridge(context: Context) {
                 }) }
                 Unit
             }
-            if (pending.containsKey(message.arg1)) SpiderAuthorizationUi.receive(this,
-                message.arg1, message.arg2,
-                if (message.what == SpiderIpc.AUTH_CLOSE) null else message.data.getString("payload"), respond)
-            else respond(null)
+            if (pending.containsKey(message.arg1)) {
+                HerrinPlaybackDiagnosticJournal.record("SPIDER",
+                    if (message.what == SpiderIpc.AUTH_CLOSE) "AUTH_DIALOG_CLOSE_RECEIVED" else "AUTH_DIALOG_SHOW_RECEIVED")
+                SpiderAuthorizationUi.receive(this, message.arg1, message.arg2,
+                    if (message.what == SpiderIpc.AUTH_CLOSE) null else message.data.getString("payload"), respond)
+            } else {
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "AUTH_DIALOG_EXPIRED_OPERATION")
+                respond(null)
+            }
             return@Handler true
         }
         val deferred = pending.remove(message.arg1)

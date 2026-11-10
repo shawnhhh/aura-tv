@@ -56,7 +56,7 @@ jobs:
           bash android-tv/scripts/build_live_arm_canary.sh
           python3 android-tv/scripts/build_m467_spider_fixture.py
           cd android-tv
-          gradle --build-cache :app:testDebugUnitTest --tests 'tv.herrin.app.nativeplayback.NativeFongMiHlsTest' --tests 'tv.herrin.app.nativeplayback.NativeFongMiProxyTest' --tests 'tv.herrin.app.SpiderProxyDiagnosticsTest' --tests 'tv.herrin.app.TvBoxSpiderBridgeTest' --tests 'tv.herrin.app.M476RemoteMediaProbeTest' --tests 'tv.herrin.app.SpiderManifestReferenceTest' --tests 'tv.herrin.app.SpiderRuntimeCompatTest' --tests 'tv.herrin.app.SelectedSpiderSearchStateTest' --tests 'tv.herrin.app.WarehouseHttpEvidenceTest'
+          gradle --build-cache :app:testDebugUnitTest --tests 'tv.herrin.app.nativeplayback.NativeFongMiHlsTest' --tests 'tv.herrin.app.nativeplayback.NativeFongMiProxyTest' --tests 'tv.herrin.app.SpiderProxyDiagnosticsTest' --tests 'tv.herrin.app.TvBoxSpiderBridgeTest' --tests 'tv.herrin.app.M476RemoteMediaProbeTest' --tests 'tv.herrin.app.SpiderManifestReferenceTest' --tests 'tv.herrin.app.SpiderRuntimeCompatTest' --tests 'tv.herrin.app.SelectedSpiderSearchStateTest' --tests 'tv.herrin.app.WarehouseHttpEvidenceTest' --tests 'tv.herrin.app.SpiderAuthorizationProtocolTest'
           gradle --build-cache -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi="$LIVE_INSTALL_ABI" :app:assembleDebug :app:assembleDebugAndroidTest
           cp app/build/outputs/apk/debug/app-debug.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
