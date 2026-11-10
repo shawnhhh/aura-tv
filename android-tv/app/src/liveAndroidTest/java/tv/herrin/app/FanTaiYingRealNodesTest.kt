@@ -201,16 +201,42 @@ class FanTaiYingRealNodesTest {
                         }
                     }
                 }
-                step("real_media_bytes_$index") {
-                    val result = HerrinRemoteMediaProbe(authorizeLocal = {
+                fun probeClient(extended: Boolean): HerrinRemoteMediaProbe {
+                    val events = JSONArray()
+                    report.put(if (extended) "extended_media_events" else "production_media_events", events)
+                    val evidence: (String, String) -> Unit = { event, value ->
+                        if (events.length() < 48) events.put(JSONObject().put("event", event).put("detail", value))
+                    }
+                    val authorize: suspend (String) -> Boolean = {
                         tv.herrin.app.nativeplayback.FongMiSessionAuthorization.isApproved(it, site.key)
-                    }, evidence = { event, value ->
-                        // Host-fixed event codes/integers only; no media URLs/headers.
-                        report.put("last_media_event", event).put("last_media_detail", value)
-                    }).probe(resolved)
-                    if (result != HerrinRemoteMediaProbe.Result.MEDIA) throw Stop("MEDIA_${result.name}")
+                    }
+                    if (!extended) return HerrinRemoteMediaProbe(authorizeLocal = authorize, evidence = evidence)
+                    // Diagnostic-only budget. The normal production gate failure remains a failure.
+                    val client = okhttp3.OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
+                        .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                        .callTimeout(18, java.util.concurrent.TimeUnit.SECONDS).build()
+                    return HerrinRemoteMediaProbe(client = client, authorizeLocal = authorize, evidence = evidence)
+                }
+                try {
+                    step("real_media_bytes_$index") {
+                        val result = probeClient(false).probe(resolved)
+                        if (result != HerrinRemoteMediaProbe.Result.MEDIA) throw Stop("MEDIA_${result.name}")
+                    }
+                } catch (error: Stop) {
+                    if (!error.code.startsWith("MEDIA_")) throw error
+                    report.put("production_media_gate_failed", true).put("production_media_failure", error.code)
+                    step("diagnostic_extended_media_$index", 25_000) {
+                        val result = probeClient(true).probe(resolved)
+                        if (result != HerrinRemoteMediaProbe.Result.MEDIA) throw Stop("EXTENDED_MEDIA_${result.name}")
+                    }
+                    report.put("player_is_extended_budget_diagnostic", true)
                 }
                 verifyPlayer(resolved, index)
+            }
+            if (report.optBoolean("production_media_gate_failed")) {
+                currentStage = "production_media_gate"
+                throw Stop("PRODUCTION_MEDIA_GATE_FAILED_EXTENDED_DIAGNOSTIC_ONLY")
             }
             if (alternate == null) {
                 currentStage = "line_switch"
@@ -226,6 +252,7 @@ class FanTaiYingRealNodesTest {
                 else -> "FAIL_PLAYBACK"
             }
             report.put("verdict", verdict).put("failure_stage", currentStage).put("failure_code", code)
+                .put("safe_failure_structure", SpiderFailureTrace.recent(context))
                 .put("worker_last_stage", SpiderStartupTrace.recent(context)).put("worker_exit", SpiderExitDiagnostics.recent(context))
         } finally {
             compose.runOnIdle { media = null }
