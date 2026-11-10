@@ -1138,6 +1138,18 @@ private fun Herrin(startup: StartupPresentation) {
         selectedSearchSite, if (selectedSearchSite != null) tvBoxVodScope else null,
         selectedSearchSite != null && tmdbState.sourceForeground) {
         if (screen == "search") {
+            if (query.trim().length >= 2) {
+                val route = when {
+                    metadataToken.isNotBlank() -> "SEARCH_ROUTE_TMDB"
+                    !spiderActive -> "SEARCH_ROUTE_NO_SELECTED_SOURCE"
+                    selectedSearchKey == null -> "SEARCH_ROUTE_NO_SITE_DESCRIPTOR"
+                    selectedSearchSite == null -> "SEARCH_ROUTE_SITE_NOT_IN_CONFIG"
+                    !tmdbState.sourceForeground -> "SEARCH_ROUTE_BACKGROUND"
+                    else -> "SEARCH_ROUTE_SELECTED_SPIDER"
+                }
+                HerrinPlaybackDiagnosticJournal.record("SOURCE", route,
+                    "COUNT=${query.trim().length.coerceAtMost(99999)}")
+            }
             if (selectedSearchSite != null && !tmdbState.sourceForeground) return@LaunchedEffect
             val consent = spiderBridge.configurationTicket()
             val root = prefs.tvBoxWarehouseUrl

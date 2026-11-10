@@ -48,7 +48,7 @@ class FanTaiYingRealMainUiTest {
             context.getSharedPreferences("herrin", 0).edit().clear().commit()
             MetadataFetchers.overrideForTests = null
             File(context.filesDir, "tvbox-config").deleteRecursively()
-            for (name in listOf("spider-search-shape.json", "spider-proxy-shapes.json", "spider-failure-structure.txt"))
+            for (name in listOf("spider-search-shape.json", "spider-proxy-shapes.json", "spider-failure-structure.txt", "spider-network-shape.json"))
                 File(context.filesDir, name).delete()
             HerrinPlaybackDiagnosticJournal.clear()
         }
@@ -259,6 +259,7 @@ class FanTaiYingRealMainUiTest {
             compose.waitForIdle(); awaitIme(true)
             step("search",30_000,"search-input",action={
                 compose.onNodeWithTag("search-input").performTextReplacement(title)
+                compose.onNodeWithTag("search-input").assertTextContains(title, substring = true)
             },retry={compose.onNode(hasText("重试") and hasClickAction()).performClick()},done={
                 val journal=HerrinPlaybackDiagnosticJournal.export()
                 for (code in listOf("SOURCE_EMPTY_RESPONSE","SOURCE_AUTH_REQUIRED","SOURCE_ACCESS_DENIED","SOURCE_SESSION_EXPIRED","SOURCE_SEARCH_FAILED"))
@@ -314,6 +315,12 @@ class FanTaiYingRealMainUiTest {
                 .put("failure_stage",currentStage).put("failure_code",code)
                 .put("worker_exit",SpiderExitDiagnostics.recent(context))
         } finally {
+            runCatching {
+                val input = compose.onNodeWithTag("search-input").fetchSemanticsNode().config
+                    .getOrElse(SemanticsProperties.EditableText) { androidx.compose.ui.text.AnnotatedString("") }
+                report.put("search_input_length",input.length).put("search_input_matches_authorized_title",input.text==title)
+            }
+            compose.runOnUiThread { report.put("main_activity_lifecycle",compose.activity.lifecycle.currentState.name) }
             Regex("WAREHOUSE_HTTP_RESPONSE STATUS=([0-9]+)").findAll(HerrinPlaybackDiagnosticJournal.export())
                 .lastOrNull()?.groupValues?.get(1)?.toIntOrNull()?.let{report.put("warehouse_http_status",it)}
             compose.runOnUiThread { observed.forEach { (p,l)->runCatching{p.removeAnalyticsListener(l)} }; observed.clear() }
@@ -324,6 +331,8 @@ class FanTaiYingRealMainUiTest {
                     report.put("blocked",true).put("blocker","UPSTREAM_MEDIA_ACCESS_DENIED")
             }
             runCatching{report.put("search_response_shape",JSONObject(File(context.filesDir,"spider-search-shape.json").readText()))}
+            runCatching{report.put("sdk_network_scope","SDK_OKHTTP_ONLY")
+                .put("sdk_network_evidence",JSONArray(File(context.filesDir,"spider-network-shape.json").readText()))}
             report.put("safe_player_journal",HerrinPlaybackDiagnosticJournal.export())
                 .put("observed_network_media_bytes_after_listener",bytes.get()).put("elapsed_ms",SystemClock.elapsedRealtime()-start)
             File(context.filesDir,"live-node-$fileName.json").writeText(report.toString(2)+"\n")

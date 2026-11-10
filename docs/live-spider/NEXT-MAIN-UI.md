@@ -1,4 +1,12 @@
-# 待完成：真正的MainActivity详情返回驱动
+# 进行中：真正的MainActivity详情返回驱动
+
+开发分支已有 `FanTaiYingRealMainUiTest`：实际 MainActivity 配置/选站/搜索/详情与正式播放器，仅读取现有 PlayerView 的 Media3 实例和计数，不创建播放器。开发提交 `211155d` 补当前已授权 Java Spider 的无 TMDB Token 搜索及所选结果索引；原 TMDB 路径及媒体校验保持不变。**实现存在不等于真实验收通过。**
+
+`699482a` / run42874186858 / job130033034664 的两个“搜索 PASS”无效：驱动把有点击动作的搜索输入框误认为影片结果，随后详情超时。安全 JSON 明确标记 `valid_search_evidence=false`；不得从此轮推断来源搜索或详情成功。`9c4f591` 限定真实 `card-` 结果卡片并核实焦点，run42876168824 / job130039922318 定向重验原创空首页3例和两个真实节点。结果需读取实际日志，不沿用旧结论。
+
+PR/integration 仍为 `08f6640`（完整常规CI715/259/24通过）；上述开发改动尚未集成或完成完整回归。旧测试宿主的硬失败门禁仍保留，未改成回调通过。
+
+---
 
 当前FanTaiYingRealNodesTest只复用正式Bridge/worker和正式AuthorizedPlaybackPanel，目录宿主是ComponentActivity。26bd09a已加真实film-detail-list可见性硬条件，不能再把回调当详情通过；当源端可播放时，在最后该阶段仍需补实际MainActivity导航。这不是已验收能力。
 
