@@ -1,0 +1,130 @@
+name: HERRIN P0 Config Request Semantics Diagnostic
+on:
+  push:
+    branches: ['codex/herrin-p0-live-playback-20261110']
+    paths: ['.github/workflows/herrin-p0-config-semantics.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read real root header declarations without plugin or media execution
+        shell: bash
+        run: |
+          python3 - <<'PYDIAG'
+          import base64, hashlib, ipaddress, json, socket, ssl
+          from pathlib import Path
+          from urllib.request import Request, build_opener, HTTPRedirectHandler
+          from urllib.error import HTTPError, URLError
+          from time import monotonic
+
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl): return None
+
+          def config(data):
+              if data.startswith(b'\xff\xd8'):
+                  end=data.rfind(b'\xff\xd9')
+                  if end<0: raise ValueError('bad_jpeg_wrapper')
+                  head,sep,enc=data[end+2:].strip().decode('ascii').partition('**')
+                  if not sep or not (4<=len(head)<=64 and head.isalnum()):
+                      raise ValueError('bad_jpeg_wrapper')
+                  data=base64.b64decode(enc,validate=True)
+              text=data.decode('utf-8-sig')
+              # Mirror HERRIN's comment stripping without executing JS/plugin code.
+              out=[]; i=0; quoted=False; escaped=False; line=False; block=False
+              while i<len(text):
+                  c=text[i]; n=text[i+1] if i+1<len(text) else ''
+                  if line:
+                      if c in '\r\n': line=False; out.append(c)
+                  elif block:
+                      if c in '\r\n': out.append(c)
+                      if c=='*' and n=='/': block=False; i+=1
+                  elif quoted:
+                      out.append(c)
+                      if escaped: escaped=False
+                      elif c=='\\': escaped=True
+                      elif c=='"': quoted=False
+                  elif c=='"': quoted=True; out.append(c)
+                  elif c=='/' and n=='/': line=True; i+=1
+                  elif c=='/' and n=='*': block=True; i+=1
+                  else: out.append(c)
+                  i+=1
+              obj=json.loads(''.join(out))
+              if not isinstance(obj,dict) or not any(k in obj for k in ('sites','urls','lives')):
+                  raise ValueError('not_tvbox_json')
+              return obj
+
+          known_headers={'user-agent','ua','referer','origin','cookie','authorization','accept','accept-language','range','host'}
+          def header_shape(value):
+              names=set()
+              def walk(item, depth=0):
+                  if depth>5:return
+                  if isinstance(item,dict):
+                      names.update(str(k).lower() for k in item if str(k).lower() in known_headers)
+                      for child in item.values():
+                          if isinstance(child,(list,dict)):walk(child,depth+1)
+                  elif isinstance(item,list):
+                      for child in item[:100]:walk(child,depth+1)
+              walk(value)
+              return {'kind':type(value).__name__,'entries':len(value) if isinstance(value,(list,dict)) else 0,
+                      'known_header_names':sorted(names)}
+
+          report={'scope':'ROOT_CONFIG_REQUEST_SEMANTICS_ONLY_NOT_IMPORT_OR_PLAYBACK','status':'FAILED'}
+          begin=monotonic()
+          try:
+              host='www.饭太硬.net'.encode('idna').decode('ascii')
+              for addr in socket.getaddrinfo(host,80,type=socket.SOCK_STREAM):
+                  if not ipaddress.ip_address(addr[4][0]).is_global:raise ValueError('NONPUBLIC_DNS')
+              request=Request('http://'+host+'/tv',headers={'User-Agent':'HERRIN/P0-config-semantics','Accept':'application/json,text/plain,*/*'})
+              with build_opener(NoRedirect()).open(request,timeout=10) as response:
+                  report['http_status']=response.status
+                  payload=response.read(1048577)
+                  if len(payload)>1048576:raise ValueError('CONFIG_LIMIT')
+              root=config(payload)
+              report['body_sha256']=hashlib.sha256(payload).hexdigest()
+              report['body_bytes']=len(payload)
+              known_keys={'spider','sites','lives','headers','header','rules','parses','flags','ads','doh','proxy','wallpaper','port'}
+              report['known_root_fields']=sorted(k for k in root if k in known_keys)
+              report['root_headers']=header_shape(root.get('headers'))
+              report['root_header']=header_shape(root.get('header'))
+              rules=root.get('rules',[])
+              report['rules']=header_shape(rules)
+              report['rules_with_header_fields']=sum(isinstance(r,dict) and any(k in r for k in ('header','headers')) for r in rules) if isinstance(rules,list) else 0
+              selected=[]
+              for site in root.get('sites',[]):
+                  if not isinstance(site,dict) or not any(name in site.get('name','') for name in ('奶酪','玩偶哥哥')):continue
+                  ext=site.get('ext')
+                  ext_shape={'kind':type(ext).__name__,'chars':len(ext) if isinstance(ext,str) else None}
+                  if isinstance(ext,str):
+                      try: ext_object=json.loads(ext)
+                      except (ValueError,TypeError):ext_object=None
+                  else:ext_object=ext
+                  ext_shape['header_shape']=header_shape(ext_object)
+                  selected.append({'key':site.get('key'),'api':site.get('api'),
+                                   'header':header_shape(site.get('header')),'headers':header_shape(site.get('headers')),
+                                   'extension':ext_shape,'searchable':site.get('searchable'),'quickSearch':site.get('quickSearch')})
+              report['selected_site_declarations']=selected
+              report['status']='SCHEMA_READ'
+          except HTTPError as error:
+              report['http_status']=error.code
+              report['failure_code']='HTTP_ERROR'
+          except (ValueError,URLError,OSError) as error:
+              report['failure_code']=type(error).__name__
+          finally:
+              report['elapsed_ms']=round((monotonic()-begin)*1000)
+              Path('evidence').mkdir(exist_ok=True)
+              Path('evidence/config-semantics.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+              print(json.dumps(report,ensure_ascii=False,indent=2))
+          if report['status']!='SCHEMA_READ':raise SystemExit(1)
+
+          PYDIAG
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p0-config-request-semantics
+          path: evidence/config-semantics.json
+          retention-days: 30
