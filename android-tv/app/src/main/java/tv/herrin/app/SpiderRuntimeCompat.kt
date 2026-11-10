@@ -35,7 +35,23 @@ internal object SpiderRuntimeCompat {
         else it in setOf("armeabi-v7a", "armeabi", "x86")
     }
 
-    fun processAbi(): String? = selectAbi(Build.SUPPORTED_ABIS.toList(), Process.is64Bit())
+    // SUPPORTED_ABIS describes the image, not necessarily this process. A
+    // standard --abi ARM install can execute through Google's native bridge
+    // while x86_64 remains first in that list. Never rewrite system properties.
+    fun selectProcessAbi(supported: List<String>, is64Bit: Boolean, architecture: String?): String? {
+        val actual = when (architecture?.lowercase(java.util.Locale.ROOT)) {
+            "aarch64", "arm64" -> "arm64-v8a"
+            "arm", "armv7", "armv7l", "armv8l" -> "armeabi-v7a"
+            "x86_64", "amd64" -> "x86_64"
+            "x86", "i386", "i686" -> "x86"
+            else -> null
+        }
+        if (actual != null) return actual.takeIf { it in supported &&
+            ((it in setOf("arm64-v8a", "x86_64")) == is64Bit) }
+        return selectAbi(supported, is64Bit)
+    }
+
+    fun processAbi(): String? = selectProcessAbi(Build.SUPPORTED_ABIS.toList(), Process.is64Bit(), System.getProperty("os.arch"))
 
     fun nativeEntries(names: List<String>, abi: String): List<String> = names.filter {
         it.startsWith("lib/$abi/") && nativeName.matches(it.removePrefix("lib/$abi/"))
