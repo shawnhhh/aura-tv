@@ -22,7 +22,10 @@ class M437SourceDetailMergeTest {
         val current = FilmMetadataEnrichment.apply(raw, metadata)
         // Exercise the real JSON IPC codec, which deliberately does not transmit enrichment.
         val requestSnapshot = SpiderIpc.readFilm(SpiderIpc.film(raw))
-        val resolved = SpiderVodCodec.detail(detailJson, requestSnapshot)
+        // This shared fixture is CMS-shaped; Spider must return its own requested VOD.
+        // Preserve all metadata/IPC assertions while respecting protocol identity.
+        val spiderDetail = detailJson.replace("\"vod_id\":\"original-cms-id\"", "\"vod_id\":\"original-spider-id\"")
+        val resolved = SpiderVodCodec.detail(spiderDetail, requestSnapshot)
         val ipcResponse = SpiderIpc.readFilm(SpiderIpc.film(resolved))
         assertNull(ipcResponse.metadataSource)
         val merged = FilmMetadataEnrichment.mergeSourceDetails(current, ipcResponse)

@@ -59,7 +59,8 @@ internal object SpiderIpc {
     fun site(site: TvBoxSite): JSONObject = JSONObject()
         .put("name", site.name).put("key", site.key)
         .put("spiderApi", site.spiderApi ?: "").put("scriptApi", site.scriptApi ?: "")
-        .put("ext", site.extension)
+        .put("ext", site.extension).put("apiType", site.apiType)
+        .put("searchable", site.searchable).put("quickSearch", site.quickSearch)
         .put("jar", site.jar ?: "").put("click", site.click)
         .put("header", JSONObject(site.headers))
 
@@ -75,7 +76,9 @@ internal object SpiderIpc {
                     api.substringBefore('?').endsWith(".py", true)))
         },
         extension = obj.optString("ext").take(64_000),
-        click = obj.optString("click").take(4096),
+        searchable = obj.takeIf { it.has("searchable") }?.optInt("searchable"),
+        quickSearch = obj.takeIf { it.has("quickSearch") }?.optInt("quickSearch"),
+        click = obj.optString("click").take(4096), apiType = obj.optInt("apiType",1),
         jar = obj.optString("jar").takeIf { it.isNotBlank() },
         headers = TvBoxHeaderCodec.decode(obj.optJSONObject("header")))
 
@@ -191,7 +194,7 @@ internal object SpiderIpc {
 
     fun playback(media: PlaybackMedia): JSONObject = JSONObject().put("ok", true)
         .put("uri", media.uri)
-        .put("mediaId", media.mediaId)
+        .put("mediaId", media.mediaId).put("diagnosticSession", PlaybackDiagnosticSession.id())
         .put("alternates", JSONArray(media.alternateUris.take(7)))
         .put("allowHttpRedirects", media.allowHttpRedirects)
         // Without this field, a working header-free VOD backup loses its
@@ -242,6 +245,7 @@ internal object SpiderIpc {
         return PlaybackResult.Ready(PlaybackMedia(url, headers, subtitles, urls,
             response.optBoolean("allowHttpRedirects") && allowHttp,
             declaredMime = PlaybackFormatRetry.declaredMime(response.optString("declaredMime")),
+            diagnosticSessionId = response.optString("diagnosticSession").takeIf { it.matches(Regex("[a-f0-9-]{36}")) },
             mediaId = response.optString("mediaId").takeIf { it.isNotBlank() && it.length <= 256 },
             // Re-validate in the receiving process. A malicious/forged IPC
             // flag cannot enable cross-origin fallback for authenticated
@@ -282,6 +286,7 @@ class TvBoxSpiderService : Service() {
             val mustRetire=activeOperation == message.arg1 &&authCaller?.first==message.replyTo
             if (mustRetire) {
                 retiring = true
+                SpiderStartupTrace.mark(applicationContext,SpiderStartupTrace.Stage.WATCHDOG)
                 authorization.cancel()
                 // A coroutine cannot interrupt arbitrary JNI. Retire ONLY this
                 // manifest-verified :spider process; the UI process is untouched.
@@ -304,7 +309,7 @@ class TvBoxSpiderService : Service() {
         val payload = message.data.getString("payload").orEmpty()
         if (reply != null) {
             val operationBudget = message.data.getLong("operationBudgetMs", 150_000L).coerceIn(200,150_000)
-            val task = scope.launch(start = CoroutineStart.LAZY) {
+            val task = scope.launch(PlaybackDiagnosticSession.context(message.data.getString("diagnosticSession").orEmpty()), start = CoroutineStart.LAZY) {
                 val response = lock.withLock {
                     if (retiring) return@withLock SpiderIpc.error("Spider 会话正在回收")
                     activeOperation = id
@@ -348,10 +353,14 @@ class TvBoxSpiderService : Service() {
                                 }
                             }
                             SpiderIpc.SEARCH -> {
+                                SpiderStartupTrace.mark(applicationContext,SpiderStartupTrace.Stage.SEARCH)
                                 val site = SpiderIpc.readSite(request.getJSONObject("site"))
                                 val keyword = request.optString("query").trim().take(120)
                                 when (val result = worker.search(site, keyword)) {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
+                                        .put("queryIdentity", SourceHealthIndex.digest(keyword))
+                                        .put("rawCount",worker.lastSearchCounts.first).put("parsedCount",worker.lastSearchCounts.second)
+                                        .put("quick",worker.lastSearchQuick)
                                         .put("films", JSONArray().apply {
                                             result.value.take(60).forEach { put(SpiderIpc.film(it)) }
                                         })
@@ -384,22 +393,25 @@ class TvBoxSpiderService : Service() {
                                     .put("uri", active.siteUrl() + "&part=probe")
                             }
                             SpiderIpc.PLAY -> {
+                                SpiderPlaybackEvidence.clear()
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
                                     request.optInt("episode"), request.optString("line"),
                                     request.optBoolean("allowHttp"))
                                 when (result) {
                                     is PlaybackResult.Ready -> SpiderIpc.playback(result.media)
                                     is PlaybackResult.Unavailable -> SpiderIpc.error(result.reason)
-                                }
+                                }.put("playbackEvidence", SpiderPlaybackEvidence.snapshot())
                             }
                             else -> SpiderIpc.error("不支持的插件操作")
                         }
                     } catch (cancel: CancellationException) {
                         throw cancel
                     } catch (e: Exception) {
+                        SpiderFailureTrace.record(applicationContext, e)
                         Log.e("HerrinSpiderWorker", "Spider operation failed: ${e.javaClass.simpleName}")
                         SpiderIpc.error(SpiderFailureDetails.message(e))
                     } catch (e: LinkageError) {
+                        SpiderFailureTrace.record(applicationContext, e)
                         Log.e("HerrinSpiderWorker", "Spider linkage failed: ${e.javaClass.simpleName}")
                         SpiderIpc.error(SpiderFailureDetails.message(e))
                     } finally {
@@ -429,6 +441,11 @@ class TvBoxSpiderService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        val previousHandler=Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            SpiderFailureTrace.record(applicationContext,error)
+            previousHandler?.uncaughtException(thread,error)
+        }
         // Chromium browser parser lives only in the :spider process.
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             runCatching { android.webkit.WebView.setDataDirectorySuffix("herrin-spider") }
@@ -714,6 +731,13 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     private suspend fun sendRequest(operation: Int, payload: JSONObject,
         sourceEpoch: Long? = null): SpiderResult<JSONObject> = try {
+        val diagnosticStart = System.nanoTime()
+        val diagnosticEvent = when(operation) {
+            SpiderIpc.BROWSE -> "INITIALIZE"; SpiderIpc.SEARCH -> "SEARCH"
+            SpiderIpc.DETAILS -> "DETAILS_EPISODES"; SpiderIpc.PLAY -> "RESOLVE"
+            else -> "RESOURCE_RELEASE"
+        }
+        HerrinPlaybackDiagnosticJournal.record("SPIDER", diagnosticEvent + "_STARTED")
         val response = withContext(Dispatchers.Main.immediate) {
             check(sourceEpoch == null || sourceSession.isCurrent(sourceEpoch)) { "Spider 会话已结束或变化" }
             val encoded = payload.toString()
@@ -730,7 +754,7 @@ internal class TvBoxSpiderBridge(context: Context) {
                 server.send(Message.obtain(null, operation).apply {
                     arg1 = id
                     replyTo = responses
-                    data = Bundle().apply { putString("payload", encoded); putLong("operationBudgetMs",budget) }
+                    data = Bundle().apply { putString("payload", encoded); putLong("operationBudgetMs",budget); putString("diagnosticSession", PlaybackDiagnosticSession.id()) }
                 })
                 withTimeout(if (budget == 150_000L) 165_000L else budget + 800) { deferred.await() }
             } catch (timeout: TimeoutCancellationException) {
@@ -754,8 +778,11 @@ internal class TvBoxSpiderBridge(context: Context) {
                 SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge)
             }
         }
+        HerrinPlaybackDiagnosticJournal.record("SPIDER", diagnosticEvent + "_RETURNED",
+            "MS=" + ((System.nanoTime()-diagnosticStart)/1_000_000).coerceAtMost(99999))
         require(response.length <= SpiderIpc.MAX_RESPONSE_CHARS) { "Spider 返回内容超过进程通信限制" }
         val result = withContext(Dispatchers.Default){JSONObject(response)}
+        if (operation == SpiderIpc.PLAY) SpiderPlaybackEvidence.replay(result.optJSONArray("playbackEvidence"))
         if (result.optBoolean("ok")) SpiderResult.Ready(result)
         else SpiderResult.Failure(result.optString("message").ifBlank { "Spider 返回错误" })
     } catch (timeout: TimeoutCancellationException) {
@@ -839,7 +866,11 @@ internal class TvBoxSpiderBridge(context: Context) {
         return when (val response = request(SpiderIpc.SEARCH, payload, invocation)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> try {
+                if (response.value.optString("queryIdentity") != SourceHealthIndex.digest(keyword))
+                    return SpiderResult.Failure("SEARCH_QUERY_IDENTITY_MISMATCH：站点搜索查询身份已变化")
                 val array = response.value.getJSONArray("films")
+                DiscoveryProtocolTrace.record(site.key,if(response.value.optBoolean("quick")) "SPIDER_SEARCH_QUICK" else "SPIDER_SEARCH_FALSE",
+                    response.value.optInt("rawCount",array.length()),array.length(),keyword)
                 SpiderResult.Ready((0 until minOf(60, array.length())).map {
                     SpiderIpc.readFilm(array.getJSONObject(it))
                 })
@@ -864,6 +895,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
+        playbackLease.incrementAndGet()
         val invocation = sourceSession.snapshot()
         if (!ownsFilm(film, invocation))
             return PlaybackResult.Unavailable("Spider 影片或选集来源已失效，请重新查找片源")
@@ -956,13 +988,16 @@ internal class TvBoxSpiderBridge(context: Context) {
      * rebind a service before onDestroy, so unbind alone is not a close barrier.
      * This job is owned by the bridge, not the outgoing media composition.
      */
+    private val playbackLease = java.util.concurrent.atomic.AtomicLong()
+
     fun releasePlayback() {
+        val selectedLease = playbackLease.get()
         val selectedSource = lastBrowse
         val selectedGeneration = generation
         cleanupJob?.cancel()
         cleanupJob = cleanupScope.launch(start = CoroutineStart.UNDISPATCHED) {
             requests.withLock {
-                if (generation != selectedGeneration || lastBrowse != selectedSource) return@withLock
+                if (playbackLease.get() != selectedLease || generation != selectedGeneration || lastBrowse != selectedSource) return@withLock
                 if (remote == null && !bound) {
                     invalidate("Spider 播放会话已结束")
                     return@withLock

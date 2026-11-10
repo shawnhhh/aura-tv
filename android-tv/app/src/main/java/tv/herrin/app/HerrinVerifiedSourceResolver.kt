@@ -38,6 +38,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
             { _, film -> HerrinPlaybackEntry.firstPlayable(film) },
         coordinate: HerrinPlaybackCoordinate? = null,
         streaming: Boolean = false,
+        preferredSourceId: String? = null,
         health: SourceHealthIndex? = null,
         onEvent: suspend (SourceSearchEvent) -> Unit = {},
         remoteDetails: suspend (HerrinSourceMovie) -> Film?
@@ -45,7 +46,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
         var personalPlaylist: HerrinPersonalPlaylist? = null
         var detailedFilm: Film? = null
         var verifiedLine: Pair<Int, String>? = null
-        val result = HerrinFilmRouter(adapters).find(identity,streaming,health,onEvent) { ranked ->
+        val result = HerrinFilmRouter(adapters, preferredSourceId).find(identity,streaming,health,onEvent) { ranked ->
             if (ranked.firstOrNull()?.tier == HerrinSourceTier.PERSONAL) {
                 // Use exactly the same source-specific permission check as
                 // actual playback. Never accept an unauthorized WebDAV file.

@@ -153,3 +153,6 @@ FongMi 结构、许可及集成方案见 [docs/FONGMI.md](docs/FONGMI.md)。
 ## M3.9 授权实播验收与状态面板
 
 播放器新增可通过遥控器开启的「查看实播状态」，显示 Media3 实际播放状态、视频解码出帧、分辨率、丢帧和当前音轨/字幕轨数量，不包含媒体地址或访问凭据。完整自动化验收基于本仓库自制 HTTPS MP4/HLS/字幕测试素材，新增用户授权 M3U + XMLTV 对应关系、切换频道解码释放、模拟网络失败后的遥控器重试。实际 TCL T7L Ultra 和用户授权片源的实播仍需实机执行。详见 [M3.9 文档](docs/M3_9_LIVE_PLAYBACK_ACCEPTANCE.md)。
+
+
+完整SMB回归需要受控只读Samba服务（CI自动创建，仅原创素材）。在仓库根执行 `bash .github/scripts/start_smb_fixture.sh`，再从android-tv运行 `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`。脚本用于一次性Linux开发/CI主机，需要sudo与Samba安装权限；不要在用户NAS/电视运行。1445仅SMB3，1446仅SMB2；不能关闭这些协议测试后称完整通过。

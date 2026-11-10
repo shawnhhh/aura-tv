@@ -5,23 +5,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class M455PlaybackViewportModeTest {
-    @Test fun newInstallDefaultsToEdgeToEdgeCenterCrop() {
-        assertEquals(PlaybackViewportMode.FILL,
-            PlaybackViewportMode.fromStoredFill(true))
-        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-            PlaybackViewportMode.fromStoredFill(true).resizeMode)
+    @Test fun oldDefaultCropSettingCannotCropAnUpgrade() {
+        assertEquals(PlaybackViewportMode.FIT, PlaybackViewportMode.fromStoredFill(true))
+        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, PlaybackViewportMode.fromStoredFill(true).resizeMode)
     }
-
-    @Test fun fitPreservesOriginalPictureInsteadOfStretching() {
-        val fit = PlaybackViewportMode.FILL.toggle()
-        assertEquals(PlaybackViewportMode.FIT, fit)
-        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, fit.resizeMode)
-        assertEquals(PlaybackViewportMode.FILL, fit.toggle())
+    @Test fun newInstallAndPreviousFitChoicePreserveOriginalPicture() {
+        assertEquals(PlaybackViewportMode.FIT, PlaybackViewportMode.fromStoredFill(false))
+        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, PlaybackViewportMode.fromStoredFill(false).resizeMode)
     }
-
-    @Test fun storedUserChoiceCanRestoreTheUncroppedMode() {
-        assertEquals(PlaybackViewportMode.FIT,
-            PlaybackViewportMode.fromStoredFill(false))
-        assertEquals("完整显示", PlaybackViewportMode.FIT.label)
+    @Test fun noSelectableModeCanCropOrStretch() {
+        assertEquals(listOf(PlaybackViewportMode.FIT), PlaybackViewportMode.entries)
+        assertEquals("完整显示（等比例）", PlaybackViewportMode.FIT.label)
     }
 }

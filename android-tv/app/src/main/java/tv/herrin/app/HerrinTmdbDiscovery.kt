@@ -23,7 +23,8 @@ internal class HerrinTmdbDiscovery(
     private val fetcher: ArtworkJsonFetcher = NetworkArtworkFetcher,
     private val clock: () -> Long = System::currentTimeMillis,
     private val cacheDir: java.io.File? = null,
-    private val language: String = "zh-CN"
+    private val language: String = "zh-CN",
+    private val browseClassification: ((String, Int, Set<Int>) -> String)? = null
 ) {
     private data class Cached(val until: Long, val entries: List<Film>)
     private val cache = ConcurrentHashMap<String, Cached>()
@@ -90,6 +91,35 @@ internal class HerrinTmdbDiscovery(
             if (films.isNotEmpty()) cache[cacheKey] = Cached(file?.takeIf { it.exists() }?.let { if (it.lastModified() == 0L) 0L else it.lastModified() + 6*3600_000L } ?: (clock() + 6*3600_000L), films)
             HerrinTmdbShelf(section.key, section.title, films, films.isNotEmpty())
         }
+
+    data class SearchPage(val films: List<Film>, val page: Int, val totalPages: Int)
+
+    /** Always online; an empty response is never substituted with home/demo data. */
+    suspend fun search(query: String, token: String, page: Int = 1): SearchPage {
+        require(page in 1..500)
+        if (query.isBlank()) return SearchPage(emptyList(), 1, 0)
+        if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
+        val url = base + "/search/multi?language=$language&include_adult=false&page=$page&query=" +
+            URLEncoder.encode(query.trim().take(200), "UTF-8")
+        val raw = if (fetcher === NetworkArtworkFetcher) TmdbSearchTransport.load(url, token)
+            else kotlinx.coroutines.runInterruptible(Dispatchers.IO) { fetcher.load(url, token) }
+            ?: throw java.io.IOException("TMDB_EMPTY_RESPONSE")
+        return withContext(Dispatchers.IO) { parseSearchPage(raw, page) }
+    }
+
+    internal fun parseSearchPage(raw: String, page: Int): SearchPage {
+        require(raw.toByteArray(Charsets.UTF_8).size <= 1_000_000)
+        val obj = JSONObject(raw)
+        require(obj.getInt("page") == page && obj.has("results"))
+        val rows = obj.getJSONArray("results")
+        val films = (0 until minOf(20, rows.length())).flatMap { index ->
+            val row = rows.optJSONObject(index) ?: return@flatMap emptyList()
+            val type = row.optString("media_type")
+            if (type !in listOf("movie", "tv")) emptyList()
+            else parsePage(JSONObject().put("results", JSONArray().put(row)).toString(), type)
+        }.distinctBy(Film::id)
+        return SearchPage(films, page, obj.optInt("total_pages", 0).coerceIn(0, 500))
+    }
 
     /** Persist the metadata projection, never arbitrary endpoint response fields. */
     private fun displayPage(raw: String): String {
@@ -219,7 +249,7 @@ internal class HerrinTmdbDiscovery(
                 id = "tmdb-" + type + "-" + id,
                 title = title,
                 subtitle = original.takeIf { it != title }.orEmpty(),
-                category = TmdbGenreClassification.category(if (type == "movie") "电影" else "剧集", type, ids),
+                category = browseClassification?.invoke(type, id, ids.toSet()) ?: TmdbAnimeIp.category(type, id, ids.toSet(), null, emptyMap()),
                 year = year,
                 synopsis = item.optString("overview").trim().take(2_000),
                 artwork = R.drawable.photofilm_orbit,

@@ -96,8 +96,9 @@ internal object TmdbGenreClassification {
 
     fun category(original: String, tmdbType: String, ids: List<Int>): String = when {
         99 in ids -> "纪录片"
-        16 in ids -> "动漫"
-        10764 in ids || 10767 in ids -> "综艺"
+        tmdbType == "tv" && 16 in ids -> "动漫"
+        tmdbType == "tv" && (10764 in ids || 10767 in ids) -> "综艺"
+        tmdbType == "movie" -> "电影"
         original in listOf("动漫", "纪录片", "综艺") -> original
         tmdbType == "tv" -> "剧集"
         else -> "电影"

@@ -32,7 +32,7 @@ internal class AdditionalServiceConfigs(private val context: Context) {
         val id = existing?.id ?: UUID.randomUUID().toString()
         val name = input.getString("name").trim()
         require(name.length in 1..32 && name.none { it.code < 32 })
-        val url = checkedAddress(input.getString("url"))
+        val url = if (module == "sources") sourceAddress(input.getString("url")) else checkedAddress(input.getString("url"))
         val epg = input.optString("epg").takeIf { it.isNotBlank() }?.let(::checkedAddress).orEmpty()
         require(current.none { it.id != id && it.url == url })
         if (module == "sources") require(url != Preferences(context).tvBoxWarehouseUrl)
@@ -54,7 +54,7 @@ internal class AdditionalServiceConfigs(private val context: Context) {
     }
     fun batchSources(raw: String) = synchronized(mutationLock) {
         val addresses = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
-            .map(::checkedAddress).distinct().toList()
+            .map(::sourceAddress).distinct().toList()
         require(addresses.isNotEmpty())
         val current = list("sources")
         val primary = Preferences(context).tvBoxWarehouseUrl
@@ -71,6 +71,10 @@ internal class AdditionalServiceConfigs(private val context: Context) {
         .put("epg", e.epg).put("enabled", e.enabled)
     companion object {
         private val mutationLock = Any()
+        fun sourceAddress(raw: String): String {
+            require(raw.length in 1..2048)
+            return requireNotNull(TvBoxUrl.normalize(raw, allowHttp = true))
+        }
         fun checkedAddress(raw: String): String {
             require(raw.length in 1..2048)
             val uri = URI(raw.trim())

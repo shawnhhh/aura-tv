@@ -104,6 +104,31 @@ public final class NativeFongMiHlsTest {
         }
     }
 
+    @Test public void distinguishesInvalidBodyFromRejectedReferenceWithoutLeakingContent() {
+        assertEquals("HLS_BODY_EMPTY", NativeFongMiHls.rejectionCode(""));
+        assertEquals("HLS_BODY_JSON", NativeFongMiHls.rejectionCode("{\"token\":\"PRIVATE\"}"));
+        assertEquals("HLS_BODY_HTML", NativeFongMiHls.rejectionCode("<!doctype html>PRIVATE"));
+        assertEquals("HLS_HEADER_INVALID", NativeFongMiHls.rejectionCode("PRIVATE"));
+        assertEquals("HLS_BODY_XML", NativeFongMiHls.rejectionCode("<?xml version=\"1.0\"?><Error>PRIVATE</Error>"));
+        assertEquals("HLS_BODY_URL", NativeFongMiHls.rejectionCode("https://private.invalid/token"));
+        assertEquals("HLS_BODY_ACCESS_DENIED", NativeFongMiHls.rejectionCode("Forbidden PRIVATE"));
+        assertEquals("HLS_BODY_GZIP", NativeFongMiHls.rejectionCode(new String(new byte[]{31, (byte)139, 8}, StandardCharsets.UTF_8)));
+        assertEquals("HLS_REFERENCE_REWRITE_REJECTED", NativeFongMiHls.rejectionCode("#EXTM3U\nPRIVATE"));
+    }
+
+    @Test public void resolvesFetchedPlaylistRelativeChildrenKeysAndSegmentsOnSameOrigin() {
+        String rewritten = NativeFongMiHls.resolveReferences("#EXTM3U\n"
+            + "#EXT-X-KEY:METHOD=AES-128,URI=\"../key.bin\"\n"
+            + "#EXT-X-STREAM-INF:BANDWIDTH=1000\nchild/index.m3u8\n",
+            "https://media.example.org/show/master.m3u8");
+        assertTrue(rewritten.contains("https://media.example.org/key.bin"));
+        assertTrue(rewritten.contains("https://media.example.org/show/child/index.m3u8"));
+        assertNull(NativeFongMiHls.resolveReferences("#EXTM3U\n//foreign.example.org/child.m3u8\n", "https://media.example.org/master.m3u8"));
+        assertNull(NativeFongMiHls.resolveReferences("#EXTM3U\nhttp://127.0.0.1/secret\n", "https://media.example.org/master.m3u8"));
+        assertNull(NativeFongMiHls.singleReference("https://media.example.org/a\nhttps://media.example.org/b"));
+        assertNull(NativeFongMiHls.singleReference("https://user:password@media.example.org/a"));
+    }
+
     private static HttpURLConnection connection(String url) throws Exception {
         HttpURLConnection req = (HttpURLConnection) URI.create(url).toURL().openConnection();
         req.setConnectTimeout(3000);

@@ -23,6 +23,7 @@ class P0StartupFrameProbeTest {
         val inst=InstrumentationRegistry.getInstrumentation()
         inst.targetContext.getSharedPreferences("herrin",0).edit().clear().commit()
         val reveal=Collections.synchronizedList(mutableListOf<Long>())
+        val breathing=Collections.synchronizedList(mutableListOf<Long>())
         val handoff=Collections.synchronizedList(mutableListOf<Long>())
         val thread=HandlerThread("herrin-startup-observer").apply{start()}
         var window:Window?=null
@@ -34,7 +35,8 @@ class P0StartupFrameProbeTest {
             val since=(timestamp-first)/1_000_000
             val duration=frame.getMetric(FrameMetrics.TOTAL_DURATION)
             if(duration>0 &&since in 0..1799)reveal.add(duration)
-            else if(duration>0 &&since in 1800..3500)handoff.add(duration)
+            else if(duration>0 &&since in 1800..4199)breathing.add(duration)
+            else if(duration>0 &&since in 4200..6500)handoff.add(duration)
         }
         val callback=ActivityLifecycleCallback{activity:Activity,stage:Stage->
             if(activity.javaClass.name=="tv.herrin.app.MainActivity" &&stage==Stage.CREATED){
@@ -48,14 +50,15 @@ class P0StartupFrameProbeTest {
         inst.runOnMainSync{monitor.addLifecycleCallback(callback)}
         try{
             ActivityScenario.launch(MainActivity::class.java).use{
-                SystemClock.sleep(4500) // Observer only; never delays the application.
+                SystemClock.sleep(7000) // Observer only; never delays the application.
                 assertNotNull(window)
                 inst.runOnMainSync{window?.removeOnFrameMetricsAvailableListener(listener)}
                 assertTrue("Real frame callbacks required",reveal.size>=3)
+                assertTrue("Breathing must have real frame callbacks",breathing.size>=3)
                 assertTrue("Home handoff must also draw frames",handoff.isNotEmpty())
                 val out=JSONObject().put("version",inst.targetContext.packageManager.getPackageInfo(inst.targetContext.packageName,0).versionName)
                     .put("refresh_hz",hz.toDouble()).put("warm_process_activity_start",true).put("physical_tcl",false)
-                for((name,samples)in listOf("reveal" to reveal,"handoff" to handoff)){
+                for((name,samples)in listOf("reveal" to reveal,"breathing" to breathing,"handoff" to handoff)){
                     val data=synchronized(samples){samples.toList().sorted()}
                     fun percentile(q:Int)=data[(data.size-1)*q/100]/1_000_000.0
                     out.put(name,JSONObject().put("count",data.size).put("p50_ms",percentile(50))

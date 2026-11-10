@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: android-emulator-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
+  group: android-emulator-${{ github.ref }}-${{ (github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-global-search-20261107' || github.head_ref == 'codex/herrin-global-search-20261107') && github.sha || 'latest' }}
   cancel-in-progress: true
 jobs:
   emulator:
@@ -20,6 +20,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Acceptance APK and reports must identify the actual PR head.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -27,6 +30,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+          # This same-repository P0 PR may populate its PR-scoped dependency cache.
+          # Fork PRs stay read-only; no cache is written into the base branch.
+          cache-read-only: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !(github.event_name == 'pull_request' && github.head_ref == 'codex/herrin-global-search-20261107' && github.event.pull_request.head.repo.full_name == github.repository) }}
       - name: Verify bundled original synthetic decoder fixture
         run: |
           # Original, synthetic H.264 + bilingual AAC + WebVTT + HLS assets are
@@ -44,6 +50,8 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Start controlled real SMB2 and SMB3 fixture
+        run: bash .github/scripts/start_smb_fixture.sh
       - name: Test on Android TV emulator (API 30)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -61,7 +69,7 @@ jobs:
         working-directory: android-tv
         run: python3 scripts/acceptance_report.py
       - name: Collect emulator screenshots and UI test reports
-        if: always()
+        if: ${{ always() && !contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
         uses: actions/upload-artifact@v4
         with:
           name: HERRIN-emulator-evidence
@@ -72,5 +80,17 @@ jobs:
             android-tv/app/build/outputs/androidTest-results/
             android-tv/app/build/outputs/apk/debug/*.apk
             android-tv/app/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Collect P0 reports without acceptance APKs
+        if: ${{ always() && contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-emulator-evidence
+          path: |
+            android-tv/build/emulator-evidence/
+            android-tv/build/acceptance/
+            android-tv/app/build/reports/androidTests/
+            android-tv/app/build/outputs/androidTest-results/
           if-no-files-found: warn
           retention-days: 14

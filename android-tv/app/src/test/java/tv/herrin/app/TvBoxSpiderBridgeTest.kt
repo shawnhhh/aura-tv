@@ -4,6 +4,7 @@ import com.github.catvod.utils.RuntimeModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.lang.reflect.InvocationTargetException
 
@@ -217,6 +218,67 @@ class TvBoxSpiderBridgeTest {
                 """{"list":[{"vod_id":"backup","vod_name":"备用首页"}]}"""
             }, homeVideos = { "" }, category = { error("not needed") })
         assertEquals("备用首页", films.single().title)
+    }
+
+    @Test fun `empty home publishes a usable empty catalog after all ordered hooks`() {
+        val calls = mutableListOf<String>()
+        assertTrue(SpiderCatalogBrowser.browse(site,
+            home = { filter -> calls += "home:$filter"; "" },
+            homeVideos = { calls += "video"; "" }, category = { error("no categories") }).isEmpty())
+        assertEquals(listOf("home:true", "video", "home:false"), calls)
+    }
+
+    @Test fun `home video hook always runs and takes precedence as in FongMi`() {
+        val calls = mutableListOf<String>()
+        val films = SpiderCatalogBrowser.browse(site,
+            home = { calls += "home"; """{"list":[{"vod_id":"home","vod_name":"首页"}]}""" },
+            homeVideos = { calls += "video"; """{"list":[{"vod_id":"video","vod_name":"推荐"}]}""" },
+            category = { error("not needed") })
+        assertEquals(listOf("home", "video"), calls)
+        assertEquals("video", films.single().spiderVodId)
+    }
+
+    @Test fun `search distinguishes empty body from an explicit empty results list`() {
+        assertEquals(0, SpiderVodCodec.searchRoot("""{"list":[]}""").getJSONArray("list").length())
+        for ((payload, expected) in listOf("" to "SOURCE_EMPTY_RESPONSE", "no" to "SOURCE_RESPONSE_INVALID",
+            "{}" to "SOURCE_INTERFACE_ERROR", """{"code":401}""" to "SOURCE_AUTH_REQUIRED",
+            """{"code":403}""" to "SOURCE_ACCESS_DENIED", """{"code":419}""" to "SOURCE_SESSION_EXPIRED")) {
+            try { SpiderVodCodec.searchRoot(payload); fail("must reject $expected") }
+            catch (error: IllegalStateException) { assertTrue(error.message.orEmpty().startsWith(expected)) }
+        }
+    }
+
+    @Test fun `FongMi first page dispatch reaches paginated-only Spider implementation`() {
+        val paged = object : com.github.catvod.crawler.Spider() {
+            override fun searchContent(key: String, quick: Boolean, pg: String): String {
+                assertEquals("授权片名", key)
+                assertFalse(quick)
+                assertEquals("1", pg)
+                return """{"list":[{"vod_id":"one","vod_name":"授权片名"}]}"""
+            }
+        }
+        assertEquals("one", SpiderVodCodec.listing(paged.searchContent("授权片名", false), site).single().spiderVodId)
+        paged.js.close()
+    }
+
+    @Test fun `only declared quick mode may follow a blank normal entry point`() {
+        val calls=mutableListOf<Boolean>()
+        val result=SpiderSearchInvocation.execute(true) { quick ->
+            calls+=quick
+            if(quick) """{"list":[{"vod_id":"authorized","vod_name":"授权片名"}]}""" else ""
+        }
+        assertEquals(listOf(false,true),calls)
+        assertTrue(result.quick)
+        assertEquals("authorized",SpiderVodCodec.listing(result.body,site).single().spiderVodId)
+        for(body in listOf("""{"list":[]}""", """{"code":401}""", "invalid")) {
+            var count=0
+            val unchanged=SpiderSearchInvocation.execute(true) { count++; body }
+            assertEquals(1,count)
+            assertEquals(body,unchanged.body)
+        }
+        var count=0
+        SpiderSearchInvocation.execute(false) { count++; "" }
+        assertEquals(1,count)
     }
 
     @Test fun `native guard filename matches ABI specific library name`() {

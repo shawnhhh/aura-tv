@@ -29,6 +29,15 @@ class SpiderRuntimeCompatTest {
             "lib/x86_64/sub/libbad.so", "lib/x86_64/not-library"), "x86_64"))
     }
 
+    @Test fun translatedArmProcessChoosesItsExecutingArchitectureInsteadOfImagePreference() {
+        val image = listOf("x86_64", "x86", "arm64-v8a", "armeabi-v7a")
+        assertEquals("arm64-v8a", SpiderRuntimeCompat.selectProcessAbi(image,true,"aarch64"))
+        assertEquals("armeabi-v7a", SpiderRuntimeCompat.selectProcessAbi(image,false,"armv7l"))
+        assertEquals("x86_64", SpiderRuntimeCompat.selectProcessAbi(image,true,"x86_64"))
+        assertNull(SpiderRuntimeCompat.selectProcessAbi(listOf("x86_64"),true,"aarch64"))
+        assertNull(SpiderRuntimeCompat.selectProcessAbi(image,false,"aarch64"))
+    }
+
     @Test fun optionalInitializerCannotSwallowWrappedFatalRuntimeErrors() {
         val fatal = OutOfMemoryError("synthetic")
         assertSame(fatal, SpiderInitPolicy.blocking(InvocationTargetException(fatal)))
@@ -58,6 +67,8 @@ class SpiderRuntimeCompatTest {
             spiderVodId = "vod?opaque=one", playbackEpisodes = listOf(
                 PlaybackEpisode(120, "第 120 集", listOf(PlaybackLine("spider-2", "线路二", "id?a=1&b=2")))))
         val restored = SpiderIpc.readFilm(SpiderIpc.film(film))
+        val declared = site.copy(searchable=0,quickSearch=1)
+        assertEquals(declared,SpiderIpc.readSite(SpiderIpc.site(declared)))
         assertEquals(film.spiderVodId, restored.spiderVodId)
         assertEquals(film.playbackEpisodes, restored.playbackEpisodes)
         val media = PlaybackMedia("https://example.org/main", headers = mapOf("Cookie" to "session=value"),

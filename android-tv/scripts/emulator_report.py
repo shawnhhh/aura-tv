@@ -67,9 +67,11 @@ for payload in re.findall(r'HerrinStartupProbe[^\n]*?(\{[^\n]+\})', log):
         'version': probe['version'], 'refresh_hz': probe['refresh_hz'],
         'warm_process_activity_start': True, 'physical_tcl': False,
         **{stage: {field: probe[stage][field] for field in ('count', 'p50_ms', 'p95_ms', 'p99_ms', 'over_budget')}
-           for stage in ('reveal', 'handoff')}
+           for stage in ('reveal', 'breathing', 'handoff') if stage in probe}
     })
 summary['source_recovery_evidence'] = re.findall(r'HerrinSourceRecovery[^\n]*', log)
+summary['smb_evidence'] = re.findall(r'HerrinSmbEvidence[^\n]*', log)
+summary['wordmark_evidence'] = re.findall(r'HerrinWordmarkEvidence[^\n]*', log)
 summary['source_feedback_evidence'] = re.findall(r'HerrinSourceFeedback[^\n]*', log)
 (out / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 lines = ['# Actual Android TV emulator results', '', f"Script exit: {summary['exit_code']}", '',

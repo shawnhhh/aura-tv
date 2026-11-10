@@ -10,4 +10,13 @@ class WordmarkMotionTest {
         assertEquals(1f, WordmarkMotion.brightness(1800f), 0.001f)
         assertEquals(0.7f, WordmarkMotion.brightness(3000f), 0.001f)
     }
+    @Test fun noHaloBeforeFullRevealAndAtLeastOneWholeBreathBeforeNormalExit() {
+        assertEquals(0f,WordmarkMotion.glow(1799f),0f)
+        assertEquals(0f,WordmarkMotion.glow(1800f),.001f)
+        assertEquals(1f,WordmarkMotion.glow(3000f),.001f)
+        assertEquals(0f,WordmarkMotion.glow(4200f),.001f)
+        assertFalse(WordmarkMotion.ready(4199f))
+        assertTrue(WordmarkMotion.ready(4200f))
+        assertEquals(1f,WordmarkMotion.brightness(4200f),.001f)
+    }
 }

@@ -54,6 +54,11 @@ internal interface HerrinFilmSource {
     suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie>
 }
 
+/** Personal adapters share one source router, playlist builder and existing FongMi player. */
+internal interface HerrinPersonalSource:HerrinFilmSource {
+    fun playback(offer:HerrinSourceMovie):PlaybackResult
+}
+
 internal data class HerrinFilmLookupResult(
     val options: List<HerrinSourceMovie>,
     val selectedTier: HerrinSourceTier?,
@@ -66,7 +71,9 @@ internal data class HerrinFilmLookupResult(
  * A cloud "4K" filename cannot outrank a verified NAS 1080p resource.
  * Within a source tier, quality labels only break ties between matches.
  */
-internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
+internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, private val preferredSourceId: String? = null,
+    private val validationBudgetMs: Long = 17_000L) {
+    init { require(validationBudgetMs in 1..17_000L) }
     /**
      * Verify actual resource usability before accepting a priority tier.
      * If every matched NAS/cloud offer is unusable, continue to TVBox.
@@ -147,90 +154,108 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>) {
         return HerrinFilmLookupResult(emptyList(), null, errors, searched)
     }
 
-    /** Consume completed HTTP searches immediately; a slow peer never holds a successful candidate. */
+    /** Search and validation have separate deadlines; a completed search does not consume Media3's budget. */
     private suspend fun firstVerified(identity: HerrinFilmIdentity, health: SourceHealthIndex?,
         onEvent: suspend (SourceSearchEvent)->Unit,
         accept: suspend (List<HerrinSourceMovie>)->List<HerrinSourceMovie>): HerrinFilmLookupResult {
-        val errors=linkedMapOf<String,String>();val searched=mutableListOf<String>()
-        val completedCount=java.util.concurrent.atomic.AtomicInteger()
-        val stages=listOf(HerrinSourceType.NAS,HerrinSourceType.CLOUD,HerrinSourceType.TVBOX_CMS,HerrinSourceType.TVBOX_SPIDER)
-        for(type in stages){
-            val providers=sources.filter{it.type==type && health?.eligible(it.id)!=false}.distinctBy{it.id}
-                .sortedByDescending{health?.rank(it.id)?:0}.take(100)
-            if(providers.isEmpty())continue
-            val tier=if(type==HerrinSourceType.NAS||type==HerrinSourceType.CLOUD)HerrinSourceTier.PERSONAL else HerrinSourceTier.TVBOX
-            if(type==HerrinSourceType.TVBOX_SPIDER){
-                // Hold the whole discovery -> details -> verification sequence,
-                // not merely searchContent, before any other mutable session.
-                for(source in providers){
-                    val accepted=withTimeoutOrNull(1_800L){
-                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING,
-                            completed=completedCount.get(),total=sources.size))
-                        var failure:SourceSearchOutcome?=null
-                        val began=System.nanoTime()
-                        val offers=try{source.search(identity).filter{it.sourceId==source.id &&it.sourceType==source.type &&HerrinFilmIdentityMatch.matches(identity,it)}}
-                            catch(cancel:CancellationException){throw cancel}
-                            catch(error:SourceCandidateFailure){failure=error.outcome;emptyList()}
-                            catch(_:Exception){failure=SourceSearchOutcome.ERROR;emptyList()}
-                        searched+=source.id
-                        val outcome=failure?:if(offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED
-                        health?.record(source.id,SourceSearchStage.SEARCH,outcome,(System.nanoTime()-began)/1_000_000)
-                        if(failure!=null)errors[source.id]=outcome.name
-                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,outcome,
-                            completed=completedCount.get(),total=sources.size))
-                        val verified=accept(offers).filter{it in offers}
-                        onEvent(SourceSearchEvent(source.id,SourceSearchStage.DISCOVER,SourceSearchOutcome.CHECKING,
-                            completed=completedCount.incrementAndGet(),total=sources.size,nodeComplete=true))
-                        verified
-                    }.orEmpty()
-                    if(accepted.isNotEmpty())return HerrinFilmLookupResult(accepted,tier,errors,searched)
-                }
-                continue
-            }
-            val accepted=withTimeoutOrNull(if(type==HerrinSourceType.TVBOX_CMS)2_800L else 1_800L){
-                coroutineScope {
-                    data class Found(val source:HerrinFilmSource,val offers:List<HerrinSourceMovie>,val failure:SourceSearchOutcome?,val elapsed:Long)
-                    val channel=kotlinx.coroutines.channels.Channel<Found>(4)
-                    val gate=kotlinx.coroutines.sync.Semaphore(if(type==HerrinSourceType.TVBOX_SPIDER)1 else 4)
-                    val jobs=providers.map{source->
-                        launch {
-                            gate.acquire()
-                            try {
-                                onEvent(SourceSearchEvent(source.id,SourceSearchStage.SEARCH,SourceSearchOutcome.CHECKING,
-                                    completed=completedCount.get(),total=sources.size))
-                                val at=System.nanoTime()
-                                var failure:SourceSearchOutcome?=null
-                                val offers=try{
-                                    withTimeoutOrNull(1_200L){source.search(identity)}.also{if(it==null)failure=SourceSearchOutcome.TIMEOUT}.orEmpty()
-                                }catch(cancel:CancellationException){throw cancel}
-                                catch(error:SourceHttpFailure){failure=SourceHealthIndex.httpOutcome(error.code);health?.record(source.id,SourceSearchStage.SEARCH,failure!!,0,error.retryAfterMs);emptyList()}
-                                catch(error:SourceCandidateFailure){failure=error.outcome;emptyList()}
-                                catch(_:Exception){failure=SourceSearchOutcome.NETWORK;emptyList()}
-                                channel.send(Found(source,offers.take(80).filter{it.sourceId==source.id &&it.sourceType==source.type &&HerrinFilmIdentityMatch.matches(identity,it)},failure,(System.nanoTime()-at)/1_000_000))
-                            }finally{gate.release()}
-                        }
-                    }
-                    try{
-                        repeat(providers.size){
-                            val result=channel.receive();searched+=result.source.id
-                            val outcome=result.failure?:if(result.offers.isEmpty())SourceSearchOutcome.NO_MATCH else SourceSearchOutcome.VERIFIED
-                            onEvent(SourceSearchEvent(result.source.id,SourceSearchStage.SEARCH,outcome,result.elapsed,completedCount.get(),sources.size))
-                            if(outcome!=SourceSearchOutcome.RATE_LIMITED && outcome!=SourceSearchOutcome.AUTH_REQUIRED)
-                                health?.record(result.source.id,SourceSearchStage.SEARCH,outcome,result.elapsed)
-                            if(result.failure!=null)errors[result.source.id]=outcome.name
-                            val verified=if(result.offers.isEmpty())emptyList() else accept(result.offers).filter{it in result.offers}
-                            onEvent(SourceSearchEvent(result.source.id,SourceSearchStage.DISCOVER,SourceSearchOutcome.CHECKING,
-                                completed=completedCount.incrementAndGet(),total=sources.size,nodeComplete=true))
-                            if(verified.isNotEmpty())return@coroutineScope verified
-                        }
-                        emptyList()
-                    }finally{jobs.forEach{it.cancel()};channel.cancel()}
-                }
-            }.orEmpty()
-            if(accepted.isNotEmpty())return HerrinFilmLookupResult(accepted,tier,errors,searched)
+        val errors = linkedMapOf<String, String>()
+        val searched = mutableListOf<String>()
+        var completed = 0
+        val preferred = sources.firstOrNull { it.id == preferredSourceId &&
+            it.type in listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER) }
+        val stages = listOf(
+            sources.filter { it.type == HerrinSourceType.NAS },
+            sources.filter { it.type == HerrinSourceType.CLOUD },
+            listOfNotNull(preferred),
+            sources.filter { it.type == HerrinSourceType.TVBOX_CMS && it !== preferred },
+            sources.filter { it.type == HerrinSourceType.TVBOX_SPIDER && it !== preferred })
+        data class Found(val source: HerrinFilmSource, val offers: List<HerrinSourceMovie>,
+            val outcome: SourceSearchOutcome, val elapsed: Long)
+        suspend fun fetch(source: HerrinFilmSource, budget: Long): Found {
+            onEvent(SourceSearchEvent(source.id, SourceSearchStage.SEARCH, SourceSearchOutcome.CHECKING,
+                completed = completed, total = sources.size))
+            val began = System.nanoTime()
+            var outcome = SourceSearchOutcome.NO_MATCH
+            val offers = try {
+                withTimeoutOrNull(budget) { source.search(identity) }.also {
+                    if (it == null) outcome = SourceSearchOutcome.TIMEOUT
+                }.orEmpty().take(80).filter { it.sourceId == source.id && it.sourceType == source.type &&
+                    HerrinFilmIdentityMatch.matches(identity, it) }
+            } catch (cancel: CancellationException) { throw cancel }
+            catch (error: SourceHttpFailure) {
+                outcome = SourceHealthIndex.httpOutcome(error.code)
+                health?.record(source.id, SourceSearchStage.SEARCH, outcome, 0, error.retryAfterMs)
+                emptyList()
+            } catch (error: SourceCandidateFailure) { outcome = error.outcome; emptyList() }
+            catch (_: Exception) { outcome = SourceSearchOutcome.NETWORK; emptyList() }
+            if (offers.isNotEmpty()) outcome = SourceSearchOutcome.VERIFIED
+            return Found(source, offers, outcome, (System.nanoTime()-began)/1_000_000)
         }
-        return HerrinFilmLookupResult(emptyList(),null,errors,searched)
+        suspend fun consume(found: Found): List<HerrinSourceMovie> {
+            val source = found.source
+            searched += source.id
+            if (found.outcome != SourceSearchOutcome.VERIFIED && found.outcome != SourceSearchOutcome.NO_MATCH)
+                errors[source.id] = found.outcome.name
+            if (found.outcome !in setOf(SourceSearchOutcome.RATE_LIMITED, SourceSearchOutcome.AUTH_REQUIRED))
+                health?.record(source.id, SourceSearchStage.SEARCH, found.outcome, found.elapsed)
+            onEvent(SourceSearchEvent(source.id, SourceSearchStage.SEARCH, found.outcome,
+                found.elapsed, completed + if (found.offers.isEmpty()) 1 else 0, sources.size, nodeComplete = found.offers.isEmpty()))
+            if (found.offers.isEmpty()) { completed++; return emptyList() }
+            val began = System.nanoTime()
+            // Existing per-phase bounds: details 4s + parse 9s + media 4s.
+            // This is independent of the 1-2s passive search deadline.
+            val accepted = if (found.offers.isEmpty()) emptyList() else
+                withTimeoutOrNull(validationBudgetMs) { accept(found.offers).filter { it in found.offers } }
+            completed++
+            if (accepted == null) {
+                errors[source.id] = SourceSearchOutcome.TIMEOUT.name
+                health?.record(source.id, SourceSearchStage.MEDIA, SourceSearchOutcome.TIMEOUT, (System.nanoTime()-began)/1_000_000)
+                onEvent(SourceSearchEvent(source.id, SourceSearchStage.MEDIA, SourceSearchOutcome.TIMEOUT,
+                    (System.nanoTime()-began)/1_000_000, completed, sources.size, nodeComplete = true))
+            } else onEvent(SourceSearchEvent(source.id, SourceSearchStage.DISCOVER, SourceSearchOutcome.CHECKING,
+                completed = completed, total = sources.size, nodeComplete = true))
+            return accepted.orEmpty()
+        }
+        for (stage in stages) {
+            val isPreferred = stage.singleOrNull() === preferred && preferred != null
+            val providers = stage.distinctBy { it.id }.filter { isPreferred || health?.eligible(it.id) != false }
+                .let { if (isPreferred) it else it.sortedByDescending { source -> health?.rank(source.id) ?: 0 } }.take(100)
+            val type = providers.firstOrNull()?.type ?: continue
+            val tier = if (type in listOf(HerrinSourceType.NAS, HerrinSourceType.CLOUD)) HerrinSourceTier.PERSONAL else HerrinSourceTier.TVBOX
+            val accepted = if (type == HerrinSourceType.TVBOX_CMS && !isPreferred) coroutineScope {
+                val channel = kotlinx.coroutines.channels.Channel<Found>(4)
+                val gate = kotlinx.coroutines.sync.Semaphore(4)
+                val deadline = System.nanoTime() + 1_800_000_000L
+                val jobs = providers.map { source -> launch {
+                    gate.acquire()
+                    try {
+                        val remaining = (deadline-System.nanoTime())/1_000_000
+                        channel.send(if (remaining > 0) fetch(source, minOf(1_000L, remaining))
+                            else Found(source, emptyList(), SourceSearchOutcome.TIMEOUT, 0))
+                    } finally { gate.release() }
+                } }
+                try {
+                    var result = emptyList<HerrinSourceMovie>()
+                    repeat(providers.size) {
+                        result = consume(channel.receive())
+                        if (result.isNotEmpty()) return@coroutineScope result
+                    }
+                    result
+                } finally { jobs.forEach { it.cancel() }; channel.cancel() }
+            } else {
+                var result = emptyList<HerrinSourceMovie>()
+                // Stateful Spider keeps search -> details -> verification serial under one owner.
+                for (source in providers) {
+                    result = consume(fetch(source, if (isPreferred) 2_000L else if (type == HerrinSourceType.TVBOX_SPIDER) 1_800L else 1_000L))
+                    if (result.isNotEmpty()) break
+                }
+                result
+            }
+            if (accepted.isNotEmpty()) return HerrinFilmLookupResult(accepted, tier, errors, searched)
+        }
+        return HerrinFilmLookupResult(emptyList(), null, errors, searched)
     }
+
 }
 
 internal object HerrinFilmIdentityMatch {

@@ -1,0 +1,15 @@
+# 待完成：真正的MainActivity详情返回驱动
+
+当前FanTaiYingRealNodesTest只复用正式Bridge/worker和正式AuthorizedPlaybackPanel，目录宿主是ComponentActivity。26bd09a已加真实film-detail-list可见性硬条件，不能再把回调当详情通过；当源端可播放时，在最后该阶段仍需补实际MainActivity导航。这不是已验收能力。
+
+优先复用既有UI测试而非拆换播放器：
+- P0RecentPlaybackReturnTest使用真实MainActivity、player-root-focus、D-pad Back与原卡片焦点恢复；其中Mock NAS/视频只可作结构参考，绝不能用于两个真实节点结果。
+- P0ExitAndEntryTest/TmdbBrowsePageTest包含真实film-detail-list及D-pad确认、Back操作。当前TMDB测试已改成明确焦点+确认，原详情断言仍在。
+- TmdbSpiderPlaybackClosureTest、M467JarPlaybackEndToEndTest只是原创JAR/PlaybackTestActivity证据，不是实际主界面返回详情，也不是饭太硬通过证据。
+- FanTaiYingArmLivePlaybackTest含旧首ABI判断、默认YGP和独立Exo，不能拿来满足当前真实节点验收；目前仅跑FanTaiYingRealNodesTest指定方法，不跑默认YGP。
+
+需要实际走MainActivity仓配置/站点应用与用户许可入口，使用实时仓按名称选玩偶/奶酪；不能把另一个Bridge签名的Film直接塞入主界面，必须由当前正式会话重新搜索、详情和选集。媒体只限用户授权《小城良方》2026，详情确认年份后才能取视频。保持私有URI、Cookie、QR不落盘。
+
+主界面生产播放仍必须AuthorizedPlaybackPanel→HerrinPlaybackAdapter→FongMi PlayerManager→唯一Media3。可优先用既有SID/FIRST_FRAME诊断、播放器UI操作；如须只读观察真实播放器，不能新建Exo或替换surface/地址，不能新增可被URL/Intent激活的生产后门。
+
+真实节点当前先卡在：奶酪上游403 HTML；玩偶普通/quick均0字符，未出现登录QR。没有合法新证据时不反复请求403，不猜插件私有入口，不伪装包名/签名/绕过保护。若需要对照原版FongMi实际客户端，只可作独立参考诊断，不能充当Herrin播放或授权通过。

@@ -1,0 +1,16 @@
+{
+  "native_crashes": [
+    {
+      "process": "spider",
+      "signal": 4,
+      "signal_name": "SIGILL",
+      "top_modules": [
+        "libc.so",
+        "libndk_translation.so",
+        "libndk_translation.so",
+        "libndk_translation.so",
+        "libndk_translation.so"
+      ]
+    }
+  ]
+}

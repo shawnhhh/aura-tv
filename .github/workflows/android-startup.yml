@@ -8,14 +8,33 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: actions/download-artifact@v4
+        if: ${{ !contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
         with:
           name: HERRIN-debug-apk
           path: startup-apk
+      - uses: gradle/actions/setup-gradle@v4
+        if: ${{ contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
+        with:
+          gradle-version: '8.9'
+          cache-read-only: true
+      - name: Build P0 startup diagnostic APK locally without publishing it
+        if: ${{ contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
+        run: |
+          gradle -p android-tv --build-cache :app:assembleDebug
+          mkdir -p startup-apk
+          cp android-tv/app/build/outputs/apk/debug/app-debug.apk startup-apk/app-debug.apk
+      - name: Install startup frame extraction dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version
       - name: Enable Linux KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

@@ -77,6 +77,7 @@ internal object FongMiParsePlayback {
         normalizeMedia: ((String) -> String?)? = null,
         onHttpFailure: ((Int,Long?)->Unit)? = null
     ): PlaybackResult {
+        SpiderPlaybackEvidence.structure(playerContent)
         val root = runCatching { JSONObject(playerContent) }.getOrNull()
             ?: return PlaybackResult.Unavailable("PARSE_INVALID_JSON：Spider 播放数据不是有效 JSON")
         val result = runCatching { Result.fromObject(playerContent) }.getOrNull()
@@ -102,13 +103,14 @@ internal object FongMiParsePlayback {
                     var selected: Parse? = null
                     val cause = java.util.concurrent.atomic.AtomicReference<String>()
                     val host = object : ParseJob.Host {
-                        override fun getParse(): Parse = catalog.getParse().also { selected = it }
-                        override fun getParse(name: String): Parse = catalog.getParse(name).also { selected = it }
+                        override fun getParse(): Parse = catalog.getParse().also { selected = it; SpiderPlaybackEvidence.parser(it.type) }
+                        override fun getParse(name: String): Parse = catalog.getParse(name).also { selected = it; SpiderPlaybackEvidence.parser(it.type) }
                         override fun getParses(): List<Parse> = catalog.parses
                         override fun getParses(type: Int, flag: String): List<Parse> = catalog.getParses(type, flag)
                         override fun getSiteClick(key: String): String = siteClick
                         override fun onFailure(error: Throwable) {
                             val rootCause = generateSequence(error) { it.cause }.take(12).last()
+                            SpiderPlaybackEvidence.failure(rootCause)
                             val detail = when (rootCause) {
                                 is java.util.concurrent.TimeoutException, is java.net.SocketTimeoutException -> "PARSE_TIMEOUT：解析超时"
                                 is java.net.UnknownHostException -> "PARSE_DNS：解析接口域名解析失败"

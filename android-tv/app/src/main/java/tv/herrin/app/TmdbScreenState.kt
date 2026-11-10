@@ -7,9 +7,25 @@ import java.util.concurrent.atomic.AtomicLong
  * below the problematic register pressure. No credentials or saved UI change. */
 @Stable
 internal class TmdbScreenState {
+    val sourceDiscoveries = mutableMapOf<String, HerrinSourceDiscovery>()
+    val discoveredSources = mutableStateMapOf<String, HerrinSourceDiscovery.Snapshot>()
+    val discoverySpiderLock = kotlinx.coroutines.sync.Mutex()
+    var discoverySelection by mutableStateOf<Pair<String, String>?>(null)
+    var discoverySelectionEpoch by mutableIntStateOf(0)
+    fun discoveryFor(id: String): HerrinSourceDiscovery {
+        sourceDiscoveries[id]?.let { return it }
+        if(sourceDiscoveries.size >= 24) {
+            sourceDiscoveries.keys.first().let { old -> sourceDiscoveries.remove(old); discoveredSources.remove(old) }
+        }
+        return HerrinSourceDiscovery().also { sourceDiscoveries[id] = it }
+    }
+    var resumeSourceFilm: String? = null
+    var searchReturnFocus:String?=null
+    var restoreSearchFocus by mutableStateOf(false)
+    val globalSearch = TmdbGlobalSearchState()
     var sourceForeground by mutableStateOf(false)
     var sourceSearchJob:kotlinx.coroutines.Job?=null
-    var tmdbHomeFilms by mutableStateOf<List<Film>>(emptyList())
+    var tmdbBrowseIndex by mutableStateOf<List<Film>>(emptyList())
     var cacheHydrated by mutableStateOf(false)
     var tmdbTop250Films by mutableStateOf<List<Film>>(emptyList())
     var tmdbTop250Status by mutableStateOf("")
@@ -24,6 +40,7 @@ internal class TmdbScreenState {
     val tmdbSpiderBatchOffsets=mutableStateMapOf<String,Int>()
     val tmdbSpiderBatchCompleted=mutableStateMapOf<String,Int>()
     var tmdbDiscoveryStatus by mutableStateOf("")
+    var preferredSiteStatus by mutableStateOf("")
     var tmdbSourceStatus by mutableStateOf("")
     var tmdbStatusFilm by mutableStateOf("")
     var tmdbStageStarted by mutableLongStateOf(0L)

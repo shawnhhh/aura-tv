@@ -17,13 +17,16 @@ class HerrinPlaybackAdapter(context: Context, media: PlaybackMedia,
         persistTrackPreferences: Boolean = true) : AutoCloseable {
     val media = media.copy(headers = media.headers.toMap(), subtitles = media.subtitles.toList())
     private val trackPreferences = PlaybackTrackPreferences(context)
+    private val createdAt = android.os.SystemClock.elapsedRealtime()
     val manager = PlayerManager(FongMiExoPlayerFactory.create(context, this.media))
         .apply {
             if (persistTrackPreferences) {
                 restorePreferredTracks(trackPreferences.load())
                 onTrackPreference = trackPreferences::save
             }
-            onDiagnostic = { event, detail -> HerrinPlaybackDiagnosticJournal.record("MEDIA3", event, detail) }
+            onDiagnostic = { event, detail ->
+                HerrinPlaybackDiagnosticJournal.record("MEDIA3", event, if (event == "FIRST_FRAME") "MS=${(android.os.SystemClock.elapsedRealtime()-createdAt).coerceAtMost(99999)}" else detail, this@HerrinPlaybackAdapter.media.diagnosticSessionId)
+            }
         }
     val player get() = manager.player
     fun item(uri: String = media.uri, mime: String? = media.declaredMime): MediaItem =

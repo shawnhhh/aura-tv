@@ -53,18 +53,28 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
     var failed by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("正在开启临时 HTTPS 服务…") }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(epoch) {
         var created: LanConfigServer? = null
         bitmap = null; failed = false; pending = false
         message = "正在开启临时 HTTPS 服务…"
+        // Publish the modal's skeleton before certificate/KeyStore or interface work starts.
+        withFrameNanos { }
+        val diagnosticStart = android.os.SystemClock.elapsedRealtime()
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "DIALOG_VISIBLE")
         try {
             val started = withContext(Dispatchers.IO) {
                 serverFactory(context) { module -> main.post { callback(module) } }
                     .also { created = it }.apply { start(5000, true) }
             }
+            check(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+            HerrinPlaybackDiagnosticJournal.record("CONFIG", "HTTPS_LISTENING",
+                "MS=${(android.os.SystemClock.elapsedRealtime()-diagnosticStart).coerceAtMost(99999)}")
             server = started
             bitmap = withContext(Dispatchers.Default) { qrFactory(started.qr) }
-            message = "配对 3 分钟有效；确认后闲置 30 分钟结束。"
+            HerrinPlaybackDiagnosticJournal.record("CONFIG", "QR_VISIBLE",
+                "MS=${(android.os.SystemClock.elapsedRealtime()-diagnosticStart).coerceAtMost(99999)}")
+            message = "配对 3 分钟有效；服务最长 30 分钟，退出或转入后台立即关闭。"
             while (!started.pairing.expired()) {
                 pending = started.pairing.pending()
                 delay(350)
@@ -77,10 +87,23 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
         } catch (_: Exception) {
             failed = true; message = "服务启动或二维码生成失败。请重试，或使用遥控器手动配置。"
         } finally {
-            created?.end(); server = null; bitmap = null; pending = false
+            created?.end()
+            // A cancelled attempt must not clear the next attempt's UI.
+            if (server === created) {
+                server = null; bitmap = null; pending = false
+            }
         }
     }
-    DisposableEffect(Unit) { onDispose { server?.end() } }
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) server?.end()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            server?.end()
+        }
+    }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.width(800.dp).testTag("phone-config-dialog"), color = Color(0xFF171719),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
@@ -93,12 +116,12 @@ internal fun LanConfigDialog(onDismiss: () -> Unit, onApplied: (String) -> Unit,
                         else Text(if (failed) "二维码不可用" else "正在准备二维码…", color = Color.Black)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("四个模块共用会话：TMDB、影视源、直播、NAS。", fontSize = 16.sp, color = Color.White)
+                        Text("共用配对会话：TMDB、影视源、直播、NAS / 云盘。", fontSize = 16.sp, color = Color.White)
                         server?.let { current ->
                             Text(current.origin, fontSize = 17.sp, color = Color.White, modifier = Modifier.testTag("phone-config-address"))
                             Text("证书 SHA-256：\n${current.fingerprint}", fontSize = 13.sp, lineHeight = 18.sp, color = Color(0xFFD4D4D6))
                         }
-                        Text("自签名 HTTPS 需要在手机核对完整证书指纹。Safari 等浏览器可能限制访问；无法核对时请手动配置。", fontSize = 14.sp, lineHeight = 20.sp, color = Color(0xFFD4D4D6))
+                        Text("设备会安全保留自签名证书；IP 变化或到期时更新。固定指纹不代表 Safari 自动信任，请核对证书；不能核对时使用遥控器。无警告访问需要系统信任且地址匹配的证书，不能关闭 TLS 校验。", fontSize = 14.sp, lineHeight = 20.sp, color = Color(0xFFD4D4D6))
                         Text(message, fontSize = 14.sp, lineHeight = 20.sp, color = Color.White, modifier = Modifier.testTag("phone-config-status"))
                     }
                 }

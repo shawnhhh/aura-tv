@@ -90,7 +90,11 @@ internal object PlaybackErrorReport {
             .find(raw)?.groupValues?.get(1)
         val safeOperation = Regex("route_operation=(JAR|CSP|LIVE|PUSH|CZSpp|CZSPP|CK|PARSE|PLAY|PROXY|VOD|M3U8|OTHER|MISSING|UNAVAILABLE)")
             .find(raw)?.groupValues?.get(1)
+        val mediaProbe = Regex("MEDIA_PROBE_(?:INVALID_URL|UNAUTHORIZED_LOCAL|HTTP_ERROR|LOGIN_OR_TEXT|INVALID_RANGE|EMPTY_BODY|INVALID_MANIFEST|NETWORK_ERROR|PROBE_TIMEOUT)(?![A-Z_])").find(raw)?.value
+        val parserCode = Regex("PARSE_(?:WEB_REQUIRED|NO_MEDIA_URL|INVALID_JSON|INVALID_RESULT_URL|INVALID_RESULT|INVALID_URL|TIMEOUT|DNS|CONNECT|TLS|JAR_CLASS|JAR_ABI|HTTP|FAILED)(?![A-Z_])").find(raw)?.value
         val kind = when {
+            mediaProbe != null -> "SOURCE_$mediaProbe"
+            parserCode != null -> "SOURCE_$parserCode"
             proxyHealth != null -> "SOURCE_$proxyHealth"
             http != null -> "SOURCE_HTTP_$http"
             webViewCode != null -> "SOURCE_WEBVIEW_$webViewCode"
@@ -117,7 +121,7 @@ internal object PlaybackErrorReport {
         }
         return buildString {
             val probeFailure = proxyHealth?.matches(Regex("PROXY_(?:IO_[A-Z_]+|CONNECT_REFUSED|TIMEOUT|HTTP_[A-Z0-9]+|INVALID_SESSION|INVALID_PORT)")) == true
-            append("失败阶段：").append(if (probeFailure) "本机 Spider 代理健康检查" else safeStage)
+            append("失败阶段：").append(if (mediaProbe != null) "媒体响应字节验证" else if (probeFailure) "本机 Spider 代理健康检查" else safeStage)
             append("\n诊断分类：").append(kind)
             if (routeReason != null) append("\n代理路由校验：").append(routeReason)
             if (safeOperation != null) append("\n代理操作类型：").append(safeOperation)

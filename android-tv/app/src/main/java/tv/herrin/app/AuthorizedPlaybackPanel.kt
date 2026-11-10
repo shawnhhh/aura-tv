@@ -122,10 +122,7 @@ private fun AuthorizedPlaybackSession(
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val playbackPreferences = remember(context) { Preferences(context) }
-    var viewportMode by remember(media) {
-        mutableStateOf(PlaybackViewportMode.fromStoredFill(playbackPreferences.playbackFillScreen))
-    }
+    val viewportMode = PlaybackViewportMode.FIT
     val danmaku = rememberDanmakuSettings()
     var errorMessage by remember(media) { mutableStateOf<String?>(null) }
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
@@ -332,6 +329,8 @@ private fun AuthorizedPlaybackSession(
     }
     LaunchedEffect(player) {
         var tick = 0
+        var sustained = false
+        val initialPosition = player.currentPosition
         while (true) {
             delay(500)
             journey.onFrames(player.videoDecoderCounters?.renderedOutputBufferCount ?: 0,
@@ -339,6 +338,11 @@ private fun AuthorizedPlaybackSession(
             shownPosition = player.currentPosition.coerceAtLeast(0L)
             shownDuration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
             tick++
+            if (!sustained && player.isPlaying && shownPosition > initialPosition + 1_000 &&
+                (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3) {
+                sustained = true
+                HerrinPlaybackDiagnosticJournal.record("MEDIA3", "SUSTAINED_PLAYBACK", "POSITION_MS=${shownPosition.coerceAtMost(99999)}", media.diagnosticSessionId)
+            }
             if (tick % 5 == 0 &&
                 (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED))
                 reportProgress()
@@ -772,14 +776,8 @@ private fun AuthorizedPlaybackSession(
                 // Removed upper-left Back/Verification text never returns here.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = {
-                        viewportMode = viewportMode.toggle()
-                        playbackPreferences.playbackFillScreen =
-                            viewportMode == PlaybackViewportMode.FILL
-                        controlsInteractionEpoch++
-                    }, modifier = Modifier.testTag("transport-viewport-mode")) {
-                        Text("画面：" + viewportMode.label)
-                    }
+                    Text("画面：" + viewportMode.label,
+                        modifier = Modifier.testTag("transport-viewport-mode"))
                     if (!isLive) Button(onClick = {
                         playback.manager.setRepeatOne(player.repeatMode != Player.REPEAT_MODE_ONE)
                         uiEpoch++

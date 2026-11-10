@@ -4,20 +4,21 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /** Monotonic, single-use pairing grant and independently expiring management capability. */
-internal class ConfigPairingSession(private val clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
+internal class ConfigPairingSession(private val maxLifetimeMs: Long = Long.MAX_VALUE, private val clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
     companion object {
         private fun random() = ByteArray(32).also { SecureRandom().nextBytes(it) }
             .joinToString("") { "%02x".format(it) }
     }
     val pairing = random()
-    private val deadline = clock() + 180_000
+    private val startedAt = clock()
+    private val deadline = startedAt + 180_000
     private var pending = false
     private var approved = false
     private var consumed = false
     private var management: String? = null
     private var lastUsed = 0L
     @Synchronized fun request(value: String): Boolean {
-        if (consumed || clock() >= deadline || !equal(value, pairing)) return false
+        if (consumed || lifetimeExpired() || clock() >= deadline || !equal(value, pairing)) return false
         pending = true
         return true
     }
@@ -30,11 +31,12 @@ internal class ConfigPairingSession(private val clock: () -> Long = { System.nan
     }
     @Synchronized fun authorized(value: String): Boolean {
         val saved = management ?: return false
-        if (clock() - lastUsed >= 30 * 60_000 || !equal(value, saved)) return false
+        if (lifetimeExpired() || clock() - lastUsed >= 30 * 60_000 || !equal(value, saved)) return false
         lastUsed = clock()
         return true
     }
-    @Synchronized fun expired(): Boolean = if (!consumed) clock() >= deadline
+    private fun lifetimeExpired() = clock() - startedAt >= maxLifetimeMs
+    @Synchronized fun expired(): Boolean = if (lifetimeExpired()) true else if (!consumed) clock() >= deadline
         else management == null || clock() - lastUsed >= 30 * 60_000
     @Synchronized fun close() { management = null; consumed = true; pending = false }
     private fun equal(a: String, b: String) = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())

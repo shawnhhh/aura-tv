@@ -30,6 +30,7 @@ class M477NativeFongMiRealFrameTest {
             assertEquals("fixture", args["id"])
             assertNull(args["session"])
             assertEquals("approved", args["siteKey"])
+            assertEquals("String header must reach actual proxy bytes", "HerrinLegalFixture", args["user-agent"])
             val range = args["range"]
             val begin = Regex("""bytes=(\d+)-""").find(range.orEmpty())
                 ?.groupValues?.get(1)?.toIntOrNull() ?: 0
@@ -50,14 +51,19 @@ class M477NativeFongMiRealFrameTest {
             assertTrue(NativeFongMiRoute.isNativeProxy(mediaUrl))
             assertEquals(NativeFongMiRoute.Health.READY,
                 NativeFongMiRoute.probe(mediaUrl, "approved"))
-            val media = PlaybackMedia(mediaUrl)
+            val response = JSONObject(normalized).put("header", "{\"ua\":\"HerrinLegalFixture\"}")
+            val parsed = FongMiParsePlayback.resolve(inst.targetContext, response.toString(),
+                "fixture", emptyList(), true) as PlaybackResult.Ready
+            assertEquals("HerrinLegalFixture", parsed.media.headers["User-Agent"])
+            val media = parsed.media
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
                 HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
                     tv.herrin.app.nativeplayback.FongMiSessionAuthorization.isApproved(candidate, "approved")
                 }).probe(media))
             ActivityScenario.launch<PlaybackTestActivity>(
                 Intent(inst.targetContext, PlaybackTestActivity::class.java)
-                    .putExtra("fixture", mediaUrl)
+                    .putExtra("spiderJson", response.toString())
+                    .putExtra("spiderAllowHttp", true)
             ).use { scenario ->
                 var frames = 0
                 var failure: String? = null

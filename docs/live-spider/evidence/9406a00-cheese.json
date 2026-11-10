@@ -1,0 +1,261 @@
+{
+  "node": "奶酪",
+  "verdict": "FAIL_PLAYBACK",
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "supported_64": [
+      "x86_64",
+      "arm64-v8a"
+    ],
+    "supported_32": [
+      "x86",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "build_cpu_abi": "arm64-v8a",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a",
+    "native_library_dir": "/data/app/~~kMnT_sMXzb7PDTtlAA5L1w==/tv.herrin.app-mhcYv8EZmJ16-C3WOyzgHg==/lib/arm64"
+  },
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 1507
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 5420
+    },
+    {
+      "stage": "search",
+      "result": "PASS",
+      "elapsed_ms": 802
+    },
+    {
+      "stage": "film_match",
+      "result": "PASS",
+      "elapsed_ms": 101
+    },
+    {
+      "stage": "details",
+      "result": "PASS",
+      "elapsed_ms": 200
+    },
+    {
+      "stage": "episodes",
+      "result": "PASS",
+      "elapsed_ms": 100
+    },
+    {
+      "stage": "resolve_0",
+      "result": "PASS",
+      "elapsed_ms": 502
+    },
+    {
+      "stage": "real_media_bytes_0",
+      "result": "FAILED_OR_PENDING",
+      "error": "MEDIA_NETWORK_ERROR",
+      "elapsed_ms": 1603
+    },
+    {
+      "stage": "diagnostic_extended_media_0",
+      "result": "FAILED_OR_PENDING",
+      "error": "EXTENDED_MEDIA_HTTP_ERROR",
+      "elapsed_ms": 3210
+    },
+    {
+      "stage": "diagnostic_production_http_0",
+      "result": "FAILED_OR_PENDING",
+      "error": "PRODUCTION_HTTP_LOCAL_CONNECT_REFUSED",
+      "elapsed_ms": 101
+    }
+  ],
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "first_frame": false,
+  "seek_verified": false,
+  "plugin_initialized": true,
+  "playback_host_scope": "PRODUCTION_PANEL_WITH_TEST_CATALOG_HOST",
+  "details_ui_verified": false,
+  "site_key": "奶酪",
+  "site_name": "🧀奶酪┃秒播",
+  "spider_api": "csp_T4Guard",
+  "node_count": 48,
+  "declared_jar_md5": "9d5f341aa5f3353b50cc3bc16b4f3e8a",
+  "home_film_count": 0,
+  "active_site_after_home": true,
+  "search_count": 1,
+  "film_identity_verified": true,
+  "episode_count": 29,
+  "alternate_line_available": false,
+  "selection_failures": [
+    {
+      "selection": 0,
+      "episode": 1,
+      "stage": "diagnostic_production_http_0",
+      "code": "PRODUCTION_HTTP_LOCAL_CONNECT_REFUSED"
+    }
+  ],
+  "production_media_events": [
+    {
+      "event": "LOCAL_AUTH_READY",
+      "current_site_matches": true
+    },
+    {
+      "event": "MEDIA_REQUEST",
+      "detail": "HOP=0"
+    },
+    {
+      "event": "MEDIA_TARGET_PROXY",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_CALL_FAILED",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_CONNECT_IO_TIMEOUT",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_IO_TIMEOUT",
+      "detail": ""
+    }
+  ],
+  "production_media_gate_failed": true,
+  "production_media_failure": "MEDIA_NETWORK_ERROR",
+  "extended_media_events": [
+    {
+      "event": "LOCAL_AUTH_READY",
+      "current_site_matches": true
+    },
+    {
+      "event": "MEDIA_REQUEST",
+      "detail": "HOP=0"
+    },
+    {
+      "event": "MEDIA_TARGET_PROXY",
+      "detail": ""
+    },
+    {
+      "event": "MEDIA_HEADERS",
+      "detail": "MS=3145"
+    },
+    {
+      "event": "MEDIA_HTTP",
+      "detail": "STATUS=502"
+    },
+    {
+      "event": "MEDIA_NOT_CHUNKED",
+      "detail": ""
+    }
+  ],
+  "extended_media_failure": "EXTENDED_MEDIA_HTTP_ERROR",
+  "production_http_diagnostic": {
+    "scope": "PRODUCTION_FONGMI_HTTP_DATASOURCE_DIAGNOSTIC_ONLY",
+    "local_health": "CONNECT_REFUSED"
+  },
+  "failure_stage": "diagnostic_production_http_0",
+  "failure_code": "PRODUCTION_HTTP_LOCAL_CONNECT_REFUSED",
+  "worker_exit": "原生组件崩溃（JNI/so）",
+  "proxy_callback_shapes": [
+    {
+      "outcome": "CALLBACK_ARRAY",
+      "length": 3,
+      "mime_kind": "HLS",
+      "types": [
+        "java.lang.Integer",
+        "java.lang.String",
+        "java.io.ByteArrayInputStream"
+      ],
+      "status": 200
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_URL_REFERENCE"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_TARGET_HTTPS"
+    },
+    {
+      "outcome": "CALLBACK_ARRAY",
+      "length": 3,
+      "mime_kind": "HLS",
+      "types": [
+        "java.lang.Integer",
+        "java.lang.String",
+        "java.io.ByteArrayInputStream"
+      ],
+      "status": 200
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_URL_REFERENCE"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_TARGET_HTTPS"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_HTTP_403"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_DENIAL_HTML"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "PROXY_CALLBACK_OR_REWRITE_FAILED"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_HTTP_403"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_DENIAL_HTML"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "PROXY_CALLBACK_OR_REWRITE_FAILED"
+    }
+  ],
+  "blocked": true,
+  "blocker": "UPSTREAM_MEDIA_ACCESS_DENIED",
+  "sdk_network_scope": "SDK_OKHTTP_ONLY",
+  "sdk_network_evidence": [],
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 4160
+      }
+    ],
+    "response_chars": 4160,
+    "shape": "JSON_LIST"
+  },
+  "elapsed_ms": 13857,
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+46392ms SPIDER INITIALIZE_STARTED\nT+51717ms SPIDER INITIALIZE_RETURNED MS=5325\nT+51811ms SPIDER SEARCH_STARTED\nT+52596ms SPIDER SEARCH_RETURNED MS=785\nT+52715ms SPIDER DETAILS_EPISODES_STARTED\nT+52830ms SPIDER DETAILS_EPISODES_RETURNED MS=114\nT+53065ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESOLVE_STARTED\nT+53436ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESOLVE_RETURNED MS=370\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER PARSER_DIRECT\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESPONSE_URL_STRING\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESPONSE_PARSE VALUE=0\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESPONSE_JX VALUE=0\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER HEADER_FALLBACK\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER PARSER_DIRECT\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESPONSE_URL_STRING\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESPONSE_PARSE VALUE=0\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER RESPONSE_JX VALUE=0\nT+53437ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER HEADER_FALLBACK\nT+53438ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 SPIDER PLAYER_CONTENT_RETURNED\nT+53448ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 PROXY HEALTH_STARTED\nT+53475ms SID=f0c8f7c6-4460-493f-94fb-f151994aafd8 PROXY HEALTH_READY"
+}

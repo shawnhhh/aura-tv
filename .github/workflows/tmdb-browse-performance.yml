@@ -1,0 +1,66 @@
+name: HERRIN TMDB Same Device ABBA
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/tmdb-browse-performance.yml'
+      - 'android-tv/app/src/main/java/tv/herrin/app/TmdbBrowse*.kt'
+      - '.github/scripts/tmdb_performance_ab.*'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tmdb-performance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          ref: 599d58d821b46bc364c2f325bd6e7a4220705d8b
+          path: baseline
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+          # This same-repository P0 PR may populate its PR-scoped dependency cache.
+          # Fork PRs stay read-only; no cache is written into the base branch.
+          cache-read-only: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !(github.event_name == 'pull_request' && github.head_ref == 'codex/herrin-global-search-20261107' && github.event.pull_request.head.repo.full_name == github.repository) }}
+      - name: Build TCL feedback baseline and candidate with their corresponding instrumentation APKs
+        run: |
+          gradle -p baseline/android-tv :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+          gradle -p candidate/android-tv :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+      - name: Enable Linux KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Compare cached TMDB pages and remote response on one Android TV AVD
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          ram-size: 3072M
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/tmdb_performance_ab.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: HERRIN-TMDB-same-device-ABBA
+          path: tmdb-performance-ab/
+          if-no-files-found: error
+          retention-days: 14

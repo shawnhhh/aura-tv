@@ -24,7 +24,9 @@ class P0MetadataPublicationPressureTest {
         override fun before(){
             val c=InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
-            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively()
+            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
+            val browseFixture=TmdbBrowseFixture().apply { dense=true }
+            seedTmdbBrowseTestCache(c, token, browseFixture)
             Preferences(c).tmdbReadToken=token
             MetadataFetchers.overrideForTests=ArtworkJsonFetcher { url,_ ->
                 requests.incrementAndGet()
@@ -33,7 +35,8 @@ class P0MetadataPublicationPressureTest {
                 when {
                     uri.path.endsWith("configuration") -> "{\"images\":{}}"
                     uri.path.contains("search/") -> "{\"results\":[]}"
-                    url.contains("append_to_response") -> {Thread.sleep(70);"{broken-detail"}
+                    url.contains("credits") -> {Thread.sleep(70);"{broken-detail"}
+                    !uri.path.contains("top_rated") -> {Thread.sleep(8);browseFixture.load(url,token)}
                     else -> {
                         Thread.sleep(8)
                         val page=Regex("(?:[?&])page=(\\d+)").find(url)?.groupValues?.get(1)?.toInt()?:1
@@ -56,7 +59,7 @@ class P0MetadataPublicationPressureTest {
             MetadataFetchers.overrideForTests=null
             val c=InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
-            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively()
+            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
         }
     }
     @get:Rule(order=1) val compose=createAndroidComposeRule<MainActivity>()
@@ -64,7 +67,7 @@ class P0MetadataPublicationPressureTest {
     private fun cache()=HerrinTmdbDiscovery(cacheDir=java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,"tmdb-home-pages"))
     @Test fun validProbePublishesHundredsThenTop250WhileCategoriesAndRemoteRemainUsable(){
         ready()
-        compose.waitUntil(15000){cache().cachedHome(token).size>=100}
+        compose.waitUntil(15000){cachedTmdbBrowseTestFilms(InstrumentationRegistry.getInstrumentation().targetContext, token).size>=100}
         for(cat in listOf("电影","剧集","动漫","Top 250","首页","电影","Top 250")){
             compose.onNodeWithTag("nav-$cat").performClick()
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
@@ -78,9 +81,9 @@ class P0MetadataPublicationPressureTest {
         assertTrue("Requests must stay bounded, including cancelled/restarted pages",requests.get()<70)
     }
     @Test fun malformedDetailAndActivityRecreationRetainCachedHomeDuringNetworkLoss(){
-        ready();compose.waitUntil(15000){cache().cachedHome(token).size>=100}
+        ready();compose.waitUntil(15000){cachedTmdbBrowseTestFilms(InstrumentationRegistry.getInstrumentation().targetContext, token).size>=100}
         compose.onNodeWithTag("nav-电影").performClick()
-        compose.onNodeWithTag("catalog-film-rail").performScrollToIndex(0)
+        compose.onNodeWithTag("tmdb-rail-movie-hot").performScrollToIndex(0)
         val posters=compose.onAllNodes(SemanticsMatcher("source card"){it.config.getOrElse(SemanticsProperties.TestTag){""}.startsWith("card-tmdb-movie-")})
         val previousSearch=SourceSearchDiagnostics.currentStart()
         posters.onFirst().performClick()
@@ -94,6 +97,6 @@ class P0MetadataPublicationPressureTest {
         compose.activityRule.scenario.recreate();ready()
         compose.onNodeWithTag("nav-电影").assertExists()
         assertFalse(compose.activity.isFinishing)
-        assertTrue(cache().cachedHome(token).isNotEmpty())
+        assertTrue(cachedTmdbBrowseTestFilms(InstrumentationRegistry.getInstrumentation().targetContext, token).isNotEmpty())
     }
 }

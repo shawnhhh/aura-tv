@@ -60,6 +60,17 @@ class Preferences(context: Context) : FavoritesStore {
     var tvBoxLastWorkingSiteId: String
         get() = prefs.getString("tvbox_last_working_site_id", "") ?: ""
         set(value) { prefs.edit().putString("tvbox_last_working_site_id", value).apply() }
+    /** Explicit preference; independent of automatic last-success health hints. */
+    var tvBoxPreferredSiteId: String
+        get() = prefs.getString("tvbox_preferred_site_id", "").orEmpty()
+        set(value) { prefs.edit().putString("tvbox_preferred_site_id", value).apply() }
+    var tvBoxPreferredRootId: String
+        get() = prefs.getString("tvbox_preferred_root_id", "").orEmpty()
+        set(value) { prefs.edit().putString("tvbox_preferred_root_id", value).apply() }
+    internal fun preferSite(root: String, site: TvBoxSite, defaultJar: String?) {
+        prefs.edit().putString("tvbox_preferred_root_id", SourceHealthIndex.digest(root))
+            .putString("tvbox_preferred_site_id", TvBoxAutoSites.identity(site, defaultJar)).apply()
+    }
     /** Last user-submitted live playlist URL; actual validated channels live in TvBoxLiveStore. */
     var tvBoxLiveSourceUrl: String
         get() = prefs.getString("tvbox_live_source_url", "") ?: ""
@@ -71,9 +82,9 @@ class Preferences(context: Context) : FavoritesStore {
     var reducedMotion: Boolean
         get() = prefs.getBoolean("reduced_motion", false)
         set(value) { prefs.edit().putBoolean("reduced_motion", value).apply() }
-    /** Default full-bleed TV playback. Fit can be selected for uncropped cinema. */
+    /** Legacy crop setting; the playback surface now always preserves the complete frame. */
     var playbackFillScreen: Boolean
-        get() = prefs.getBoolean("playback_fill_screen", true)
+        get() = prefs.getBoolean("playback_fill_screen", false)
         set(value) { prefs.edit().putBoolean("playback_fill_screen", value).apply() }
     /** Explicit personal WebDAV bridge URLs; no internet-wide NAS scanning. */
     var nasWebDavUrl: String

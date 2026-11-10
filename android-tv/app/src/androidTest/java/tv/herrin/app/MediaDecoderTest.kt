@@ -137,6 +137,16 @@ class MediaDecoderTest {
                 // Activity STOP is the lifecycle transition caused by Home/background.
                 scenario.moveToState(Lifecycle.State.CREATED)
                 scenario.moveToState(Lifecycle.State.RESUMED)
+                // ActivityScenario resumes lifecycle callbacks before its separate
+                // EmptyActivity window has necessarily relinquished input focus.
+                // Run 42435249433 sent MEDIA_PLAY to that other UID (INJECT_EVENTS),
+                // despite this Activity already being RESUMED. Keep the actual
+                // remote event; require its real target window before injecting it.
+                await("Resumed playback window must regain remote input focus") {
+                    var focused = false
+                    scenario.onActivity { focused = it.hasWindowFocus() }
+                    focused
+                }
                 scenario.onActivity { assertFalse(it.player.playWhenReady) }
                 inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MEDIA_PLAY)
                 await("Synthetic clip must reach ENDED") {

@@ -19,6 +19,7 @@ class P0Top250NavigationTest {
         override fun before() {
             val c = InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
+            clearTmdbBrowseTestCache(c)
             val dir = java.io.File(c.filesDir,"tmdb-home-pages"); dir.deleteRecursively()
             val discovery = HerrinTmdbDiscovery(ArtworkJsonFetcher { url, _ ->
                 val page = Regex("page=(\\d+)").find(url)!!.groupValues[1].toInt()
@@ -34,7 +35,7 @@ class P0Top250NavigationTest {
         override fun after() {
             val c = InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
-            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively()
+            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
         }
     }
     @get:Rule(order=1) val compose = createAndroidComposeRule<MainActivity>()

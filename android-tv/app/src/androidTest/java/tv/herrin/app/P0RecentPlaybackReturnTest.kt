@@ -21,7 +21,7 @@ class P0RecentPlaybackReturnTest {
             val c=inst.targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
             c.getSharedPreferences("herrin-watch-history",0).edit().clear().commit()
-            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively()
+            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
             val video=inst.context.assets.open("synthetic.mp4").use { it.readBytes() }
             server.dispatcher=object:Dispatcher() {
                 override fun dispatch(request:RecordedRequest):MockResponse = when {

@@ -15,6 +15,7 @@ class P0CachedHomeHeroTest {
         override fun before() {
             val c=InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
+            clearTmdbBrowseTestCache(c)
             val dir=java.io.File(c.filesDir,"tmdb-home-pages");dir.deleteRecursively()
             val parser=HerrinTmdbDiscovery(ArtworkJsonFetcher { url,_->
                 val (id,genres)=when {
@@ -28,18 +29,33 @@ class P0CachedHomeHeroTest {
                 """{"results":[{"id":$id,"title":"Original $id","name":"Original $id","genre_ids":[$genres],"release_date":"2026-01-01","first_air_date":"2026-01-01"}]}"""
             },cacheDir=dir)
             runBlocking { parser.sections.forEach { parser.load(it,"fixture") } }
+            seedTmdbBrowseTestCache(c, "fixture")
             Preferences(c).apply { tmdbReadToken="fixture";tvBoxWarehouseUrl="http://127.0.0.1:1/fixture.json" }
         }
         override fun after() {
             val c=InstrumentationRegistry.getInstrumentation().targetContext
             c.getSharedPreferences("herrin",0).edit().clear().commit()
-            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively()
+            java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
         }
     }
     @get:Rule(order=1) val compose=createAndroidComposeRule<MainActivity>()
+    @get:Rule(order=2) val failureEvidence=object:org.junit.rules.TestWatcher() {
+        override fun failed(error:Throwable?,description:org.junit.runner.Description) {
+            runCatching { compose.onRoot(useUnmergedTree=true).printToLog("HerrinCachedHeroFailure") }
+        }
+    }
 
     @Test fun cachedOfflineHomeAndRapidCategoriesKeepTitleAndBackdropOnTheirOwnFirstFilm() {
-        compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
+        // Curtain readiness means the progressive home skeleton is committed,
+        // not that its asynchronous local catalog projection has published.
+        // Retained failure tree 42431720138 showed the correct hero 127 ms
+        // after the old entry assertion. Keep the same 10s entry bound, then
+        // retain every immediate rapid-category/title/backdrop assertion below.
+        compose.waitUntil(10000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithTag("hero-title-tmdb-movie-11").assertTextEquals("Original 11")
+            compose.onNodeWithTag("hero-art-tmdb-movie-11").assertExists()
+        }.isSuccess }
         val expected=listOf("首页" to "tmdb-movie-11", "电影" to "tmdb-movie-11",
             "剧集" to "tmdb-tv-21", "动漫" to "tmdb-tv-31", "综艺" to "tmdb-tv-41",
             "纪录片" to "tmdb-movie-51", "Top 250" to "tmdb-movie-61", "电影" to "tmdb-movie-11",

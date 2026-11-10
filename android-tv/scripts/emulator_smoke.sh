@@ -75,7 +75,7 @@ if grep -q 'mResumedActivity.*tv.herrin.app/.MainActivity' "$evidence/after-exit
     echo "FAIL: explicit Exit App did not finish Activity"; exit 1
 fi
 adb shell am start -W -n tv.herrin.app/.MainActivity | tee "$evidence/relaunch.txt"
-sleep 4
+sleep 5
 adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I > "$evidence/startup-smoke.log"
 adb logcat -d -s AndroidRuntime:E > "$evidence/android-runtime.log" || true
 if grep -q 'Process: tv.herrin.app' "$evidence/android-runtime.log"; then

@@ -32,7 +32,8 @@ internal class HerrinRemoteMediaProbe(
     // for its current approved Spider site; all other callers fail closed.
     private val authorizeLocal: suspend (String) -> Boolean = { false },
     private val onHttpFailure: (Int, Long?) -> Unit = { _, _ -> },
-    private val strictHttpFailure: Boolean = false
+    private val strictHttpFailure: Boolean = false,
+    private val evidence: (String, String) -> Unit = { _, _ -> }
 ) {
     enum class Result {
         MEDIA, INVALID_URL, UNAUTHORIZED_LOCAL, HTTP_ERROR, LOGIN_OR_TEXT,
@@ -42,6 +43,17 @@ internal class HerrinRemoteMediaProbe(
     suspend fun canRead(media: PlaybackMedia): Boolean = probe(media) == Result.MEDIA
 
     suspend fun probe(media: PlaybackMedia): Result {
+        val began = System.nanoTime()
+        val observedClient = client.newBuilder().eventListener(object: okhttp3.EventListener() {
+            override fun dnsStart(call: okhttp3.Call, domainName: String) { evidence("MEDIA_DNS_STARTED", "") }
+            override fun dnsEnd(call: okhttp3.Call, domainName: String, inetAddressList: List<java.net.InetAddress>) { evidence("MEDIA_DNS_FINISHED", "") }
+            override fun secureConnectStart(call: okhttp3.Call) { evidence("MEDIA_TLS_STARTED", "") }
+            override fun secureConnectEnd(call: okhttp3.Call, handshake: okhttp3.Handshake?) { evidence("MEDIA_TLS_FINISHED", "") }
+            override fun callFailed(call: okhttp3.Call, ioe: java.io.IOException) {
+                evidence(if (call.isCanceled()) "MEDIA_SOCKET_CANCELLED" else "MEDIA_CALL_FAILED", "")
+            }
+        }).build()
+        var receivedBytes = 0
         var url = media.uri
         var headers = media.headers
         repeat(3) { hop ->
@@ -53,13 +65,26 @@ internal class HerrinRemoteMediaProbe(
             val request = try {
                 Request.Builder().url(url).get().apply {
                     headers.forEach { (name, value) -> header(name, value) }
-                    header("Range", "bytes=0-$PROBE_RANGE_END")
+                    // Media3/FongMi requests HLS manifests without Range. A
+                    // Spider proxy can dispatch Range as a different operation;
+                    // probing it must not change the provider's manifest request.
+                    // Reads below remain bounded even for a full 200 response.
+                    if (!tv.herrin.app.nativeplayback.NativeFongMiRoute.isNativeProxy(url) &&
+                        media.declaredMime != PlaybackFormatRetry.HLS &&
+                        !target.path.orEmpty().lowercase().endsWith(".m3u8")) {
+                        header("Range", "bytes=0-$PROBE_RANGE_END")
+                    }
                     header("Accept-Encoding", "identity")
                 }.build()
             } catch (_: IllegalArgumentException) {
                 return Result.INVALID_URL
             }
-            val result = try { readSourceResponse(client,request) { reply ->
+            evidence("MEDIA_REQUEST", "HOP=$hop")
+            evidence(if (isLoopback(target)) "MEDIA_TARGET_PROXY" else "MEDIA_TARGET_REMOTE", "")
+            val result = try { readSourceResponse(observedClient,request) { reply ->
+                evidence("MEDIA_HEADERS", "MS=${((System.nanoTime()-began)/1_000_000).coerceAtMost(99999)}")
+                evidence("MEDIA_HTTP", "STATUS=${reply.code}")
+                evidence(if (reply.header("Transfer-Encoding").equals("chunked", true)) "MEDIA_CHUNKED" else "MEDIA_NOT_CHUNKED", "")
                 if (reply.code in setOf(301, 302, 303, 307, 308)) {
                     if (hop >= 2) return@readSourceResponse Result.HTTP_ERROR
                     val location = reply.header("Location") ?: return@readSourceResponse Result.HTTP_ERROR
@@ -92,12 +117,36 @@ internal class HerrinRemoteMediaProbe(
                 if (contentType in setOf("text/html", "application/xhtml+xml",
                         "application/json", "text/json"))
                     return@readSourceResponse Result.LOGIN_OR_TEXT
-                val buffer = ByteArray(2048)
+                evidence("MEDIA_TYPE_" + when {
+                    contentType.contains("mpegurl") -> "HLS"
+                    contentType.startsWith("video/") -> "VIDEO"
+                    contentType.startsWith("text/") -> "TEXT"
+                    contentType.contains("json") -> "JSON"
+                    else -> "OTHER"
+                }, "")
+                val buffer = ByteArray((PROBE_RANGE_END + 1).toInt())
                 val size = try {
-                    reply.body?.byteStream()?.read(buffer) ?: -1
+                    val stream=reply.body?.byteStream() ?: return@readSourceResponse Result.EMPTY_BODY
+                    var received=0
+                    while(received<buffer.size) {
+                        val count=stream.read(buffer,received,buffer.size-received)
+                        if(count<0)break
+                        if(count==0)continue
+                        if (received == 0) evidence("MEDIA_FIRST_BYTE", "MS=${((System.nanoTime()-began)/1_000_000).coerceAtMost(99999)}")
+                        received+=count
+                        receivedBytes = received
+                        val prefix = buffer.copyOf(received).toString(Charsets.UTF_8)
+                            .trimStart('\uFEFF',' ','\n','\r','\t')
+                        if (prefix.startsWith("#EXTM3U\n") || prefix.startsWith("#EXTM3U\r\n") ||
+                            MediaProbePrefix.identified(buffer, received)) break
+                    }
+                    received
                 } catch (cancel: CancellationException) {
                     throw cancel
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    evidence("MEDIA_BYTES", "COUNT=$receivedBytes")
+                    evidence("MEDIA_BODY_IO_" + ioCode(error), "")
+                    evidence("MEDIA_IO_" + ioCode(error), "")
                     return@readSourceResponse Result.NETWORK_ERROR
                 }
                 if (size <= 0) return@readSourceResponse Result.EMPTY_BODY
@@ -123,7 +172,9 @@ internal class HerrinRemoteMediaProbe(
                 if (contentType.startsWith("text/") || contentType.contains("xml"))
                     return@readSourceResponse Result.LOGIN_OR_TEXT
                 Result.MEDIA
-            } } catch(cancel:CancellationException){throw cancel} catch(error:Exception){
+            } } catch(cancel:CancellationException){evidence("MEDIA_CANCELLED_CALLER", "");throw cancel} catch(error:Exception){
+                evidence("MEDIA_CONNECT_IO_" + ioCode(error), "")
+                evidence("MEDIA_IO_" + ioCode(error), "")
                 if(strictHttpFailure &&error is SourceHttpFailure)throw error
                 return Result.NETWORK_ERROR
             }
@@ -144,6 +195,15 @@ internal class HerrinRemoteMediaProbe(
         val total = match.groupValues[2]
         return end <= PROBE_RANGE_END &&
             (total == "*" || (total.toLongOrNull()?.let { it > end } == true))
+    }
+
+    private fun ioCode(error: Exception) = when(error) {
+        is java.net.SocketTimeoutException, is java.io.InterruptedIOException -> "TIMEOUT"
+        is java.net.UnknownHostException -> "DNS"
+        is javax.net.ssl.SSLException -> "TLS"
+        is java.net.ConnectException -> "CONNECT"
+        is java.io.EOFException -> "EOF"
+        else -> "OTHER"
     }
 
     private fun isLoopback(uri: URI) =

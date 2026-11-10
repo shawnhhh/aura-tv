@@ -11,6 +11,20 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicInteger
 
 class M476RemoteMediaProbeTest {
+    @Test fun slowChunkedBinaryStopsAtConclusiveSignatureWithoutWaitingForOneKilobyte(): Unit = runBlocking {
+        for (prefix in listOf(byteArrayOf(0,0,0,24,102,116,121,112), byteArrayOf(0x1a,0x45,0xdf.toByte(),0xa3.toByte()))) {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream")
+                    .setChunkedBody(okio.Buffer().write(prefix).write(ByteArray(2048)), prefix.size)
+                    .throttleBody((prefix.size + prefix.size.toString(16).length + 4).toLong(), 2, java.util.concurrent.TimeUnit.SECONDS))
+                server.start()
+                val began = System.nanoTime()
+                assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, probe().probe(PlaybackMedia(server.url("/signed").toString())))
+                assertTrue("Must not wait for the next chunk or enlarge the timeout", (System.nanoTime()-began)/1_000_000 < 1200)
+            }
+        }
+    }
+
     private fun probe(authorized: Boolean = true) = HerrinRemoteMediaProbe(
         authorizeLocal = { authorized })
 
@@ -81,6 +95,8 @@ class M476RemoteMediaProbeTest {
             val media = PlaybackMedia(server.url("/master.m3u8").toString())
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, probe().probe(media))
             assertEquals(HerrinRemoteMediaProbe.Result.INVALID_MANIFEST, probe().probe(media))
+            assertNull(server.takeRequest().getHeader("Range"))
+            assertNull(server.takeRequest().getHeader("Range"))
         }
     }
 
@@ -150,6 +166,7 @@ class M476RemoteMediaProbeTest {
         NativeFongMiProxy("approved", { params ->
             assertEquals("approved", params["siteKey"])
             assertEquals("jar", params["do"])
+            assertFalse("Probe must preserve FongMi manifest dispatch, without injected Range", params.containsKey("range"))
             byteReads.incrementAndGet()
             arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(0, 0, 0, 24, 1, 2, 3, 4)))
         }, null).use { nativeProxy ->
@@ -201,4 +218,15 @@ class M476RemoteMediaProbeTest {
             assertEquals(1, source.requestCount)
         }
     }
+    @Test fun fragmentedHlsHeaderIsReadAsBytesNotRejectedAfterFirstPacket() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl")
+                .setBody("#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:1,\nchunk.ts\n")
+                .throttleBody(1, 2, java.util.concurrent.TimeUnit.MILLISECONDS))
+            server.start()
+            assertEquals(HerrinRemoteMediaProbe.Result.MEDIA,
+                probe().probe(PlaybackMedia(server.url("/fragmented.m3u8").toString())))
+        }
+    }
+
 }

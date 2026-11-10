@@ -2,6 +2,8 @@
 set -euo pipefail
 apk="$1"
 evidence="$2"
+# CI installs FFmpeg explicitly; fail before starting a probe if unavailable.
+command -v ffmpeg >/dev/null
 mkdir -p "$evidence"
 collect_startup() {
     code=$?
@@ -90,9 +92,30 @@ PY
 if grep -q 'FATAL EXCEPTION' "$evidence/cold-diagnostics.txt"; then exit 1; fi
 # Separate visual pass: screen recording perturbs timing, so it is never the perf source.
 adb shell am force-stop tv.herrin.app
-adb shell screenrecord --time-limit 6 /sdcard/herrin-startup.mp4 > "$evidence/recording.log" 2>&1 &
+# Include the entire 4.54s design plus cold AVD composition/decode overhead.
+adb shell screenrecord --time-limit 12 /sdcard/herrin-startup.mp4 > "$evidence/recording.log" 2>&1 &
 recording_pid=$!
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/visual-launch.txt"
-wait "$recording_pid" || true
-adb pull /sdcard/herrin-startup.mp4 "$evidence/visual-only-startup.mp4" || true
+wait "$recording_pid"
+adb pull /sdcard/herrin-startup.mp4 "$evidence/visual-only-startup.mp4"
+test -s "$evidence/visual-only-startup.mp4"
+# Export actual platform-handoff frames, separately from the Compose pixel tests.
+# A missing recording/decoder is a failed evidence check, never a silent pass.
+mkdir -p "$evidence/visual-frames"
+ffmpeg -v error -i "$evidence/visual-only-startup.mp4" -vf fps=4 "$evidence/visual-frames/frame-%03d.png"
+adb shell uiautomator dump /sdcard/herrin-visual-home.xml >/dev/null
+adb exec-out cat /sdcard/herrin-visual-home.xml > "$evidence/visual-home.xml"
+python3 - "$evidence" <<'PYVISUAL'
+from pathlib import Path
+import json,sys
+root=Path(sys.argv[1])
+frames=list((root/'visual-frames').glob('frame-*.png'))
+assert len(frames)>=24, 'Startup visual evidence must contain at least six seconds at four samples/sec'
+text=(root/'visual-home.xml').read_text()
+assert 'HERRIN' in text and '影片详情' in text, 'Visual startup did not finish on the interactive home'
+record={'sampled_frames':len(frames),'samples_per_second':4,'recording_limit_seconds':12,
+        'interactive_home_after_recording':True,'performance_source':False,'physical_TCL':False}
+(root/'visual-evidence.json').write_text(json.dumps(record,indent=2))
+print('HERRIN_STARTUP_VISUAL='+json.dumps(record))
+PYVISUAL
 cat "$evidence/cold-launch.txt" "$evidence/hot-launch.txt" "$evidence/cold-diagnostics.txt"

@@ -3,19 +3,18 @@ package tv.herrin.app
 import android.content.Context
 import fi.iki.elonen.NanoHTTPD
 import okhttp3.tls.HandshakeCertificates
-import okhttp3.tls.HeldCertificate
 import org.json.JSONObject
 import java.net.URI
 import java.security.MessageDigest
 
-/** Ephemeral HTTPS only. A self-signed certificate REQUIRES out-of-band trust verification. */
+/** Short-lived, locally bound HTTPS configuration; transport never grants Spider execution. */
 internal class LanConfigServer(
     private val context: Context, val host: String,
     private val applied: (String) -> Unit
 ) : NanoHTTPD(host, 0) {
-    val pairing = ConfigPairingSession()
-    internal val certificate = HeldCertificate.Builder().commonName("HERRIN local configuration")
-        .addSubjectAlternativeName(host).build()
+    val pairing = ConfigPairingSession(maxLifetimeMs = 30 * 60_000L)
+    private val reaper by lazy { java.util.Timer("lan-config-expiry", true) }
+    internal val certificate = LanTlsIdentity(context).load(host)
     val fingerprint: String = MessageDigest.getInstance("SHA-256").digest(certificate.certificate.encoded)
         .joinToString(":") { "%02X".format(it) }
     val origin: String get() = "https://$host:$listeningPort"
@@ -23,6 +22,9 @@ internal class LanConfigServer(
     init {
         val tls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
         makeSecure(tls.sslContext().serverSocketFactory, null)
+        reaper.scheduleAtFixedRate(object : java.util.TimerTask() {
+            override fun run() { if (pairing.expired()) end() }
+        }, 250L, 250L)
     }
     override fun serve(session: IHTTPSession): Response {
         fun response(code: Response.Status, body: String, type: String = "application/json"): Response =
@@ -100,12 +102,40 @@ internal class LanConfigServer(
                     val connected = kotlinx.coroutines.runBlocking { HerrinWebDavSource(account).testConnection() }
                     JSONObject().put("result", if (connected) "WebDAV 已连接" else "连接失败")
                 }
+                "/smb" -> {
+                    HerrinSmbConfigStore(context).save(input)
+                    applied("nas");JSONObject().put("ok",true)
+                }
+                "/smb/test" -> {
+                    val result=try {
+                        val account=requireNotNull(HerrinSmbConfigStore(context).account())
+                        val connected=kotlinx.coroutines.runBlocking {
+                            HerrinSmbSessions().use{HerrinSmbSource(account,it).testConnection()}
+                        }
+                        if(connected)"SMB2/3 共享目录已连接" else "SMB 共享目录不存在或不可访问"
+                    }catch(error:Exception){SmbFailure.message(error)}
+                    JSONObject().put("result",result)
+                }
+                "/cloud/test" -> {
+                    val login=HerrinPersonalCredentialStore(context,"cloud").load()
+                    val connected=kotlinx.coroutines.runBlocking {
+                        HerrinWebDavSource(HerrinWebDavAccount("云盘",prefs.cloudWebDavUrl,login.first,login.second)).testConnection()
+                    }
+                    JSONObject().put("result",if(connected)"WebDAV 已连接" else "连接失败")
+                }
+                "/cloud" -> {
+                    val url=address(input.getString("url"))
+                    if(url.isNotBlank())HerrinWebDavSource(HerrinWebDavAccount("云盘",url))
+                    require(HerrinPersonalCredentialStore(context,"cloud").save(input.getString("username"),input.getString("password")))
+                    prefs.cloudWebDavUrl=url
+                    applied("nas");JSONObject().put("ok",true)
+                }
                 "/end" -> { pairing.close(); JSONObject().put("ok", true) }
                 "/status" -> JSONObject().put("endpoint", TmdbEndpoints.current)
                     .put("tokenConfigured", prefs.tmdbReadToken.isNotBlank())
                     .put("tvbox", prefs.tvBoxWarehouseUrl).put("m3u", prefs.livePlaylistUrl)
                     .put("epg", prefs.liveEpgUrl).put("nas", prefs.nasWebDavUrl)
-                    .put("nasProtocol", "WebDAV")
+                    .put("cloud",prefs.cloudWebDavUrl).put("smb",HerrinSmbConfigStore(context).publicConfig()).put("nasProtocol", "WebDAV")
                 "/tmdb/test" -> JSONObject().put("result", TmdbConnectivityProbe.checkDetailed(prefs.tmdbReadToken).text)
                 "/tmdb" -> {
                     val token = input.getString("token").trim()
@@ -114,7 +144,8 @@ internal class LanConfigServer(
                     applied("tmdb"); JSONObject().put("ok", true)
                 }
                 "/sources" -> {
-                    val url = address(input.getString("url"))
+                    val raw = input.getString("url")
+                    val url = if (raw.isBlank()) "" else AdditionalServiceConfigs.sourceAddress(raw)
                     prefs.tvBoxWarehouseUrl = url
                     // This never grants permission to execute a new Spider JAR.
                     applied("sources"); JSONObject().put("ok", true)
@@ -146,5 +177,5 @@ internal class LanConfigServer(
         require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.rawUserInfo == null && uri.fragment == null)
         return uri.toASCIIString()
     }
-    fun end() { pairing.close(); stop() }
+    fun end() { pairing.close(); reaper.cancel(); stop() }
 }

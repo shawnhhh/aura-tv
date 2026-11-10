@@ -37,8 +37,16 @@ internal object FongMiMediaProbe {
                         if (!response.isSuccessful) return false
                         val body = response.body ?: return false
                         val source = body.source()
-                        source.request(512)
-                        val bytes = source.buffer.clone().readByteArray(minOf(source.buffer.size, 512))
+                        val prefix = java.io.ByteArrayOutputStream(512)
+                        while (prefix.size() < 512) {
+                            if (!source.request(1)) break
+                            val chunk = source.readByteArray(minOf(source.buffer.size, (512-prefix.size()).toLong()))
+                            prefix.write(chunk)
+                            val sample = prefix.toByteArray()
+                            if (MediaProbePrefix.identified(sample, sample.size)) break
+                        }
+                        val bytes = prefix.toByteArray()
+                        if (bytes.isEmpty()) return false
                         return isMedia(response.header("Content-Type").orEmpty(), bytes)
                     }
                 }

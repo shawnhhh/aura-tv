@@ -1,0 +1,83 @@
+{
+  "scope": "ROOT_CONFIG_REQUEST_SEMANTICS_ONLY_NOT_IMPORT_OR_PLAYBACK",
+  "status": "SCHEMA_READ",
+  "http_status": 200,
+  "body_sha256": "b7ce2c710a34d0e971fa3198a13f692de5f728b0d6ece15b317fe8e22e35dd4f",
+  "body_bytes": 19951,
+  "known_root_fields": [
+    "lives",
+    "rules",
+    "sites",
+    "spider",
+    "wallpaper"
+  ],
+  "root_headers": {
+    "kind": "NoneType",
+    "entries": 0,
+    "known_header_names": []
+  },
+  "root_header": {
+    "kind": "NoneType",
+    "entries": 0,
+    "known_header_names": []
+  },
+  "rules": {
+    "kind": "list",
+    "entries": 1,
+    "known_header_names": []
+  },
+  "rules_with_header_fields": 0,
+  "selected_site_declarations": [
+    {
+      "key": "玩偶",
+      "api": "csp_WoGGGuard",
+      "header": {
+        "kind": "NoneType",
+        "entries": 0,
+        "known_header_names": []
+      },
+      "headers": {
+        "kind": "NoneType",
+        "entries": 0,
+        "known_header_names": []
+      },
+      "extension": {
+        "kind": "dict",
+        "chars": null,
+        "header_shape": {
+          "kind": "dict",
+          "entries": 1,
+          "known_header_names": []
+        }
+      },
+      "searchable": 1,
+      "quickSearch": 1
+    },
+    {
+      "key": "奶酪",
+      "api": "csp_T4Guard",
+      "header": {
+        "kind": "NoneType",
+        "entries": 0,
+        "known_header_names": []
+      },
+      "headers": {
+        "kind": "NoneType",
+        "entries": 0,
+        "known_header_names": []
+      },
+      "extension": {
+        "kind": "str",
+        "chars": 520,
+        "header_shape": {
+          "kind": "NoneType",
+          "entries": 0,
+          "known_header_names": []
+        }
+      },
+      "searchable": 1,
+      "quickSearch": 1
+    }
+  ],
+  "elapsed_ms": 1173
+}

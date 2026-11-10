@@ -6,12 +6,22 @@ package tv.herrin.app
  */
 internal class HerrinTvBoxSpiderSource(
     internal val site: TvBoxSite,
-    private val bridge: TvBoxSpiderBridge
+    private val bridge: TvBoxSpiderBridge,
+    private val activate: (suspend () -> Boolean)? = null
 ) : HerrinFilmSource {
     override val id = "spider:" + site.key
     override val type = HerrinSourceType.TVBOX_SPIDER
 
-    override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> {
+    override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> =
+        searchInternal(identity, strict = true)
+
+    /** Keep provider hits even if TMDB metadata differs or media is unavailable. */
+    suspend fun searchCandidates(identity: HerrinFilmIdentity): List<HerrinSourceMovie> =
+        searchInternal(identity, strict = false)
+
+    private suspend fun searchInternal(identity: HerrinFilmIdentity, strict: Boolean): List<HerrinSourceMovie> {
+        if (activate != null && !activate.invoke())
+            throw SourceCandidateFailure(SourceSearchStage.ACTIVATE, SourceSearchOutcome.ACTIVATE_FAILED)
         val found = linkedMapOf<String, HerrinSourceMovie>()
         for (name in identity.names.filter { it.trim().length >= 2 }.distinct().take(2)) {
             val search = bridge.search(site, name)
@@ -25,10 +35,10 @@ internal class HerrinTvBoxSpiderSource(
                     resolutionClaim = HerrinFilmIdentityMatch.resolutionClaim(
                         film.title + " " + film.subtitle)
                 )
-                if (HerrinFilmIdentityMatch.matches(identity, offered))
+                if (!strict || HerrinFilmIdentityMatch.matches(identity, offered))
                     found[film.spiderVodId ?: film.id] = offered
             }
-            if (found.isNotEmpty()) break
+            if (found.values.any { HerrinFilmIdentityMatch.matches(identity, it) }) break
         }
         return found.values.take(60)
     }

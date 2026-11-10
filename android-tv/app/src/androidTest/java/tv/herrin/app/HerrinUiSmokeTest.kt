@@ -32,6 +32,7 @@ import javax.net.ssl.HttpsURLConnection
 class HerrinUiSmokeTest {
     @get:Rule(order = 0) val reset = object : ExternalResource() {
         override fun before() {
+            MetadataFetchers.overrideForTests = null
             InstrumentationRegistry.getInstrumentation().targetContext
                 .getSharedPreferences("herrin", 0).edit().clear().commit()
         }
@@ -53,6 +54,64 @@ class HerrinUiSmokeTest {
         }
         compose.waitForIdle()
     }
+    private val searchRequests = java.util.concurrent.ConcurrentLinkedQueue<String>()
+    @org.junit.After fun clearSearchProtocolFixture() { MetadataFetchers.overrideForTests = null }
+    /** Controlled TMDB protocol fixture. Never counted as live network acceptance. */
+    private fun protocolSearch(query: String = "协议测试") {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        Preferences(context).tmdbReadToken = "instrumentation-fixture-token-only"
+        MetadataFetchers.overrideForTests = ArtworkJsonFetcher { url, _ ->
+            val rows = org.json.JSONArray()
+            for (n in 1..6) rows.put(org.json.JSONObject().put("id", 9000+n)
+                .put("media_type", if (n > 4) "tv" else "movie")
+                .put("title", "协议测试$n").put("name", "协议测试$n")
+                .put("original_title", "Protocol $n").put("release_date", "2025-01-01")
+                .put("genre_ids", org.json.JSONArray(if (n > 4) "[16]" else "[]")))
+            if (url.contains("/search/multi?")) {
+                searchRequests.add(url)
+                val q = android.net.Uri.parse(url).getQueryParameter("query").orEmpty().trim()
+                val found = org.json.JSONArray()
+                for (n in 0 until rows.length()) if (rows.getJSONObject(n).getString("title").contains(q) ||
+                    rows.getJSONObject(n).optString("original_title").contains(q, true)) found.put(rows.get(n))
+                org.json.JSONObject().put("page", 1).put("total_pages", 1).put("results", found).toString()
+            } else if (url.contains("/configuration")) """{"images":{"secure_base_url":"https://image.tmdb.org/t/p/"}}"""
+            else if (url.contains("/movie/9001?"))
+                """{"id":9001,"title":"协议测试1","overview":"协议测试详情"}"""
+            else org.json.JSONObject().put("results", rows).toString()
+        }
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("search").assertIsDisplayed(); compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
+        focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        enterSearchQuery(query)
+        awaitProtocolResults(if (query == "协议测试") "6 部" else "1 部")
+    }
+    private fun enterSearchQuery(value: String) {
+        // TV editor owns an input connection only while focused. Keep text
+        // entry explicit, then exercise actual D-pad focus/key delivery below.
+        compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.waitForIdle()
+        awaitSearchImeView(shown = true)
+        compose.onNodeWithTag("search-input").performTextReplacement(value)
+    }
+    private fun awaitSearchImeView(shown: Boolean) {
+        // Insets/isAcceptingText can clear before the actual TV IME finishes its
+        // input view. Run 42436598370 injected CENTER at 02:09:22.586 while the
+        // service's onFinishInputView was still pending until .675; only UP reached
+        // the Activity. API30 dumpsys includes the real InputMethodService state.
+        // Read only these booleans; never export EditorInfo or the raw dump.
+        val inst = InstrumentationRegistry.getInstrumentation()
+        compose.waitUntil(5_000) {
+            val state = inst.uiAutomation.executeShellCommand("dumpsys input_method").use { fd ->
+                java.io.FileInputStream(fd.fileDescriptor).bufferedReader().use { it.readText() }
+            }.substringAfter("Input method service state for ", "")
+            state.contains("mInputViewStarted=$shown") && state.contains("mWindowVisible=$shown")
+        }
+        RemoteTrace.event("TEST IME input_view=$shown window=$shown ready=true")
+    }
+    private fun awaitProtocolResults(count: String) {
+        compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("search-filter-status").assertTextContains(count, substring = true) }.isSuccess }
+        assertTrue("Search must call the online protocol endpoint", searchRequests.any { it.contains("/search/multi?") })
+    }
     private fun focus(tag: String) {
         compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.waitForIdle()
@@ -61,9 +120,18 @@ class HerrinUiSmokeTest {
         if (Build.VERSION.SDK_INT >= 30) compose.waitUntil(5000) {
             !compose.activity.window.decorView.rootWindowInsets.isVisible(WindowInsets.Type.ime())
         }
-        if (tag.startsWith("card-") || tag == "screen-first") {
+        if (tag.startsWith("card-") || tag == "screen-first" ||
+            (tag.startsWith("search-") && tag != "search-input")) {
             val inputMethod = compose.activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
             compose.waitUntil(5000) { !inputMethod.isAcceptingText }
+        }
+        if (tag.startsWith("card-tmdb-") || tag.startsWith("search-")) {
+            // IME visibility/served editor can clear before Android finishes routing
+            // keys back to this window (CI trace: OK never reached Activity).
+            // Use the same OS readiness fence as dismissEditorIme, never retry OK.
+            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(500, 5000)
+            if (tag != "search-input") awaitSearchImeView(shown = false)
+            compose.onNodeWithTag(tag).assertIsFocused()
         }
     }
     private fun key(code: Int) {
@@ -415,16 +483,14 @@ class HerrinUiSmokeTest {
     }
 
     @Test fun searchFilterDpadDownReachesSuggestionsAndResultAndUpReturns() {
-        focus("search")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("search-filter-全部").assertIsDisplayed()
-        focus("search-filter-全部")
+        protocolSearch()
+        focus("search-filter-全部"); key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("search-suggest-清空").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("search-suggest-轨道").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("card-orbit").assertIsFocused()
+        compose.onNodeWithTag("card-tmdb-movie-9001").assertIsFocused()
         key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("search-suggest-轨道").assertIsFocused()
+        compose.onNodeWithTag("search-suggest-清空").assertIsFocused()
+        compose.onNodeWithTag("search-suggest-轨道").assertDoesNotExist()
         capture("search-vertical-focus")
     }
     @Test fun applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab() {
@@ -633,58 +699,125 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("episode-4").performClick()
         compose.onNodeWithText("播放演示").assertExists()
     }
-    @Test fun offlineSearchTextEmptyAndRemoteResult() {
-        focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("search-input").performTextInput("not-a-film")
-        compose.onNodeWithText("没有找到匹配影片").assertExists()
-        compose.onNodeWithTag("search-input").performTextReplacement("  last ORBIT  ")
-        compose.onNodeWithText("搜索结果 · 1").assertExists()
-        capture("search")
-        focus("card-orbit")
-        capture("search-result-focused")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        // Wait for the Activity to finish the IME/window transition before asserting lazy detail content.
-        compose.waitUntil(5000) {
-            runCatching { compose.onNodeWithText("集数").assertExists() }.isSuccess
+    @Test fun tmdbDetailStreamsBothCmsSourcesAndLoadsOnlyChosenProviderVod() {
+        MockWebServer().use { server ->
+            val details=java.util.concurrent.ConcurrentLinkedQueue<String>()
+            val mediaCalls=java.util.concurrent.atomic.AtomicInteger()
+            server.dispatcher=object:okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request:okhttp3.mockwebserver.RecordedRequest):MockResponse {
+                    val url=request.requestUrl!!
+                    if(url.encodedPath == "/box.json") return MockResponse().setBody(org.json.JSONObject().put("sites",
+                        org.json.JSONArray().put(org.json.JSONObject().put("key","a").put("name","CMS A").put("type",1).put("api",server.url("/a")))
+                            .put(org.json.JSONObject().put("key","b").put("name","CMS B").put("type",1).put("api",server.url("/b")))).toString())
+                    if(url.encodedPath !in listOf("/a","/b")) {
+                        mediaCalls.incrementAndGet();return MockResponse().setResponseCode(503)
+                    }
+                    val source=url.encodedPath.substringAfter('/')
+                    val row=org.json.JSONObject().put("vod_id","local-$source").put("vod_name","协议测试1（$source）")
+                        .put("type_name","电影").put("vod_year","2024")
+                    if(url.queryParameter("ids") != null) {
+                        details.add(source+":"+url.queryParameter("ids"))
+                        row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/unavailable-$source.mp4"))
+                    }
+                    return MockResponse().setHeader("Content-Type","application/json")
+                        .setBody(org.json.JSONObject().put("list",org.json.JSONArray().put(row)).toString())
+                }
+            }
+            server.start()
+            val root=server.url("/box.json").toString()
+            focus("settings");key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val settings=compose.onNodeWithTag("settings-list")
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
+            compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(root)
+            settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
+            compose.onNodeWithTag("tvbox-warehouse-load").performClick()
+            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")}.isSuccess}
+            settings.performScrollToNode(hasTestTag("settings-source-sites"))
+            compose.onNodeWithTag("settings-source-sites").performClick()
+            compose.onNodeWithTag("site-select-0").performClick()
+            compose.waitUntil(15000){runCatching{compose.onAllNodesWithText("协议测试1（a）").onFirst().assertIsDisplayed()}.isSuccess}
+            protocolSearch("Protocol 1")
+            focus("card-tmdb-movie-9001");key(KeyEvent.KEYCODE_DPAD_CENTER)
+            val list=compose.onNodeWithTag("film-detail-list")
+            list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
+            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status").assertTextContains("命中 2",substring=true)}.isSuccess}
+            assertEquals(0,details.size);assertEquals(0,mediaCalls.get())
+            fun tag(source:String):String {
+                val site=TvBoxSite("CMS "+source.uppercase(),false,server.url("/$source").toString(),key=source)
+                return "source-hit-"+HerrinDiscoveryNodes.id(root,site,null)+":local-$source"
+            }
+            for(source in listOf("a","b")) {
+                list.performScrollToNode(hasTestTag(tag(source)))
+                compose.onNodeWithTag(tag(source)).performClick()
+                list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
+                compose.waitUntil(10000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status")
+                    .assertTextContains("CMS "+source.uppercase(),substring=true)
+                    .assertTextContains("选择集数后",substring=true)}.isSuccess}
+            }
+            assertEquals(listOf("a:local-a","b:local-b"),details.toList())
+            assertEquals(0,mediaCalls.get())
+            list.performScrollToNode(hasTestTag(tag("a")))
+            compose.onNodeWithTag(tag("a")).assertExists()
+            capture("p0-real-cms-protocol-source-groups-before-media")
         }
-        compose.onNodeWithText("集数").assertExists()
-        compose.onNodeWithText("集数").assertIsDisplayed()
-        capture("search-detail")
+    }
+    @Test fun onlineSearchProtocolEmptyAndRemoteResult() {
+        protocolSearch()
+        enterSearchQuery("not-a-film")
+        compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("tmdb-online-search-status").assertTextContains("无结果", substring = true) }.isSuccess }
+        compose.onNodeWithText("没有找到匹配影片").assertExists()
+        enterSearchQuery("Protocol 1")
+        awaitProtocolResults("1 部")
+        focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("film-detail-list").assertExists()
+        compose.onNodeWithText("协议测试1").assertExists()
+        // Metadata-only TMDB results must expose unavailability instead of demo episodes.
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("tmdb-episodes-unavailable"))
+        compose.onNodeWithTag("tmdb-episodes-unavailable").assertExists()
+        compose.onNodeWithTag("tmdb-episodes-unavailable").assertIsDisplayed()
+        compose.onNodeWithText("播放演示").assertDoesNotExist()
         key(KeyEvent.KEYCODE_BACK)
-        compose.onNodeWithTag("card-orbit").assertIsFocused()
-        activate("潮汐")
-        compose.onNodeWithText("搜索结果 · 1").assertExists()
-        compose.onNodeWithTag("card-tide").assertExists()
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-9001").assertIsFocused() }.isSuccess }
+        capture("tmdb-protocol-search-detail-return")
+        enterSearchQuery("Protocol 2")
+        awaitProtocolResults("1 部")
+        compose.onNodeWithTag("card-tmdb-movie-9002").assertExists()
+        // Return from an actionable result, not from an active text editor/IME.
+        focus("card-tmdb-movie-9002")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("search").assertIsFocused()
     }
     @Test fun favoritesRemainAvailableUnderSearchAfterRestartAndCanBeRemoved() {
-        focus("card-orbit"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        protocolSearch("Protocol 1")
+        focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         activate("♡ 添加收藏")
         compose.onNodeWithText("♥ 已收藏 · 取消").assertExists()
         key(KeyEvent.KEYCODE_BACK)
-        focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         focus("search-favorites"); key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("card-orbit").assertIsDisplayed()
+        compose.onNodeWithTag("card-tmdb-movie-9001").assertIsDisplayed()
         compose.onNodeWithTag("nav-我的").assertExists()
         compose.activityRule.scenario.recreate()
-        compose.waitUntil(15_000) {
-            runCatching {
-                compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
-                compose.onNodeWithTag("card-orbit").assertIsDisplayed()
-            }.isSuccess
-        }
+        compose.waitUntil(15_000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithTag("card-tmdb-movie-9001").assertIsDisplayed()
+        }.isSuccess }
         compose.waitForIdle()
-        capture("favorites-inside-search-persisted")
-        focus("card-orbit"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        capture("favorites-online-search-persisted")
+        focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The real key reaches DETAILS (run 42438102723, 02:29:41.010),
+        // while the restored metadata detail is still mounting its lazy actions.
+        // Require the persisted favorite action before requesting its focus.
+        compose.waitUntil(5_000) {
+            runCatching { compose.onNodeWithText("♥ 已收藏 · 取消").assertExists() }.isSuccess
+        }
         activate("♥ 已收藏 · 取消")
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithText("没有找到匹配影片").assertExists()
         compose.onNodeWithTag("search-favorites").assertExists()
-        capture("favorites-inside-search-empty")
+        capture("favorites-online-search-persisted")
     }
     @Test fun advancedMetadataFiltersOpenInsideSearchAndWorkWithDpad() {
-        focus("search"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        protocolSearch()
         compose.onNodeWithTag("facets").assertDoesNotExist()
         focus("search-advanced-toggle"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("search-advanced-filters").assertExists()
@@ -745,6 +878,16 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("重新同步目录"))
         activate("重新同步目录")
         // LazyColumn does not compose its off-screen status row until scrolled into view.
+        // Observe its committed status, like the async save checks above. A
+        // traversal during the refresh/layout boundary triggered Compose's
+        // off-thread error-tree SnapshotStateObserver in run 42438102723.
+        compose.waitUntil(8_000) {
+            runCatching {
+                compose.onNodeWithTag("settings-list")
+                    .performScrollToNode(hasText("当前使用离线演示目录"))
+                compose.onNodeWithText("当前使用离线演示目录").assertExists()
+            }.isSuccess
+        }
         compose.onNodeWithTag("settings-list")
             .performScrollToNode(hasText("当前使用离线演示目录"))
         compose.onNodeWithText("当前使用离线演示目录").assertExists()
@@ -885,13 +1028,12 @@ http://example.org/live/channel.m3u8
         capture("settings-authorized-live")
     }
 
-    @Test fun searchCategoryAndSortAreOperableByRemoteWithoutNetwork() {
-        focus("search")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
+    @Test fun searchCategoryAndSortAreOperableByRemoteWithProtocolFixture() {
+        protocolSearch()
         focus("search-filter-动漫")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("search-filter-status").assertTextContains("2 部 · 动漫", substring = true)
-        compose.onNodeWithTag("card-night").assertExists()
+        compose.onNodeWithTag("card-tmdb-tv-9005").assertExists()
         focus("search-sort")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("排序：最新优先").assertExists()

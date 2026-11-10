@@ -1,0 +1,93 @@
+{
+  "node": "玩偶哥哥",
+  "verdict": "FAIL_PLAYBACK",
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "supported_64": [
+      "x86_64",
+      "arm64-v8a"
+    ],
+    "supported_32": [
+      "x86",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "build_cpu_abi": "arm64-v8a",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a",
+    "native_library_dir": "/data/app/~~pEksODnE9oeDkaf3EhWVpg==/tv.herrin.app-9mvk-yemeZb3470xkIMUHA==/lib/arm64"
+  },
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 1706
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 3806
+    },
+    {
+      "stage": "search",
+      "result": "FAILED_OR_PENDING",
+      "error": "Spider IllegalStateException：SOURCE_EMPTY_RESPONSE：站点搜索返回空内容，尚不能判断资源或授权状态",
+      "elapsed_ms": 101
+    }
+  ],
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "first_frame": false,
+  "seek_verified": false,
+  "plugin_initialized": true,
+  "playback_host_scope": "PRODUCTION_PANEL_WITH_TEST_CATALOG_HOST",
+  "details_ui_verified": false,
+  "site_key": "玩偶",
+  "site_name": "👽玩偶哥哥┃4K弹幕",
+  "spider_api": "csp_WoGGGuard",
+  "node_count": 48,
+  "declared_jar_md5": "9d5f341aa5f3353b50cc3bc16b4f3e8a",
+  "home_film_count": 0,
+  "active_site_after_home": true,
+  "failure_stage": "search",
+  "failure_code": "Spider IllegalStateException：SOURCE_EMPTY_RESPONSE：站点搜索返回空内容，尚不能判断资源或授权状态",
+  "safe_failure_structure": "SEARCH\nCAUSE java.lang.IllegalStateException\ntv.herrin.app.SpiderVodCodec.searchRoot:41\ntv.herrin.app.TvBoxSpiderWorker.search$lambda$49:696\ntv.herrin.app.TvBoxSpiderWorker.$r8$lambda$gxQ8Gm9ejfm3LLWaGxUpkY8i_0g:0\ntv.herrin.app.TvBoxSpiderWorker$$ExternalSyntheticLambda12.invoke:0\ntv.herrin.app.TvBoxSpiderWorker$attempt$2.invokeSuspend$lambda$0:501\ntv.herrin.app.TvBoxSpiderWorker$attempt$2.$r8$lambda$KcRrfltXuUayf_ybxIGemqOReCI:0\ntv.herrin.app.TvBoxSpiderWorker$attempt$2$$ExternalSyntheticLambda0.invoke:0\nkotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext:52\nkotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext:1\nkotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend:44\nkotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke:8\nkotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke:4",
+  "worker_last_stage": "搜索影片",
+  "worker_exit": "系统记录的其他退出原因",
+  "sdk_network_scope": "SDK_OKHTTP_ONLY",
+  "sdk_network_evidence": [],
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 40,
+    "init_extension_kind": "JSON",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": true,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 0
+      },
+      {
+        "quick": true,
+        "response_chars": 0
+      }
+    ],
+    "response_chars": 0,
+    "shape": "EMPTY_BODY"
+  },
+  "elapsed_ms": 5936,
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+73771ms SPIDER INITIALIZE_STARTED\nT+77565ms SPIDER INITIALIZE_RETURNED MS=3793\nT+77576ms SPIDER SEARCH_STARTED\nT+77612ms SPIDER SEARCH_RETURNED MS=35"
+}

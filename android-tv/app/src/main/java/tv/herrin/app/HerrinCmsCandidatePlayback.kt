@@ -4,6 +4,7 @@ package tv.herrin.app
  * Automatic discovery never starts a new browser/JAR script runtime. */
 internal suspend fun resolveCmsCandidate(context:android.content.Context,source:HerrinTvBoxCmsSource,
     film:Film,number:Int,lineId:String,config:TvBoxConfig.Single?,allowHttp:Boolean):PlaybackResult {
+    if(source.site.apiType == 4) return resolveHttpSpiderPlayback(context,source.site,film,number,lineId,config,allowHttp)
     val line=film.playbackEpisodes.firstOrNull{it.number==number}?.lines?.firstOrNull{it.id==lineId}
         ?:return PlaybackResult.Unavailable("当前候选没有有效选集")
     val parser=TvBoxJsonPlayback.choose(line.uri,line.title,config?.jsonParsers.orEmpty())

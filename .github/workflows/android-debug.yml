@@ -2,15 +2,15 @@ name: HERRIN Android Debug
 on:
   push:
     branches: ['integration/herrin-m437-consumer-tv-20261029', 'feat/herrin-android-tv-m1', 'feat/herrin-m1-5-cinematic', 'feat/herrin-m2-provider-player', 'feat/herrin-m2-2-episode-resume', 'feat/herrin-m2-3-player-controls', 'feat/herrin-m4-5-catvod-spider-playback-20261027']
-    paths: ['android-tv/**', '.github/workflows/android-debug.yml']
+    paths: ['android-tv/**', '.github/workflows/android-debug.yml', '.github/workflows/android-startup.yml']
   pull_request:
-    paths: ['android-tv/**', '.github/workflows/android-debug.yml']
+    paths: ['android-tv/**', '.github/workflows/android-debug.yml', '.github/workflows/android-startup.yml']
   workflow_dispatch:
   workflow_call:
 permissions:
   contents: read
 concurrency:
-  group: android-debug-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
+  group: android-debug-${{ github.ref }}-${{ (github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-global-search-20261107' || github.head_ref == 'codex/herrin-global-search-20261107') && github.sha || 'latest' }}
   cancel-in-progress: true
 jobs:
   debug:
@@ -22,6 +22,9 @@ jobs:
         working-directory: android-tv
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Acceptance APK and reports must identify the actual PR head.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -29,6 +32,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+          # This same-repository P0 PR may populate its PR-scoped dependency cache.
+          # Fork PRs stay read-only; no cache is written into the base branch.
+          cache-read-only: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !(github.event_name == 'pull_request' && github.head_ref == 'codex/herrin-global-search-20261107' && github.event.pull_request.head.repo.full_name == github.repository) }}
       - name: Offline structural checks
         run: |
           python3 scripts/check_static.py
@@ -42,12 +48,18 @@ jobs:
           sdk_manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
           test -x "$sdk_manager"
           "$sdk_manager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Start controlled real SMB2 and SMB3 fixture
+        working-directory: ${{ github.workspace }}
+        run: bash .github/scripts/start_smb_fixture.sh
       - name: Test, lint and assemble Debug APK
         run: gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
       - name: Generate Chinese acceptance record
         if: always()
         run: python3 scripts/acceptance_report.py
+      # P0 real nodes remain blocked. Compile/install diagnostics as needed,
+      # but do not distribute this branch's build as an acceptance APK.
       - uses: actions/upload-artifact@v4
+        if: ${{ !contains(fromJSON('["codex/herrin-global-search-20261107","codex/herrin-p0-live-playback-20261110"]'), github.head_ref || github.ref_name) }}
         with:
           name: HERRIN-debug-apk
           path: android-tv/app/build/outputs/apk/debug/*.apk
@@ -61,3 +73,7 @@ jobs:
             android-tv/app/build/reports/
             android-tv/build/acceptance/
           if-no-files-found: ignore
+
+  android12-startup:
+    needs: debug
+    uses: ./.github/workflows/android-startup.yml
