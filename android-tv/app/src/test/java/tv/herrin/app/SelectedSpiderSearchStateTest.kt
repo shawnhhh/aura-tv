@@ -6,6 +6,7 @@ import org.junit.Test
 
 /** State/ownership regressions only; original values are not real-source evidence. */
 class SelectedSpiderSearchStateTest {
+    private fun film(id: String) = Film(id,id,"","电影","2026","",R.drawable.photofilm_orbit)
     @Test fun emptyTransportAndValidEmptyListRemainDifferent() = runBlocking {
         val state = TmdbGlobalSearchState().apply { requestKey = "current" }
         state.loadSelectedSpider("Original", "Original source") {
@@ -28,12 +29,12 @@ class SelectedSpiderSearchStateTest {
                 entered.complete(Unit)
                 withContext(NonCancellable) {
                     release.await()
-                    SpiderResult.Ready(listOf(demoFilms.first().copy(id = "old")))
+                    SpiderResult.Ready(listOf(film("old")))
                 }
             }
         }
         entered.await()
-        val fresh = demoFilms.first().copy(id = "new")
+        val fresh = film("new")
         state.requestKey = "new-source"
         state.films = listOf(fresh)
         state.loading = true
