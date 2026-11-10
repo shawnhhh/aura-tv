@@ -95,6 +95,8 @@ class M476RemoteMediaProbeTest {
             val media = PlaybackMedia(server.url("/master.m3u8").toString())
             assertEquals(HerrinRemoteMediaProbe.Result.MEDIA, probe().probe(media))
             assertEquals(HerrinRemoteMediaProbe.Result.INVALID_MANIFEST, probe().probe(media))
+            assertNull(server.takeRequest().getHeader("Range"))
+            assertNull(server.takeRequest().getHeader("Range"))
         }
     }
 
@@ -164,6 +166,7 @@ class M476RemoteMediaProbeTest {
         NativeFongMiProxy("approved", { params ->
             assertEquals("approved", params["siteKey"])
             assertEquals("jar", params["do"])
+            assertFalse("Probe must preserve FongMi manifest dispatch, without injected Range", params.containsKey("range"))
             byteReads.incrementAndGet()
             arrayOf(200, "video/mp4", ByteArrayInputStream(byteArrayOf(0, 0, 0, 24, 1, 2, 3, 4)))
         }, null).use { nativeProxy ->

@@ -65,7 +65,15 @@ internal class HerrinRemoteMediaProbe(
             val request = try {
                 Request.Builder().url(url).get().apply {
                     headers.forEach { (name, value) -> header(name, value) }
-                    header("Range", "bytes=0-$PROBE_RANGE_END")
+                    // Media3/FongMi requests HLS manifests without Range. A
+                    // Spider proxy can dispatch Range as a different operation;
+                    // probing it must not change the provider's manifest request.
+                    // Reads below remain bounded even for a full 200 response.
+                    if (!tv.herrin.app.nativeplayback.NativeFongMiRoute.isNativeProxy(url) &&
+                        media.declaredMime != PlaybackFormatRetry.HLS &&
+                        !target.path.orEmpty().lowercase().endsWith(".m3u8")) {
+                        header("Range", "bytes=0-$PROBE_RANGE_END")
+                    }
                     header("Accept-Encoding", "identity")
                 }.build()
             } catch (_: IllegalArgumentException) {

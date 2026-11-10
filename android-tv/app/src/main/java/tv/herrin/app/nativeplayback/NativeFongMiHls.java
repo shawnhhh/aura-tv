@@ -21,9 +21,18 @@ public final class NativeFongMiHls {
         if (playlist == null || playlist.isEmpty()) return "HLS_BODY_EMPTY";
         if (playlist.length() > MAX_MANIFEST_BYTES) return "HLS_MANIFEST_SIZE_LIMIT";
         String header = playlist.startsWith("\uFEFF") ? playlist.substring(1) : playlist;
+        if (header.length() >= 2 && header.charAt(0) == 0x1F && header.charAt(1) == 0xFFFD)
+            return "HLS_BODY_GZIP";
         header = header.stripLeading();
         if (header.startsWith("#EXTM3U")) return "HLS_REFERENCE_REWRITE_REJECTED";
         if (header.startsWith("{") || header.startsWith("[")) return "HLS_BODY_JSON";
+        if (header.startsWith("http://") || header.startsWith("https://")) return "HLS_BODY_URL";
+        if (header.startsWith("<?xml") || header.startsWith("<Error")) return "HLS_BODY_XML";
+        if (header.startsWith("\uFFFD\uFFFD") || header.indexOf('\u0000') >= 0) return "HLS_BODY_BINARY_OR_UTF16";
+        if (header.startsWith("I0VYVE0zV")) return "HLS_BODY_BASE64";
+        if (header.regionMatches(true, 0, "forbidden", 0, 9) ||
+            header.regionMatches(true, 0, "access denied", 0, 13)) return "HLS_BODY_ACCESS_DENIED";
+        if (header.regionMatches(true, 0, "error", 0, 5)) return "HLS_BODY_ERROR_TEXT";
         if (header.regionMatches(true, 0, "<html", 0, 5) ||
             header.regionMatches(true, 0, "<!doctype", 0, 9)) return "HLS_BODY_HTML";
         return "HLS_HEADER_INVALID";

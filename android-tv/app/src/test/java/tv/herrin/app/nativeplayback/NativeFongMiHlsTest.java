@@ -109,6 +109,10 @@ public final class NativeFongMiHlsTest {
         assertEquals("HLS_BODY_JSON", NativeFongMiHls.rejectionCode("{\"token\":\"PRIVATE\"}"));
         assertEquals("HLS_BODY_HTML", NativeFongMiHls.rejectionCode("<!doctype html>PRIVATE"));
         assertEquals("HLS_HEADER_INVALID", NativeFongMiHls.rejectionCode("PRIVATE"));
+        assertEquals("HLS_BODY_XML", NativeFongMiHls.rejectionCode("<?xml version=\"1.0\"?><Error>PRIVATE</Error>"));
+        assertEquals("HLS_BODY_URL", NativeFongMiHls.rejectionCode("https://private.invalid/token"));
+        assertEquals("HLS_BODY_ACCESS_DENIED", NativeFongMiHls.rejectionCode("Forbidden PRIVATE"));
+        assertEquals("HLS_BODY_GZIP", NativeFongMiHls.rejectionCode(new String(new byte[]{31, (byte)139, 8}, StandardCharsets.UTF_8)));
         assertEquals("HLS_REFERENCE_REWRITE_REJECTED", NativeFongMiHls.rejectionCode("#EXTM3U\nPRIVATE"));
     }
 
