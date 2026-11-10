@@ -419,6 +419,8 @@ internal class SpiderInitializationFailure(cause: Throwable) :
 internal class TvBoxSpiderWorker(private val context: Context) {
     var lastSearchCounts = 0 to 0
         private set
+    var lastSearchQuick = false
+        private set
     private val lifecycle = Any()
     private var epoch = 0L
     private var initializingProxy: NativeFongMiProxy? = null
@@ -685,12 +687,16 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             "拒绝在未应用的 Spider 站点自动检索"
         }
         val owner = activeAuthority ?: error("Spider 来源授权已失效")
-        val response = spider.searchContent(keyword, false)
-        SpiderSearchTrace.record(context, spider, site, keyword.length, response)
+        val invocation = SpiderSearchInvocation.execute(site.quickSearch == 1 && site.searchable != 0) { quick ->
+            spider.searchContent(keyword, quick)
+        }
+        lastSearchQuick = invocation.quick
+        val response = invocation.body
+        SpiderSearchTrace.record(context, spider, site, keyword.length, invocation)
         val root = SpiderVodCodec.searchRoot(response)
         SpiderVodCodec.listing(response, site).map(owner::sign).also { films ->
             lastSearchCounts = root.getJSONArray("list").length() to films.size
-            DiscoveryProtocolTrace.record(site.key, "SPIDER_SEARCH_FALSE", lastSearchCounts.first, films.size, keyword)
+            DiscoveryProtocolTrace.record(site.key, if(invocation.quick) "SPIDER_SEARCH_QUICK" else "SPIDER_SEARCH_FALSE", lastSearchCounts.first, films.size, keyword)
         }
     }
 

@@ -261,6 +261,26 @@ class TvBoxSpiderBridgeTest {
         paged.js.close()
     }
 
+    @Test fun `only declared quick mode may follow a blank normal entry point`() {
+        val calls=mutableListOf<Boolean>()
+        val result=SpiderSearchInvocation.execute(true) { quick ->
+            calls+=quick
+            if(quick) """{"list":[{"vod_id":"authorized","vod_name":"授权片名"}]}""" else ""
+        }
+        assertEquals(listOf(false,true),calls)
+        assertTrue(result.quick)
+        assertEquals("authorized",SpiderVodCodec.listing(result.body,site).single().spiderVodId)
+        for(body in listOf("""{"list":[]}""", """{"code":401}""", "invalid")) {
+            var count=0
+            val unchanged=SpiderSearchInvocation.execute(true) { count++; body }
+            assertEquals(1,count)
+            assertEquals(body,unchanged.body)
+        }
+        var count=0
+        SpiderSearchInvocation.execute(false) { count++; "" }
+        assertEquals(1,count)
+    }
+
     @Test fun `native guard filename matches ABI specific library name`() {
         assertEquals("assets/ftyguard_v8.so", SpiderNativeLibraryPlan.assetForAbi("arm64-v8a"))
         assertEquals("assets/ftyguard_v7.so", SpiderNativeLibraryPlan.assetForAbi("armeabi-v7a"))

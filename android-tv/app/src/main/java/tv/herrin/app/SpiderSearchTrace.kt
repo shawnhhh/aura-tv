@@ -7,8 +7,9 @@ import java.io.File
 
 /** Public method ownership and fixed response shapes only, never body/query/URLs. */
 internal object SpiderSearchTrace {
-    fun record(context: Context, spider: Spider, site: TvBoxSite, queryLength: Int, response: String) {
+    fun record(context: Context, spider: Spider, site: TvBoxSite, queryLength: Int, invocation: SpiderSearchInvocation.Reply) {
         runCatching {
+            val response=invocation.body
             val root = runCatching { JSONObject(response) }.getOrNull()
             fun owner(vararg parameters: Class<*>) = spider.javaClass.getMethod("searchContent", *parameters)
                 .declaringClass.name.takeIf { it.length <= 180 && it.matches(Regex("[A-Za-z0-9_.$]+")) }
@@ -24,7 +25,10 @@ internal object SpiderSearchTrace {
                 .put("init_extension_known_fields", org.json.JSONArray(knownFields))
                 .put("two_argument_owner", owner(String::class.java, Boolean::class.javaPrimitiveType!!))
                 .put("three_argument_owner", owner(String::class.java, Boolean::class.javaPrimitiveType!!, String::class.java))
-                .put("query_length", queryLength.coerceIn(0, 120)).put("quick", false)
+                .put("query_length", queryLength.coerceIn(0, 120)).put("quick", invocation.quick)
+                .put("attempts", org.json.JSONArray(invocation.attempts.map { attempt ->
+                    JSONObject().put("quick",attempt.quick).put("response_chars",attempt.body.length)
+                }))
                 .put("response_chars", response.length).put("shape", when {
                     response.isBlank() -> "EMPTY_BODY"
                     root?.optJSONArray("list") != null -> "JSON_LIST"

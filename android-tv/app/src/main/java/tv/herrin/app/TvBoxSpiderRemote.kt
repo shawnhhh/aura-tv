@@ -360,6 +360,7 @@ class TvBoxSpiderService : Service() {
                                     is SpiderResult.Ready -> JSONObject().put("ok", true)
                                         .put("queryIdentity", SourceHealthIndex.digest(keyword))
                                         .put("rawCount",worker.lastSearchCounts.first).put("parsedCount",worker.lastSearchCounts.second)
+                                        .put("quick",worker.lastSearchQuick)
                                         .put("films", JSONArray().apply {
                                             result.value.take(60).forEach { put(SpiderIpc.film(it)) }
                                         })
@@ -868,7 +869,7 @@ internal class TvBoxSpiderBridge(context: Context) {
                 if (response.value.optString("queryIdentity") != SourceHealthIndex.digest(keyword))
                     return SpiderResult.Failure("SEARCH_QUERY_IDENTITY_MISMATCH：站点搜索查询身份已变化")
                 val array = response.value.getJSONArray("films")
-                DiscoveryProtocolTrace.record(site.key,"SPIDER_SEARCH_FALSE",
+                DiscoveryProtocolTrace.record(site.key,if(response.value.optBoolean("quick")) "SPIDER_SEARCH_QUICK" else "SPIDER_SEARCH_FALSE",
                     response.value.optInt("rawCount",array.length()),array.length(),keyword)
                 SpiderResult.Ready((0 until minOf(60, array.length())).map {
                     SpiderIpc.readFilm(array.getJSONObject(it))
