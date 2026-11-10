@@ -56,7 +56,8 @@ class FanTaiYingRealNodesTest {
             val begin = SystemClock.elapsedRealtime()
             try {
                 val packaged = File(context.applicationInfo.nativeLibraryDir, "libherrinarmprobe.so")
-                val file = if (abi == "arm64-v8a" && packaged.exists()) packaged else {
+                val matchesProcess = (abi == "arm64-v8a") == Process.is64Bit()
+                val file = if (matchesProcess && packaged.exists()) packaged else {
                     val out = File(context.codeCacheDir, "canary-$abi.so")
                     if (out.exists()) check(out.delete())
                     inst.context.assets.open("native-probe/$abi/libherrinarmprobe.so").use { input ->
@@ -186,8 +187,10 @@ class FanTaiYingRealNodesTest {
             report.put("episode_count", episodes.size)
             val first = episodes[0]
             val second = episodes[1]
-            val alternate = first.lines.getOrNull(1) ?: throw Stop("ALTERNATE_LINE_UNAVAILABLE")
-            val sequence = listOf(first to first.lines[0], first to first.lines[0], second to second.lines[0], first to alternate)
+            val alternate = first.lines.getOrNull(1)
+            report.put("alternate_line_available", alternate != null)
+            val sequence = mutableListOf(first to first.lines[0], first to first.lines[0], second to second.lines[0])
+            if (alternate != null) sequence.add(first to alternate)
             for ((index, choice) in sequence.withIndex()) {
                 val session = PlaybackDiagnosticSession.newId()
                 val resolved = step("resolve_$index") {
@@ -208,6 +211,10 @@ class FanTaiYingRealNodesTest {
                     if (result != HerrinRemoteMediaProbe.Result.MEDIA) throw Stop("MEDIA_${result.name}")
                 }
                 verifyPlayer(resolved, index)
+            }
+            if (alternate == null) {
+                currentStage = "line_switch"
+                throw Stop("ALTERNATE_LINE_UNAVAILABLE")
             }
             report.put("verdict", "PASS_PLAYBACK")
         } catch (error: Throwable) {
@@ -245,18 +252,25 @@ class FanTaiYingRealNodesTest {
             }
             report.put("first_frame", true)
         }
-        step("continuous_pause_seek_$index", 35_000) {
+        step("continuous_pause_seek_$index", 70_000) {
             var start = 0L
             compose.runOnIdle { start = player!!.currentPosition }
-            compose.waitUntil(15_000) {
+            val requiredMs = if (index == 0) 30_000L else 10_000L
+            compose.waitUntil(requiredMs + 15_000) {
                 var advanced = false
-                compose.runOnIdle { advanced = player!!.isPlaying && player!!.currentPosition > start + 3_000 }
+                compose.runOnIdle { advanced = player!!.isPlaying && player!!.currentPosition > start + requiredMs }
                 advanced
             }
             var paused = 0L
             compose.runOnIdle { player!!.pause(); paused = player!!.currentPosition }
             Thread.sleep(800)
             compose.runOnIdle { check(!player!!.isPlaying && kotlin.math.abs(player!!.currentPosition - paused) < 250) }
+            compose.runOnIdle { player!!.play() }
+            compose.waitUntil(8_000) {
+                var resumed = false
+                compose.runOnIdle { resumed = player!!.isPlaying && player!!.currentPosition > paused + 500 }
+                resumed
+            }
             var target = 0L
             compose.runOnIdle {
                 check(player!!.isCurrentMediaItemSeekable) { "MEDIA_NOT_SEEKABLE" }
@@ -270,7 +284,7 @@ class FanTaiYingRealNodesTest {
                 compose.runOnIdle { sought = player!!.isPlaying && player!!.currentPosition >= target && player!!.currentPosition < target + 5_000 }
                 sought
             }
-            val row = JSONObject().put("selection", index).put("seek_target_ms", target)
+            val row = JSONObject().put("selection", index).put("seek_target_ms", target).put("continuous_ms_minimum", requiredMs)
             compose.runOnIdle { row.put("frames", player!!.videoDecoderCounters?.renderedOutputBufferCount)
                 .put("position_ms", player!!.currentPosition) }
             report.optJSONArray("playback_evidence")?.put(row) ?: report.put("playback_evidence", JSONArray().put(row))

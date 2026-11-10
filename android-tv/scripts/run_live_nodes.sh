@@ -41,7 +41,7 @@ if [[ -n "${LIVE_PREBUILT_APKS:-}" ]]; then
     apk_dir="$repo_root/$LIVE_PREBUILT_APKS/$variant"
 else
     bash android-tv/scripts/build_live_arm_canary.sh
-    (cd android-tv && gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" :app:assembleDebug :app:assembleDebugAndroidTest) 2>&1 | tee evidence/build.log
+    (cd android-tv && gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" -PherrinLiveAbi="${LIVE_INSTALL_ABI:-arm64-v8a}" :app:assembleDebug :app:assembleDebugAndroidTest) 2>&1 | tee evidence/build.log
     apk_dir="$repo_root/android-tv/app/build/outputs/apk"
 fi
 install_args=()
