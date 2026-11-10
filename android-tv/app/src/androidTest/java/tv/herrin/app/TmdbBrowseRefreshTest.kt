@@ -11,7 +11,6 @@ import org.junit.Test
 import org.junit.rules.ExternalResource
 import java.io.File
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /** Real Activity receives changed public metadata while a native poster retains D-pad focus. */
 class TmdbBrowseRefreshTest {
@@ -45,7 +44,10 @@ class TmdbBrowseRefreshTest {
                         entered.incrementAndGet()
                         firstEnteredAt.compareAndSet(0,android.os.SystemClock.elapsedRealtime())
                         try {
-                            check(release.await(15,TimeUnit.SECONDS)){"Refresh fixture was not released"}
+                            // This is a controlled response gate, not a server timeout.
+                            // Its owner always releases it in after(), including failure;
+                            // Activity cancellation can also interrupt the blocked call.
+                            release.await()
                             changed.load(url,key).also { raw ->
                                 returned.incrementAndGet()
                                 val rows=JSONObject(raw).optJSONArray("results")
@@ -84,6 +86,7 @@ class TmdbBrowseRefreshTest {
         errorsBeforeRelease=errors.get()
         waitBeforeReleaseMs=firstEnteredAt.get().takeIf{it>0}?.let{android.os.SystemClock.elapsedRealtime()-it} ?: 0
         release.countDown()
+        assertEquals("Fixture must not fail before the test explicitly releases it",0,errorsBeforeRelease)
         val c=InstrumentationRegistry.getInstrumentation().targetContext
         compose.waitUntil(10000){cachedTmdbBrowseTestFilms(c,token).any{it.id=="tmdb-movie-12"}}
         compose.onNodeWithTag("card-tmdb-movie-11").assertIsFocused()
