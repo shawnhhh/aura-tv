@@ -97,6 +97,7 @@ class FanTaiYingRealImportTest {
             assertTrue(cached.fromCache)
             assertEquals(single.sites, cached.sites)
             passed(stage)
+            File(context.filesDir, "tvbox-config").deleteRecursively()
             stage = "ui_apply"
             compose.waitUntil(15_000) {
                 runCatching { compose.onNodeWithTag("details").assertIsDisplayed()
