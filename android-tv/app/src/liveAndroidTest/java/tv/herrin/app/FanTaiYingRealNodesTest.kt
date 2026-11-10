@@ -32,6 +32,7 @@ class FanTaiYingRealNodesTest {
     private var media by mutableStateOf<PlaybackMedia?>(null)
     @Volatile private var player: ExoPlayer? = null
     private val stages = JSONArray()
+    private val productionHttpFirst = InstrumentationRegistry.getArguments().getString("p0ProductionHttpFirst") == "true"
     private var currentStage = "config"
     private lateinit var report: JSONObject
     private class Stop(val code: String) : Exception(code)
@@ -152,6 +153,7 @@ class FanTaiYingRealNodesTest {
             .put("first_frame", false).put("seek_verified", false).put("plugin_initialized", false)
             .put("playback_host_scope", "PRODUCTION_PANEL_WITH_TEST_CATALOG_HOST")
             .put("details_ui_verified", false)
+            .put("diagnostic_only", productionHttpFirst)
         val bridge = TvBoxSpiderBridge(context)
         for (file in listOf("spider-failure-structure.txt", "spider-proxy-shapes.json", "spider-startup-stage.txt", "spider-search-shape.json", "spider-network-shape.json"))
             File(context.filesDir, file).delete()
@@ -250,6 +252,16 @@ class FanTaiYingRealNodesTest {
                             is PlaybackResult.Unavailable -> throw Stop(safe(result.reason))
                         }
                     }
+                }
+                if (productionHttpFirst && index == 0) {
+                    step("diagnostic_production_http_first", 18_000) {
+                        if (!tv.herrin.app.nativeplayback.NativeFongMiRoute.isNativeProxy(resolved.uri))
+                            throw Stop("PRODUCTION_HTTP_FIRST_REQUIRES_OWNED_PROXY")
+                        productionHttpDiagnostic(resolved, site.key)
+                    }
+                    // One isolated read only: do not prime the session then call that
+                    // normal acceptance. A genuine frame test is a separate invocation.
+                    throw Stop("DIAGNOSTIC_MANIFEST_READ_NOT_PLAYBACK_ACCEPTANCE")
                 }
                 fun probeClient(extended: Boolean): HerrinRemoteMediaProbe {
                     val events = JSONArray()

@@ -65,6 +65,9 @@ if [[ -n "${LIVE_INSTALL_ABI:-}" ]]; then
     install_args=(--abi "$LIVE_INSTALL_ABI")
     instrument_args=(--abi "$LIVE_INSTALL_ABI")
 fi
+if [[ "${LIVE_PRODUCTION_HTTP_FIRST:-false}" == true ]]; then
+    instrument_args+=(-e p0ProductionHttpFirst true)
+fi
 if [[ -n "${LIVE_PREBUILT_APKS:-}" ]]; then
     adb install "${install_args[@]}" -r "$apk_dir/app-debug.apk" | tee evidence/install.txt
     adb install "${install_args[@]}" -r "$apk_dir/app-debug-androidTest.apk"
