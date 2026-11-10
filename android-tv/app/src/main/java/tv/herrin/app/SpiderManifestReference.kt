@@ -34,6 +34,7 @@ internal class SpiderManifestReference(
             throw IOException("HLS_REFERENCE_CREDENTIAL_ORIGIN_UNKNOWN").also { record("HLS_REFERENCE_CREDENTIAL_ORIGIN_UNKNOWN") }
         val policy = MediaProxyPolicy.authorize(reference)
         var target = policy.source
+        record(if(target.isHttps) "HLS_REFERENCE_TARGET_HTTPS" else "HLS_REFERENCE_TARGET_HTTP")
         repeat(3) { hop ->
             val call = client.newCall(Request.Builder().url(target).get().apply {
                 headers.filterKeys { it.lowercase() in setOf("user-agent", "accept", "accept-language") }
@@ -48,7 +49,15 @@ internal class SpiderManifestReference(
                         if (hop == 2) throw IOException("HLS reference redirect limit")
                         target = policy.resolve(target, response.header("Location") ?: throw IOException("Missing HLS redirect"))
                     } else {
-                        if (response.code != 200) throw IOException("HLS reference HTTP error")
+                        if (response.code != 200) {
+                            if (response.code in setOf(401, 403)) {
+                                if (response.header("WWW-Authenticate") != null) record("HLS_REFERENCE_WWW_AUTHENTICATE")
+                                val bytes=ByteArray(2048)
+                                val count=response.body?.byteStream()?.read(bytes) ?: -1
+                                record(denialCode(if(count>0) String(bytes,0,count,Charsets.UTF_8) else ""))
+                            }
+                            throw IOException("HLS reference HTTP error")
+                        }
                         val stream = response.body?.byteStream() ?: throw IOException("Missing HLS body")
                         val output = ByteArrayOutputStream()
                         val buffer = ByteArray(4096)
@@ -70,6 +79,21 @@ internal class SpiderManifestReference(
             } finally { synchronized(calls) { calls -= call } }
         }
         throw IOException("HLS reference redirect limit")
+    }
+
+    companion object {
+        /** Classify standard denial markers in memory; never export error text. */
+        internal fun denialCode(body: String): String = when {
+            body.contains("Only HTTPS requests are allowed", true) -> "HLS_REFERENCE_HTTPS_REQUIRED"
+            body.contains("Domain forbidden", true) -> "HLS_REFERENCE_DOMAIN_POLICY"
+            body.contains("<Code>ExpiredToken</Code>", true) ||
+                body.contains("<Code>RequestExpired</Code>", true) -> "HLS_REFERENCE_SIGNATURE_EXPIRED"
+            body.contains("<Code>SignatureDoesNotMatch</Code>", true) -> "HLS_REFERENCE_SIGNATURE_MISMATCH"
+            body.contains("<Code>AccessDenied</Code>", true) -> "HLS_REFERENCE_ACCESS_DENIED"
+            body.trimStart().startsWith("<html", true) || body.contains("<!doctype html", true) -> "HLS_REFERENCE_DENIAL_HTML"
+            body.trimStart().startsWith("{") -> "HLS_REFERENCE_DENIAL_JSON"
+            else -> "HLS_REFERENCE_DENIAL_UNSPECIFIED"
+        }
     }
 
     override fun close() {

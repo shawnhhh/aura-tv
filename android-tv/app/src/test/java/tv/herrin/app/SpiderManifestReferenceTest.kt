@@ -27,7 +27,7 @@ class SpiderManifestReferenceTest {
                 val request = server.takeRequest()
                 assertNull(request.getHeader("Range"))
                 assertNull(request.getHeader("Cookie"))
-                assertEquals(listOf("HLS_REFERENCE_HTTP_200"), events)
+                assertEquals(listOf("HLS_REFERENCE_TARGET_HTTP", "HLS_REFERENCE_HTTP_200"), events)
             }
         }
     }
@@ -60,7 +60,13 @@ class SpiderManifestReferenceTest {
                 try { resolver.load("http://provider.test:${server.port}/index.m3u8", emptyMap()); fail() }
                 catch (_: java.io.IOException) {}
             }
-            assertEquals(listOf("HLS_REFERENCE_HTTP_200", "HLS_BODY_HTML"), codes)
+            assertEquals(listOf("HLS_REFERENCE_TARGET_HTTP", "HLS_REFERENCE_HTTP_200", "HLS_BODY_HTML"), codes)
         }
     }
+    @Test fun deniedReferenceReportsOnlyFixedReasonWithoutCredentials() {
+        assertEquals("HLS_REFERENCE_HTTPS_REQUIRED", SpiderManifestReference.denialCode("Blocked: Only HTTPS requests are allowed private-token"))
+        assertEquals("HLS_REFERENCE_SIGNATURE_EXPIRED", SpiderManifestReference.denialCode("<Code>ExpiredToken</Code><Token>private</Token>"))
+        assertEquals("HLS_REFERENCE_DENIAL_UNSPECIFIED", SpiderManifestReference.denialCode("private-token https://private.invalid"))
+    }
+
 }

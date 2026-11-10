@@ -307,7 +307,12 @@ class FanTaiYingRealNodesTest {
             bridge.close()
             scope.cancel()
             runCatching {
-                report.put("proxy_callback_shapes", JSONArray(File(context.filesDir, "spider-proxy-shapes.json").readText()))
+                val shapes = JSONArray(File(context.filesDir, "spider-proxy-shapes.json").readText())
+                report.put("proxy_callback_shapes", shapes)
+                if ((0 until shapes.length()).any { shapes.optJSONObject(it)?.optString("code") in
+                    setOf("HLS_REFERENCE_HTTP_401", "HLS_REFERENCE_HTTP_403") }) {
+                    report.put("blocked", true).put("blocker", "UPSTREAM_MEDIA_ACCESS_DENIED")
+                }
             }
             runCatching { report.put("search_response_shape", JSONObject(File(context.filesDir, "spider-search-shape.json").readText())) }
             report.put("elapsed_ms", SystemClock.elapsedRealtime() - begin)
