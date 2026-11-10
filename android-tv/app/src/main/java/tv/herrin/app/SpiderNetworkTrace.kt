@@ -20,7 +20,7 @@ internal object SpiderNetworkTrace {
         val stage=SpiderStartupTrace.currentStage?.name ?: "UNKNOWN"
         return object : EventListener() {
             override fun responseHeadersEnd(call: Call, response: Response) {
-                session.record("HTTP_"+stage,response.code(),(System.nanoTime()-started)/1_000_000)
+                session.record("HTTP_"+stage,response.code,(System.nanoTime()-started)/1_000_000)
             }
             override fun callFailed(call: Call, ioe: IOException) {
                 val kind=when(ioe) {
