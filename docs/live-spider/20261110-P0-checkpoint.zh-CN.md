@@ -101,9 +101,9 @@ ABBA当次软件AVD小样本：首CPU绘制670→700.5ms（+30.5）；首页2860
 - b64cf4f/run42863215516：已找到标签，触摸未激活卡片。
 - 1a96913/run42864825533：进了配置界面，确认按钮未触发立即dismiss。
 - de1ccde/run42865754956：按真实焦点+确认后弹窗已关，选站ID误写vod_home；上游activity_setting.xml实际为vodHome。
-- 已改为3848b3c源码并正在验证，结果待实际JSON。全部旧失败JSON保留，目标节点比较尚未完成，不得归因源端失败。
+- 3848b3c/run42867039176/job130008047096：设置及配置界面已走过，选站弹窗控制存在，但真实键盘焦点未到搜索开关；REFERENCE_UI_TARGET_NOT_REACHED，REFERENCE_BLOCKED。安全JSON已保存。目标搜索尚未执行，不能推断官方客户端的来源结果。停止继续消耗参考UI构建，优先实际Herrin MainActivity驱动。
 
-实际Herrin两节点仍同上FAIL，无视频首帧、60秒、Seek或授权QR通过。MainActivity真实节点详情返回驱动仍未补。先查新参考运行，只有新合法来源证据/修复才重跑实际节点；不要重复已过08f完整CI、48节点导入或ARMcanary基线。
+实际Herrin两节点仍未播放通过，无视频首帧、60秒、Seek或授权QR通过。开发分支已实现但未完成真实验收的MainActivity驱动：699482a误将输入框认作结果卡片，已由9c4f591限定card标签；原创空首页UI3通过，真实两源在UI搜索阶段超时且未观察SEARCH_STARTED。e0c4c47/run42877324522正在只增加固定路由/输入长度/前台诊断，不是新的来源播放通过。PR保持08f6640已过完整CI，不重复同HEAD、48节点导入或ARM基线。
 
 另查过网络权限假设：不能只看根Manifest只有INTERNET就添加权限；Media3 1.9.4 common/exoplayer库Manifest已声明ACCESS_NETWORK_STATE。尚未以最终安装包直接核验WifiState等权限，也没有证据表明Guard因权限返回空。没有据此扩大权限。
 
