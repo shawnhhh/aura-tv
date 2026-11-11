@@ -30,3 +30,23 @@ dependencies.json记录这些确定事实与未解决版本；verify_dependencie
 校验和、对应源码commit、许可材料、重复类、非空实现、双ARM JNI与原版Media3导入。
 只约束完整内核preBuild，不拦截独立contract开发。没有替代AAR/桩类或删除原功能。
 下一模块：C，原版SiteApi/PlayerManager直接委托与不携带媒体URL的UI接口。
+
+## 模块C：原版委托与宿主边界
+
+新增纯Java17 Kernel接口：仓库/明确站点执行授权、搜索、详情、原版选集引用、播放、
+暂停/恢复/Seek/停止和状态观察。界面仅得到不透明影片/选集handle，得不到playerContent、
+解析JSON、Proxy或媒体URL；适配层没有解析器、HLS处理或媒体探测。
+
+FongMiKernel直接调用Config.find→VodConfig.load、SiteApi.searchContent/detailContent/
+playerContent→原PlayerManager.parse，选集取自原Vod/Flag/Episode。独立IO串行执行、
+主线程管理播放器，session epoch取消旧结果；原版仍负责超时/引擎/解码/释放。
+原生PlayerView由原manager.bindPlayerView绑定。真实first-frame事件与READY分离。
+授权界面继续由原App/CatVod/SpiderDialog负责，不合成QR或授权成功状态。
+
+KernelApplication继承原App初始化Runtime/Startup，拒绝包名/签名Hook替换。
+唯一源码宿主补丁是构建时将原Nano监听super(port)改为super("127.0.0.1", port)，
+保留所有原process/Proxy响应/HLS字节语义；不暴露原版未认证的LAN管理面。
+修正完整资源导入为原main/leanback层级覆盖，保留原flavor生成Binding与R。
+
+状态：委托代码已写，Android编译尚未验证；当前app未接入，绝不说已替换。
+下一模块D/E：宿主统一网关、单所有者无回退切换边界、保持稳定app；之后统一检查。

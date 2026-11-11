@@ -2,7 +2,7 @@ plugins { alias libs.plugins.android.library }
 android {
     namespace = 'tv.herrin.kernel.android'
     compileSdk = libs.versions.compileSdk.get().toInteger()
-    defaultConfig { minSdk = 26 }
+    defaultConfig { minSdk = 26; missingDimensionStrategy 'device', 'leanback' }
     compileOptions {
         coreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_21

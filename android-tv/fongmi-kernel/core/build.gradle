@@ -7,6 +7,20 @@ def verifyInputs = tasks.register('verifyKernelDependencies', Exec) {
     commandLine 'python3', rootProject.file('verify_dependencies.py'), '--directory', directory,
         '--lock', providers.gradleProperty('fongmiDependencyLock').getOrElse(rootProject.file('dependencies.json').toString())
 }
+def hostSources = layout.buildDirectory.dir('generated/herrinHost')
+def prepareHost = tasks.register('prepareKernelHostSources') {
+    inputs.file(new File(upstream, 'app/src/main/java/com/fongmi/android/tv/server/Nano.java'))
+    outputs.dir(hostSources)
+    doLast {
+        def original = inputs.files.singleFile.getText('UTF-8')
+        if (original.count('super(port);') != 1) throw new GradleException('Nano binding patch no longer applies')
+        def target = hostSources.get().file('host/Nano.java').asFile
+        target.parentFile.mkdirs()
+        // Only the listening address changes. All original processes, headers,
+        // proxy response handling and HLS bytes remain upstream-owned.
+        target.setText(original.replace('super(port);', 'super("127.0.0.1", port);'), 'UTF-8')
+    }
+}
 
 android {
     namespace = 'com.fongmi.android.tv'
@@ -17,7 +31,6 @@ android {
         buildConfigField 'String', 'APPLICATION_ID', '"tv.herrin.app"'
         buildConfigField 'String', 'VERSION_NAME', '"5.8.7-herrin-integration"'
         buildConfigField 'int', 'VERSION_CODE', '587'
-        buildConfigField 'String', 'FLAVOR', '"leanback"'
         manifestPlaceholders.runtimeCatalog = 'https://github.com/FongMi/Release/releases/download/module/catalog.json'
         javaCompileOptions.annotationProcessorOptions.arguments += [
             'room.schemaLocation': layout.buildDirectory.dir('schemas').get().asFile.toString(),
@@ -25,14 +38,21 @@ android {
         ]
     }
     buildFeatures { buildConfig = true; viewBinding = true }
+    flavorDimensions = ['device']
+    productFlavors { leanback { dimension 'device' } }
     sourceSets.main {
         // Whole source trees, including upstream engine implementations. No
         // fake Media3 API or playback algorithm is supplied by this build.
-        java.srcDirs = [new File(upstream, 'app/src/main/java'), new File(upstream, 'app/src/leanback/java')]
-        res.srcDirs = [new File(upstream, 'app/src/main/res'), new File(upstream, 'app/src/leanback/res')]
+        java.srcDirs = [new File(upstream, 'app/src/main/java'), hostSources]
+        java.exclude 'com/fongmi/android/tv/server/Nano.java'
+        res.srcDirs = [new File(upstream, 'app/src/main/res')]
         assets.srcDirs = [new File(upstream, 'app/src/main/assets')]
         aidl.srcDirs = [new File(upstream, 'app/src/main/aidl')]
         jniLibs.srcDirs = [new File(upstream, 'app/src/main/jniLibs')]
+    }
+    sourceSets.leanback {
+        java.srcDirs = [new File(upstream, 'app/src/leanback/java')]
+        res.srcDirs = [new File(upstream, 'app/src/leanback/res')]
     }
     compileOptions {
         coreLibraryDesugaringEnabled = true
@@ -52,7 +72,7 @@ configurations.configureEach {
 dependencies {
     api project(':catvod')
     // Upstream local libraries are not silently replaced by Maven stock Media3.
-    implementation fileTree(dir: new File(upstream, 'app/libs'), include: ['*.aar'])
+    api fileTree(dir: new File(upstream, 'app/libs'), include: ['*.aar'])
     if (externalLibraries.isPresent()) api fileTree(dir: externalLibraries.get(), include: ['*.aar'])
     implementation libs.appcompat
     implementation libs.lifecycle.service
@@ -87,4 +107,4 @@ dependencies {
 }
 // Only this full-kernel compilation depends on external engine inputs. Contract
 // and independent modules remain buildable; no fake AAR is generated on failure.
-tasks.named('preBuild').configure { dependsOn verifyInputs }
+tasks.named('preBuild').configure { dependsOn verifyInputs, prepareHost }
