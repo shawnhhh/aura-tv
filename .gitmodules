@@ -1,0 +1,3 @@
+[submodule "android-tv/vendor/fongmi-core/upstream"]
+	path = android-tv/vendor/fongmi-core/upstream
+	url = https://github.com/FongMi/TV.git

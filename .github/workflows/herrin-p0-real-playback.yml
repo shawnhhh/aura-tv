@@ -1,8 +1,7 @@
-name: HERRIN P0 Real Playback Repair (one node)
+name: HERRIN Legacy Playback Diagnostics (manual only)
 on:
-  push:
-    branches: ['codex/herrin-p0-live-playback-20261110']
-    paths: ['android-tv/**', '.github/workflows/herrin-p0-real-playback.yml']
+  # Whole-core migration supersedes the automatic old-core repair loop.
+  # Retained for explicit historical diagnostics; never a new-core acceptance.
   workflow_dispatch:
     inputs:
       node:
