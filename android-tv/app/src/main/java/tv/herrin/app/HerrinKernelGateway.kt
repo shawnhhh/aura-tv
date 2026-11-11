@@ -6,6 +6,7 @@ import android.os.Looper
 import tv.herrin.kernel.Kernel
 import tv.herrin.kernel.KernelCutover
 import java.util.concurrent.CompletionStage
+import java.util.concurrent.CompletableFuture
 
 /** UI/business entry for the whole upstream kernel. No URL resolver or fallback.
  *
@@ -29,23 +30,53 @@ internal class HerrinKernelGateway : AutoCloseable {
     ): CompletionStage<Void> = cutover.install(retireLegacy, createOriginalKernel)
 
     fun load(access: Kernel.WarehouseAccess): CompletionStage<List<Kernel.Site>> =
-        cutover.requireKernel().load(access)
+        submit { it.load(access) }
 
     fun search(siteKey: String, query: String): CompletionStage<List<Kernel.Movie>> =
-        cutover.requireKernel().search(siteKey, query)
+        submit { it.search(siteKey, query) }
 
     fun details(movieHandle: String): CompletionStage<Kernel.Detail> =
-        cutover.requireKernel().details(movieHandle)
+        submit { it.details(movieHandle) }
 
     fun play(episodeHandle: String, positionMs: Long = -1L): CompletionStage<Void> =
-        cutover.requireKernel().play(episodeHandle, positionMs)
+        submit { it.play(episodeHandle, positionMs) }
 
-    fun pause(): CompletionStage<Void> = cutover.requireKernel().pause()
-    fun resume(): CompletionStage<Void> = cutover.requireKernel().resume()
-    fun seek(positionMs: Long): CompletionStage<Void> = cutover.requireKernel().seek(positionMs)
-    fun stop(): CompletionStage<Void> = cutover.requireKernel().stop()
-    fun snapshot(): Kernel.State = cutover.requireKernel().snapshot()
-    fun observe(observer: (Kernel.State) -> Unit) = cutover.requireKernel().observe(observer)
-    fun observeDetail(observer: (Kernel.Detail) -> Unit) = cutover.requireKernel().observeDetail(observer)
+    fun pause(): CompletionStage<Void> = submit { it.pause() }
+    fun resume(): CompletionStage<Void> = submit { it.resume() }
+    fun seek(positionMs: Long): CompletionStage<Void> = submit { it.seek(positionMs) }
+    fun stop(): CompletionStage<Void> = submit { it.stop() }
+    fun snapshot(): CompletionStage<Kernel.State> = submit { CompletableFuture.completedFuture(it.snapshot()) }
+    fun observe(observer: (Kernel.State) -> Unit): CompletionStage<Void> = submit {
+        it.observe(observer)
+        CompletableFuture.completedFuture(null)
+    }
+    fun observeDetail(observer: (Kernel.Detail) -> Unit): CompletionStage<Void> = submit {
+        it.observeDetail(observer)
+        CompletableFuture.completedFuture(null)
+    }
+
+    // Source aggregation may call from IO; upstream lifecycle and player APIs
+    // are always entered on the main thread, without creating another worker.
+    private fun <T> submit(operation: (Kernel) -> CompletionStage<T>): CompletionStage<T> {
+        val result = CompletableFuture<T>()
+        val task = Runnable {
+            if (!result.isCancelled) {
+                try {
+                    val delegated = operation(cutover.requireKernel())
+                    delegated.whenComplete { value, failure ->
+                        if (failure == null) result.complete(value)
+                        else result.completeExceptionally(failure)
+                    }
+                    result.whenComplete { _, _ ->
+                        if (result.isCancelled) delegated.toCompletableFuture().cancel(false)
+                    }
+                } catch (failure: RuntimeException) {
+                    result.completeExceptionally(failure)
+                }
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) task.run() else main.post(task)
+        return result
+    }
     override fun close() = cutover.close()
 }
