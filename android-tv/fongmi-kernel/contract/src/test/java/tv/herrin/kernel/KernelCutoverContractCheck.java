@@ -38,10 +38,11 @@ public final class KernelCutoverContractCheck {
         var failure = failed.install(() -> CompletableFuture.failedFuture(new IllegalStateException("old still alive")),
             () -> { throw new AssertionError("Allocated a competing engine after retirement failure"); });
         require(failure.toCompletableFuture().isCompletedExceptionally(), "Retirement failure was hidden");
-        try { failed.install(() -> CompletableFuture.completedFuture(null), () -> closeCounter(closes));
-            throw new AssertionError("Failed transition silently retried");
-        } catch (IllegalStateException expected) { }
+        boolean retryRejected = false;
+        try { failed.install(() -> CompletableFuture.completedFuture(null), () -> closeCounter(closes)); }
+        catch (IllegalStateException expected) { retryRejected = true; }
         failed.close();
+        require(retryRejected, "Failed transition silently retried");
 
         var closing = new KernelCutover(Runnable::run);
         var stillRetiring = new CompletableFuture<Void>();
