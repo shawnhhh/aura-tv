@@ -1,0 +1,16 @@
+plugins { alias libs.plugins.android.library }
+android {
+    namespace = 'tv.herrin.kernel.android'
+    compileSdk = libs.versions.compileSdk.get().toInteger()
+    defaultConfig { minSdk = 26 }
+    compileOptions {
+        coreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+dependencies {
+    api project(':contract')
+    api project(':core')
+    coreLibraryDesugaring libs.desugar
+}
