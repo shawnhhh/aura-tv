@@ -12,5 +12,6 @@ android {
 dependencies {
     api project(':contract')
     api project(':core')
+    implementation libs.appcompat
     coreLibraryDesugaring libs.desugar
 }

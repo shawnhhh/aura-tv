@@ -3,3 +3,9 @@ java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
 }
+tasks.register('checkCutoverContract', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'tv.herrin.kernel.KernelCutoverContractCheck'
+}
+tasks.named('check').configure { dependsOn 'checkCutoverContract' }

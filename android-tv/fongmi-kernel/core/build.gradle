@@ -27,6 +27,7 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInteger()
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInteger()
+        targetSdk = libs.versions.targetSdk.get().toInteger()
         consumerProguardFiles upstream.toPath().resolve('app/proguard-rules.pro').toFile()
         buildConfigField 'String', 'APPLICATION_ID', '"tv.herrin.app"'
         buildConfigField 'String', 'VERSION_NAME', '"5.8.7-herrin-integration"'

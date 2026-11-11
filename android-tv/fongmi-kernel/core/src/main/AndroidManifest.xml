@@ -13,7 +13,7 @@
          called by the kernel Application, never installed in the legacy app. -->
     <application>
         <meta-data android:name="com.fongmi.runtime.catalog" android:value="${runtimeCatalog}" />
-        <activity android:name="com.fongmi.android.tv.ui.activity.WebActivity" android:exported="false" />
+        <activity android:name="com.fongmi.android.tv.ui.activity.WebActivity" android:exported="false" android:theme="@style/Theme.App" />
         <service android:name="com.fongmi.android.tv.api.node.NodeService" android:exported="false" android:process=":nodejs" android:stopWithTask="true" />
     </application>
 </manifest>

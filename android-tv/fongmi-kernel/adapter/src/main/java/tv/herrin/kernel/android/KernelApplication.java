@@ -10,6 +10,7 @@ public class KernelApplication extends App {
     @Override public void onCreate() {
         super.onCreate();
         new Startup().create(this);
+        com.github.catvod.Runtime.setDialog(KernelAuthorizationActivity::show);
     }
 
     @Override public void setHook(Hook hook) {
