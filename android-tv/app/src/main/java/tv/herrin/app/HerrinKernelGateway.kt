@@ -49,11 +49,11 @@ internal class HerrinKernelGateway : AutoCloseable {
     fun snapshot(): CompletionStage<Kernel.State> = submit { CompletableFuture.completedFuture(it.snapshot()) }
     fun observe(observer: (Kernel.State) -> Unit): CompletionStage<Void> = submit {
         it.observe(observer)
-        CompletableFuture.completedFuture(null)
+        CompletableFuture<Void>().apply { complete(null) }
     }
     fun observeDetail(observer: (Kernel.Detail) -> Unit): CompletionStage<Void> = submit {
         it.observeDetail(observer)
-        CompletableFuture.completedFuture(null)
+        CompletableFuture<Void>().apply { complete(null) }
     }
 
     // Source aggregation may call from IO; upstream lifecycle and player APIs

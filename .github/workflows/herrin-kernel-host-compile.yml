@@ -2,7 +2,9 @@ name: HERRIN kernel host compile only
 on:
   push:
     branches: ['codex/herrin-p0-live-playback-20261110']
-    paths: ['.github/workflows/herrin-kernel-host-compile.yml']
+    paths:
+      - '.github/workflows/herrin-kernel-host-compile.yml'
+      - 'android-tv/app/src/main/java/tv/herrin/app/HerrinKernelGateway.kt'
   workflow_dispatch:
 permissions:
   contents: read
