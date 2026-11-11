@@ -37,6 +37,7 @@ public interface Kernel extends AutoCloseable {
                  boolean renderedFirstFrame, String errorCode) {}
 
     CompletionStage<List<Site>> load(WarehouseAccess access);
+    CompletionStage<List<Movie>> home(String siteKey);
     CompletionStage<List<Movie>> search(String siteKey, String query);
     CompletionStage<Detail> details(String movieHandle);
     /** Completes on admission to original PlayerManager, never on playback

@@ -49,7 +49,9 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Map<String, MovieEntry> movies = new HashMap<>();
+    private final Map<String, String> movieHandles = new HashMap<>();
     private final Map<String, Selection> episodes = new HashMap<>();
+    private final Map<Selection, String> episodeHandles = new HashMap<>();
     private final List<CompletableFuture<?>> pending = new ArrayList<>();
     private Consumer<State> observer = state -> {};
     private Consumer<Detail> detailObserver = detail -> {};
@@ -67,6 +69,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private History history;
     private Detail latestDetail;
     private CompletableFuture<Void> playbackAdmission;
+    private CompletableFuture<Detail> detailAdmission;
     private long requestedPosition = C.TIME_UNSET;
     private static final class SessionLifecycle implements LifecycleOwner {
         final LifecycleRegistry registry = new LifecycleRegistry(this);
@@ -116,7 +119,9 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         loaded = false;
         access = next;
         movies.clear();
+        movieHandles.clear();
         episodes.clear();
+        episodeHandles.clear();
         releaseVodSession();
         releasePlayer();
         var future = track(new CompletableFuture<List<Site>>());
@@ -148,6 +153,12 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         return future;
     }
 
+    @Override public CompletionStage<List<Movie>> home(String siteKey) {
+        requireOpen();
+        var original = site(siteKey);
+        return background(epoch, () -> SiteApi.homeContent(original), result ->
+            result.getList().stream().map(vod -> remember(siteKey, vod)).toList());
+    }
     @Override public CompletionStage<List<Movie>> search(String siteKey, String query) {
         requireOpen();
         var original = site(siteKey);
@@ -164,27 +175,20 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         MovieEntry entry = movies.get(handle);
         if (entry == null) throw new SecurityException("Unknown or retired movie handle");
         site(entry.siteKey());
-        return background(epoch, () -> SiteApi.detailContent(entry.siteKey(), entry.vod().getId()), result -> {
-            if (result.getList().isEmpty()) throw new IllegalStateException("EMPTY_DETAIL");
-            Vod vod = result.getVod();
-            List<Line> lines = new ArrayList<>();
-            // SiteApi already invokes original Vod.setFlags/Source.parse. No
-            // delimiter splitting or episode URL decoding is done in the host.
-            for (Flag flag : vod.getFlags()) {
-                List<Episode> items = new ArrayList<>();
-                for (var episode : flag.getEpisodes()) {
-                    String id = UUID.randomUUID().toString();
-                    episodes.put(id, new Selection(entry.siteKey(), vod, flag, episode));
-                    items.add(new Episode(id, episode.getName(), items.size()));
-                }
-                lines.add(new Line(flag.getShow(), items));
-            }
-            return new Detail(remember(entry.siteKey(), vod), lines);
-        });
+        if (vodSession != null && currentSite.equals(entry.siteKey()) && currentId.equals(entry.vod().getId()) && latestDetail != null)
+            return CompletableFuture.completedFuture(latestDetail);
+        releaseVodSession();
+        releasePlayer();
+        currentVod = entry.vod(); currentSite = entry.siteKey(); currentId = currentVod.getId();
+        detailAdmission = track(new CompletableFuture<>());
+        vodSession = new OriginalVodSession(lifecycle, this,
+            key -> !closed && loaded && currentSite.equals(key) && access.approvedSiteKeys().contains(key));
+        vodSession.openDetail();
+        return detailAdmission;
     }
 
     private Movie remember(String siteKey, Vod vod) {
-        String handle = UUID.randomUUID().toString();
+        String handle = movieHandles.computeIfAbsent(siteKey + "\u0000" + vod.getId(), key -> UUID.randomUUID().toString());
         movies.put(handle, new MovieEntry(siteKey, vod));
         return new Movie(handle, siteKey, vod.getName(), vod.getYear(), vod.getPic(), vod.getContent());
     }
@@ -212,6 +216,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
                 key -> !closed && loaded && currentSite.equals(key) && access.approvedSiteKeys().contains(key));
             vodSession.acceptDetail(currentSite, currentId, Result.vod(currentVod));
         }
+        vodSession.allowPlayback();
         // These are the original controller entry points, exactly as an
         // upstream UI line/episode click. The original model cancels displaced
         // requests and the controller handles expanded netdisk episode results.
@@ -270,14 +275,41 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         observedPlayer = player;
         if (player != null) player.addListener(events);
         if (view != null && manager != null) manager.bindPlayerView(view);
+        publish("");
     }
 
     /** Called by the existing UI's AndroidView host after cutover. */
     public void bind(PlayerView playerView) {
         requireOpen();
-        if (view != null && view != playerView) view.setPlayer(null);
+        if (view != null && view != playerView) { view.setBackendPlayer(null); view.setPlayer(null); }
         view = playerView;
-        if (manager != null) manager.bindPlayerView(view);
+        if (manager != null && view != null) manager.bindPlayerView(view);
+    }
+    public Player playerForHost() { requireOpen(); ensurePlayer(); return manager.getPlayer(); }
+    public void unbindForHost(PlayerView expected) { requireOpen(); if (view == expected) bind(null); }
+    public float speedForHost(float value) { requireOpen(); ensurePlayer(); return manager.setSpeed(value); }
+    public void repeatForHost(boolean value) { requireOpen(); ensurePlayer(); manager.setRepeatOne(value); }
+    public void skipSilenceForHost(boolean value) { requireOpen(); ensurePlayer(); manager.setSkipSilenceEnabled(value); }
+    public boolean skipSilenceForHost() { requireOpen(); ensurePlayer(); return manager.isSkipSilence(); }
+    public boolean cycleTrackForHost(int type) {
+        requireOpen(); ensurePlayer();
+        var tracks = manager.getPlayer().getCurrentTracks();
+        List<com.fongmi.android.tv.bean.Track> choices = new ArrayList<>();
+        int selected = -1;
+        int ordinal = 0;
+        for (var group : tracks.getGroups()) {
+            if (group.getType() != type) continue;
+            for (int i = 0; i < group.length; i++) {
+                var format = group.getTrackFormat(i);
+                var choice = com.fongmi.android.tv.player.track.TrackUtil.createTrack(type,
+                    format.label == null ? "" : format.label, format, ordinal++);
+                if (group.isTrackSelected(i)) selected = choices.size();
+                choices.add(choice);
+            }
+        }
+        if (choices.isEmpty()) return false;
+        manager.setTrack(choices.get((selected + 1) % choices.size()).key(manager.getKey()));
+        return true;
     }
 
     private void updateState() {
@@ -388,6 +420,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
             vodSession = null;
         }
         if (playbackAdmission != null && !playbackAdmission.isDone()) playbackAdmission.cancel(false);
+        if (detailAdmission != null && !detailAdmission.isDone()) detailAdmission.cancel(false);
         currentVod = null;
         currentFlags = List.of();
         history = null;
@@ -404,8 +437,9 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         for (Flag flag : currentFlags) {
             List<Episode> values = new ArrayList<>();
             for (var episode : flag.getEpisodes()) {
-                String handle = UUID.randomUUID().toString();
-                episodes.put(handle, new Selection(currentSite, currentVod, flag, episode));
+                var selection = new Selection(currentSite, currentVod, flag, episode);
+                String handle = episodeHandles.computeIfAbsent(selection, key -> UUID.randomUUID().toString());
+                episodes.put(handle, selection);
                 values.add(new Episode(handle, episode.getName(), values.size()));
             }
             lines.add(new Line(flag.getShow(), values));
@@ -469,9 +503,15 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
             value -> { if (manager != null) manager.setDanmaku(value); },
             value -> { if (manager != null) manager.addDanmaku(value); });
     }
-    @Override public void renderDetail(Vod item, History current) { currentVod = item; currentFlags = item.getFlags(); history = current; refreshDetail(); }
+    @Override public void renderDetail(Vod item, History current) {
+        currentVod = item; currentFlags = item.getFlags(); history = current; refreshDetail();
+        if (detailAdmission != null) detailAdmission.complete(latestDetail);
+    }
     @Override public void renderVodUpdate(Vod item) { currentVod = item; refreshDetail(); }
-    @Override public void renderEmptyDetail() { latestDetail = null; emit(Phase.ERROR, "EMPTY_DETAIL"); failAdmission(); }
+    @Override public void renderEmptyDetail() {
+        latestDetail = null; emit(Phase.ERROR, "EMPTY_DETAIL"); failAdmission();
+        if (detailAdmission != null) detailAdmission.completeExceptionally(new IllegalStateException("EMPTY_DETAIL"));
+    }
     @Override public void renderFallbackName(String name) { if (currentVod != null) { currentVod.setName(name); refreshDetail(); } }
     @Override public void renderFlags(List<Flag> items) { currentFlags = items; refreshDetail(); }
     @Override public void renderEpisodes(List<com.fongmi.android.tv.bean.Episode> items) { refreshDetail(); }
@@ -512,7 +552,9 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         active = null;
         loaded = false;
         movies.clear();
+        movieHandles.clear();
         episodes.clear();
+        episodeHandles.clear();
         for (var future : List.copyOf(pending)) future.cancel(false);
         VodConfig.get().cancel();
         Source.get().stop();

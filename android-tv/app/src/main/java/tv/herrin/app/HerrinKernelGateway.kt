@@ -34,6 +34,7 @@ internal class HerrinKernelGateway : AutoCloseable {
 
     fun search(siteKey: String, query: String): CompletionStage<List<Kernel.Movie>> =
         submit { it.search(siteKey, query) }
+    fun home(siteKey: String): CompletionStage<List<Kernel.Movie>> = submit { it.home(siteKey) }
 
     fun details(movieHandle: String): CompletionStage<Kernel.Detail> =
         submit { it.details(movieHandle) }

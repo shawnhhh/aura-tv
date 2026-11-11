@@ -34,6 +34,8 @@ public final class OriginalVodSession implements AutoCloseable {
     private final VideoViewModel model;
     private final VodPlaybackController controller;
     private boolean closed;
+    private boolean playbackAllowed;
+    private VodPlayRequest deferredSelection;
     private final Observer<VodDetailResult> detail;
     private final Observer<PlaybackResult<VodPlayRequest>> playback;
     private final Observer<PlaybackResult<VodPlayRequest>> preload;
@@ -53,12 +55,17 @@ public final class OriginalVodSession implements AutoCloseable {
             }
             @Override public void cancelContent() { model.cancelContent(); }
             @Override public void playerContent(VodPlayRequest request) {
-                check(request.getKey()); model.playerContent(request);
+                check(request.getKey());
+                // HERRIN opens details before the user presses Play. Preserve
+                // original controller selection state, but defer execution.
+                if (!playbackAllowed) deferredSelection = request;
+                else model.playerContent(request);
             }
             @Override public void resolveContent(VodPlayRequest request, Result result) {
                 check(request.getKey()); model.resolveContent(request, result);
             }
             @Override public void preloadContent(VodPlayRequest request) {
+                if (!playbackAllowed) throw new IllegalStateException("Preload requires user playback admission");
                 check(request.getKey()); model.preloadContent(request);
             }
             @Override public void cancelPreloadContent() { model.cancelPreloadContent(); }
@@ -84,6 +91,7 @@ public final class OriginalVodSession implements AutoCloseable {
         if (closed) throw new IllegalStateException("VOD session closed");
     }
     public void openDetail() { requireOpen(); controller.checkId(); }
+    public void allowPlayback() { requireOpen(); playbackAllowed = true; deferredSelection = null; }
     public void acceptDetail(String key, String id, Result result) {
         requireOpen(); controller.onDetailResult(new VodDetailResult(key, id, result));
     }

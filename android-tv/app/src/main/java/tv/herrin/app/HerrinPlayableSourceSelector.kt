@@ -14,7 +14,7 @@ import java.net.URI
  */
 internal object HerrinPlayableSourceSelector {
     data class Selected(val episode: Int, val line: String, val media: PlaybackMedia,
-                        val claimedResolution: Int)
+                        val claimedResolution: Int, val mediaBytesVerified: Boolean = true)
 
     private fun origin(value: String): Triple<String, String, Int>? = try {
         val uri = URI(value)
@@ -52,6 +52,11 @@ internal object HerrinPlayableSourceSelector {
                 null
             }
             if(media==null)continue
+            if (media.kernelPlayback != null) {
+                // Selection admission only. Original kernel validates media
+                // when its player starts; never call this MEDIA_BYTES_VERIFIED.
+                return Selected(episode.number, line.id, media, 0, mediaBytesVerified = false)
+            }
             // A provider can return a dead primary and working alternate. Verify each
             // candidate before handing it to Media3; never retain unverified fallbacks.
             // Authenticated media must not forward credentials to a different origin.

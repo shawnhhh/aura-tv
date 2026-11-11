@@ -659,6 +659,7 @@ private fun Herrin(startup: StartupPresentation) {
     // HTTP metadata/playlist access is enabled by default; plugin execution is
     // limited to a user-applied source or a previously pinned JAR fingerprint.
     var tvBoxAllowHttp by remember { mutableStateOf(true) }
+    SideEffect { spiderBridge.configureKernelWarehouse(prefs.tvBoxWarehouseUrl, tvBoxAllowHttp) }
     var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
     var tvBoxLoadEpoch by remember { zeroIntState() }
@@ -1575,7 +1576,8 @@ private fun Herrin(startup: StartupPresentation) {
                             verifiedLine!!.episode to verifiedLine.line
                     }
                     HerrinPlaybackDiagnosticJournal.record("SOURCE",
-                        if (passed) "MEDIA_BYTES_VERIFIED" else "MEDIA_BYTES_REJECTED")
+                        if (verifiedLine?.mediaBytesVerified == false) "KERNEL_SELECTION_ADMITTED_MEDIA_PENDING"
+                        else if (passed) "MEDIA_BYTES_VERIFIED" else "MEDIA_BYTES_REJECTED")
                     passed
                 },
                 selectRemote = { offer, _ ->
@@ -2252,7 +2254,10 @@ private fun Herrin(startup: StartupPresentation) {
                 }
             }
             val parsed = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp)
-            spiderResolved = if(parsed is PlaybackResult.Ready) {
+            spiderResolved = if(parsed is PlaybackResult.Ready && parsed.media.kernelPlayback != null) {
+                HerrinPlaybackDiagnosticJournal.record("SOURCE", "KERNEL_MEDIA_VALIDATION_DEFERRED")
+                parsed
+            } else if(parsed is PlaybackResult.Ready) {
                 val validation = withContext(Dispatchers.IO) {
                     withTimeoutOrNull(4_000) {
                         HerrinRemoteMediaProbe(authorizeLocal = { candidate ->

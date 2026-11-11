@@ -43,6 +43,7 @@ internal class HerrinRemoteMediaProbe(
     suspend fun canRead(media: PlaybackMedia): Boolean = probe(media) == Result.MEDIA
 
     suspend fun probe(media: PlaybackMedia): Result {
+        require(media.kernelPlayback == null) { "Whole-kernel selections must not enter the legacy media probe" }
         val began = System.nanoTime()
         val ioPhase = java.util.concurrent.atomic.AtomicReference("NO_CONNECT_EVENT")
         val observedClient = client.newBuilder().eventListener(object: okhttp3.EventListener() {
