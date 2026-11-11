@@ -23,20 +23,26 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
     val manager = Controls()
     init { if (legacy != null) runtime?.registerLegacy(this, ::close) }
 
-    fun select(media: PlaybackMedia, position: Long) {
+    fun select(media: PlaybackMedia, position: Long): java.util.concurrent.CompletionStage<Void>? {
         check(!closed)
         this.media = media
-        start(media.uri, media.declaredMime, position)
+        val ticket = media.kernelPlayback
+        if (ticket != null && !ticket.replay && runtime?.pages?.alreadyPlaying(ticket) == true)
+            return java.util.concurrent.CompletableFuture.completedFuture(null)
+        return start(media.uri, media.declaredMime, position)
     }
-    fun start(uri: String, mime: String? = media.declaredMime, position: Long = C.TIME_UNSET) {
+    fun start(uri: String, mime: String? = media.declaredMime, position: Long = C.TIME_UNSET): java.util.concurrent.CompletionStage<Void>? {
         check(!closed)
         if (original != null) {
             val ticket = requireNotNull(media.kernelPlayback)
             requireNotNull(runtime).player(ticket) // Recheck session ownership.
-            runtime.gateway.play(ticket.episode, position)
-        } else requireNotNull(legacy).start(uri, mime, position)
+            return runtime.gateway.play(ticket.episode, position)
+        } else { requireNotNull(legacy).start(uri, mime, position); return null }
     }
-    fun observe(observer: (Kernel.State) -> Unit) { if (whole) requireNotNull(runtime).gateway.observe(observer) }
+    fun observe(observer: (Kernel.State) -> Unit) { if (whole) requireNotNull(runtime).gateway.observe {
+        runtime.pages?.onState(it)
+        observer(it)
+    } }
     fun bind(view: PlayerView?) {
         if (original != null) original.bind(view) else if (view != null) view.player = player
     }
@@ -49,7 +55,9 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
         closed = true
         if (original != null) {
             original.bind(null)
-            requireNotNull(runtime).gateway.stop()
+            val owner = requireNotNull(runtime)
+            owner.gateway.observe { owner.pages?.onState(it) }
+            owner.gateway.stop()
         } else {
             requireNotNull(legacy).close()
             runtime?.unregisterLegacy(this)

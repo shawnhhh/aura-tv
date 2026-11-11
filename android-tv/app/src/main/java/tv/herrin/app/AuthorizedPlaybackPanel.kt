@@ -453,7 +453,7 @@ private fun AuthorizedPlaybackSession(
         (player as? ExoPlayer)?.let(onPlayer)
         if (playback.whole) currentMediaSession?.setPlayer(player)
     }
-    LaunchedEffect(playback, media.kernelPlayback) {
+    LaunchedEffect(playback, media.kernelPlayback, if (playback.whole) media.diagnosticSessionId else null) {
         if (playback.whole) {
             playback.observe { state ->
                 if (!playback.isClosed && state.phase() in setOf(tv.herrin.kernel.Kernel.Phase.RESOLVING,
@@ -464,7 +464,10 @@ private fun AuthorizedPlaybackSession(
                 if (state.phase() == tv.herrin.kernel.Kernel.Phase.ERROR)
                     errorMessage = "原版内核播放失败；可重新解析、切集或返回详情"
             }
-            playback.select(media, if (startPositionMs > 0) startPositionMs else C.TIME_UNSET)
+            playback.select(media, if (startPositionMs > 0) startPositionMs else C.TIME_UNSET)?.whenComplete { _, failure ->
+                if (failure != null && !playback.isClosed)
+                    errorMessage = "原版内核请求失败；请返回详情重新选择"
+            }
         }
     }
     val backGate = remember { PlaybackBackGate() }

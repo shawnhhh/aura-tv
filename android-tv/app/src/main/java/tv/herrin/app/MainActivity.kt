@@ -660,6 +660,24 @@ private fun Herrin(startup: StartupPresentation) {
     // limited to a user-applied source or a previously pinned JAR fingerprint.
     var tvBoxAllowHttp by remember { mutableStateOf(true) }
     SideEffect { spiderBridge.configureKernelWarehouse(prefs.tvBoxWarehouseUrl, tvBoxAllowHttp) }
+    val kernelPages = remember(context) { HerrinKernelRuntime.find()?.pages }
+    LaunchedEffect(kernelPages?.revision) {
+        if (kernelPages != null) {
+            providerFilms = providerFilms?.map { item ->
+                kernelPages.latest(item)?.let { FilmMetadataEnrichment.mergeSourceDetails(item, it) } ?: item
+            }
+            tmdbState.tmdbResolved.toMap().forEach { (id, metadata) ->
+                kernelPages.latest(metadata)?.let { fresh ->
+                    val source = fresh.spiderOrigin?.site
+                    if (source == spiderBridge.approvedActiveSiteKey()) {
+                        tmdbState.tmdbResolved[id] = FilmMetadataEnrichment.mergeSourceDetails(metadata, fresh)
+                        if (tmdbState.tmdbPlaybackRoutes.sourceFilm(id) != fresh)
+                            tmdbState.tmdbPlaybackRoutes.spider(id, requireNotNull(source), fresh)
+                    }
+                }
+            }
+        }
+    }
     var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
     var tvBoxLoadEpoch by remember { zeroIntState() }
@@ -756,6 +774,7 @@ private fun Herrin(startup: StartupPresentation) {
             launch(Dispatchers.IO) { tvBoxRepository.loadUserWarehouse(address) }
         }
         if (settingsTvBoxOnly && tvBoxSingle != null) {
+            spiderBridge.configureKernelWarehouse(address, tvBoxAllowHttp)
             // Import must activate an actual catalog, not just display 49 names
             // under Settings while the home page stays on the demo collection.
             val config = tvBoxSingle!!
@@ -1067,6 +1086,13 @@ private fun Herrin(startup: StartupPresentation) {
     var showSearchAdvancedFilters by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
+    LaunchedEffect(kernelPages?.selectedCoordinate) {
+        val coordinate = kernelPages?.selectedCoordinate
+        if (coordinate != null && screen == "player") {
+            episode = coordinate.first
+            line = coordinate.second
+        }
+    }
     val playbackDiagnosticId = remember(screen, filmId, episode, line, playerRetryEpoch) { PlaybackDiagnosticSession.newId() }
     var detailSelectedSeason by rememberSaveable { zeroIntState() }
     var restoreSeasonFocus by remember { mutableStateOf(false) }

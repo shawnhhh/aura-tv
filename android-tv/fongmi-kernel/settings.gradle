@@ -9,3 +9,9 @@ dependencyResolutionManagement {
 rootProject.name = 'herrin-fongmi-kernel'
 include ':contract', ':catvod', ':core', ':adapter'
 project(':catvod').projectDir = file('../vendor/fongmi-core/upstream/catvod')
+// Original independently buildable runtime bridges. The full player dependency
+// gate does not block these source builds, nor are they bundled as fake runtimes.
+['quickjs', 'nodejs', 'thunder', 'chaquo'].each { module ->
+    include ":${module}"
+    project(":${module}").projectDir = file("../vendor/fongmi-core/upstream/${module}")
+}

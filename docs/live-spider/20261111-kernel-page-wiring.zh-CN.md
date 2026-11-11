@@ -32,5 +32,21 @@ PlayerManager，比例仍由现有viewport设置驱动原PlayerView。MPV没有E
 unbind携带具体View身份，旧View释放不能拆掉后装的新Surface。返回详情/ON_STOP保持
 原导航回调，只暂停/停止内核，不调用Application退出。个人/直播稳定旧路径保持默认。
 
-当前待完成：动态网盘选集与播放坐标回传到页面、授权取消的状态观测、依赖源码构建适配、
-精确旧会话退休门禁及最终集中语法/签名检查。完整原版classpath尚未验证，不能开启whole源集。
+## 后续连续完成
+
+已加入动态网盘选集/播放坐标回传到现有页面；自动切集不会被页面重组再次触发解析，
+明确重播会重新取得原版播放状态。站点/仓库变化时校验请求session，旧结果不能用新站点
+授权签名。Source重定向更新Vod ID时保持逻辑影片handle，按原数据更新category/remarks，
+不写死剧集类型或改变TMDB规则。
+
+原授权Activity维护真实pending request、完成/取消/销毁通知；Kernel.State新增
+authorizationPending，只表示原源请求仍待处理，**不表示QR已显示、授权成功或已出帧**。
+内核关闭会撤销全部待处理对话框并禁止无会话请求打开授权页。
+
+独立构建加入原QuickJS/Node/Thunder/Python bridge工程及源码AAR构建脚本。
+Python原native.lock固定python-android@4cabf1d1bce37d1fc517d939c54b8087af8f9cd3，
+已通过公开commit元数据确认存在；ABI/二进制输入及未知来源项记录在evidence JSON。
+仅构建原AAR，不生成APK、不改包名/签名、不以二进制存在推定对应源码合法齐全。
+
+仍待：精确旧会话退休与Surface门禁集中检查、原媒体依赖版本/源码匹配、默认宿主小范围
+编译检查。完整原版classpath尚未验证，whole源目录/清单不加入稳定构建。

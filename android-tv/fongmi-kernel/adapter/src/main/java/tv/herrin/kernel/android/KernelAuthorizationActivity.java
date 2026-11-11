@@ -18,19 +18,40 @@ import java.util.function.Function;
 public final class KernelAuthorizationActivity extends FragmentActivity {
     private static final String TICKET = "kernel.authorization.ticket";
     private static final ConcurrentHashMap<String, Request> REQUESTS = new ConcurrentHashMap<>();
+    private static Object sessionOwner;
+    private static java.util.function.Consumer<Boolean> pendingObserver = value -> {};
     private record Request(String options, Function<String, CompletableFuture<String>> callback,
                            CompletableFuture<String> result) {}
     private Request request;
     private CompletableFuture<String> dialog;
+
+    static void bindSession(Object owner, java.util.function.Consumer<Boolean> observer) {
+        sessionOwner = owner;
+        pendingObserver = observer;
+    }
+    static void cancelRequests() {
+        for (Request request : REQUESTS.values()) request.result().cancel(false);
+    }
+    static void endSession(Object owner) {
+        if (sessionOwner != owner) return;
+        sessionOwner = null;
+        cancelRequests();
+        pendingObserver = value -> {};
+    }
+    private static void publishPending() {
+        App.post(() -> pendingObserver.accept(!REQUESTS.isEmpty()));
+    }
 
     static CompletableFuture<String> show(String options, Function<String, CompletableFuture<String>> callback) {
         var result = new CompletableFuture<String>();
         String ticket = UUID.randomUUID().toString();
         var request = new Request(options, callback, result);
         REQUESTS.put(ticket, request);
-        result.whenComplete((value, failure) -> REQUESTS.remove(ticket, request));
+        result.whenComplete((value, failure) -> { REQUESTS.remove(ticket, request); publishPending(); });
+        publishPending();
         App.post(() -> {
             if (result.isDone()) return;
+            if (sessionOwner == null) { result.cancel(false); return; }
             Activity owner = App.activity();
             if (owner == null || owner.isFinishing() || owner.isDestroyed()) {
                 result.completeExceptionally(new IllegalStateException("Authorization requires a foreground host"));
@@ -48,13 +69,14 @@ public final class KernelAuthorizationActivity extends FragmentActivity {
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         String ticket = getIntent().getStringExtra(TICKET);
-        request = ticket == null ? null : REQUESTS.remove(ticket);
+        request = ticket == null ? null : REQUESTS.get(ticket);
         if (request == null || request.result().isDone()) finish();
     }
 
     @Override protected void onPostResume() {
         super.onPostResume();
         if (request == null || dialog != null || isFinishing()) return;
+        if (request.result().isDone()) { finish(); return; }
         // App's ActivityLifecycleCallbacks have now installed this real
         // FragmentActivity as Runtime.activity(). No QR or credentials are
         // synthesized by HERRIN: the original SpiderDialog renders everything.

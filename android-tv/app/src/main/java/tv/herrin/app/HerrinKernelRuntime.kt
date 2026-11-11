@@ -27,7 +27,7 @@ interface WholeKernelPlayer {
     val skipSilenceEnabled: Boolean
 }
 
-data class KernelPlaybackTicket(val session: String, val episode: String)
+data class KernelPlaybackTicket(val session: String, val episode: String, val replay: Boolean = false)
 
 /** Process lifetime owner. Disabled builds never allocate a whole-core player. */
 internal class HerrinKernelRuntime private constructor(private val installer: WholeKernelInstaller?) {

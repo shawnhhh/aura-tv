@@ -23,7 +23,8 @@ public interface Kernel extends AutoCloseable {
         }
     }
     record Site(String key, String name) {}
-    record Movie(String handle, String siteKey, String title, String year, String artwork, String synopsis) {}
+    record Movie(String handle, String siteKey, String title, String year, String artwork, String synopsis,
+                 String category, String remarks) {}
     record Episode(String handle, String title, int index) {}
     record Line(String name, List<Episode> episodes) {
         public Line { episodes = List.copyOf(episodes); }
@@ -34,7 +35,8 @@ public interface Kernel extends AutoCloseable {
     enum Phase { IDLE, CONFIGURING, READY, RESOLVING, BUFFERING, PLAYING, PAUSED, ENDED, ERROR, CLOSED }
     /** renderedFirstFrame only comes from the actual player's video event. */
     record State(long request, Phase phase, long positionMs, long durationMs,
-                 boolean renderedFirstFrame, String errorCode) {}
+                 boolean renderedFirstFrame, String errorCode, String selectedEpisodeHandle,
+                 boolean authorizationPending) {}
 
     CompletionStage<List<Site>> load(WarehouseAccess access);
     CompletionStage<List<Movie>> home(String siteKey);

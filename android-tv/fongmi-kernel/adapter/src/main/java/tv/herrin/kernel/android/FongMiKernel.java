@@ -66,8 +66,10 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private List<Flag> currentFlags = List.of();
     private String currentSite = "";
     private String currentId = "";
+    private String presentationMovieHandle = "";
     private History history;
     private Detail latestDetail;
+    private String selectedEpisodeHandle = "";
     private CompletableFuture<Void> playbackAdmission;
     private CompletableFuture<Detail> detailAdmission;
     private long requestedPosition = C.TIME_UNSET;
@@ -79,6 +81,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private long request;
     private volatile boolean closed;
     private boolean firstFrame;
+    private boolean authorizationPending;
     private boolean loaded;
     private Phase phase = Phase.IDLE;
 
@@ -92,6 +95,9 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         if (!OWNER.compareAndSet(null, this))
             throw new IllegalStateException("A FongMi kernel already owns this process");
         lifecycle.registry.setCurrentState(Lifecycle.State.RESUMED);
+        KernelAuthorizationActivity.bindSession(this, pending -> {
+            if (!closed) { authorizationPending = pending; publish(""); }
+        });
     }
 
     private static void requireMain() {
@@ -117,6 +123,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         long ticket = ++epoch;
         ++request;
         loaded = false;
+        KernelAuthorizationActivity.cancelRequests();
         access = next;
         movies.clear();
         movieHandles.clear();
@@ -180,6 +187,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         releaseVodSession();
         releasePlayer();
         currentVod = entry.vod(); currentSite = entry.siteKey(); currentId = currentVod.getId();
+        presentationMovieHandle = handle;
         detailAdmission = track(new CompletableFuture<>());
         vodSession = new OriginalVodSession(lifecycle, this,
             key -> !closed && loaded && currentSite.equals(key) && access.approvedSiteKeys().contains(key));
@@ -188,9 +196,12 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     }
 
     private Movie remember(String siteKey, Vod vod) {
-        String handle = movieHandles.computeIfAbsent(siteKey + "\u0000" + vod.getId(), key -> UUID.randomUUID().toString());
+        String identity = siteKey + "\u0000" + vod.getId();
+        String handle = vod == currentVod && siteKey.equals(currentSite) && !presentationMovieHandle.isEmpty()
+            ? presentationMovieHandle : movieHandles.computeIfAbsent(identity, key -> UUID.randomUUID().toString());
+        movieHandles.put(identity, handle);
         movies.put(handle, new MovieEntry(siteKey, vod));
-        return new Movie(handle, siteKey, vod.getName(), vod.getYear(), vod.getPic(), vod.getContent());
+        return new Movie(handle, siteKey, vod.getName(), vod.getYear(), vod.getPic(), vod.getContent(), vod.getTypeName(), vod.getRemarks());
     }
 
     @Override public CompletionStage<Void> play(String handle, long startPositionMs) {
@@ -212,6 +223,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
             currentVod = selected.vod();
             currentSite = selected.siteKey();
             currentId = currentVod.getId();
+            presentationMovieHandle = movieHandles.getOrDefault(currentSite + "\u0000" + currentId, "");
             vodSession = new OriginalVodSession(lifecycle, this,
                 key -> !closed && loaded && currentSite.equals(key) && access.approvedSiteKeys().contains(key));
             vodSession.acceptDetail(currentSite, currentId, Result.vod(currentVod));
@@ -357,12 +369,12 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         if (vodSession != null && manager != null)
             vodSession.onProgress(System.currentTimeMillis(), manager.getPosition(), manager.getDuration());
         return new State(request, phase, manager == null ? 0 : manager.getPosition(),
-            manager == null ? 0 : manager.getDuration(), firstFrame, "");
+            manager == null ? 0 : manager.getDuration(), firstFrame, "", selectedEpisodeHandle, authorizationPending);
     }
     private void publish(String code) {
         if (!closed) {
             try { observer.accept(new State(request, phase, manager == null ? 0 : manager.getPosition(),
-                manager == null ? 0 : manager.getDuration(), firstFrame, code)); }
+                manager == null ? 0 : manager.getDuration(), firstFrame, code, selectedEpisodeHandle, authorizationPending)); }
             catch (RuntimeException error) { android.util.Log.e("HerrinKernel", "STATE_OBSERVER_FAILED"); }
         }
     }
@@ -422,9 +434,11 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         if (playbackAdmission != null && !playbackAdmission.isDone()) playbackAdmission.cancel(false);
         if (detailAdmission != null && !detailAdmission.isDone()) detailAdmission.cancel(false);
         currentVod = null;
+        presentationMovieHandle = "";
         currentFlags = List.of();
         history = null;
         latestDetail = null;
+        selectedEpisodeHandle = "";
     }
     private void failAdmission() {
         if (playbackAdmission != null && !playbackAdmission.isDone())
@@ -516,7 +530,11 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     @Override public void renderFlags(List<Flag> items) { currentFlags = items; refreshDetail(); }
     @Override public void renderEpisodes(List<com.fongmi.android.tv.bean.Episode> items) { refreshDetail(); }
     @Override public void renderFlagSelection(Flag item) { publish(""); }
-    @Override public void renderEpisodeSelection(com.fongmi.android.tv.bean.Episode item) { publish(""); }
+    @Override public void renderEpisodeSelection(com.fongmi.android.tv.bean.Episode item) {
+        selectedEpisodeHandle = episodes.entrySet().stream().filter(entry ->
+            entry.getValue().episode() == item).map(Map.Entry::getKey).findFirst().orElse("");
+        publish("");
+    }
     @Override public void renderReverseEpisodes(List<com.fongmi.android.tv.bean.Episode> items, boolean scroll) { refreshDetail(); }
     @Override public void renderQuality(Result result, boolean visible) { publish(""); }
     @Override public void renderQualityVisible(boolean visible) { publish(""); }
@@ -545,6 +563,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         releasePlayer();
         emit(Phase.CLOSED, "");
         closed = true;
+        KernelAuthorizationActivity.endSession(this);
         observer = state -> {};
         detailObserver = detail -> {};
         view = null;
