@@ -39,6 +39,8 @@ public interface Kernel extends AutoCloseable {
     CompletionStage<List<Site>> load(WarehouseAccess access);
     CompletionStage<List<Movie>> search(String siteKey, String query);
     CompletionStage<Detail> details(String movieHandle);
+    /** Completes on admission to original PlayerManager, never on playback
+     * success. Observe actual frame/progress events separately. */
     CompletionStage<Void> play(String episodeHandle, long startPositionMs);
     CompletionStage<Void> pause();
     CompletionStage<Void> resume();
@@ -46,5 +48,6 @@ public interface Kernel extends AutoCloseable {
     CompletionStage<Void> stop();
     State snapshot();
     void observe(Consumer<State> observer);
+    void observeDetail(Consumer<Detail> observer);
     @Override void close();
 }

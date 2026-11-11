@@ -21,7 +21,7 @@ def verify(directory, lock_path):
     artifacts = lock['artifacts']
     if not artifacts:
         raise ValueError('DEPENDENCY_BLOCKED: no source/version/license-locked external artifacts')
-    names, classes = set(), set()
+    names, classes, locked_upstream = set(), set(), set()
     for artifact in artifacts:
         for field in ('path', 'sha256', 'source_repository', 'source_commit', 'version',
                       'license_file', 'build_instructions'):
@@ -29,8 +29,11 @@ def verify(directory, lock_path):
                 raise ValueError('Missing provenance field: ' + field)
         if not re.fullmatch(r'[0-9a-f]{40}', artifact['source_commit']):
             raise ValueError('Corresponding source must use a full commit')
-        path = (directory / artifact['path']).resolve()
-        path.relative_to(directory.resolve())
+        base = UPSTREAM if artifact.get('origin') == 'upstream' else directory
+        path = (base / artifact['path']).resolve()
+        path.relative_to(base.resolve())
+        if artifact.get('origin') == 'upstream':
+            locked_upstream.add(artifact['path'])
         if path.suffix != '.aar' or path.name in names:
             raise ValueError('Duplicate or non-AAR input')
         names.add(path.name)
@@ -56,6 +59,9 @@ def verify(directory, lock_path):
     missing_archives = set(lock['required_external_archives']) - names
     if missing_archives:
         raise ValueError('Missing archives: ' + ', '.join(sorted(missing_archives)))
+    missing_upstream = set(lock['required_upstream_archives']) - locked_upstream
+    if missing_upstream:
+        raise ValueError('Upstream binary provenance missing: ' + ', '.join(sorted(missing_upstream)))
     imports = set()
     for flavor in ('main', 'leanback'):
         for file in (UPSTREAM / 'app/src' / flavor / 'java').rglob('*.java'):

@@ -46,5 +46,6 @@ internal class HerrinKernelGateway : AutoCloseable {
     fun stop(): CompletionStage<Void> = cutover.requireKernel().stop()
     fun snapshot(): Kernel.State = cutover.requireKernel().snapshot()
     fun observe(observer: (Kernel.State) -> Unit) = cutover.requireKernel().observe(observer)
+    fun observeDetail(observer: (Kernel.Detail) -> Unit) = cutover.requireKernel().observeDetail(observer)
     override fun close() = cutover.close()
 }

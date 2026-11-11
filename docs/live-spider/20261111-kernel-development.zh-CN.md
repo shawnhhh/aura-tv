@@ -77,11 +77,17 @@ CrashJournal、绑定原PlayerView，将页面改接gateway后再删除旧实现
 VodPlaybackState及原LiveData详情/播放/预载/搜索回调，委托选线/选集/重播/切集/
 Seek通知/进度/历史/生命周期，不自行实现网盘展开选集算法。
 
-**必须注意：这一绑定尚未与Kernel句柄接口和实际UI统一。** FongMiKernel现有直接
-SiteApi→PlayerManager委托只是初步适配，不含完整VodPlaybackController的网盘动态
-选集、历史和预载调度。不能以类存在或这个初步play方法声称完整原版链路已可用。
-最终应由OriginalVodSession成为唯一VOD调度路径，补齐UI渲染Host，将playerContent
-与原版状态机统一，移除初步直接调度；不可同时调度同一播放请求。
+随后继续完成了句柄接口与这一绑定的统一：FongMiKernel实现原VodPlaybackHost，
+56个原抽象方法均有实现；play只调用OriginalVodSession的原版选线/选集入口，
+playerContent通过原VideoViewModel→VodPlaybackController→PlayerManager.parse。
+删除初步SiteApi.playerContent/playSelection快捷调度，不保留两条VOD执行路线。
+原控制器处理网盘展开选集，observeDetail发布新的不透明选集handle，过期句柄失效。
+预载、切集、错误、刷新、Seek通知、进度与退出历史保存均委托原控制器/播放器。
+原模型数据源外只增加授权过滤，避免原fallback搜索越过用户选定站点/外层源顺序。
+这属于业务授权边界，不实现解析、Proxy或HLS。
+
+**实际页面和Application尚未接线，Android类型/链接未验证。** 原版专用Web播放及
+其他非P0可选交互仍需集中编译/运行时核对，不能据源集完整或静态方法匹配声称全功能等价。
 
 ## 本批统一验证结果
 
@@ -102,8 +108,8 @@ SiteApi→PlayerManager委托只是初步适配，不含完整VodPlaybackControl
 ## 准确续跑
 
 读取最新HEAD与此记录，不重新拉取TV源码、不跑1360文件审计、不测原版APK/旧403。
-复用android-tv/fongmi-kernel的4模块和已有源码，优先完成OriginalVodSession与句柄API/
-渲染Host的单路径整合，避免保留两套调度入口。取得TV305dff2所需定制Media3及MPV/
+复用android-tv/fongmi-kernel的4模块和已有源码；OriginalVodSession与句柄API/
+渲染Host的单路径整合已写入，不重做直接playerContent路径。取得TV305dff2所需定制Media3及MPV/
 FFmpeg真实源码/版本/构建对应关系后，填dependencies.json真实artifacts并完整编译；
 修复类型/链接问题，再接入当前Application/页面/PlayerView，移除旧同包类和stock Media3。
 完整可编译前不启用新入口；之后旧会话完全退休→新kernel唯一分配→删除旧链路。

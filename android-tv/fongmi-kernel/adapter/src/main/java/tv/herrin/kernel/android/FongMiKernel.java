@@ -9,16 +9,25 @@ import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.danmaku.DanmakuConfig;
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.LifecycleRegistry;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Config;
 import com.fongmi.android.tv.bean.Flag;
+import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.extractor.Source;
+import com.fongmi.android.tv.player.media.PlaySpec;
+import com.fongmi.android.tv.playback.vod.VodPlaybackHost;
+import com.fongmi.android.tv.playback.vod.VodPlaybackMedia;
+import com.fongmi.android.tv.playback.vod.VodPlayRequest;
+import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.server.Server;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,7 +44,7 @@ import java.util.function.Consumer;
 import tv.herrin.kernel.Kernel;
 
 /** Direct calls into whole upstream modules. This class does not resolve media. */
-public final class FongMiKernel implements Kernel {
+public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private static final AtomicReference<FongMiKernel> OWNER = new AtomicReference<>();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -43,11 +52,26 @@ public final class FongMiKernel implements Kernel {
     private final Map<String, Selection> episodes = new HashMap<>();
     private final List<CompletableFuture<?>> pending = new ArrayList<>();
     private Consumer<State> observer = state -> {};
+    private Consumer<Detail> detailObserver = detail -> {};
     private WarehouseAccess access;
     private PlayerManager manager;
     private Player observedPlayer;
     private PlayerView view;
     private Selection active;
+    private OriginalVodSession vodSession;
+    private final SessionLifecycle lifecycle = new SessionLifecycle();
+    private Vod currentVod;
+    private List<Flag> currentFlags = List.of();
+    private String currentSite = "";
+    private String currentId = "";
+    private History history;
+    private Detail latestDetail;
+    private CompletableFuture<Void> playbackAdmission;
+    private long requestedPosition = C.TIME_UNSET;
+    private static final class SessionLifecycle implements LifecycleOwner {
+        final LifecycleRegistry registry = new LifecycleRegistry(this);
+        @Override public Lifecycle getLifecycle() { return registry; }
+    }
     private volatile long epoch;
     private long request;
     private volatile boolean closed;
@@ -64,6 +88,7 @@ public final class FongMiKernel implements Kernel {
             throw new IllegalStateException("Install KernelApplication before constructing the kernel");
         if (!OWNER.compareAndSet(null, this))
             throw new IllegalStateException("A FongMi kernel already owns this process");
+        lifecycle.registry.setCurrentState(Lifecycle.State.RESUMED);
     }
 
     private static void requireMain() {
@@ -92,6 +117,7 @@ public final class FongMiKernel implements Kernel {
         access = next;
         movies.clear();
         episodes.clear();
+        releaseVodSession();
         releasePlayer();
         var future = track(new CompletableFuture<List<Site>>());
         emit(Phase.CONFIGURING, "");
@@ -168,31 +194,30 @@ public final class FongMiKernel implements Kernel {
         Selection selected = episodes.get(handle);
         if (selected == null) throw new SecurityException("Unknown or retired episode handle");
         site(selected.siteKey());
+        if (!selected.flag().getEpisodes().contains(selected.episode()))
+            throw new IllegalStateException("Episode was replaced by upstream resolution");
         active = selected;
-        return playSelection(selected, startPositionMs);
-    }
-
-    private CompletionStage<Void> playSelection(Selection selected, long position) {
-        long playback = ++request;
-        firstFrame = false;
+        if (playbackAdmission != null && !playbackAdmission.isDone()) playbackAdmission.cancel(false);
+        boolean changingMovie = vodSession == null || currentVod != selected.vod() || !currentSite.equals(selected.siteKey());
+        if (changingMovie) releaseVodSession();
+        playbackAdmission = track(new CompletableFuture<>());
+        requestedPosition = startPositionMs < 0 ? C.TIME_UNSET : startPositionMs;
         if (manager != null) manager.stop();
-        emit(Phase.RESOLVING, "");
-        var resultFuture = background(epoch, () -> SiteApi.playerContent(selected.siteKey(), selected.flag().getFlag(),
-            selected.episode().getUrl()), result -> {
-            if (request != playback) throw new CancellationException("Playback selection superseded");
-            ensurePlayer();
-            MediaMetadata metadata = new MediaMetadata.Builder().setTitle(selected.vod().getName()).build();
-            // Original PlayerManager owns ParseJob, media request creation,
-            // engine selection, progress, timeouts and decoder lifecycle.
-            manager.parse(selected.siteKey(), result, false, metadata,
-                position < 0 ? C.TIME_UNSET : position);
-            return (Void) null;
-        });
-        resultFuture.whenComplete((value, failure) -> main.post(() -> {
-            if (!closed && request == playback && failure != null && !(failure instanceof CancellationException))
-                emit(Phase.ERROR, "UPSTREAM_PLAYBACK_REQUEST_FAILED");
-        }));
-        return resultFuture;
+        ensurePlayer();
+        if (changingMovie) {
+            currentVod = selected.vod();
+            currentSite = selected.siteKey();
+            currentId = currentVod.getId();
+            vodSession = new OriginalVodSession(lifecycle, this,
+                key -> !closed && loaded && currentSite.equals(key) && access.approvedSiteKeys().contains(key));
+            vodSession.acceptDetail(currentSite, currentId, Result.vod(currentVod));
+        }
+        // These are the original controller entry points, exactly as an
+        // upstream UI line/episode click. The original model cancels displaced
+        // requests and the controller handles expanded netdisk episode results.
+        vodSession.selectLine(selected.flag());
+        vodSession.selectEpisode(selected.episode());
+        return playbackAdmission;
     }
 
     private void ensurePlayer() {
@@ -202,11 +227,22 @@ public final class FongMiKernel implements Kernel {
             @Override public void onTracksChanged() { publish(""); }
             @Override public void onDecodeChanged() { publish(""); }
             @Override public void onMediaOptionsChanged() { publish(""); }
-            @Override public void onError(String message) { emit(Phase.ERROR, "UPSTREAM_PLAYBACK_ERROR"); }
+            @Override public void onError(String message) {
+                emit(Phase.ERROR, "UPSTREAM_PLAYBACK_ERROR");
+                if (vodSession != null) vodSession.playbackError(message);
+                failAdmission();
+            }
             @Override public boolean onRefresh() {
-                if (closed || active == null) return false;
-                playSelection(active, manager.getPosition());
+                if (closed || vodSession == null) return false;
+                vodSession.refresh();
                 return true;
+            }
+            @Override public void onPreloadError(Object tag) {
+                if (vodSession != null && tag instanceof VodPlayRequest original) vodSession.onPreloadError(original);
+            }
+            @Override public void onPreloadTransition(Object tag, long position, long duration) {
+                if (vodSession != null && tag instanceof VodPlayRequest original)
+                    vodSession.onPreloadTransition(original, position, duration);
             }
             @Override public void onPlayerRebuild(Player player) { attachPlayer(player); }
             @Override public void onDanmakuSourceChanged(Uri uri) { publish(""); }
@@ -219,8 +255,14 @@ public final class FongMiKernel implements Kernel {
 
     private final Player.Listener events = new Player.Listener() {
         @Override public void onRenderedFirstFrame() { firstFrame = true; publish(""); }
-        @Override public void onPlaybackStateChanged(int state) { updateState(); }
-        @Override public void onIsPlayingChanged(boolean playing) { updateState(); }
+        @Override public void onPlaybackStateChanged(int state) {
+            updateState();
+            if (state == Player.STATE_ENDED && vodSession != null) vodSession.onEnded();
+        }
+        @Override public void onIsPlayingChanged(boolean playing) {
+            updateState();
+            if (vodSession != null) vodSession.onPlayingChanged(playing);
+        }
     };
 
     private void attachPlayer(Player player) {
@@ -249,12 +291,13 @@ public final class FongMiKernel implements Kernel {
     @Override public CompletionStage<Void> resume() { return control(() -> manager.play()); }
     @Override public CompletionStage<Void> seek(long positionMs) {
         if (positionMs < 0) throw new IllegalArgumentException("Negative seek");
-        return control(() -> manager.seekTo(positionMs));
+        return control(() -> { manager.seekTo(positionMs); if (vodSession != null) vodSession.onSeek(); });
     }
     @Override public CompletionStage<Void> stop() {
         requireOpen();
         ++request;
         active = null;
+        releaseVodSession();
         releasePlayer();
         emit(Phase.IDLE, "");
         return CompletableFuture.completedFuture(null);
@@ -271,9 +314,16 @@ public final class FongMiKernel implements Kernel {
         observer = java.util.Objects.requireNonNull(next);
         publish("");
     }
+    @Override public void observeDetail(Consumer<Detail> next) {
+        requireOpen();
+        detailObserver = java.util.Objects.requireNonNull(next);
+        if (latestDetail != null) detailObserver.accept(latestDetail);
+    }
     private void emit(Phase next, String code) { phase = next; publish(code); }
     @Override public State snapshot() {
         requireOpen();
+        if (vodSession != null && manager != null)
+            vodSession.onProgress(System.currentTimeMillis(), manager.getPosition(), manager.getDuration());
         return new State(request, phase, manager == null ? 0 : manager.getPosition(),
             manager == null ? 0 : manager.getDuration(), firstFrame, "");
     }
@@ -331,14 +381,134 @@ public final class FongMiKernel implements Kernel {
         manager = null;
         firstFrame = false;
     }
+    private void releaseVodSession() {
+        if (vodSession != null) {
+            if (manager != null) vodSession.saveHistory(true, System.currentTimeMillis(), manager.getPosition(), manager.getDuration());
+            vodSession.close();
+            vodSession = null;
+        }
+        if (playbackAdmission != null && !playbackAdmission.isDone()) playbackAdmission.cancel(false);
+        currentVod = null;
+        currentFlags = List.of();
+        history = null;
+        latestDetail = null;
+    }
+    private void failAdmission() {
+        if (playbackAdmission != null && !playbackAdmission.isDone())
+            playbackAdmission.completeExceptionally(new IllegalStateException("UPSTREAM_PLAYBACK_ERROR"));
+    }
+    private void refreshDetail() {
+        if (currentVod == null) return;
+        episodes.entrySet().removeIf(entry -> entry.getValue().vod() == currentVod);
+        List<Line> lines = new ArrayList<>();
+        for (Flag flag : currentFlags) {
+            List<Episode> values = new ArrayList<>();
+            for (var episode : flag.getEpisodes()) {
+                String handle = UUID.randomUUID().toString();
+                episodes.put(handle, new Selection(currentSite, currentVod, flag, episode));
+                values.add(new Episode(handle, episode.getName(), values.size()));
+            }
+            lines.add(new Line(flag.getShow(), values));
+        }
+        latestDetail = new Detail(remember(currentSite, currentVod), lines);
+        try { detailObserver.accept(latestDetail); }
+        catch (RuntimeException error) { android.util.Log.e("HerrinKernel", "DETAIL_OBSERVER_FAILED"); }
+    }
+
+    // Original VodPlaybackHost: UI projection and calls to the same original
+    // PlayerManager. No playerContent/Source/ParseJob logic is implemented here.
+    @Override public String getVodKey() { return currentSite; }
+    @Override public String getVodId() { return currentId; }
+    @Override public void setVodId(String id) { currentId = id; }
+    @Override public String getVodName() { return currentVod == null ? "" : currentVod.getName(); }
+    @Override public String getVodPic() { return currentVod == null ? "" : currentVod.getPic(); }
+    @Override public String getVodMark() { return ""; }
+    @Override public String getHistoryKey() {
+        return currentSite + AppDatabase.SYMBOL + currentId + AppDatabase.SYMBOL + VodConfig.getCid();
+    }
+    @Override public boolean isSiteChangeable() { return false; }
+    @Override public boolean isFromCollect() { return false; }
+    @Override public boolean isHostFinishing() { return closed; }
+    @Override public boolean isPlayerEmpty() { return manager == null || manager.isEmpty(); }
+    @Override public boolean hasPlaybackSession() { return manager != null && !manager.isEmpty(); }
+    @Override public boolean isLivePlayback() { return false; }
+    @Override public boolean canTrackPlaybackProgress() { return manager != null && !manager.isEmpty(); }
+    @Override public boolean canPreloadNext() { return manager != null; }
+    @Override public boolean isPlayerPlaying() { return manager != null && manager.isPlaying(); }
+    @Override public long getPlayerPosition() { return manager == null ? 0 : manager.getPosition(); }
+    @Override public long getPlayerDuration() { return manager == null ? 0 : manager.getDuration(); }
+    @Override public void usePushId(String id) { throw new SecurityException("Push requires separate source authorization"); }
+    @Override public void openPush(String target) { throw new SecurityException("Push requires separate source authorization"); }
+    @Override public void onPlaybackRequested() { ++request; firstFrame = false; emit(Phase.RESOLVING, ""); }
+    @Override public void prepareSource(Vod item) {
+        if (!item.getSiteKey().isEmpty() && !currentSite.equals(item.getSiteKey()))
+            throw new SecurityException("Source switch requires explicit host routing");
+        currentVod = item; currentFlags = item.getFlags(); currentId = item.getId(); refreshDetail();
+    }
+    @Override public void stopPlaybackForRefresh() { if (manager != null) manager.stop(); }
+    @Override public void resetPlaybackForError(String message) { stopPlaybackForRefresh(); emit(Phase.ERROR, "UPSTREAM_VOD_ERROR"); failAdmission(); }
+    @Override public void replay(long position) { requestedPosition = position; if (vodSession != null) vodSession.replay(); }
+    @Override public void seekPlayback(long position) { if (manager != null) manager.seekTo(position); }
+    @Override public void setPlaybackEnding(long ending) { if (manager != null) manager.setEnding(ending); }
+    @Override public boolean isPlaybackEndingManaged() { return true; }
+    @Override public void startPlayback(Result result, boolean useParse, long position, MediaMetadata metadata) {
+        ensurePlayer();
+        long start = requestedPosition == C.TIME_UNSET ? position : requestedPosition;
+        requestedPosition = C.TIME_UNSET;
+        manager.parse(getHistoryKey(), result, useParse, metadata, start, history == null ? 0 : history.getEnding());
+        if (playbackAdmission != null) playbackAdmission.complete(null);
+    }
+    @Override public boolean preloadPlayback(Result result, long position, MediaMetadata metadata, VodPlayRequest tag) {
+        return manager != null && manager.preload(PlaySpec.from(result, getHistoryKey(), metadata)
+            .setEnding(history == null ? 0 : history.getEnding()), position, tag);
+    }
+    @Override public boolean seekToPreloaded(VodPlayRequest tag) { return manager != null && manager.seekToPreloaded(tag); }
+    @Override public void clearPreload() { if (manager != null) manager.clearPreload(); }
+    @Override public void loadDanmaku(Result result, History current, com.fongmi.android.tv.bean.Episode episode) {
+        if (manager != null) VodPlaybackMedia.searchDanmaku(result, current, episode,
+            value -> { if (manager != null) manager.setDanmaku(value); },
+            value -> { if (manager != null) manager.addDanmaku(value); });
+    }
+    @Override public void renderDetail(Vod item, History current) { currentVod = item; currentFlags = item.getFlags(); history = current; refreshDetail(); }
+    @Override public void renderVodUpdate(Vod item) { currentVod = item; refreshDetail(); }
+    @Override public void renderEmptyDetail() { latestDetail = null; emit(Phase.ERROR, "EMPTY_DETAIL"); failAdmission(); }
+    @Override public void renderFallbackName(String name) { if (currentVod != null) { currentVod.setName(name); refreshDetail(); } }
+    @Override public void renderFlags(List<Flag> items) { currentFlags = items; refreshDetail(); }
+    @Override public void renderEpisodes(List<com.fongmi.android.tv.bean.Episode> items) { refreshDetail(); }
+    @Override public void renderFlagSelection(Flag item) { publish(""); }
+    @Override public void renderEpisodeSelection(com.fongmi.android.tv.bean.Episode item) { publish(""); }
+    @Override public void renderReverseEpisodes(List<com.fongmi.android.tv.bean.Episode> items, boolean scroll) { refreshDetail(); }
+    @Override public void renderQuality(Result result, boolean visible) { publish(""); }
+    @Override public void renderQualityVisible(boolean visible) { publish(""); }
+    @Override public void renderSources(List<Vod> items) { publish(""); }
+    @Override public void renderHistory(History current) { history = current; publish(""); }
+    @Override public void renderUseParse(boolean enabled) { publish(""); }
+    @Override public void renderArtwork(String url) { if (currentVod != null) { currentVod.setPic(url); refreshDetail(); } }
+    @Override public void renderDescription(String desc) { publish(""); }
+    @Override public void renderPlaybackMetadata(MediaMetadata metadata) { if (manager != null) manager.setMetadata(metadata); }
+    @Override public void onDetailFallbackScheduled() { publish(""); }
+    @Override public void onDetailFallbackCancelled() { publish(""); }
+    @Override public void onSearchStarted(String keyword) { publish(""); }
+    @Override public void onSearchResult() { publish(""); }
+    @Override public void showDetailMessage(String message) { publish(""); }
+    @Override public void showSwitchLine(Flag item) { publish(""); }
+    @Override public void showSwitchSource(Vod item) { site(item.getSiteKey().isEmpty() ? currentSite : item.getSiteKey()); publish(""); }
+    @Override public void showNoNext(boolean reversed) { emit(Phase.ENDED, ""); }
+    @Override public void showNoPrev(boolean reversed) { publish(""); }
+    @Override public void finishVod() { failAdmission(); releasePlayer(); emit(Phase.IDLE, ""); }
     @Override public void close() {
         requireMain();
         if (closed) return;
         ++epoch;
         ++request;
+        releaseVodSession();
         releasePlayer();
         emit(Phase.CLOSED, "");
         closed = true;
+        observer = state -> {};
+        detailObserver = detail -> {};
+        view = null;
+        lifecycle.registry.setCurrentState(Lifecycle.State.DESTROYED);
         active = null;
         loaded = false;
         movies.clear();

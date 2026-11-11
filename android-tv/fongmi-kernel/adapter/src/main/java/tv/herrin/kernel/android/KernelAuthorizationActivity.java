@@ -47,7 +47,8 @@ public final class KernelAuthorizationActivity extends FragmentActivity {
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        request = REQUESTS.remove(getIntent().getStringExtra(TICKET));
+        String ticket = getIntent().getStringExtra(TICKET);
+        request = ticket == null ? null : REQUESTS.remove(ticket);
         if (request == null || request.result().isDone()) finish();
     }
 

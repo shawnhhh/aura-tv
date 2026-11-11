@@ -21,5 +21,6 @@
     "reason": "The immutable release lists four APK assets, no AAR inputs or corresponding build manifest. No APK extraction/decompilation substitutes for corresponding source."
   },
   "required_external_archives": ["lib-mpvplayer-release.aar", "lib-decoder-ffmpeg-release.aar"],
+  "required_upstream_archives": ["app/libs/hook-release.aar", "app/libs/tvbus-release.aar"],
   "artifacts": []
 }

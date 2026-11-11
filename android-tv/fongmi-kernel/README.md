@@ -6,6 +6,15 @@ SiteApi, VodConfig, loaders, Proxy, Source, ParseJob, PlayerManager and both
 engines. `catvod` is the original project. `contract` is the Android-free host
 boundary; `adapter` delegates to upstream APIs without media parsing.
 
+Playback uses original VideoViewModel/VodPlaybackController/VodPlaybackState,
+then original PlayerManager.parse. There is no direct SiteApi.playerContent
+shortcut. Original resolved netdisk episodes flow through the controller, and
+updated opaque selection handles are published through observeDetail. Original
+preload/history/progress callbacks remain in the same session. The data-source
+wrapper only restricts execution to the explicitly selected/authorized site;
+HERRIN's outer router continues to own source order. Playback admission futures
+are not video-frame or authorization-success evidence.
+
 The only source host patch generates Nano with a **loopback listener**, preserving
 its original process dispatch and response handling. No original UI launcher is
 registered. The kernel Application extends original App/Startup and refuses
