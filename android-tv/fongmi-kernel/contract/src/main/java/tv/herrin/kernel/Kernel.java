@@ -44,6 +44,7 @@ public interface Kernel extends AutoCloseable {
     CompletionStage<Void> resume();
     CompletionStage<Void> seek(long positionMs);
     CompletionStage<Void> stop();
+    State snapshot();
     void observe(Consumer<State> observer);
     @Override void close();
 }

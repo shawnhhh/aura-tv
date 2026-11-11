@@ -272,9 +272,17 @@ public final class FongMiKernel implements Kernel {
         publish("");
     }
     private void emit(Phase next, String code) { phase = next; publish(code); }
+    @Override public State snapshot() {
+        requireOpen();
+        return new State(request, phase, manager == null ? 0 : manager.getPosition(),
+            manager == null ? 0 : manager.getDuration(), firstFrame, "");
+    }
     private void publish(String code) {
-        if (!closed) observer.accept(new State(request, phase, manager == null ? 0 : manager.getPosition(),
-            manager == null ? 0 : manager.getDuration(), firstFrame, code));
+        if (!closed) {
+            try { observer.accept(new State(request, phase, manager == null ? 0 : manager.getPosition(),
+                manager == null ? 0 : manager.getDuration(), firstFrame, code)); }
+            catch (RuntimeException error) { android.util.Log.e("HerrinKernel", "STATE_OBSERVER_FAILED"); }
+        }
     }
 
     private <T> CompletableFuture<T> track(CompletableFuture<T> future) {

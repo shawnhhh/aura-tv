@@ -50,3 +50,18 @@ KernelApplication继承原App初始化Runtime/Startup，拒绝包名/签名Hook�
 
 状态：委托代码已写，Android编译尚未验证；当前app未接入，绝不说已替换。
 下一模块D/E：宿主统一网关、单所有者无回退切换边界、保持稳定app；之后统一检查。
+
+## 模块D/E：切换协议与稳定宿主
+
+KernelCutover只有单向状态机：NOT_INSTALLED→RETIRING_LEGACY→INSTALLED，失败为
+FAILED，关闭为CLOSED。旧会话退休future完成后才允许分配新kernel；没有旧工厂或
+隐式恢复入口。宿主新增HerrinKernelGateway和纯contract依赖，可供现有页面调用，
+没有修改UI/TMDB/源优先顺序/直播/遥控。snapshot直接读原manager位置与时长。
+
+**尚未实际切换或删除旧代码**：外部Media3定制API不匹配，完整kernel不能编译；
+按用户D“完整可编译路径前不要破坏当前稳定分支”，当前Application和页面继续原入口。
+最终接线仍需宿主工具链/同包类/stock Media3迁移，改继承KernelApplication、保留
+CrashJournal、绑定原PlayerView，将页面改接gateway后再删除旧实现。新增类不是已经接管。
+
+所有当前能独立实现的构建边界、API委托与宿主接口已连续提交；进入统一静态/最小编译
+检查。依赖输入问题只影响完整Android构建，不重跑环境审计、节点/模拟器/TV/ABBA。
