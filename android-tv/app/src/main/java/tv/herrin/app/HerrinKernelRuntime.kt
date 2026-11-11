@@ -44,6 +44,13 @@ internal class HerrinKernelRuntime private constructor(private val installer: Wh
         check(legacyPlayers.isEmpty()) { "Legacy player retirement did not complete" }
         return CompletableFuture.completedFuture(null)
     }
+    fun retireWholePlaybackForPersonal() {
+        if (gateway.status != tv.herrin.kernel.KernelCutover.Status.INSTALLED) return
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        val stopped = gateway.stop().toCompletableFuture()
+        check(stopped.isDone) { "Original player retirement must finish before another renderer is allocated" }
+        stopped.join()
+    }
 
     @Synchronized fun activate(retireLegacy: () -> CompletionStage<Void>): CompletionStage<Void> {
         installed?.let { return it }
@@ -54,6 +61,8 @@ internal class HerrinKernelRuntime private constructor(private val installer: Wh
     }
     fun player(ticket: KernelPlaybackTicket): WholeKernelPlayer {
         require(pages?.owns(ticket) == true) { "Retired kernel playback ticket" }
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        retireLegacy().toCompletableFuture().join()
         return requireNotNull(port) { "Whole kernel is not installed" }
     }
     companion object {

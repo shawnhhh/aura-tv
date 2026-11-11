@@ -50,3 +50,8 @@ Python原native.lock固定python-android@4cabf1d1bce37d1fc517d939c54b8087af8f9cd
 
 仍待：精确旧会话退休与Surface门禁集中检查、原媒体依赖版本/源码匹配、默认宿主小范围
 编译检查。完整原版classpath尚未验证，whole源目录/清单不加入稳定构建。
+
+已补齐退休协议：新whole渲染器取得前同步关闭已登记旧播放器；NAS/直播取回独立渲染前，
+同步停止原版播放器。来源Mode由Application固定，whole门面根本不能绑定旧Spider服务。
+退出页面释放observer、Surface和播放器，不关闭应用，不把旧View的onRelease作用到新View。
+新增独立compile-only CI，仅编译默认稳定宿主与contract，不跑任何测试/模拟器/媒体或APK。

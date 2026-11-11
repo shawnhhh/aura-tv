@@ -13,8 +13,10 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
                                    persistTrackPreferences: Boolean) : AutoCloseable {
     private val runtime = HerrinKernelRuntime.find()
     private val original = media.kernelPlayback?.let { requireNotNull(runtime).player(it) }
-    private val legacy = if (original == null) HerrinPlaybackAdapter(context, media,
-        persistTrackPreferences = persistTrackPreferences) else null
+    private val legacy = if (original == null) {
+        runtime?.retireWholePlaybackForPersonal()
+        HerrinPlaybackAdapter(context, media, persistTrackPreferences = persistTrackPreferences)
+    } else null
     val whole get() = original != null
     val isClosed get() = closed
     val skipSilenceEnabled get() = original?.skipSilenceEnabled ?: requireNotNull(legacy).player.skipSilenceEnabled
@@ -44,12 +46,13 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
         observer(it)
     } }
     fun bind(view: PlayerView?) {
+        if (closed) { view?.player = null; return }
         if (original != null) original.bind(view) else if (view != null) view.player = player
     }
     fun play() { if (whole) requireNotNull(runtime).gateway.resume() else requireNotNull(legacy).play() }
     fun unbind(view: PlayerView) { if (original != null && !closed) original.unbind(view) else view.player = null }
-    fun pause() { if (whole) requireNotNull(runtime).gateway.pause() else requireNotNull(legacy).pause() }
-    fun snapshot() { if (whole) requireNotNull(runtime).gateway.snapshot() }
+    fun pause() { if (!closed) { if (whole) requireNotNull(runtime).gateway.pause() else requireNotNull(legacy).pause() } }
+    fun snapshot() { if (whole && !closed) requireNotNull(runtime).gateway.snapshot() }
     override fun close() {
         if (closed) return
         closed = true

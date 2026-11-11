@@ -7,6 +7,8 @@ import java.util.UUID
 import java.util.concurrent.CompletionStage
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import tv.herrin.kernel.Kernel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -15,7 +17,8 @@ internal suspend fun <T> CompletionStage<T>.awaitKernel(): T = suspendCancellabl
     val future = toCompletableFuture()
     future.whenComplete { value, failure ->
         if (continuation.isActive) {
-            if (failure == null) continuation.resume(value) else continuation.resumeWithException(failure)
+            if (failure == null) continuation.resume(value) else continuation.resumeWithException(
+                if (failure is java.util.concurrent.CompletionException) failure.cause ?: failure else failure)
         }
     }
     continuation.invokeOnCancellation { future.cancel(false) }
@@ -23,11 +26,12 @@ internal suspend fun <T> CompletionStage<T>.awaitKernel(): T = suspendCancellabl
 
 /** Projection into existing Film/episode layouts; never decodes source JSON. */
 internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
-    private var warehouse = ""
-    private var allowHttp = false
-    private var site: TvBoxSite? = null
-    private var session = UUID.randomUUID().toString()
-    private var authority: SpiderFilmAuthority? = null
+    private val requests = Mutex()
+    @Volatile private var warehouse = ""
+    @Volatile private var allowHttp = false
+    @Volatile private var site: TvBoxSite? = null
+    @Volatile private var session = UUID.randomUUID().toString()
+    @Volatile private var authority: SpiderFilmAuthority? = null
     private val movies = java.util.concurrent.ConcurrentHashMap<String, Kernel.Movie>()
     private val selections = java.util.concurrent.ConcurrentHashMap<String, KernelPlaybackTicket>()
     private val latest = java.util.concurrent.ConcurrentHashMap<String, Film>()
@@ -90,7 +94,7 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         check(selectedSession == session)
         projectDetail(detail)
     }
-    fun media(film: Film, number: Int, line: String): PlaybackResult = try {
+    @Synchronized fun media(film: Film, number: Int, line: String): PlaybackResult = try {
         val selected = ticket(film, number, line).copy(replay = lastRequestedEpisode == line)
         lastRequestedEpisode = line
         PlaybackResult.Ready(PlaybackMedia("kernel-selection:$line", kernelPlayback = selected))
@@ -129,7 +133,7 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         selectedCoordinate = null; currentEpisode = ""; currentPhase = Kernel.Phase.IDLE; lastRequestedEpisode = ""
         runtime.gateway.stop()
     }
-    private suspend fun <T> result(block: suspend () -> T): SpiderResult<T> = try { SpiderResult.Ready(block()) }
+    private suspend fun <T> result(block: suspend () -> T): SpiderResult<T> = try { requests.withLock { SpiderResult.Ready(block()) } }
     catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
     catch (_: Exception) { SpiderResult.Failure("原版内核请求失败；未回退旧播放系统") }
 }
