@@ -2,6 +2,11 @@ plugins { alias libs.plugins.android.library }
 
 def upstream = file('../../vendor/fongmi-core/upstream')
 def externalLibraries = providers.gradleProperty('fongmiLibraries').map { file(it) }
+def verifyInputs = tasks.register('verifyKernelDependencies', Exec) {
+    def directory = externalLibraries.getOrElse(file('../unresolved-libraries'))
+    commandLine 'python3', rootProject.file('verify_dependencies.py'), '--directory', directory,
+        '--lock', providers.gradleProperty('fongmiDependencyLock').getOrElse(rootProject.file('dependencies.json').toString())
+}
 
 android {
     namespace = 'com.fongmi.android.tv'
@@ -80,3 +85,6 @@ dependencies {
     annotationProcessor libs.glide.compiler
     coreLibraryDesugaring libs.desugar
 }
+// Only this full-kernel compilation depends on external engine inputs. Contract
+// and independent modules remain buildable; no fake AAR is generated on failure.
+tasks.named('preBuild').configure { dependsOn verifyInputs }
