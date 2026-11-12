@@ -22,6 +22,10 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
     val skipSilenceEnabled get() = original?.skipSilenceEnabled ?: requireNotNull(legacy).player.skipSilenceEnabled
     val player: Player get() = original?.player ?: requireNotNull(legacy).player
     private var closed = false
+    // Scene callbacks may outlive the warehouse that created this playback
+    // ticket. Track the currently selected source session independently of
+    // the process-wide shared FongMi player lease.
+    private var wholeSourceSession = media.kernelPlayback?.session
     val manager = Controls()
     init {
         if (legacy != null) runtime?.registerLegacy(this, ::close)
@@ -36,6 +40,7 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
             return java.util.concurrent.CompletableFuture.failedFuture(IllegalStateException("Retired playback UI lease"))
         this.media = media
         val ticket = media.kernelPlayback
+        if (whole) wholeSourceSession = ticket?.session
         if (ticket != null && !ticket.replay && runtime?.pages?.alreadyPlaying(ticket) == true)
             return java.util.concurrent.CompletableFuture.completedFuture(null)
         return start(media.uri, media.declaredMime, position)
@@ -50,12 +55,15 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
             return runtime.gateway.play(ticket.episode, position)
         } else { requireNotNull(legacy).start(uri, mime, position); return null }
     }
-    fun observe(observer: (Kernel.State) -> Unit) { if (isActiveWhole()) requireNotNull(runtime).gateway.observe {
-        if (isActiveWhole()) {
-            runtime.pages?.onState(it)
-            observer(it)
+    fun observe(observer: (Kernel.State) -> Unit) {
+        val sourceAtSubscription = wholeSourceSession
+        if (isActiveWhole()) requireNotNull(runtime).gateway.observe {
+            if (isActiveWhole() && sourceAtSubscription == runtime.pages?.playbackLease()) {
+                runtime.pages?.onState(it)
+                observer(it)
+            }
         }
-    } }
+    }
     fun bind(view: PlayerView?) {
         if (original != null) {
             if (isActiveWhole()) original.bind(view)
@@ -76,7 +84,8 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
             val owner = requireNotNull(runtime)
             // Compose may dispose the previous panel after its replacement exists.
             // Only the current lease can detach the shared Surface or stop the core.
-            if (owner.releaseWholePlayback(this)) {
+            if (owner.releaseWholePlayback(this) &&
+                owner.pages?.playbackLease() == wholeSourceSession) {
                 original.bind(null)
                 owner.gateway.observe { owner.pages?.onState(it) }
                 owner.gateway.stop()
