@@ -509,6 +509,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     private val kernelPages = HerrinKernelRuntime.find()?.pages
     internal fun configureKernelWarehouse(root: String, allowHttp: Boolean) { kernelPages?.warehouse(root, allowHttp) }
     internal fun kernelOwns(film: Film): Boolean = kernelPages?.owns(film) == true
+    internal fun kernelPlaybackLease(): String? = kernelPages?.playbackLease()
     private val pending = mutableMapOf<Int, CompletableDeferred<String>>()
     private val searchRequests=mutableSetOf<Int>()
     private val waitingForBind = mutableListOf<CompletableDeferred<Messenger>>()
@@ -1012,8 +1013,8 @@ internal class TvBoxSpiderBridge(context: Context) {
      */
     private val playbackLease = java.util.concurrent.atomic.AtomicLong()
 
-    fun releasePlayback() {
-        kernelPages?.let { it.releasePlayback(); return }
+    fun releasePlayback(expectedKernelSession: String? = null) {
+        kernelPages?.let { it.releasePlayback(expectedKernelSession); return }
         val selectedLease = playbackLease.get()
         val selectedSource = lastBrowse
         val selectedGeneration = generation

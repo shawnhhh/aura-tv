@@ -45,6 +45,9 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         private set
     fun warehouse(root: String, cleartext: Boolean) { warehouse = TvBoxUrl.normalize(root, cleartext).orEmpty(); allowHttp = cleartext }
     fun activeSite(): String? = site?.key
+    // A Compose player scene releases only the warehouse session it entered.
+    // The new session cannot be stopped by an older scene's onDispose callback.
+    fun playbackLease(): String = session
     fun owns(ticket: KernelPlaybackTicket) = ticket.session == session && selections[ticket.episode]?.session == session
     fun onState(state: Kernel.State) {
         currentEpisode = state.selectedEpisodeHandle()
@@ -137,7 +140,10 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         revision++
         return projected
     }
-    fun releasePlayback() { runtime.gateway.stop() }
+    fun releasePlayback(expectedSession: String? = null) {
+        if (expectedSession != null && expectedSession != session) return
+        runtime.gateway.stop()
+    }
     fun close() {
         session = UUID.randomUUID().toString()
         movies.clear(); selections.clear(); latest.clear(); coordinates.clear(); site = null; authority = null

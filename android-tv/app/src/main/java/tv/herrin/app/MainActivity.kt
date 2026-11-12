@@ -1044,9 +1044,12 @@ private fun Herrin(startup: StartupPresentation) {
     }
     // Media rekeys (refresh, episode and line) keep their active source. Only
     // leaving the player releases its Spider resources and next play rehydrates.
-    DisposableEffect(screen == "player", spiderActive) {
+    val kernelPlaybackSceneLease = spiderBridge.kernelPlaybackLease()
+    DisposableEffect(screen == "player", spiderActive, kernelPlaybackSceneLease) {
         val ownsPlayback = screen == "player" && spiderActive
-        onDispose { if (ownsPlayback) spiderBridge.releasePlayback() }
+        // Retire only the session that originally entered this playback scene.
+        // A later site/warehouse load can coexist with a delayed old disposal.
+        onDispose { if (ownsPlayback) spiderBridge.releasePlayback(kernelPlaybackSceneLease) }
     }
 
     LaunchedEffect(screen, filmId) {
