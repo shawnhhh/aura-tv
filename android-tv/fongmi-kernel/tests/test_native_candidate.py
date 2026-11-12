@@ -64,6 +64,30 @@ class NativeCandidateTests(unittest.TestCase):
             self.assertEqual(report["status"], "NATIVE_CANDIDATE_BUILD_OR_PACKAGE_FAILED")
             self.assertTrue(any("armeabi-v7a" in e and "ELF" in e for e in report["errors"]))
 
+    def test_original_tv_missing_class_is_explicit_incompatibility(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "aar"
+            output.mkdir()
+            fixture(output / "lib-mpvplayer-release.aar", "mpvplayer")
+            fixture(output / "lib-decoder-ffmpeg-release.aar", "decoder_ffmpeg")
+            upstream = root / "tv"
+            source = upstream / "app/src/main/java"
+            leanback = upstream / "app/src/leanback/java"
+            source.mkdir(parents=True)
+            leanback.mkdir(parents=True)
+            (source / "Engine.java").write_text(
+                "import androidx.media3.mpvplayer.MpvDecoderMode;\n"
+            )
+            outcome = inspect(output, upstream)
+            self.assertEqual(
+                outcome["status"], "SOURCE_BUILT_NATIVE_CANDIDATE_TV_API_INCOMPATIBLE"
+            )
+            self.assertIn(
+                "androidx.media3.mpvplayer.MpvDecoderMode",
+                outcome["missing_original_tv_classes"]
+            )
+
     def test_rejects_missing_ffmpeg(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

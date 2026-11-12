@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import struct
 import zipfile
 
@@ -29,12 +30,27 @@ def elf_machine(data: bytes):
     return elf_class, machine
 
 
-def inspect(directory: Path):
+def original_native_imports(upstream: Path):
+    roots = [upstream / "app/src/main/java", upstream / "app/src/leanback/java"]
+    if any(not root.is_dir() for root in roots):
+        raise ValueError("Pinned original FongMi TV source missing")
+    found = set()
+    for root in roots:
+        for file in root.rglob("*.java"):
+            found.update(re.findall(
+                r"^\s*import\s+(androidx\.media3\.(?:mpvplayer|decoder\.ffmpeg)\.[\w.]+);",
+                file.read_text(), re.M))
+    return found
+
+
+def inspect(directory: Path, upstream: Path | None = None):
     result = {
         "status": "SOURCE_BUILT_NATIVE_CANDIDATE_NOT_TV_ABI_PROOF",
         "artifacts": [],
         "errors": [],
+        "missing_original_tv_classes": [],
     }
+    implementation_classes = set()
     expected_names = {filename for filename, _ in EXPECTED.values()}
     extras = sorted(p.name for p in directory.glob("*.aar") if p.name not in expected_names)
     if extras:
@@ -56,6 +72,8 @@ def inspect(directory: Path):
                     if not classes:
                         raise ValueError("empty Java implementation")
                     item["class_count"] = len(classes)
+                    implementation_classes.update(
+                        c[:-6] for c in classes if c.endswith(".class"))
                 native = {}
                 for abi, (expected_class, expected_machine) in ABIS.items():
                     libs = {
@@ -76,8 +94,20 @@ def inspect(directory: Path):
                 item["native_abis"] = native
         except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
             result["errors"].append(f"{module}: {error}")
+    if upstream is not None:
+        try:
+            required = original_native_imports(upstream)
+            result["original_tv_native_import_count"] = len(required)
+            result["missing_original_tv_classes"] = sorted(
+                required - {name.replace("/", ".") for name in implementation_classes})
+            if not required:
+                result["errors"].append("No original TV native imports found; pinned source invalid")
+        except (OSError, ValueError) as error:
+            result["errors"].append(str(error))
     if result["errors"]:
         result["status"] = "NATIVE_CANDIDATE_BUILD_OR_PACKAGE_FAILED"
+    elif result["missing_original_tv_classes"]:
+        result["status"] = "SOURCE_BUILT_NATIVE_CANDIDATE_TV_API_INCOMPATIBLE"
     return result
 
 
@@ -85,11 +115,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", required=True, type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--upstream", type=Path, default=None,
+                        help="Pinned FongMi/TV checkout; require exact imported native classes")
     args = parser.parse_args()
-    result = inspect(args.directory)
+    result = inspect(args.directory, args.upstream)
     text = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         args.output.write_text(text)
     print(text)
-    if result["errors"]:
-        parser.exit(2, "Source-built native AAR audit failed\n")
+    if result["errors"] or result["missing_original_tv_classes"]:
+        parser.exit(2, "Source-built native AAR packaging or original TV API audit failed\n")
