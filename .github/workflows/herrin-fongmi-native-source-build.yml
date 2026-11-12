@@ -1,11 +1,10 @@
 name: HERRIN pinned FongMi native candidate source build
 
 on:
+  # The locked FongMi/media candidate has been built and proven ABI-incompatible
+  # with the original TV@305dff2. Do not waste an expensive native build on
+  # every workflow edit; opt in only after the source revision actually changes.
   workflow_dispatch:
-  push:
-    branches: ['codex/herrin-p0-live-playback-20261110']
-    paths:
-      - '.github/workflows/herrin-fongmi-native-source-build.yml'
 
 permissions:
   contents: read

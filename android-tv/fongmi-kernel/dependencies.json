@@ -64,5 +64,40 @@
       "must_not_be_staged": true
     }
   ],
-  "media3_classpath_policy": "Only explicitly locked origin=media3 AARs with real required APIs, full source/sha256/license and complete binary coverage may be staged; no stock Media3 fallback."
+  "media3_classpath_policy": "Only explicitly locked origin=media3 AARs with real required APIs, full source/sha256/license and complete binary coverage may be staged; no stock Media3 fallback.",
+  "native_candidate_audits": [
+    {
+      "repository": "https://github.com/FongMi/media",
+      "commit": "3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d",
+      "tv_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+      "ci_run": "https://github.com/shawnhhh/aura-tv/actions/runs/43152499210",
+      "status": "REJECTED_TV_NATIVE_JAVA_API_INCOMPATIBLE",
+      "gradle_release_build": "SUCCESS_153_TASKS",
+      "source_built_arm_abis": [
+        "arm64-v8a",
+        "armeabi-v7a"
+      ],
+      "native_archives": [
+        {
+          "name": "lib-mpvplayer-release.aar",
+          "sha256": "915579744201054d0079ff3a4661c18804febe0683208854bb837be8d5e4518d",
+          "java_class_count": 174
+        },
+        {
+          "name": "lib-decoder-ffmpeg-release.aar",
+          "sha256": "3efae9f489cd936d2aea4be1dede874b731d68617a49ca42f3c2ab229b52effb",
+          "java_class_count": 10
+        }
+      ],
+      "original_tv_import_count": 11,
+      "missing_classes": [
+        "androidx.media3.mpvplayer.MpvConfigFileInspector",
+        "androidx.media3.mpvplayer.MpvDecoderMode",
+        "androidx.media3.mpvplayer.MpvSubtitleContentLoader",
+        "androidx.media3.mpvplayer.media.MpvDrmSupport"
+      ],
+      "must_not_be_staged": true,
+      "reason": "Both pinned source-built native AARs package valid ARM ELF but lack four classes imported by original TV@305dff2; cannot substitute native candidates for the exact original-core Java ABI."
+    }
+  ]
 }

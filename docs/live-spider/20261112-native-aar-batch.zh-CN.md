@@ -41,3 +41,10 @@ GitHub Actions `43146074390` 的 `Gradle 9.1.0` 真正执行了 153 个构建任
 本流程通过，只能说明真实原生 AAR 打包成功且 ABI检查达到声明范围。
 它不能证明完整 `fongmi-kernel:core/adapter` 编译、真实视频首帧、
 《小城良方》奶酪/玩偶哥哥播放、 seek 或授权有效。
+
+## 本批最终 CI 证据（43152499210）
+
+- 5 个小型单元测试通过；原版 FongMi/media 固定源 Gradle 9.1.0 进行 153 个任务，`BUILD SUCCESSFUL`。
+- 真实产物：`libraries/mpvplayer/buildout/outputs/aar/lib-mpvplayer-release.aar`（SHA-256 `915579744201054d0079ff3a4661c18804febe0683208854bb837be8d5e4518d`），`libraries/decoder_ffmpeg/buildout/outputs/aar/lib-decoder-ffmpeg-release.aar`（SHA-256 `3efae9f489cd936d2aea4be1dede874b731d68617a49ca42f3c2ab229b52effb`）。
+- ARM32/ARM64 ELF 和 Java 打包检查无错误。上游 TV 实际 11 个所需原生 Java imports 中 **4 个缺失**：`MpvConfigFileInspector`、`MpvDecoderMode`、`MpvSubtitleContentLoader`、`MpvDrmSupport`。故本次 CI 为预期的 API 不兼容失败，**不是编译失败**。
+- 候选 AAR 已由 CI 上传供进一步兼容性审查，**不集成至 Herrin APK**。本候选锁定为明确不兼容，避免再次自动运行约四分钟的已知无效编译，仍可手动触发源构建。
