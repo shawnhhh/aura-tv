@@ -35,46 +35,67 @@ public final class KernelCutover implements AutoCloseable {
         installed.whenComplete((value, failure) -> {
             if (installed.isCancelled()) close();
         });
-        lifecycle.execute(() -> {
-            try {
-                synchronized (this) {
-                    if (status == Status.CLOSED) return;
+        // Both executor dispatches are failure boundaries: a rejected Android
+        // main-thread dispatch must fail the installation instead of leaving the
+        // process forever in RETIRING_LEGACY with a pending Future.
+        try {
+            lifecycle.execute(() -> {
+                try {
+                    synchronized (this) {
+                        if (status == Status.CLOSED) return;
+                    }
+                    Objects.requireNonNull(retireLegacy.get()).whenComplete((ignored, failure) -> {
+                        try {
+                            lifecycle.execute(() -> finishRetirement(installed, failure, originalKernelFactory));
+                        } catch (RuntimeException rejection) {
+                            failInstallation(installed, rejection);
+                        }
+                    });
+                } catch (RuntimeException | LinkageError error) {
+                    failInstallation(installed, error);
                 }
-                Objects.requireNonNull(retireLegacy.get()).whenComplete((ignored, failure) -> lifecycle.execute(() -> {
-                    synchronized (this) {
-                        if (status == Status.CLOSED) {
-                            installed.completeExceptionally(new IllegalStateException("Cutover closed"));
-                            return;
-                        }
-                        if (failure != null) {
-                            status = Status.FAILED;
-                            installed.completeExceptionally(failure);
-                            return;
-                        }
-                    }
-                    Kernel created;
-                    try { created = Objects.requireNonNull(originalKernelFactory.get()); }
-                    catch (RuntimeException | LinkageError error) {
-                        synchronized (this) { if (status != Status.CLOSED) status = Status.FAILED; }
-                        installed.completeExceptionally(error);
-                        return;
-                    }
-                    synchronized (this) {
-                        if (status != Status.CLOSED) {
-                            kernel = created;
-                            status = Status.INSTALLED;
-                            installed.complete(null);
-                            return;
-                        }
-                    }
-                    created.close();
-                }));
-            } catch (RuntimeException error) {
-                synchronized (this) { if (status != Status.CLOSED) status = Status.FAILED; }
-                installed.completeExceptionally(error);
-            }
-        });
+            });
+        } catch (RuntimeException rejection) {
+            failInstallation(installed, rejection);
+        }
         return installed;
+    }
+
+    private void finishRetirement(CompletableFuture<Void> installed, Throwable failure,
+                                  Supplier<Kernel> originalKernelFactory) {
+        synchronized (this) {
+            if (status == Status.CLOSED) {
+                installed.completeExceptionally(new IllegalStateException("Cutover closed"));
+                return;
+            }
+            if (failure != null) {
+                failInstallation(installed, failure);
+                return;
+            }
+        }
+        Kernel created;
+        try {
+            created = Objects.requireNonNull(originalKernelFactory.get());
+        } catch (RuntimeException | LinkageError error) {
+            failInstallation(installed, error);
+            return;
+        }
+        synchronized (this) {
+            if (status != Status.CLOSED) {
+                kernel = created;
+                status = Status.INSTALLED;
+                installed.complete(null);
+                return;
+            }
+        }
+        created.close();
+    }
+
+    private void failInstallation(CompletableFuture<Void> installed, Throwable failure) {
+        synchronized (this) {
+            if (status != Status.CLOSED) status = Status.FAILED;
+        }
+        installed.completeExceptionally(failure);
     }
 
     public synchronized Kernel requireKernel() {
