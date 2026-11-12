@@ -150,12 +150,19 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
                     VodConfig.load(config, new Callback() {
                         @Override public void success() {
                             if (!valid(ticket, future)) return;
-                            loaded = true;
                             List<Site> sites = new ArrayList<>();
                             for (String key : next.approvedSiteKeys()) {
                                 var original = VodConfig.get().getSite(key);
                                 if (!original.isEmpty()) sites.add(new Site(key, original.getName()));
                             }
+                            // A successfully fetched warehouse is not READY if the
+                            // explicitly selected site was removed or renamed.
+                            // Do not silently use the first unrelated Spider.
+                            if (sites.isEmpty()) {
+                                fail(ticket, future, "APPROVED_SITE_MISSING");
+                                return;
+                            }
+                            loaded = true;
                             emit(Phase.READY, "");
                             future.complete(List.copyOf(sites));
                         }
@@ -193,6 +200,12 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
             return CompletableFuture.completedFuture(latestDetail);
         releaseVodSession();
         releasePlayer();
+        // A new detail navigation retires the previously displayed movie's
+        // episode handles; catalog movie handles remain valid for search.
+        // This blocks stale Compose film cards from reusing another movie's
+        // Spider selections after the original controller changes session.
+        episodes.clear();
+        episodeHandles.clear();
         currentVod = entry.vod(); currentSite = entry.siteKey(); currentId = currentVod.getId();
         presentationMovieHandle = handle;
         detailAdmission = track(new CompletableFuture<>());
