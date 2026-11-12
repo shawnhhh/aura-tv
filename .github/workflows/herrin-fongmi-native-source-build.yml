@@ -16,6 +16,14 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Validate native artifact collector and compatibility fixture tests
+        run: |
+          PYTHONPATH=android-tv/fongmi-kernel python3 -m unittest discover \
+            -s android-tv/fongmi-kernel/tests -p 'test_native_candidate.py' -v
+          python3 -m py_compile android-tv/fongmi-kernel/collect_native_candidate.py \
+            android-tv/fongmi-kernel/verify_native_candidate.py
       - name: Checkout exact public FongMi/media native source
         uses: actions/checkout@v4
         with:
@@ -44,28 +52,43 @@ jobs:
         run: |
           ./gradlew :lib-decoder-ffmpeg:assembleRelease :lib-mpvplayer:assembleRelease \
             --no-daemon --max-workers=2 --console=plain
-      - name: Verify actual native AAR ABI package and record hashes
+      - name: Collect real MPV and FFmpeg AARs from all upstream Gradle outputs
         run: |
-          python3 -m py_compile android-tv/fongmi-kernel/verify_native_candidate.py
-          mkdir -p native-candidate
-          find vendor-media/libraries/mpvplayer -name '*release.aar' -type f -exec cp '{}' native-candidate/ \;
-          find vendor-media/libraries/decoder_ffmpeg -name '*release.aar' -type f -exec cp '{}' native-candidate/ \;
+          python3 android-tv/fongmi-kernel/collect_native_candidate.py \
+            --source vendor-media --directory native-candidate
+      - name: Check source-built ARM32/ARM64 ELF and exact original TV Java API
+        run: |
           python3 android-tv/fongmi-kernel/verify_native_candidate.py \
-            --directory native-candidate --output native-candidate/provenance.json
+            --directory native-candidate \
+            --upstream android-tv/vendor/fongmi-core/upstream \
+            --output native-candidate/provenance.json
+      - name: Publish exact native candidate result (not playback acceptance)
+        if: always()
+        run: |
           python3 - <<'PY'
           import json
           import os
           from pathlib import Path
-          report = json.loads(Path('native-candidate/provenance.json').read_text())
+          report_path = Path('native-candidate/provenance.json')
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as f:
-              f.write('## Authentic upstream source-built ARM AARs — candidate only\n\n')
-              f.write('Source FongMi/media@3c2cbe8a; not proven TV@305dff2-compatible.\n\n')
-              for item in report['artifacts']:
-                  f.write(item['module'] + ': SHA-256 ' + item['sha256'] + '\n\n')
-              f.write('No Herrin APK or playback proof.\n')
+              f.write('## Pinned FongMi native build — not playback acceptance\n\n')
+              f.write('FongMi/media@3c2cbe8a was compiled from genuine source.\n\n')
+              if report_path.is_file():
+                  report = json.loads(report_path.read_text())
+                  f.write('**Audit status:** ' + report['status'] + '\n\n')
+                  for item in report['artifacts']:
+                      f.write(item['module'] + ': SHA-256 ' + item['sha256'] + '\n\n')
+                  if report['missing_original_tv_classes']:
+                      f.write('**Missing original TV native classes:**\n\n')
+                      for name in report['missing_original_tv_classes']:
+                          f.write('- ' + name + '\n')
+                      f.write('\n')
+              else:
+                  f.write('Native packaging/collection did not reach a completed audit.\n\n')
+              f.write('Never install these candidates in Herrin until original TV API, license, and binary compatibility are proven.\n')
           PY
-      - name: Preserve built native candidate only for compatibility review
-        if: success()
+      - name: Preserve authentic native candidates for compatibility review only
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: source-built-fongmi-native-candidate-not-validated-for-herrin
