@@ -228,11 +228,14 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
                 key -> !closed && loaded && currentSite.equals(key) && access.approvedSiteKeys().contains(key));
             vodSession.acceptDetail(currentSite, currentId, Result.vod(currentVod));
         }
-        vodSession.allowPlayback();
-        // These are the original controller entry points, exactly as an
-        // upstream UI line/episode click. The original model cancels displaced
-        // requests and the controller handles expanded netdisk episode results.
+        // A line switch may automatically select the saved-history episode
+        // (upstream seamless behavior). While the host has an explicit episode
+        // ticket, defer that incidental request until the intended episode is
+        // selected; do not issue two Spider playerContent calls on one click.
+        // OriginalVodSession still delegates both selection operations to the
+        // unmodified upstream VOD controller.
         vodSession.selectLine(selected.flag());
+        vodSession.allowPlayback();
         vodSession.selectEpisode(selected.episode());
         return playbackAdmission;
     }
