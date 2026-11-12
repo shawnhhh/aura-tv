@@ -122,6 +122,10 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         requireOpen();
         long ticket = ++epoch;
         ++request;
+        // An upstream repository reload invalidates outstanding movie/detail
+        // and admission work immediately. The serial upstream IO executor may
+        // still finish a blocking call, but no retired result is published.
+        for (var previous : List.copyOf(pending)) previous.cancel(false);
         loaded = false;
         KernelAuthorizationActivity.cancelRequests();
         access = next;
@@ -131,6 +135,9 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         episodeHandles.clear();
         releaseVodSession();
         releasePlayer();
+        currentSite = "";
+        currentId = "";
+        selectedEpisodeHandle = "";
         var future = track(new CompletableFuture<List<Site>>());
         emit(Phase.CONFIGURING, "");
         // Original Config persistence and VodConfig loading, including depot,
