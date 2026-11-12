@@ -19,7 +19,7 @@ internal class HerrinKernelGateway : AutoCloseable {
     private val main = Handler(Looper.getMainLooper())
     private val cutover = KernelCutover { operation ->
         if (Looper.myLooper() == Looper.getMainLooper()) operation.run()
-        else main.post(operation)
+        else check(main.post(operation)) { "Kernel main looper rejected lifecycle dispatch" }
     }
 
     val status: KernelCutover.Status get() = cutover.status()
@@ -76,7 +76,9 @@ internal class HerrinKernelGateway : AutoCloseable {
                 }
             }
         }
-        if (Looper.myLooper() == Looper.getMainLooper()) task.run() else main.post(task)
+        if (Looper.myLooper() == Looper.getMainLooper()) task.run()
+        else if (!main.post(task)) result.completeExceptionally(
+            IllegalStateException("Kernel main looper rejected operation"))
         return result
     }
     override fun close() = cutover.close()
