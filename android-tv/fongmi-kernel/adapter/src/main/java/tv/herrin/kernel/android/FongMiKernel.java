@@ -555,6 +555,12 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     }
     @Override public void renderVodUpdate(Vod item) { currentVod = item; refreshDetail(); }
     @Override public void renderEmptyDetail() {
+        // A failed detail refresh cannot leave an earlier movie/line selectable.
+        // The original controller owns error classification; HERRIN only
+        // revokes now-invalid opaque selection handles at its host boundary.
+        episodes.clear();
+        episodeHandles.clear();
+        selectedEpisodeHandle = "";
         latestDetail = null; emit(Phase.ERROR, "EMPTY_DETAIL"); failAdmission();
         if (detailAdmission != null) detailAdmission.completeExceptionally(new IllegalStateException("EMPTY_DETAIL"));
     }
