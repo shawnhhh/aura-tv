@@ -74,7 +74,7 @@ def inspect(directory, lock_path):
                 if not isinstance(a.get(field), str) or not a[field].strip():
                     raise ValueError("Missing provenance field " + field)
             origin = a.get("origin", "external")
-            if origin not in ("external", "upstream"):
+            if origin not in ("external", "upstream", "media3"):
                 raise ValueError("Unknown archive origin")
             if not re.fullmatch(r"[0-9a-f]{64}", a["sha256"]):
                 raise ValueError("Invalid SHA-256")
@@ -92,6 +92,11 @@ def inspect(directory, lock_path):
             if origin == "upstream":
                 if a["path"] not in upstream or a["source_commit"] != lock["upstream_commit"]:
                     raise ValueError("Unexpected or mismatched original TV archive")
+            elif origin == "media3":
+                # Independently licensed and hash-pinned custom Media3; never
+                # silently resolve these APIs from a stock Maven dependency.
+                if not path.name.startswith("media3-"):
+                    raise ValueError("Custom Media3 requires media3-* AAR")
             elif path.name not in external:
                 raise ValueError("Unexpected external archive")
             if not path.is_file():
@@ -113,7 +118,7 @@ def inspect(directory, lock_path):
             verified.append(path.name)
             if origin == "external":
                 missing_external.discard(path.name)
-            else:
+            elif origin == "upstream":
                 missing_upstream.discard(a["path"])
         except (ValueError, OSError, KeyError, zipfile.BadZipFile) as error:
             errors.append(str(a.get("path", "<unnamed>")) + ": " + str(error))
@@ -146,6 +151,9 @@ def inspect(directory, lock_path):
         "missing_external": sorted(missing_external),
         "missing_upstream": sorted(missing_upstream),
         "media3_import_count": len(imports),
+        "verified_media3_modules": sorted(
+            Path(item["path"]).name for item in lock["artifacts"]
+            if item.get("origin") == "media3" and Path(item["path"]).name in verified),
         "missing_media3_api_count": len(missing_apis),
         "errors": errors,
         "upstream_commit": lock["upstream_commit"],
