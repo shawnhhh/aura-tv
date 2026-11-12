@@ -59,6 +59,62 @@ public final class KernelCutoverContractCheck {
             "Missing original dependency did not fail terminally");
         unavailable.close();
 
+        // Android's Looper/Handler executor may reject a dispatch during
+        // shutdown. A rejected initial dispatch or completion dispatch cannot
+        // strand a partially retired process or create a second engine.
+        var firstDispatchRejected = new KernelCutover(task -> {
+            throw new java.util.concurrent.RejectedExecutionException("handler quit");
+        });
+        var firstRejected = firstDispatchRejected.install(
+            () -> { throw new AssertionError("Retirement ran after executor rejection"); },
+            () -> { throw new AssertionError("Original kernel allocated after executor rejection"); })
+            .toCompletableFuture();
+        require(firstRejected.isCompletedExceptionally()
+                && firstDispatchRejected.status() == KernelCutover.Status.FAILED,
+            "Rejected initial dispatch must terminally fail the cutover");
+        firstDispatchRejected.close();
+
+        AtomicInteger dispatches = new AtomicInteger(), rejectedAllocations = new AtomicInteger();
+        var secondDispatchRejected = new KernelCutover(task -> {
+            if (dispatches.incrementAndGet() == 2)
+                throw new java.util.concurrent.RejectedExecutionException("handler quit after retirement");
+            task.run();
+        });
+        var delayedRetirement = new CompletableFuture<Void>();
+        var secondRejected = secondDispatchRejected.install(
+            () -> delayedRetirement,
+            () -> { rejectedAllocations.incrementAndGet(); return closeCounter(closes); })
+            .toCompletableFuture();
+        require(!secondRejected.isDone(), "Retirement unexpectedly completed early");
+        delayedRetirement.complete(null);
+        require(secondRejected.isCompletedExceptionally()
+                && secondDispatchRejected.status() == KernelCutover.Status.FAILED
+                && rejectedAllocations.get() == 0,
+            "Rejected completion dispatch must never allocate the new kernel");
+        secondDispatchRejected.close();
+
+        var missingLegacyClass = new KernelCutover(Runnable::run);
+        var thrownInRetirement = missingLegacyClass.install(
+            () -> { throw new NoClassDefFoundError("missing legacy retirement dependency"); },
+            () -> { throw new AssertionError("Allocated despite retirement linkage failure"); })
+            .toCompletableFuture();
+        require(thrownInRetirement.isCompletedExceptionally()
+                && missingLegacyClass.status() == KernelCutover.Status.FAILED,
+            "Retirement LinkageError must also fail closed");
+        missingLegacyClass.close();
+
+        var cancellation = new KernelCutover(Runnable::run);
+        var pendingRetirement = new CompletableFuture<Void>();
+        var cancelledAllocation = new AtomicInteger();
+        var pendingInstall = cancellation.install(
+            () -> pendingRetirement,
+            () -> { cancelledAllocation.incrementAndGet(); return closeCounter(closes); })
+            .toCompletableFuture();
+        require(pendingInstall.cancel(false), "Pending install did not cancel");
+        pendingRetirement.complete(null);
+        require(cancellation.status() == KernelCutover.Status.CLOSED && cancelledAllocation.get() == 0,
+            "Cancelled cutover revived its engine after legacy retirement");
+
         new Kernel.WarehouseAccess(URI.create("http://example.com/tv"), true, true, List.of("chosen"));
         try { new Kernel.WarehouseAccess(URI.create("http://example.com/tv"), false, true, List.of("chosen"));
             throw new AssertionError("Implicit HTTP authorization");
@@ -66,6 +122,6 @@ public final class KernelCutoverContractCheck {
         try { new Kernel.WarehouseAccess(URI.create("https://example.com/tv"), false, false, List.of("chosen"));
             throw new AssertionError("Implicit code execution authorization");
         } catch (IllegalArgumentException expected) { }
-        System.out.println("PASS: lifecycle exclusivity, terminal failures, pending close and explicit grants; no playback tested");
+        System.out.println("PASS: exclusivity, scheduler rejection, lifecycle races, terminal failures and explicit grants; no playback tested");
     }
 }
