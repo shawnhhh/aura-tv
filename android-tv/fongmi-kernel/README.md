@@ -23,23 +23,55 @@ their legal authorization flows. No QR-success inference is implemented.
 
 ## Build after dependency resolution
 
-Use the pinned upstream wrapper (Gradle9.7.1), JDK21, SDK37 and AGP9.4:
+The original TV@305dff2 expects a **custom Media3 API**, not stock Media3.
+The public `FongMi/media` source candidate does not include multiple required
+symbols and is **not** a proven compatible replacement. All four required
+AARs (MPV, FFmpeg, original hook, tvbus) must be recorded in
+`dependencies.json` with real source commits, binary SHA-256s, license texts,
+and build instructions. The original two upstream archives are read from the
+pinned TV checkout; external ones come from a separate directory. Do not
+extract binaries from an APK, create empty placeholders, or mark a mismatched
+binary as compatible.
+
+The independent FongMi **Android library** cannot directly depend on
+`fileTree('*.aar')`, because AGP cannot package a library AAR's direct local
+AAR dependencies correctly. Instead, the staging tool verifies the original
+bytes and publishes them to a **generated, immutable-coordinate local Maven
+repository**, and the core depends on the same content-hash coordinates.
+This does not modify the AARs or replace any Media3 classes.
+
+From `android-tv`, after obtaining actual licensed inputs:
 
 ```sh
-cd android-tv
+# Non-failing, actionable JSON before the native dependencies exist:
+python3 fongmi-kernel/verify_dependencies.py \
+  --directory /absolute/path/to/locked-aars --report
+
+# Fails closed until every mandatory original input is valid.
+python3 fongmi-kernel/stage_dependencies.py \
+  --directory /absolute/path/to/locked-aars \
+  --lock fongmi-kernel/dependencies.json
+
+# Only after the verified Maven artifacts have been generated:
 bash vendor/fongmi-core/upstream/gradlew -p fongmi-kernel \
   -PfongmiLibraries=/absolute/path/to/locked-aars \
   -PfongmiDependencyLock=/absolute/path/to/dependencies.json \
   :adapter:assembleDebug
 ```
 
-The supplied lock must extend `dependencies.json` with real AAR artifacts and
-corresponding source/version/license/build materials. Run `verify_dependencies.py`
-for its schema. No fake archives, stock Media3 replacement, or downloaded APK
-classes are used. See the source candidates and unresolved version mismatch in
-that file. The original root LICENSE and per-module notices remain applicable.
-This independent build avoids changing HERRIN's stable toolchain before the new
-classpath is ready. The shared contract also compiles with plain `javac --release 17`.
+The generated Maven repository is in
+`android-tv/fongmi-kernel/build/locked-original-maven`. It must **never** be
+committed as a substitute for missing original artifacts. The required
+toolchain is upstream Gradle 9.7.1, JDK 21, SDK 37 and AGP 9.4.
+The real original sources, not a generated player implementation, produce
+`:core` and `:adapter`. This independent build avoids changing HERRIN's
+stable toolchain before the original classpath is available.
+The shared contract also compiles with plain `javac --release 17`.
+
+Use the separate `HERRIN FongMi original dependency preflight` GitHub workflow
+to confirm the input-checking scripts are syntactically valid and to record a
+non-success dependency report. **The preflight does not compile the original
+engine, launch Android, fetch real sources or prove playback.**
 
 ## Host integration and cutover
 
