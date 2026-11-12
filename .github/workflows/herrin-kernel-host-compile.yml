@@ -1,20 +1,18 @@
 name: HERRIN kernel host compile only
 on:
+  # Developer batches intentionally do not trigger full compilation on every
+  # source commit. A workflow edit at the END of a batch triggers exactly one
+  # host/contract validation for the current branch HEAD.
   push:
     branches: ['codex/herrin-p0-live-playback-20261110']
     paths:
       - '.github/workflows/herrin-kernel-host-compile.yml'
-      - 'android-tv/app/src/main/java/tv/herrin/app/HerrinKernelGateway.kt'
-      - 'android-tv/app/src/main/java/tv/herrin/app/HerrinKernelRuntime.kt'
-      - 'android-tv/app/src/main/java/tv/herrin/app/HerrinPlayerSession.kt'
-      - 'android-tv/app/src/main/java/tv/herrin/app/HerrinKernelPages.kt'
-      - 'android-tv/fongmi-kernel/adapter/src/main/java/tv/herrin/kernel/android/FongMiKernel.java'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: herrin-kernel-host-compile-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   compile:
     runs-on: ubuntu-latest
@@ -30,7 +28,7 @@ jobs:
           gradle-version: '8.9'
       - name: Compile stable host with disabled whole-kernel entry
         working-directory: android-tv
-        run: gradle --build-cache :kernel-contract:compileJava :app:compileDebugKotlin :app:compileDebugJavaWithJavac
+        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac
       # This verifies the stable host and shared contract only. The Android
       # adapter in fongmi-kernel requires its independently locked original
       # Media3/native AAR classpath before it can be compiled. This is not
