@@ -38,9 +38,16 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
         check(!closed)
         if (whole && !isActiveWhole())
             return java.util.concurrent.CompletableFuture.failedFuture(IllegalStateException("Retired playback UI lease"))
-        this.media = media
         val ticket = media.kernelPlayback
-        if (whole) wholeSourceSession = ticket?.session
+        // Never replace an original-core playback selection with a personal
+        // media ticket (or vice versa) on the same player session. A new
+        // renderer must be allocated after the old owner has retired.
+        check((ticket != null) == whole) { "Playback renderer source changed" }
+        if (whole) {
+            requireNotNull(runtime).player(ticket!!) // Validate BEFORE mutating current media.
+            check(ticket.session == wholeSourceSession) { "Kernel source session changed" }
+        }
+        this.media = media
         if (ticket != null && !ticket.replay && runtime?.pages?.alreadyPlaying(ticket) == true)
             return java.util.concurrent.CompletableFuture.completedFuture(null)
         return start(media.uri, media.declaredMime, position)
