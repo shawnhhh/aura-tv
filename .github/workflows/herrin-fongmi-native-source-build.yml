@@ -27,9 +27,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      # Cache only: the checked-out upstream wrapper selects Gradle 9.1.0.
+      # Do not hand-code an abbreviated version unsupported by setup-gradle.
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.1'
       - name: Prove native source identity and real ARM32/ARM64 inputs
         run: |
           test "$(git -C vendor-media rev-parse HEAD)" = 3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d
