@@ -26,9 +26,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Compile stable host with disabled whole-kernel entry
+      - name: Batch-validate host code, cutover contract and JVM regression
         working-directory: android-tv
-        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac
+        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:testDebugUnitTest
       # This verifies the stable host and shared contract only. The Android
       # adapter in fongmi-kernel requires its independently locked original
       # Media3/native AAR classpath before it can be compiled. This is not
