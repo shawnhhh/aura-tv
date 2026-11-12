@@ -70,7 +70,12 @@ public final class OriginalVodSession implements AutoCloseable {
             }
             @Override public void cancelPreloadContent() { model.cancelPreloadContent(); }
             @Override public void searchContent(List<Site> sites, String keyword, boolean quick) {
-                model.searchContent(sites.stream().filter(site -> approvedSite.test(site.getKey())).toList(), keyword, quick);
+                // Never hand an empty list to the upstream search controller:
+                // its default-site behavior may traverse unapproved warehouses.
+                // Search remains on the original VideoViewModel path.
+                List<Site> allowed = sites.stream().filter(site -> approvedSite.test(site.getKey())).toList();
+                if (allowed.isEmpty()) throw new SecurityException("No approved site for VOD search");
+                model.searchContent(allowed, keyword, quick);
             }
         };
         controller = new VodPlaybackController(host, authorized, new VodPlaybackState());
