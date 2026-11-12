@@ -127,3 +127,17 @@ Codex额度无可查询接口，余额未知；没有自动续跑机制，没有
 未齐；C接口和原版VOD委托已写、实际页面接线未完成；D单向退休/安装协议已写、实际
 切换及旧代码删除未执行；E既有UI/推荐/源排序/直播/遥控源文件未改，未做回归承诺。
 缺少匹配依赖时不强行把原版同包类、定制Media3与现有stock类混编或交付旧内核APK。
+
+## 2026-11-12 本批继续开发：内核交接可终止性与授权边界
+
+本批在原 P0 独立分支连续提交了以下真实代码（没有启用新内核、没有复测已知不兼容媒体库）：
+
+- `979eadd6`：KernelCutover 初次主线程 dispatch、退役完成后的第二次 dispatch 若被拒绝，转为明确终态 FAILED；退役阶段 LinkageError 也终态失败，禁止静默创建/重试另一个播放器。
+- `34048c0f`：OriginalVodSession 仍走原版 VideoViewModel；站点授权过滤后为空时拒绝执行，避免把空站点列表交给原版默认搜索入口而扩大授权范围。
+- `2fdb576a`：补充 JVM 生命周期测试，覆盖两次分发拒绝、退役依赖 LinkageError、取消后拒绝分配以及旧会话退役屏障。
+- `1c8b90f6`：HerrinKernelGateway 将 Android Handler.post(false) 明确反馈为失败，不让 UI Future 永久挂起。
+
+这批只加固原版核心切换和搜索权限的桥接边界。原版 FongMi Parser/Proxy/Media3 未被重写；旧播放器未删除、实际 Application 未切换、实机首帧未验证。完整内核的依赖仍须原版兼容 Media3 与 MPV/FFmpeg，不能用现有已证明不匹配候选冒充。
+
+统一检查由 `herrin-kernel-host-compile.yml` 在本批最后一次触发。其 JVM + Herrin 宿主编译不等于原版 Android core/adapter 编译，更不代表真实节目可播。
+
