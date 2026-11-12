@@ -446,18 +446,27 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     }
     private void refreshDetail() {
         if (currentVod == null) return;
-        episodes.entrySet().removeIf(entry -> entry.getValue().vod() == currentVod);
+        // Every published detail is the complete active selection set. Keep
+        // stable opaque handles for selections that survived a source refresh,
+        // but retire handles removed by an upstream netdisk/line expansion.
+        Map<Selection, String> previousHandles = new HashMap<>(episodeHandles);
+        episodes.clear();
+        episodeHandles.clear();
         List<Line> lines = new ArrayList<>();
         for (Flag flag : currentFlags) {
             List<Episode> values = new ArrayList<>();
             for (var episode : flag.getEpisodes()) {
                 var selection = new Selection(currentSite, currentVod, flag, episode);
-                String handle = episodeHandles.computeIfAbsent(selection, key -> UUID.randomUUID().toString());
+                String handle = previousHandles.get(selection);
+                if (handle == null) handle = UUID.randomUUID().toString();
+                episodeHandles.put(selection, handle);
                 episodes.put(handle, selection);
                 values.add(new Episode(handle, episode.getName(), values.size()));
             }
             lines.add(new Line(flag.getShow(), values));
         }
+        if (!selectedEpisodeHandle.isEmpty() && !episodes.containsKey(selectedEpisodeHandle))
+            selectedEpisodeHandle = "";
         latestDetail = new Detail(remember(currentSite, currentVod), lines);
         try { detailObserver.accept(latestDetail); }
         catch (RuntimeException error) { android.util.Log.e("HerrinKernel", "DETAIL_OBSERVER_FAILED"); }

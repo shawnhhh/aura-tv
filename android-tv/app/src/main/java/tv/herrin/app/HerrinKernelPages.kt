@@ -67,6 +67,8 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         session = UUID.randomUUID().toString()
         val selectedSession = session
         movies.clear(); selections.clear(); latest.clear(); coordinates.clear(); lastRequestedEpisode = ""
+        selectedCoordinate = null; currentEpisode = ""; currentPhase = Kernel.Phase.IDLE
+        revision++
         site = selected
         authority = SpiderFilmAuthority(selected.key,
             SpiderRuntimeCompat.sessionKey(selected.jar ?: config.spiderJar ?: selected.scriptApi.orEmpty(), selected),
@@ -99,6 +101,7 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         lastRequestedEpisode = line
         PlaybackResult.Ready(PlaybackMedia("kernel-selection:$line", kernelPlayback = selected))
     } catch (_: IllegalArgumentException) { PlaybackResult.Unavailable("来源会话或选集已变化，请返回详情重新选择") }
+    catch (_: IllegalStateException) { PlaybackResult.Unavailable("原版选集已失效，请返回详情重新选择") }
     fun latest(film: Film): Film? = film.spiderVodId?.let(latest::get)
     private fun projectMovie(movie: Kernel.Movie): Film {
         require(movie.siteKey() == site?.key) { "Movie belongs to a different site session" }
@@ -110,13 +113,18 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
     private fun projectDetail(detail: Kernel.Detail): Film {
         val movie = detail.movie()
         val base = projectMovie(movie)
+        // A detail refresh replaces the selectable episode set atomically on
+        // the main-thread gateway. Old Film objects cannot resurrect removed
+        // netdisk selections, even if their site session remains authorized.
+        selections.clear()
+        coordinates.clear()
         val episodes = linkedMapOf<Int, MutableList<PlaybackLine>>()
         val names = mutableMapOf<Int, String>()
         detail.lines().forEach { line -> line.episodes().forEach { episode ->
             val number = episode.index() + 1
             selections[episode.handle()] = KernelPlaybackTicket(session, episode.handle())
             coordinates[episode.handle()] = number to episode.handle()
-            names[number] = episode.title()
+            names.putIfAbsent(number, episode.title())
             episodes.getOrPut(number) { mutableListOf() }.add(
                 PlaybackLine(episode.handle(), line.name(), "kernel-selection:${episode.handle()}"))
         } }
@@ -131,6 +139,7 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         session = UUID.randomUUID().toString()
         movies.clear(); selections.clear(); latest.clear(); coordinates.clear(); site = null; authority = null
         selectedCoordinate = null; currentEpisode = ""; currentPhase = Kernel.Phase.IDLE; lastRequestedEpisode = ""
+        revision++
         runtime.gateway.stop()
     }
     private suspend fun <T> result(block: suspend () -> T): SpiderResult<T> = try { requests.withLock { SpiderResult.Ready(block()) } }
