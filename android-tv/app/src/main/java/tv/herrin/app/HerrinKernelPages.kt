@@ -81,7 +81,18 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         runtime.gateway.observeDetail { detail ->
             if (selectedSession == session && detail.movie().siteKey() == site?.key) projectDetail(detail)
         }.awaitKernel()
-        val home = runtime.gateway.home(selected.key).awaitKernel()
+        // The original FongMi search entry is independent of homeContent.
+        // A provider may expose only netdisk search, or throw while fetching
+        // the optional home list. Do not disable an already-approved site just
+        // because its home page is absent. Authorization and session failures
+        // are NOT swallowed; cancellation still propagates from result().
+        val home = try {
+            runtime.gateway.home(selected.key).awaitKernel()
+        } catch (error: IllegalStateException) {
+            if (error.message != "UPSTREAM_CALL_FAILED" &&
+                error.message != "UPSTREAM_RESULT_ERROR") throw error
+            emptyList()
+        }
         check(selectedSession == session)
         home.map(::projectMovie)
     }
