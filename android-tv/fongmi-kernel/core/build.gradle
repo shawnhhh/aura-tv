@@ -2,10 +2,19 @@ plugins { alias libs.plugins.android.library }
 
 def upstream = file('../../vendor/fongmi-core/upstream')
 def externalLibraries = providers.gradleProperty('fongmiLibraries').map { file(it) }
+// The local Maven coordinates match stage_dependencies.py exactly; an AAR is
+// never injected directly into this Android library or substituted with stock Media3.
+def dependencyLock = providers.gradleProperty('fongmiDependencyLock').map { rootProject.file(it) }
+    .getOrElse(rootProject.file('dependencies.json'))
+def lockedArtifacts = new groovy.json.JsonSlurper().parse(dependencyLock).artifacts
+def originalCoordinates = lockedArtifacts.collect { entry ->
+    def name = new File(entry.path.toString()).name.replaceAll(/\\.aar$/, '')
+    "tv.herrin.original:${name}:${entry.source_commit.toString().take(12)}.${entry.sha256.toString().take(12)}@aar"
+}
 def verifyInputs = tasks.register('verifyKernelDependencies', Exec) {
     def directory = externalLibraries.getOrElse(file('../unresolved-libraries'))
     commandLine 'python3', rootProject.file('verify_dependencies.py'), '--directory', directory,
-        '--lock', providers.gradleProperty('fongmiDependencyLock').getOrElse(rootProject.file('dependencies.json').toString())
+        '--lock', dependencyLock
 }
 def hostSources = layout.buildDirectory.dir('generated/herrinHost')
 def prepareHost = tasks.register('prepareKernelHostSources') {
@@ -72,9 +81,9 @@ configurations.configureEach {
 
 dependencies {
     api project(':catvod')
-    // Upstream local libraries are not silently replaced by Maven stock Media3.
-    api fileTree(dir: new File(upstream, 'app/libs'), include: ['*.aar'])
-    if (externalLibraries.isPresent()) api fileTree(dir: externalLibraries.get(), include: ['*.aar'])
+    // Real original AARs are staged as pinned local Maven modules *before* Gradle
+    // starts. Direct fileTree AAR dependencies would make AGP reject this library.
+    originalCoordinates.each { api(it) }
     implementation libs.appcompat
     implementation libs.lifecycle.service
     implementation libs.media

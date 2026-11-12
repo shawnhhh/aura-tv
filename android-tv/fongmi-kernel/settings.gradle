@@ -3,7 +3,12 @@ pluginManagement {
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories { google(); mavenCentral(); maven { url = 'https://jitpack.io' } }
+    repositories {
+        // Verified original AAR binaries are staged as immutable Maven artifacts.
+        // AGP rejects direct local AAR dependencies in an Android library.
+        maven { url = uri(file('build/locked-original-maven')); content { includeGroup 'tv.herrin.original' } }
+        google(); mavenCentral(); maven { url = 'https://jitpack.io' }
+    }
     versionCatalogs { libs { from(files('../vendor/fongmi-core/upstream/gradle/libs.versions.toml')) } }
 }
 rootProject.name = 'herrin-fongmi-kernel'
