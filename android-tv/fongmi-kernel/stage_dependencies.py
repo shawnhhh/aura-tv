@@ -38,7 +38,13 @@ def stage(directory: Path, lock: Path, output: Path):
             group, artifact, version = coordinate(entry)
             package = temp / group.replace(".", "/") / artifact / version
             package.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(original, package / (artifact + "-" + version + ".aar"))
+            destination = package / (artifact + "-" + version + ".aar")
+            shutil.copyfile(original, destination)
+            # The published Maven artifact must be byte-identical to the
+            # verified source archive, including the upstream hook/tvbus inputs.
+            import hashlib
+            if hashlib.sha256(destination.read_bytes()).hexdigest() != entry["sha256"]:
+                raise ValueError("Staged archive checksum mismatch: " + artifact)
             project = ET.Element("project", {"xmlns": "http://maven.apache.org/POM/4.0.0"})
             ET.SubElement(project, "modelVersion").text = "4.0.0"
             ET.SubElement(project, "groupId").text = group
