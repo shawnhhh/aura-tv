@@ -94,7 +94,10 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         val selectedSession = session
         val detail = runtime.gateway.details(requireNotNull(film.spiderVodId)).awaitKernel()
         check(selectedSession == session)
-        projectDetail(detail)
+        // Original VOD publishes the detail through observeDetail *before*
+        // its admission future completes. Reuse that exact projection instead
+        // of clearing/rebuilding the episode handles for a second time.
+        latest[detail.movie().handle()] ?: projectDetail(detail)
     }
     @Synchronized fun media(film: Film, number: Int, line: String): PlaybackResult = try {
         val selected = ticket(film, number, line).copy(replay = lastRequestedEpisode == line)
