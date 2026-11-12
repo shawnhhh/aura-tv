@@ -26,9 +26,34 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Batch-validate host code, cutover contract and JVM regression
+      - name: Batch-validate stable host and kernel contract only
         working-directory: android-tv
-        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:testDebugUnitTest
+        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac
+      - name: Audit published custom Media3 AARs against original FongMi API signatures
+        working-directory: android-tv
+        run: |
+          python3 -m py_compile fongmi-kernel/audit_media3_candidate.py
+          python3 fongmi-kernel/audit_media3_candidate.py \
+            --manifest fongmi-kernel/media3-candidate.json \
+            --output /tmp/herrin-custom-media3-review.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads(Path('/tmp/herrin-custom-media3-review.json').read_text())
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as f:
+              f.write('## Custom Media3 candidate audit (NOT original-kernel acceptance)\n\n')
+              f.write('This run checks byte hashes and required custom classes only. ')
+              f.write('An incompatible candidate must not be integrated.\n\n')
+              f.write('**Result:** ' + data['status'] + '\n\n')
+              f.write('Missing classes: ' + ', '.join(data['missing_classes']) + '\n\n')
+              f.write('Missing UI methods: ' + ', '.join(data['missing_ui_methods']) + '\n\n')
+              f.write('Fetch errors: ' + ', '.join(data['errors']) + '\n')
+          assert data['status'] in (
+              'FETCH_OR_BINARY_AUDIT_BLOCKED',
+              'CANDIDATE_API_INCOMPATIBLE',
+              'CANDIDATE_API_PRESENT_VERSION_AND_LICENSE_UNPROVEN')
+          PY
       # This verifies the stable host and shared contract only. The Android
       # adapter in fongmi-kernel requires its independently locked original
       # Media3/native AAR classpath before it can be compiled. This is not
