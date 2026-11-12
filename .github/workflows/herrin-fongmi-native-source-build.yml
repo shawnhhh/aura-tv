@@ -1,0 +1,73 @@
+name: HERRIN pinned FongMi native candidate source build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/herrin-p0-live-playback-20261110']
+    paths:
+      - '.github/workflows/herrin-fongmi-native-source-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout exact public FongMi/media native source
+        uses: actions/checkout@v4
+        with:
+          repository: FongMi/media
+          ref: 3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d
+          path: vendor-media
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.1'
+      - name: Prove native source identity and real ARM32/ARM64 inputs
+        run: |
+          test "$(git -C vendor-media rev-parse HEAD)" = 3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d
+          for abi in arm64-v8a armeabi-v7a; do
+            test -s "vendor-media/libraries/mpvplayer/src/main/jniLibs/$abi/libmpv.so"
+            test -s "vendor-media/libraries/mpvplayer/src/main/jniLibs/$abi/libplayer.so"
+            test -s "vendor-media/libraries/decoder_ffmpeg/src/main/jniLibs/$abi/libavcodec.so"
+            test -s "vendor-media/libraries/decoder_ffmpeg/src/main/jniLibs/$abi/libavformat.so"
+          done
+      - name: Build upstream MPV and FFmpeg release AAR candidates (no Herrin APK)
+        working-directory: vendor-media
+        run: |
+          ./gradlew :lib-decoder-ffmpeg:assembleRelease :lib-mpvplayer:assembleRelease \
+            --no-daemon --max-workers=2 --console=plain
+      - name: Verify actual native AAR ABI package and record hashes
+        run: |
+          python3 -m py_compile android-tv/fongmi-kernel/verify_native_candidate.py
+          mkdir -p native-candidate
+          find vendor-media/libraries/mpvplayer -name '*release.aar' -type f -exec cp '{}' native-candidate/ \;
+          find vendor-media/libraries/decoder_ffmpeg -name '*release.aar' -type f -exec cp '{}' native-candidate/ \;
+          python3 android-tv/fongmi-kernel/verify_native_candidate.py \
+            --directory native-candidate --output native-candidate/provenance.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report = json.loads(Path('native-candidate/provenance.json').read_text())
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as f:
+              f.write('## Authentic upstream source-built ARM AARs — candidate only\n\n')
+              f.write('Source FongMi/media@3c2cbe8a; not proven TV@305dff2-compatible.\n\n')
+              for item in report['artifacts']:
+                  f.write(item['module'] + ': SHA-256 ' + item['sha256'] + '\n\n')
+              f.write('No Herrin APK or playback proof.\n')
+          PY
+      - name: Preserve built native candidate only for compatibility review
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-built-fongmi-native-candidate-not-validated-for-herrin
+          path: native-candidate/
+          retention-days: 5
