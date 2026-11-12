@@ -25,7 +25,14 @@ their legal authorization flows. No QR-success inference is implemented.
 
 The original TV@305dff2 expects a **custom Media3 API**, not stock Media3.
 The public `FongMi/media` source candidate does not include multiple required
-symbols and is **not** a proven compatible replacement. All four required
+symbols and is **not** a proven compatible replacement.
+A second published fork `webhtv/webhtv@4e30ffaf` was SHA-256-checked against
+three authentic custom Media3 AARs in Actions run 43144759251. It lacks
+`DecoderMode`, `DiscMenuController`, `SubtitleSelectionState`,
+`IsoDiscPreparation` and `PlayerView.setBackendPlayer`, so it is **explicitly
+rejected** for the FongMi TV 5.8.7 classpath. Do not re-audit or integrate it.
+A future proven-compatible Media3 set may be declared with `origin: "media3"`,
+full source/commit/license/checksum and must satisfy all original imported APIs. All four required
 AARs (MPV, FFmpeg, original hook, tvbus) must be recorded in
 `dependencies.json` with real source commits, binary SHA-256s, license texts,
 and build instructions. The original two upstream archives are read from the

@@ -52,5 +52,17 @@
     "androidx.media3.common.text.SubtitleSelectionState",
     "androidx.media3.exoplayer.iso.IsoDiscPreparation"
   ],
-  "artifact_coordinate_policy": "tv.herrin.original:<aar-stem>:<source-sha12>.<binary-sha12>@aar"
+  "artifact_coordinate_policy": "tv.herrin.original:<aar-stem>:<source-sha12>.<binary-sha12>@aar",
+  "media_candidate_audits": [
+    {
+      "repository": "https://github.com/webhtv/webhtv",
+      "commit": "4e30ffaf219b1db15fe5662aeff6f9820e2b32bf",
+      "version": "1.11.0-alpha01-fongmi",
+      "status": "REJECTED_INCOMPATIBLE_API",
+      "ci_run": "https://github.com/shawnhhh/aura-tv/actions/runs/43144759251",
+      "evidence": "SHA-256 passed for common, exoplayer, and ui AARs, but required DecoderMode, DiscMenuController, SubtitleSelectionState, IsoDiscPreparation, and PlayerView.setBackendPlayer are absent.",
+      "must_not_be_staged": true
+    }
+  ],
+  "media3_classpath_policy": "Only explicitly locked origin=media3 AARs with real required APIs, full source/sha256/license and complete binary coverage may be staged; no stock Media3 fallback."
 }
