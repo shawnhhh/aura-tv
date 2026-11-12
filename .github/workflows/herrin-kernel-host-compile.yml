@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/herrin-kernel-host-compile.yml'
       - 'android-tv/app/src/main/java/tv/herrin/app/HerrinKernelGateway.kt'
+      - 'android-tv/app/src/main/java/tv/herrin/app/HerrinKernelRuntime.kt'
+      - 'android-tv/app/src/main/java/tv/herrin/app/HerrinPlayerSession.kt'
   workflow_dispatch:
 permissions:
   contents: read

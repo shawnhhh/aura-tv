@@ -34,6 +34,8 @@ internal class HerrinKernelRuntime private constructor(private val installer: Wh
     val gateway = HerrinKernelGateway()
     private var installed: CompletionStage<Void>? = null
     private var port: WholeKernelPlayer? = null
+    // The original decoder is process-owned; only its current UI lease can stop it.
+    private var wholePlaybackOwner: Any? = null
     private val legacyPlayers = linkedMapOf<Any, () -> Unit>()
     val pages: HerrinKernelPages? = installer?.let { HerrinKernelPages(this) }
     val enabled get() = installer != null
@@ -45,11 +47,25 @@ internal class HerrinKernelRuntime private constructor(private val installer: Wh
         return CompletableFuture.completedFuture(null)
     }
     fun retireWholePlaybackForPersonal() {
-        if (gateway.status != tv.herrin.kernel.KernelCutover.Status.INSTALLED) return
         check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        if (gateway.status != tv.herrin.kernel.KernelCutover.Status.INSTALLED) return
+        // Retire stale UI leases before handing the renderer to personal/NAS media.
+        wholePlaybackOwner = null
         val stopped = gateway.stop().toCompletableFuture()
         check(stopped.isDone) { "Original player retirement must finish before another renderer is allocated" }
         stopped.join()
+    }
+    fun claimWholePlayback(owner: Any) {
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        check(gateway.status == tv.herrin.kernel.KernelCutover.Status.INSTALLED)
+        wholePlaybackOwner = owner
+    }
+    fun ownsWholePlayback(owner: Any): Boolean = wholePlaybackOwner === owner
+    fun releaseWholePlayback(owner: Any): Boolean {
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        if (wholePlaybackOwner !== owner) return false
+        wholePlaybackOwner = null
+        return true
     }
 
     @Synchronized fun activate(retireLegacy: () -> CompletionStage<Void>): CompletionStage<Void> {
