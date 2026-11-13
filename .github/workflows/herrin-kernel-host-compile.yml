@@ -28,9 +28,23 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Batch-validate stable host and kernel contract only
+      - name: Start controlled real SMB2 and SMB3 fixture
+        run: bash .github/scripts/start_smb_fixture.sh
+      - name: Compile, lint and assemble stable host and contract
         working-directory: android-tv
-        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        run: gradle --build-cache --max-workers=2 :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:lintDebug :app:assembleDebug
+      - name: Run all stable host JVM tests after compiler and lint workers finish
+        working-directory: android-tv
+        run: gradle --build-cache --max-workers=2 :app:testDebugUnitTest
+      - name: Preserve validation reports, never an acceptance APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-stable-host-reports
+          path: |
+            android-tv/app/build/reports/
+            android-tv/app/build/test-results/
+          if-no-files-found: ignore
       - name: Audit approved-site search guard in uncompiled upstream adapter
         run: |
           python3 - <<'PY'

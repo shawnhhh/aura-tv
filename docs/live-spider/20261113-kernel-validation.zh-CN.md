@@ -10,7 +10,7 @@ P0未完成。稳定生产入口保持，完整原版core/adapter未编译接管
 | 原版core/adapter Android | ENVIRONMENT_BLOCKED + DEPENDENCY_BLOCKED；原版gradlew缺失退出127，匹配定制Media3/MPV Java API依然没有真实锁定输入 |
 | contract Java17 | ECJ3.42.0编译全部main/test Java通过；既有Cutover检查通过；新增Dispatch检查通过，含排队/委托取消、拒绝、LinkageError、正常完成 |
 | 本地宿主Debug | 默认Gradle目录不可写；改用/tmp后沙箱网络SocketException；未完成Android编译 |
-| CI宿主 Kotlin/Java/JVM/Lint/Debug | run43355940615，精确代码SHA f7ac6133；结果待本批结束后写入 |
+| CI宿主 Kotlin/Java/JVM/Lint/Debug | run43355940615，精确代码SHA f7ac6133；首次失败：Kotlin/Java编译通过，724项中6项失败（5个SMB夹具未启动，1个媒体阶段断言）；没有将其视为全绿。补齐原SMB夹具，编译/Lint与JVM分阶段后重验，结果续记 |
 | TV模拟器、生命周期/焦点、首页/TMDB/NAS/直播设备回归、ABBA | 本地无SDK/adb/emulator/KVM，未执行；没有沿用旧SHA通过结果 |
 | 奶酪 | 本批ENVIRONMENT_BLOCKED，未请求来源，未出帧/60秒/Seek/重播/第二集/详情返回，不复测已知403 |
 | 玩偶哥哥 | 本批ENVIRONMENT_BLOCKED，未请求来源，未观察QR或授权，无播放通过；不推断AUTH_BLOCKED |
