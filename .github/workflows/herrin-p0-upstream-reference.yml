@@ -10,6 +10,8 @@ jobs:
   reference:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      REFERENCE_WANOU_HOME: ${{ contains(github.event.head_commit.message, '[wanou-home]') && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

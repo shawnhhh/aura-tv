@@ -8,6 +8,7 @@ or raw logcat is published.
 from pathlib import Path
 import hashlib
 import json
+import os
 import re
 import subprocess
 import time
@@ -17,7 +18,8 @@ from urllib.error import HTTPError, URLError
 import xml.etree.ElementTree as ET
 
 PACKAGE = 'com.fongmi.android.tv'
-TARGETS = ('奶酪', '玩偶')  # Actual configured labels; WoGGGuard is named 玩偶.
+WANOU_HOME = os.environ.get('REFERENCE_WANOU_HOME') == 'true'
+TARGETS = ('玩偶',) if WANOU_HOME else ('奶酪', '玩偶')
 WAREHOUSE = 'http://www.饭太硬.net/tv'
 report = dict(scope='OFFICIAL_REFERENCE_UI_AND_PLAYER_ERROR_OBSERVATION_NO_FRAME_ACCEPTANCE', herrin_acceptance=False,
               verdict='REFERENCE_BLOCKED', release='FongMi/Release 5.8.7', warehouse=WAREHOUSE,
@@ -218,11 +220,44 @@ def restrict_search():
         raise RuntimeError('REFERENCE_CANCEL_ALL_NOT_CONFIRMED')
     selected = scan_sites(enable_targets=True)
     enabled = [name for name, value in selected.items() if value]
-    if len(enabled) != 2 or not all(sum(target in name for name in enabled) == 1 for target in TARGETS):
+    if len(enabled) != len(TARGETS) or not all(sum(target in name for name in enabled) == 1 for target in TARGETS):
         raise RuntimeError('REFERENCE_EXACT_TWO_SITE_SCOPE_NOT_CONFIRMED')
     report['search_scope_set_via_official_ui'] = list(TARGETS)
     report['site_checkboxes_observed'] = len(selected)
     report['scope_verified_by_checkboxes'] = True
+
+
+def observe_wanou_default_home():
+    click(rid='vodHome',budget=25)
+    reset_site_scroll()
+    for _ in range(40):
+        nodes = ui()
+        target = find(nodes, contains='玩偶')
+        if target is not None:
+            tap_node(target)
+            nodes = ui()
+            if find(nodes, rid='search') is not None:
+                target = find(nodes, contains='玩偶')
+                if target is None:
+                    raise RuntimeError('REFERENCE_DEFAULT_TARGET_LOST')
+                activate_focused(target)
+            break
+        scroll_sites(nodes)
+    else:
+        raise RuntimeError('REFERENCE_DEFAULT_WANOU_NOT_FOUND')
+    home = find(ui(), rid='vodHome')
+    report['default_wanou_setting_verified'] = home is not None and '玩偶' in home.get('text', '')
+    if not report['default_wanou_setting_verified']:
+        raise RuntimeError('REFERENCE_DEFAULT_WANOU_NOT_CONFIRMED')
+    key(4)
+    time.sleep(8)
+    nodes = ui()
+    report['default_wanou_home_observed'] = True
+    report['public_authorization_ui_observed'] = auth(nodes)
+    if report['public_authorization_ui_observed']:
+        key(4)  # No screenshots, QR data, credential handling or claimed auth pass.
+        report['authorization_back_sent'] = True
+    click(texts=('设置','設定','Setting','Settings'),budget=25)
 
 
 def observe_original_player(row):
@@ -307,7 +342,10 @@ def main():
         action('setting',text=WAREHOUSE,name='P0 official reference')
         click(rid='positive')
         time.sleep(5)
-        mark('restrict_search_to_two_authorized_nodes')
+        if WANOU_HOME:
+            mark('original_default_wanou_home')
+            observe_wanou_default_home()
+        mark('restrict_search_to_authorized_nodes')
         click(rid='vodHome',budget=25)
         restrict_search()
         key(4)
