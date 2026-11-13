@@ -100,10 +100,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: p0-player-baseline
+          # AGP names connected-test XMLs by device, not by test class.
           path: |
             android-tv/build/emulator-evidence/player-baseline.json
             android-tv/build/emulator-evidence/test-evidence/**/p0-baseline-*.png
-            android-tv/app/build/outputs/androidTest-results/**/TEST-tv.herrin.app.PlaybackDiagnosticsIntegrationTest*.xml
-            android-tv/app/build/outputs/androidTest-results/**/TEST-tv.herrin.app.SpiderLoaderLifecycleTest*.xml
+            android-tv/app/build/outputs/androidTest-results/**/TEST-*.xml
           if-no-files-found: error
           retention-days: 14

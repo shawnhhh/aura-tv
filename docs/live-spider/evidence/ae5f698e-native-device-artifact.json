@@ -1,0 +1,41 @@
+{
+  "run_id": 43455269784,
+  "artifact_id": 14054271465,
+  "zip_sha256": "12d9eb37da92f893114e154e154643deabb592c7434696781f724a353ddca3ac",
+  "manifest_actually_verified": true,
+  "apk_and_test_compile": "PASS",
+  "lint": "PASS",
+  "native_device_connected": false,
+  "native_device_executed": false,
+  "real_node_acceptance": false,
+  "manifest": {
+    "schema": 1,
+    "source_sha": "ae5f698e9f66a405f4e67269e221e1ed076d1d70",
+    "source_branch": "codex/herrin-p0-live-playback-20261110",
+    "abi": "arm64-v8a",
+    "scope": "INTERNAL_DIAGNOSTIC_NOT_PLAYBACK_ACCEPTANCE",
+    "files": {
+      "app-debug.apk": {
+        "sha256": "fd426eb2b5e0311ef841ad169675280d40b074a210fbe9f2f195b42326126bdb",
+        "bytes": 26850349,
+        "native_libraries": [
+          {
+            "member": "lib/arm64-v8a/libandroidx.graphics.path.so",
+            "elf_class": 2,
+            "machine": 183
+          },
+          {
+            "member": "lib/arm64-v8a/libherrinarmprobe.so",
+            "elf_class": 2,
+            "machine": 183
+          }
+        ]
+      },
+      "app-debug-androidTest.apk": {
+        "sha256": "4126420614ff80577b8544f8874918234b2ad155066aeafe26581d05c9d8002b",
+        "bytes": 6835716,
+        "native_libraries": []
+      }
+    }
+  }
+}

@@ -1,110 +1,97 @@
-# 最新断点：2026-11-13 真实Media3已接通，源访问/原生运行边界仍阻塞出帧
+# 最新断点：P0真实节点未出帧；当前生产播放器原创基准已通过
 
-P0未完成：全部真实首帧/60秒/暂停/Seek/重播/切集验收仍未通过。
-最新完整JVM730/730（0失败/跳过）、Lint/宿主成功，工件14030310663，ZIP SHA256
-97abab94f20c4e7cde33c63ea4aa20be26565bcd82b482ffdf5ce13060e33cd5。
-run43410792149原TV259/260失败保留：空首页夹具只等详情容器即查episode-2的异步竞态。
-52e38a5b在原10秒内等待真实episode-2，原断言保留；只复用完整TV回归，不重发源请求。
-复核run43413805649@92eb718a宿主兼容/Lint/Debug与TV260/260成功，0失败/跳过、68必测类齐全。
-真实节点CI/D仍FAILURE，复核通过不覆盖或替代真实视频失败。
-代码已推唯一分支；原版参考仍为官方最新5.8.7（发布SHA已核实），未改APK。
+唯一分支：`codex/herrin-p0-live-playback-20261110`；[Draft PR85](https://github.com/shawnhhh/aura-tv/pull/85)，未合并。
+最后经完整运行验证的代码HEAD：`ae5f698e9f66a405f4e67269e221e1ed076d1d70`。
+本检查点提交仅更新证据/收集路径；实际当前HEAD用`git log -1`读取。
+**P0未完成。原创素材通过不等于饭太硬节点通过。**
 
-实质播放修复1e33f8c0：明确选集的已授权本机媒体不再额外GET探测，保留当前站点/端口/
-会话真实health检查，交给唯一播放器读取及取消；未增加1.5秒超时，远端候选探测不变。
-run43404975997@b32a80b6完整JVM730/730（新延迟回调/外站/过期会话3/3），Lint/宿主
-Debug与TV通过；双节点/D失败。JUnit工件14026359995，ZIP SHA256
-b88659e6abc116b10928b87b13c8d8406c0544f3a6ecc31c1f13344855006526。
+## 已执行的统一验证
 
-最新真实结果：
-- 奶酪《小城良方》：2026/29集/解析通过，Media3真实创建；回调3038ms返回HLS URL引用，
-  获取HTTPS引用实际403 HTML→本机502→播放器网络错误。后续没有重发此请求。
-- 原版同片：run43406918397核对标题/2026并观察到HLS_HEADER_INVALID，没有出帧证据。
-  不能宣称原版同样403；它在处理非标准HLS正文阶段已失败。
-- 奶酪TV：先修复标题精确匹配、误选2项剧场片、屏外搜索框判断、列表滚动；
-  349b21e2再修复“回调返回早于详情最终发布”的竞态，并绑定真实来源季号。
-  最终run43409473187@7d47fcc7明确第九季/93集/第001集；Media3创建，ARM64回调
-  返回200/HLS/InputStream（4388ms）及HTTPS引用，但进程SIGILL（libc/NDK转译栈），
-  未取得远端状态或媒体字节。ARMv7同季首集run43407266601则SIGSEGV，栈含插件/其他、
-  libc、NDK转译。不能仅凭这些栈认定是转译器而非插件故障。
-  更早0fa5c338记录曾因详情竞态跳到第八季，不把该轮当严格同季ABI对照。
-- 玩偶两片均普通/quick空正文，无QR。原版默认站点实测run43409666358@a619ab48：
-  UI核实玩偶为默认、进入首页、仅玩偶勾选后搜索；未观察公开授权提示或结果入口。
-  不能据此推断无资源/必须扫码；没有可证实的分页/extension协议修复。
+| 作业 | 实际结果 |
+| --- | --- |
+| 43455281416 | 完整JVM730/730，0失败/错误/跳过；Lint/Debug及API31回归成功 |
+| 43455281378 | 定向生产播放器旅程1/1，再完整TV261/261，69必测类，0失败/跳过 |
+| 43455269784 | 精确SHA ARM64应用/AndroidTest构建及Lint成功；未执行真实节点C/D |
 
-**最新实际节点run43410792149@2f02cf4d已完成**：
-2f02cf4d仅将相同标准ARM64包的TV第九季首集放到官方API35 Google APIs镜像，
-实际SDK35/ARM64、第九季93集、第001集均已核实；Media3创建后仍SIGILL，0媒体字节/0首帧。
-API35栈为libc/插件或其他原生模块；API30 ARM64含libc/NDK转译，ARMv7含插件/其他/libc/NDK。
-不能把它们说成已证明“只怪模拟器”，也不以延长网络超时或修改插件保护掩盖崩溃。
-停止相同云端尝试，需要一次性原生ARM设备对照，或合法匹配的插件源码/原生诊断材料
-进一步区分宿主JNI、插件与转译环境。当前没有可核验的下一处Kotlin/Java修复根因。
-本轮首集失败后未执行第2/3集及暂停/Seek/重播，不记这些操作通过。
+当前唯一生产播放器（Media3 1.9.4）经现有AuthorizedPlaybackPanel/HerrinPlayerSession验证：
+MP4实际画面/首帧、60211ms墙钟/61072ms媒体、1459渲染帧；HLS实际画面/首帧、
+60155ms墙钟/60908ms媒体、1442渲染帧。两者均暂停恢复、真实Seek至3000ms后出帧、Back及Activity释放通过。
+输入仅仓库原创素材：72秒连续MP4；原TS按标准discontinuity构成72秒HLS。没有替代真实节点验收。
 
-当前配置审计run43417003939@2633fc4d已成功读取：声明JAR 6d10a60...、49站，
-奶酪/玩偶、根级、规则均无声明请求头；不把旧9d5f配置的结论冒充当前读取。
-此前只读工具遇302，现有限跟随真实服务器声明的公网重定向，禁止私网/降级，不记录URL或凭据。
-最新审计实际直接200、redirect_statuses=[]；不声称本次成功必然由重定向代码引起。
-原版ARM64/API35 TV对照曾被android:id/immersive_cling提示遮挡；已按实际android:id/ok
-做系统提示确认。run43417764644@447f0a23已到选站但scope未确认；后续公开UI定位/就绪修复
-run43440864678@325ccb01仍停设置页、未出现选站控件，REFERENCE_BLOCKED。官方SiteDialog
-在空列表时会自动dismiss；仅凭此现象无法把原因定为按键、配置失败或播放失败。不再重复相同UI操作。
+已下载核验小工件14056220331（JSON/两张1920x1080真实截图），ZIP SHA256
+98ad5503a82193c616db6a15e7ce3229f843f3a9d7a50e207abbf08aec5d1a89。
+其原按类名匹配的JUnit glob未收集到XML；完整原始JUnit仍在主TV工件14055491986，
+本次已修正小工件收集为AGP设备命名的`TEST-*.xml`，不冒称旧小工件含JUnit。
+最终基准证据：`evidence/ae5f698e-production-player-baseline.json`。
 
-本轮继续提交（保持唯一开发分支；Draft PR85基于前一开发分支，未合并）：
-- 44bc3ca9/e2e4379c：一次性模拟器崩溃采集保留实际so basename、相对PC/Build ID、
-  信号/线程/数值寄存器；PC寄存器与回溯相对偏移分别保存。脱敏定向测试通过。
-  **旧证据已经丢弃完整栈/PC/寄存器，无法补回，也无法据此做可靠符号解析或判定重复释放。**
-  不重复API30/35崩溃实验，待合法匹配Build ID的原生诊断材料或一次性原生ARM设备。
-- a8fb7b4a：既有PlaybackDiagnosticsIntegrationTest增加生产播放器MP4/HLS各60秒基准，
-  原创6秒素材按1x循环，实际HTTP/TLS、首帧回调/画面、持续解码、暂停/Seek/释放。
-  运行43440288111@7197daf2完整TV261项，260通过/新增基准首帧等待失败，0跳过；
-  基准与整体保持FAIL。只读提取run43445620140证明原创MP4实际FIRST_FRAME=1185ms、
-  STATE=3；新用例的单一videoDecoderCounters在预热/循环中被替换，导致观测超时。
-  047bbf4d改按实际渲染器事件/播放器身份累计真实计数，不禁用生产预热，不放宽首帧/60秒/控制。
-  复测run43446558463已通过首帧/实际画面，但6秒MediaItem循环重缓冲触发连续门槛失败；
-  同轮SpiderLoaderLifecycleTest的“主线程尚未执行”假设竞态暴露，261项259通过/2失败。
-  88b83bee用显式主线程屏障保留全部撤销断言；3a6c2b3b换72秒连续原创输入、保留
-  isPlaying/60秒墙钟并加强媒体位置≥60秒；adc6de0a修复API30 Shell导出非shell语法。
-  两次失败均保留，下一次完整TV通过前不记基准PASS。
-  同轮完整JVM原JUnit已核730/730，0失败/跳过，3个探测回归通过；Lint/宿主成功。
-  工件14044629422，ZIP SHA256 9454daabaf9524dac13db7a874a269b23488f2f1e76847fbe30cbf4cb762157b。
-- 31ddda92/41714a27：复用原ARM入口，默认prepare只读；精确SHA/两个APK哈希/真实ELF
-  架构先校验。只有run-on-disposable-device明确模式才安装并运行会重置本测试应用的驱动。
-  真机不读取/清理全局logcat，不读取其他应用数据，仅本应用报告及本UID本次退出元数据；
-  非root未取得完整栈时明确留缺口。**没有连接原生ARM设备，未发生真机验证。**
-- c8d30ad7：严格要求实际来源第九季和至少3集，不能以其他季通过验收；第1集失败立即停止。
-- 最新源码构建8d703279bf9d297a49387cda5fb3be9d8d5cb760，run43442562586只运行B及Lint，
-  B与Lint已成功。随后349b45ed修复AGP卸载导致基准JSON丢失，88649600要求Seek实际跳转事件；
-  9376ccc3修复旧静态边界检查仍要求Panel直接构造适配器的错误，强化Session唯一/互斥持有检查。
-  等基准根因修复后合并定向复测；仅构建模式和无源回归模式均不执行C/D，不声称节点PASS。
-  原完整节点入口/所有严格断言保留，触发文件未改变，没有重新请求403或相同转译崩溃。
+## 最新真实节点结果（没有重放相同403/SIG实验）
 
-本轮按固定原版公开实现核对（代码行为与真实运行证据分开）：
-| 环节 | 原版公开实现 | HERRIN实际现有路径/已知差异 |
-| --- | --- | --- |
-| JAR/Init | DexClassLoader→Init.init→Spider.init(ext) | 保留ABI搜索目录，服务器先于Init；无证据证明崩溃初始化点 |
-| 默认站点首页 | homeContent(true)→homeVideoContent | 显式选站走browse默认loadHome=true，顺序相同；空首页继续可搜索 |
-| 第1页搜索 | searchContent(keyword,quick)，后续页才三参数 | 第1页同为双参数；玩偶普通/quick均0字符，不能猜切到第2页有结果 |
-| playerContent/Proxy | 回调Object[]中InputStream直接chunked转发 | 私有会话Proxy另有HLS前缀检测/别名改写/单URL引用读取 |
-| HLS实证 | 小城原版HLS_HEADER_INVALID | HERRIN引用实际403 HTML→502；不得混称原版也403或假造请求头 |
-| 播放器 | 原版ParseJob/PlayerManager→Media3或MPV | 仍为当前唯一生产Media3；完整新整核与MPV未接管 |
+| 节点/目标 | 最早未通过阶段与真实结果 |
+| --- | --- |
+| 奶酪《小城良方》2026 | run43404975997：搜索/29集/解析通过，真实Media3创建；回调3038ms返回HLS URL引用，实际引用请求403 HTML→本机502，无视频首帧 |
+| 奶酪《蜡笔小新》第九季首集 | run43410792149@2f02cf4d：API35标准ARM64，第九季93集/第001集，Media3创建，回调3508ms返回200/HLS/InputStream及HTTPS引用，随后SIGILL；未取得媒体字节/首帧 |
+| 玩偶两片 | run43404975997：初始化通过；普通/quick均0字符，SOURCE_EMPTY_RESPONSE；无真实QR，无Media3 |
 
-依赖锁android-tv/fongmi-kernel/dependencies.json已读取：FongMi/media 3c2cbe8、
-webhtv 4e30ffa均已有不匹配实证，本轮未重复审计/替换或空实现。
+奶酪TV曾在ARMv7/API30同季首集SIGSEGV，ARM64/API30同季首集SIGILL。
+API35栈只留libc/PLUGIN_OR_OTHER分类；API30部分含NDK转译。不能指认插件或转译器为根因。
+旧采集主动丢弃完整栈、PC、寄存器，无法补回或可靠符号解析。更早0fa5c338有详情竞态选到第八季，
+不把它当严格同季ABI对照。所有节点真实60秒/暂停/Seek/重播/第2集/返回详情再播未验收；
+蜡笔小新第2/3集在首集失败后未执行。不得记REAL_PLAYBACK_PASS。
 
-证据：evidence/b32a80b6-*.json、8e417abc-*.json、7d47fcc7-*.json、
-13c7b3c7-original-player-observation.json、a619ab48-original-wanou-default.json、
-2f02cf4d-cheese-shinchan-api35.json及2f02cf4d-native-crash.json。
-新完整FongMi整核仍没有匹配依赖并未接管；本轮实际入口是现有稳定唯一Media3播放器。
+## 原版与代码对照
+
+固定未修改官方5.8.7：原版小城run43406918397观察到HLS_HEADER_INVALID，不能说原版同样403或已出帧。
+原版玩偶默认站点run43409666358核实默认/home/仅玩偶搜索，未观察可验证结果或公开授权提示；
+不能推断无资源/必须扫码。原版ARM64/API35 TV对照最终run43440864678@325ccb01仍停设置页、
+未建立选站范围，REFERENCE_BLOCKED；早先447f0a23为scope未确认。启动XML/系统提示/真实控件操作
+修复均未当成原版播放通过，不再重复相同UI尝试。公开SiteDialog空列表会dismiss，仅此不能定配置根因。
+
+公开实现核对：默认首页均homeContent(true)→homeVideoContent；第一页均双参数searchContent，
+后续页原版才三参数。HERRIN显式选站browse默认loadHome=true；没有支持修改玩偶协议的实证。
+原版Proxy直接chunked转发InputStream；HERRIN额外做HLS别名改写/单URL引用读取。小城原版无效HLS与
+HERRIN引用403是不同阶段。当前配置审计43417003939：JAR6d10a60.../49站，根/规则/奶酪/玩偶无声明请求头；
+不猜造Cookie/UA/Referer。完整FongMi整核及MPV未接管；dependencies.json中3c2cbe8/webhtv4e30ffa已有
+不兼容实证，本轮未重新审计或塞入空实现。仍需合法匹配的自定义Media3/原生构建输入。
+
+## 实质修复提交
+
+| 范围 | 提交与结果 |
+| --- | --- |
+| 实际播放入口 | 1e33f8c0移除明确选集的独立1.5秒媒体GET；真实会话health/归属保留，唯一播放器负责媒体读取/取消，未延长超时；真实复测推进到Media3 |
+| 原生诊断 | 44bc3ca9/e2e4379c保留实际so basename/相对PC/Build ID/数值寄存器，区分PC寄存器与帧偏移；旧证据不能反推 |
+| 设备及隐私 | 31ddda92精确SHA/APK哈希/真实ELF校验；41714a27真机只读本UID本次退出元数据，不读/清全局logcat或其他应用数据 |
+| 严格选集 | c8d30ad7实际来源第九季且至少3集；首集失败立即停，不把其他季冒充通过 |
+| 基准观测 | a8fb7b4a新增现有生产组件基准；047bbf4d按实际渲染器事件累计，处理预热计数引用被替换 |
+| 连续输入/释放 | 3a6c2b3b连续原创素材、墙钟≥60秒且媒体进度≥60秒；1e270089释放属性在Main读取，原门槛保留 |
+| 生命周期夹具 | 88b83bee明确持有首个主线程派发再撤销；所有原撤销/零绑定断言保留 |
+| 边界及证据 | 9376ccc3强制Session唯一/互斥适配器及唯一Exo构造；adc6de0a/3a6c2b3b修复API30非shell命令与卸载后的PNG/JSON留存 |
+
+先前7197daf2观测超时、2fcf5941循环/夹具失败、10621853错误线程读释放属性均保留在evidence，
+没有删除、跳过或放宽断言。最终完整TV通过不会覆盖真实节点失败。
+
+## 外部恢复条件与准确命令
+
+目前没有连接原生ARM设备，未执行真机测试。需要一次性原生ARM64设备对照，或合法匹配的
+插件原生诊断/对应Build ID的ELF及符号，才能继续定位SIG。源站403/玩偶空正文还需新的合法可访问
+配置/授权或公开调用证据；不能无变化重试或猜登录。普通电视的日常配置不得自动清除。
+
+已实际下载核验AE包：run43455269784、工件14054271465、标准AArch64 ELF。
+ZIP SHA256 12d9eb37da92f893114e154e154643deabb592c7434696781f724a353ddca3ac；
+两个APK SHA256及机器字段见`evidence/ae5f698e-native-device-artifact.json`。仅内部诊断，不是验收交付。
 
 ```sh
-cd /workspace/aura-tv
-git status --short --branch
-git log -10 --oneline
-# 先读43440288111完整TV/原创基准、43442562586最终设备包构建；原版325ccb01仍BLOCKED。
-# 不要重复HERRIN受阻云端请求；精确真机安装命令见CI-CHANNEL.md，实际设备必须另行连接。
-# 有一次性原生ARM64设备并已下载对应内部诊断包后，精确续跑（会清理本测试应用配置）：
-# LIVE_FILM_TITLE=蜡笔小新 LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_PREBUILT_APKS=diagnostic-apks LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
+# 在设备操作者电脑执行；P0提交的detached worktree，不新建开发分支。
+git worktree add --detach /tmp/herrin-p0-arm64-ae5f698e ae5f698e9f66a405f4e67269e221e1ed076d1d70
+cd /tmp/herrin-p0-arm64-ae5f698e
+gh run download 43455269784 -R shawnhhh/aura-tv -n p0-internal-diagnostic-apks -D diagnostic-apks
+# 只读，不安装/清理/执行节点。替换为已授权连接的一次性原生ARM64设备。
+bash android-tv/scripts/run_fantaiying_arm_e2e.sh --p0-native prepare --artifact diagnostic-apks/arm64-v8a --sha ae5f698e9f66a405f4e67269e221e1ed076d1d70 --serial DEVICE_SERIAL
+# 仅真正隔离的一次性测试环境：会重置本测试应用偏好；首集失败即停。
+# bash android-tv/scripts/run_fantaiying_arm_e2e.sh --p0-native run-on-disposable-device --artifact diagnostic-apks/arm64-v8a --sha ae5f698e9f66a405f4e67269e221e1ed076d1d70 --serial DEVICE_SERIAL --node cheese --film shinchan
 ```
+
+原版同设备安装、固定版本摘要、隐私边界和其他节点命令见[CI-CHANNEL.md](CI-CHANNEL.md)。
+直接从这里续跑，不再检查已知无SDK本机，不再重复受阻模拟器或403请求。
 
 ---
 
