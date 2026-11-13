@@ -133,6 +133,26 @@ def activate_focused(node):
     key(23)
 
 
+def dismiss_system_immersive_hint():
+    nodes = ui()
+    if not any(n.get('resource-id','').startswith('android:id/immersive_cling_') for n in nodes):
+        return
+    ok = next((n for n in nodes if n.get('resource-id') == 'android:id/ok'), None)
+    if ok is None:
+        raise RuntimeError('REFERENCE_SYSTEM_HINT_BUTTON_MISSING')
+    tap_node(ok)
+    nodes = ui()
+    if any(n.get('resource-id','').startswith('android:id/immersive_cling_') for n in nodes):
+        ok = next((n for n in nodes if n.get('resource-id') == 'android:id/ok'), None)
+        if ok is None:
+            raise RuntimeError('REFERENCE_SYSTEM_HINT_DISMISSAL_NOT_CONFIRMED')
+        activate_focused(ok)
+        nodes = ui()
+    if any(n.get('resource-id','').startswith('android:id/immersive_cling_') for n in nodes):
+        raise RuntimeError('REFERENCE_SYSTEM_HINT_DISMISSAL_NOT_CONFIRMED')
+    report['system_immersive_hint_dismissed'] = True
+
+
 def search_mode():
     nodes = ui()
     button = find(nodes, rid='search')
@@ -362,6 +382,7 @@ def main():
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         adb('forward','tcp:19978','tcp:9978')
         mark('open_settings')
+        dismiss_system_immersive_hint()
         # Upstream leanback/res/values/strings.xml names home_setting "Setting".
         click(texts=('设置','設定','Setting','Settings'),budget=25)
         click(rid='vod')
