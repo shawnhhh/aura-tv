@@ -1,0 +1,133 @@
+{
+  "node": "奶酪",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 3939
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 4834
+    },
+    {
+      "stage": "search",
+      "result": "PASS",
+      "elapsed_ms": 1032
+    },
+    {
+      "stage": "details_and_episodes",
+      "result": "PASS",
+      "elapsed_ms": 1081
+    },
+    {
+      "stage": "first_frame_0",
+      "result": "FAILED",
+      "failure_code": "MEDIA_PROBE_NETWORK_ERROR",
+      "elapsed_ms": 2497
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": true,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "armv7l",
+    "process_64bit": false,
+    "production_selected_abi": "armeabi-v7a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "奶酪",
+  "spider_api": "csp_T4Guard",
+  "node_count": 49,
+  "config_saved": true,
+  "declared_jar_md5": "6d10a60af6c0976836933c5f3cf9e8a7",
+  "film_identity_verified": true,
+  "episode_count": 29,
+  "alternate_line_available": false,
+  "episode_selection_attempt": 1,
+  "episode_driver_action": "ACTIVATE_EPISODE_BUTTON",
+  "episode_ui_kind": "SOURCE_EPISODE_BUTTON",
+  "pipeline_failure_component": "MEDIA_VALIDATION_BEFORE_MEDIA3",
+  "failure_stage": "first_frame_0",
+  "failure_code": "MEDIA_PROBE_NETWORK_ERROR",
+  "driver_failure_structure": "CAUSE tv.herrin.app.FanTaiYingRealMainUiTest$Stop\ntv.herrin.app.FanTaiYingRealMainUiTest.failProductionGate:173\ntv.herrin.app.FanTaiYingRealMainUiTest.node$lambda$44:315\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$hC4RDiwBynsYb-IGIxaaU9WxsKM:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda31.invoke:0\ntv.herrin.app.FanTaiYingRealMainUiTest.step$lambda$15:126\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$TahwOK8H7DSJHpX_brCSlLbL-0g:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda16.invoke:0\nandroidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil:434\nandroidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil:306\ntv.herrin.app.FanTaiYingRealMainUiTest.step:113\ntv.herrin.app.FanTaiYingRealMainUiTest.node:314\ntv.herrin.app.FanTaiYingRealMainUiTest.cheeseRealNode:220",
+  "post_failure_observation_only": true,
+  "post_failure_observation_ms": 8052,
+  "main_activity_lifecycle": "RESUMED",
+  "proxy_callback_shapes": [
+    {
+      "outcome": "HOST_PROXY_RESPONSE",
+      "status": 204,
+      "range": false
+    },
+    {
+      "outcome": "HOST_PROXY_RESPONSE",
+      "status": 204,
+      "range": false
+    },
+    {
+      "outcome": "CALLBACK_ENTERED"
+    },
+    {
+      "outcome": "CALLBACK_ARRAY",
+      "length": 3,
+      "mime_kind": "HLS",
+      "types": [
+        "java.lang.Integer",
+        "java.lang.String",
+        "java.io.ByteArrayInputStream"
+      ],
+      "status": 200,
+      "elapsed_ms": 3908
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_URL_REFERENCE"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_TARGET_HTTPS"
+    }
+  ],
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 4160
+      }
+    ],
+    "response_chars": 4160,
+    "shape": "JSON_LIST"
+  },
+  "sdk_network_scope": "PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+42414ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+43553ms SPIDER INITIALIZE_STARTED\nT+47633ms SPIDER INITIALIZE_RETURNED MS=4080\nT+49064ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+49646ms SPIDER SEARCH_STARTED\nT+49805ms SPIDER SEARCH_RETURNED MS=159\nT+51676ms SPIDER DETAILS_EPISODES_STARTED\nT+51852ms SPIDER DETAILS_EPISODES_RETURNED MS=175\nT+51853ms SPIDER DETAILS_RETURNED COUNT=29\nT+51853ms SPIDER DETAIL_LINES_RETURNED COUNT=1\nT+52524ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE SELECTION_STARTED\nT+52650ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESOLVE_STARTED\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESOLVE_RETURNED MS=455\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER PARSER_DIRECT\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESPONSE_URL_STRING\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESPONSE_PARSE VALUE=0\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESPONSE_JX VALUE=0\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER HEADER_FALLBACK\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER PARSER_DIRECT\nT+53106ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESPONSE_URL_STRING\nT+53107ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESPONSE_PARSE VALUE=0\nT+53107ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER RESPONSE_JX VALUE=0\nT+53107ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER HEADER_FALLBACK\nT+53107ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER PLAYER_CONTENT_RETURNED\nT+53108ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d PROXY HEALTH_STARTED\nT+53119ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d PROXY HEALTH_READY\nT+53129ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_REQUEST HOP=0\nT+53129ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_TARGET_PROXY\nT+53139ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_CONNECT_STARTED\nT+53139ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_TRANSPORT_DIRECT\nT+53140ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_CONNECT_FINISHED\nT+53140ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_REQUEST_HEADERS_SENT\nT+54641ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_CALL_FAILED\nT+54641ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_FAILURE_RESPONSE_HEADERS\nT+54641ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_IO_TIMEOUT\nT+54641ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SOURCE MEDIA_PROBE_NETWORK_ERROR\nT+54642ms SID=0aeeaad3-9626-49af-9dfa-2ef196f6245d SPIDER PLAYER_CONTENT_REJECTED",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 23918
+}

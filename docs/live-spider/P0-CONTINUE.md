@@ -1,3 +1,48 @@
+# 最新断点：2026-11-13 Android CI通道实际恢复，双节点已运行
+
+**环境通道已可用，P0播放仍FAIL；不要再以本地缺SDK作为停止条件。**
+代码HEAD在本检查点提交前为faa8081a；宿主/双真实节点验证SHA为69419944。
+[运行43395757545](https://github.com/shawnhhh/aura-tv/actions/runs/43395757545)由真实push自动触发：
+A完整JVM727/727（0失败/跳过，M476为12/12）、Lint/Debug成功；B诊断APK构建成功；
+C两份工件均确认KVM、模拟器启动、APK安装、正式MainActivity测试实际执行。
+完整TV/生命周期Job尚在运行，D将在其结束后始终汇总；此状态会随后更新，不认整套通过。
+
+本轮修复：6897d64d只补正文IO失败阶段事件，原NETWORK_ERROR/超时/断言保留；
+78cd4b83拆开A/B/C/D并加专用push触发文件及手动入口；b6e1a159修复setup-android
+默认退役tools包导致的真实失败；69419944允许新修正替代旧运行；26bc8321补严格仪器
+完成门槛（本地4例通过，未引发重复节点请求）。通道说明与操作见[CI-CHANNEL.md](CI-CHANNEL.md)。
+
+奶酪本轮：真实配置/初始化/搜索/2026身份/29集/解析成功，DIRECT本机连接和发送成功，
+等待响应头约1501ms超时；同次Spider回调约3908ms才返回200/HLS/InputStream，
+8秒只读观察见URL引用及HTTPS目标，未取得最终远端状态。没有本轮403证据，不能沿用旧403
+替代；没有创建Media3/真实首帧，不能靠放宽门槛宣称通过。
+玩偶本轮：真实配置/初始化成功，普通/quick仍空正文，SOURCE_EMPTY_RESPONSE，未观察QR。
+两者60秒/暂停恢复/Seek/重播/切集/详情返回再进均未通过。详细脱敏JSON见
+[evidence/69419944-main-ui-cheese.json](evidence/69419944-main-ui-cheese.json)与
+[evidence/69419944-main-ui-wanou.json](evidence/69419944-main-ui-wanou.json)。
+
+原版既有脚本复用到当前分支，实证修复TAB无焦点、touch仅聚焦未切换，以及玩偶实际标签。
+第二轮run43396931027@faa8081a：42个可见站点核查、仅两目标勾选、搜索实际执行；
+奶酪标题可见，玩偶结果入口未观察到。不认无资源/必须登录，也未验证原版年份/详情/播放器。
+这只解除了选站阻塞，尚不能把原版当真实播放成功对照；见[evidence/faa8081a-official-reference.json](evidence/faa8081a-official-reference.json)。
+
+持久环境状态：[evidence/20261113-ci-channel.json](evidence/20261113-ci-channel.json)。
+下一次读取实际CI及上面报告后，仅在有实质修复或新授权/网络依据时更新触发文件attempt/reason：
+
+```sh
+cd /workspace/aura-tv
+git status --short --branch
+# 修改 .github/p0-playback-trigger.json 后：
+git add .github/p0-playback-trigger.json
+git commit -m "ci(p0): run next evidenced playback repair"
+git push origin HEAD:refs/heads/codex/herrin-p0-live-playback-20261110
+# 无需本地SDK或Actions写API；Actions页面也可指定当前分支手动node=both/cheese/wanou。
+```
+
+PR保持Draft，不合并master；未使用Superpowers，未改无关UI，没有发布验收APK。
+
+---
+
 # 最新断点：2026-11-13 双真实节点 A/B 环境核查
 
 **P0未完成；奶酪、玩偶哥哥本轮均 ENVIRONMENT_BLOCKED，原版 REFERENCE_BLOCKED。**
