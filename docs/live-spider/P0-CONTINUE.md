@@ -1,3 +1,51 @@
+# 最新断点：2026-11-13 双真实节点 A/B 环境核查
+
+**P0未完成；奶酪、玩偶哥哥本轮均 ENVIRONMENT_BLOCKED，原版 REFERENCE_BLOCKED。**
+同步并核实代码HEAD `86ec4d419b6706be752967dd54cc499249e1d1d5`；本记录提交后的HEAD以
+`git rev-parse HEAD` 为准。PR84实读Draft/open/unmerged，仍在旧global-search头08f6640；
+未合并、未同步旧PR分支。未开发UI、未改生产播放路径、未使用Superpowers。
+
+本轮新增核查：[脱敏证据](evidence/20261113-real-ab-blocked.json)。
+- **补齐历史遗漏**：最后被动诊断run42882067450/job130060627476@d7ad546f，
+  75项定向测试1失败（M476阶段事件），模拟器及真实节点步骤均skipped；没有新的媒体结果。
+- 原版最新既有run42867039176/job130008047096实读日志：workflow success但正文
+  REFERENCE_BLOCKED，停止于restrict_search_to_two_authorized_nodes，targets=[]。
+  不得以此认定原版任一节点成功/失败或源站共同403。
+- 奶酪最后有效Main UI证据仍0ada209：搜索/2026身份/29集/playerContent成功，
+  前置探测无响应头即失败。更早86d3192才是本机502、上游403 HTML证据。
+  玩偶最后有效Main UI仍0ada209：普通/quick空正文，无公开QR；不能判无资源或必须登录。
+- 两者均未取得视频首帧，60秒、暂停恢复、Seek恢复新帧、重播、第二集、返回详情再进均未通过。
+- 定向实读固定原版Proxy.java：原版直接chunked转发InputStream；本宿主先预读HLS、
+  可取正文URL引用。这是静态实现差异；真实最早差异仍UNKNOWN，没有A/B因果证据，不据此打补丁。
+- 最新CI实读run43378025637@83288e1a：宿主编译/Lint/Debug成功、JVM失败。
+  727项/1失败为上轮已核查JUnit记录，不把宿主通过当整核接管。
+
+当前环境无adb/SDK/emulator/KVM/javac，只有JRE21；无运行中的设备/现存测试APK/合法会话材料。
+GitHub CLI Actions API实测Forbidden；连接器可读但未提供workflow dispatch工具。
+完整编译/JVM/Lint/设备任务已合并尝试，wrapper先沙箱SocketException，外部重试为
+services.gradle.org UnknownHostException（JVM未自动使用HTTP代理；不推断该域被策略拒绝）。
+任务尚未开始，TV及生命周期未执行。整核检查仍INVALID：固定检出、四AAR、匹配媒体锁缺失。
+未重试两个来源、未复验拒绝依赖候选、未请求猜测UA/Referer/Cookie、未绕过授权或DRM。
+
+恢复条件：提供已配置SDK/Gradle/ARM或ARM转译的一次性设备与合法配置/授权及可访问来源的网络；
+或恢复Actions运行权限。先恢复未修改官方APK的两节点选站UI，完成相同设备/网络/配置A/B，
+不要先等整核编译。M476原断言继续保留；它目前会阻止既有专项工作流进入设备步骤，
+后续需要修复被实证的事件遗漏并定向验证，不能删除或跳过测试求绿。
+
+```sh
+cd /workspace/aura-tv
+git status --short --branch
+git log -1 --format='%H %s'
+# 在上述恢复条件满足后；两份独立报告，仍用既有正式MainActivity驱动：
+LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=armeabi-v7a LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
+LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=wanou ARM_PACKAGE=true LIVE_INSTALL_ABI=armeabi-v7a LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
+# 有实际修复/新A/B信息或网络授权条件变化后才发请求；默认不重跑旧403/空搜索。
+# 全部必要输入恢复后，在android-tv/执行完整验证：
+# GRADLE_USER_HOME=/tmp/herrin-p0-gradle ./gradlew --continue :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:connectedDebugAndroidTest
+```
+
+---
+
 # 最新断点：2026-11-13 原版会话极简控制层与媒体能力
 
 P0未完成。代码验证HEAD：`83288e1a40eb3fd931a8e37b794bb037a3041ef7`。
