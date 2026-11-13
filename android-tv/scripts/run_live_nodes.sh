@@ -51,7 +51,11 @@ trap collect EXIT
 # Mark only stages confirmed by actual Android commands on this invocation.
 adb wait-for-device
 test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
-touch evidence/emulator-booted
+if [[ "${LIVE_PHYSICAL_DEVICE:-false}" == true ]]; then
+    touch evidence/native-device-booted
+else
+    touch evidence/emulator-booted
+fi
 adb shell getprop ro.product.cpu.abilist > evidence/system-abilist.txt
 adb shell getprop ro.dalvik.vm.native.bridge > evidence/native-bridge.txt
 adb shell getprop ro.dalvik.vm.isa.arm >> evidence/native-bridge.txt
@@ -59,7 +63,9 @@ adb shell getprop ro.dalvik.vm.isa.arm64 >> evidence/native-bridge.txt
 adb shell ls /system/lib64/libndk_translation.so /system/lib/libndk_translation.so /system/lib64/libhoudini.so /system/lib/libhoudini.so > evidence/bridge-files.txt 2>&1 || true
 if [[ -n "${LIVE_PREBUILT_APKS:-}" ]]; then
     if [[ "${ARM_PACKAGE:-false}" == true ]]; then variant="${LIVE_INSTALL_ABI:?ARM package ABI required}"; else variant=plain; fi
-    apk_dir="$repo_root/$LIVE_PREBUILT_APKS/$variant"
+    apk_root="$LIVE_PREBUILT_APKS"
+    if [[ "$apk_root" != /* ]]; then apk_root="$repo_root/$apk_root"; fi
+    apk_dir="$apk_root/$variant"
 else
     bash android-tv/scripts/build_live_arm_canary.sh
     (cd android-tv && gradle -PherrinLiveSourceTest=true -PherrinArmTranslationTest="${ARM_PACKAGE:-false}" -PherrinLiveAbi="${LIVE_INSTALL_ABI:-arm64-v8a}" :app:assembleDebug :app:assembleDebugAndroidTest) 2>&1 | tee evidence/build.log
