@@ -7,6 +7,7 @@ or raw logcat is published.
 """
 from pathlib import Path
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -18,8 +19,12 @@ from urllib.error import HTTPError, URLError
 import xml.etree.ElementTree as ET
 
 PACKAGE = 'com.fongmi.android.tv'
+TV_REFERENCE = os.environ.get('REFERENCE_SCENARIO') == 'cheese_tv'
 WANOU_HOME = os.environ.get('REFERENCE_WANOU_HOME') == 'true'
-TARGETS = ('玩偶',) if WANOU_HOME else ('奶酪', '玩偶')
+REFERENCE_TITLE = '蜡笔小新第九季' if TV_REFERENCE else '小城良方'
+REFERENCE_ABI = 'arm64-v8a' if TV_REFERENCE else 'armeabi-v7a'
+REFERENCE_DIGEST = 'cda5776ba2ee6f7dfdcd3d7c1a13095ba8672b9892d6fb9e1ba38f993ad66f3a' if TV_REFERENCE else 'f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9'
+TARGETS = ('玩偶',) if WANOU_HOME else (('奶酪',) if TV_REFERENCE else ('奶酪', '玩偶'))
 WAREHOUSE = 'http://www.饭太硬.net/tv'
 report = dict(scope='OFFICIAL_REFERENCE_UI_AND_PLAYER_ERROR_OBSERVATION_NO_FRAME_ACCEPTANCE', herrin_acceptance=False,
               verdict='REFERENCE_BLOCKED', release='FongMi/Release 5.8.7', warehouse=WAREHOUSE,
@@ -269,17 +274,23 @@ def observe_original_player(row):
     # Exact authorized title only, on the already restricted Cheese result.
     # The unmodified client's own detail/player owns parsing and playback.
     adb('logcat', '-c')
-    click(texts=('小城良方',), budget=15)
+    click(texts=(REFERENCE_TITLE,), budget=15)
     time.sleep(5)
     nodes = ui()
     row['detail_year_2026_visible'] = any(re.search(r'(?<![0-9])2026(?![0-9])', n.get('text', '')) for n in nodes)
-    row['detail_title_visible'] = any('小城良方' in n.get('text', '') for n in nodes)
-    if not row['detail_year_2026_visible'] or not row['detail_title_visible']:
+    row['detail_title_visible'] = any(REFERENCE_TITLE in n.get('text', '') for n in nodes)
+    row['requested_source_title'] = REFERENCE_TITLE
+    if (not TV_REFERENCE and not row['detail_year_2026_visible']) or not row['detail_title_visible']:
         key(4)
         row['player_observation'] = 'REFERENCE_DETAIL_IDENTITY_NOT_VERIFIED'
         return
     time.sleep(20)  # Observe this one original playback attempt, no retries initiated by this script.
     pids = set(adb('shell', 'pidof', PACKAGE, check=False).split())
+    crash_raw = adb('logcat', '-b', 'crash', '-d', '-t', '600', timeout=15)
+    spec = importlib.util.spec_from_file_location('crash_metadata', Path('android-tv/scripts/live_native_crash.py'))
+    classifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(classifier)
+    row['native_crash_metadata'] = classifier.classify(crash_raw, PACKAGE)
     raw = adb('logcat', '-d', '-t', '6000', '-v', 'threadtime', timeout=15)
     scoped = []
     for line in raw.splitlines():
@@ -328,15 +339,15 @@ def main():
     try:
         apk=Path('reference-apk/official.apk')
         digest=hashlib.sha256(apk.read_bytes()).hexdigest()
-        if digest != 'f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9':
+        if digest != REFERENCE_DIGEST:
             raise RuntimeError('OFFICIAL_DIGEST_MISMATCH')
         report['apk_sha256']=digest
         report['apk_modified_or_resigned']=False
-        adb('install','--abi','armeabi-v7a','-r',str(apk),timeout=90)
+        adb('install','--abi',REFERENCE_ABI,'-r',str(apk),timeout=90)
         info=adb('shell','dumpsys','package',PACKAGE)
         report['package_primary_abi']=next((x.split('=',1)[1].strip() for x in info.splitlines() if 'primaryCpuAbi=' in x),'unknown')
         report['device_abis']=adb('shell','getprop','ro.product.cpu.abilist').strip()
-        if report['package_primary_abi']!='armeabi-v7a':raise RuntimeError('EXPECTED_STANDARD_ARMV7_INSTALL')
+        if report['package_primary_abi']!=REFERENCE_ABI:raise RuntimeError('EXPECTED_STANDARD_ABI_INSTALL')
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         adb('forward','tcp:19978','tcp:9978')
         mark('open_settings')
@@ -356,7 +367,7 @@ def main():
         key(4)
         key(4)
         mark('target_only_search')
-        action('search',word='小城良方')
+        action('search',word=REFERENCE_TITLE)
         time.sleep(10)
         for name in TARGETS:
             row=dict(node=name, verdict='REFERENCE_NOT_OBSERVED', playback_pass=False)
@@ -370,7 +381,7 @@ def main():
                     row['verdict']='REFERENCE_AUTH_UI_UNVERIFIED'
                     key(4)
                 else:
-                    row['authorized_title_visible']=any('小城良方' in n.get('text','') for n in nodes)
+                    row['authorized_title_visible']=any(REFERENCE_TITLE in n.get('text','') for n in nodes)
                     row['verdict']='REFERENCE_TITLE_VISIBLE' if row['authorized_title_visible'] else 'REFERENCE_NO_VISIBLE_MATCH_NOT_NO_RESOURCES'
                     if name == '奶酪' and row['authorized_title_visible']:
                         mark('cheese_original_detail_player_observation')
