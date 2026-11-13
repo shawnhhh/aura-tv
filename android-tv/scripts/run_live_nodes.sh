@@ -77,6 +77,23 @@ fi
 if [[ "${LIVE_MAIN_UI:-false}" == true ]]; then
     [[ "${LIVE_DISPOSABLE_DEVICE:-false}" == true ]] || { echo 'DISPOSABLE_DEVICE_CONFIRMATION_REQUIRED'; exit 1; }
     instrument_args+=(-e herrinDisposableDevice true)
+    selected_title="${LIVE_FILM_TITLE:-}"
+    if [[ -z "$selected_title" && -f "$repo_root/.github/p0-playback-trigger.json" ]]; then
+        selected_title="$(python3 - "$repo_root/.github/p0-playback-trigger.json" <<'PY'
+import json, sys
+from pathlib import Path
+config = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+print(config.get('film_title', '小城良方'))
+PY
+)"
+    fi
+    selected_title="${selected_title:-小城良方}"
+    case "$selected_title" in
+        "小城良方"|"蜡笔小新") ;;
+        *) echo "UNSUPPORTED_REAL_TEST_TITLE"; exit 1;;
+    esac
+    instrument_args+=(-e herrinFilmTitle "$selected_title")
+    printf 'P0_REAL_TITLE=%s\n' "$selected_title"
 fi
 if [[ -n "${LIVE_PREBUILT_APKS:-}" ]]; then
     adb install "${install_args[@]}" -r "$apk_dir/app-debug.apk" | tee evidence/install.txt
