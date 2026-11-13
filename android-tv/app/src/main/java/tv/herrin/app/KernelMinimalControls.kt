@@ -38,17 +38,18 @@ internal fun KernelMinimalControls(
     val audioFormat = player.currentTracks.groups.asSequence().filter { it.type == C.TRACK_TYPE_AUDIO }
         .flatMap { group -> (0 until group.length).asSequence().filter(group::isTrackSelected).map(group::getTrackFormat) }
         .firstOrNull()
-        val context = LocalContext.current
+    val context = LocalContext.current
     var capabilities by remember { mutableStateOf<DeviceMediaCapabilitySnapshot?>(null) }
     LaunchedEffect(panel, audioFormat) {
         onPanel(panel != null)
         if (panel == "技术信息") capabilities = withContext(Dispatchers.IO) {
             val snapshot = DeviceMediaCapabilitiesAndroid.inspect(context)
-            val mime = audioFormat?.sampleMimeType
-            if (mime == null) snapshot else snapshot.copy(audioFormats = listOf(
+            val audio = audioFormat
+            val mime = audio?.sampleMimeType
+            if (audio == null || mime == null) snapshot else snapshot.copy(audioFormats = listOf(
                 DeviceAudioCapability(mime, snapshot.decoderSupport(mime),
-                    DeviceMediaCapabilitiesAndroid.directPlayback(mime, audioFormat.sampleRate, audioFormat.channelCount),
-                    audioFormat.sampleRate, audioFormat.channelCount)))
+                    DeviceMediaCapabilitiesAndroid.directPlayback(mime, audio.sampleRate, audio.channelCount),
+                    audio.sampleRate, audio.channelCount)))
         }
     }
     DisposableEffect(Unit) { onDispose { onPanel(false) } }
