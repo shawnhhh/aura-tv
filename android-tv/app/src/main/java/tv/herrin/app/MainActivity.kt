@@ -2299,6 +2299,7 @@ private fun Herrin(startup: StartupPresentation) {
                             validation == HerrinRemoteMediaProbe.Result.MEDIA
                         }, evidence = { code -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, "", diagnosticSession) })
                 }
+                if (!admitted) HerrinPlaybackDiagnosticJournal.record("SOURCE", "MEDIA_PROBE_REJECTED", "", diagnosticSession)
                 if(admitted) parsed else
                     PlaybackResult.Unavailable("MEDIA_PROBE_REJECTED：当前来源授权或媒体响应验证失败；可重试、换线路或返回其他影视点")
             } else parsed
