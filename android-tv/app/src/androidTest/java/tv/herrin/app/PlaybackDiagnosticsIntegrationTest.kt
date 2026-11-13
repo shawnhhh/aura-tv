@@ -129,7 +129,18 @@ class PlaybackDiagnosticsIntegrationTest {
                             it.player.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
                             it.player.setPlaybackSpeed(1f)
                         }
-                        frames(scenario)
+                        try {
+                            frames(scenario)
+                        } catch (failure: Throwable) {
+                            scenario.onActivity {
+                                row.put("first_frame_error_code", it.player.playerError?.errorCodeName ?: "NONE")
+                                    .put("first_frame_state", it.player.playbackState)
+                                    .put("first_frame_play_when_ready", it.player.playWhenReady)
+                                    .put("first_frame_rendered", it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0)
+                            }
+                            row.put("http_requests", requests.count { it == path })
+                            throw failure
+                        }
                         scenario.onActivity {
                             assertTrue("Real first-frame callback must be observed", it.firstFramePlayers.contains(it.player))
                         }
@@ -201,6 +212,13 @@ class PlaybackDiagnosticsIntegrationTest {
             report.put("verdict", "PLAYER_CAPABILITY_PASS_NOT_REAL_NODE_PASS")
         } finally {
             java.io.File(inst.targetContext.filesDir, "player-baseline.json").writeText(report.toString(2))
+            // AGP uninstalls the app after connected tests, including failures.
+            // Reuse shell-owned fixture evidence so this report survives.
+            val encoded = android.util.Base64.encodeToString(report.toString().toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+            inst.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence && " +
+                "printf '%s' '$encoded' | base64 -d > /data/local/tmp/herrin-test-evidence/player-baseline.json").use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
             android.util.Log.i("HerrinPlaybackBaseline", report.toString())
         }
     }
