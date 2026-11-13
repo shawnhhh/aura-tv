@@ -191,17 +191,26 @@ class PlaybackDiagnosticsIntegrationTest {
                         }
                         row.put("pause_resume", true)
                         var beforeSeek = 0
+                        var seekAcknowledgedAt = -1L
                         scenario.onActivity {
+                            assertTrue("The original fixture must be seekable", it.player.isCurrentMediaItemSeekable)
+                            it.player.addListener(object : androidx.media3.common.Player.Listener {
+                                override fun onPositionDiscontinuity(oldPosition: androidx.media3.common.Player.PositionInfo,
+                                    newPosition: androidx.media3.common.Player.PositionInfo, reason: Int) {
+                                    if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK)
+                                        seekAcknowledgedAt = newPosition.positionMs
+                                }
+                            })
                             beforeSeek = it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
                             it.player.seekTo(3_000L)
                         }
                         compose.waitUntil(10_000) {
                             var decoded = false
-                            scenario.onActivity { decoded = it.player.isPlaying && it.player.currentPosition >= 3_000L &&
+                            scenario.onActivity { decoded = seekAcknowledgedAt == 3_000L && it.player.isPlaying && it.player.currentPosition >= 3_000L &&
                                 (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > beforeSeek+3 }
                             decoded
                         }
-                        row.put("seek_and_frames", true)
+                        row.put("seek_and_frames", true).put("seek_acknowledged_position_ms", seekAcknowledgedAt)
                         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                         compose.waitUntil(10_000) { decoder?.isReleased == true }
                         row.put("released_on_back", true).put("verdict", "PASS")
