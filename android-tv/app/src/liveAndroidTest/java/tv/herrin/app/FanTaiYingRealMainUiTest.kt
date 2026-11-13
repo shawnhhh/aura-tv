@@ -214,8 +214,18 @@ class FanTaiYingRealMainUiTest {
         val seen = mutableSetOf<String>()
         val inspected = JSONArray().also { report.put("tv_candidates_inspected",it) }
         repeat(8) { attempt ->
-            val candidates = compose.onAllNodes(authorizedTitleCard()).fetchSemanticsNodes()
-            val candidate = candidates.firstOrNull { it.config.getOrElse(SemanticsProperties.TestTag) { "" } !in seen }
+            val eligible = authorizedTitleCard() and SemanticsMatcher("uninspected TV series title") { node ->
+                node.config.getOrElse(SemanticsProperties.TestTag) { "" } !in seen &&
+                    node.config.getOrElse(SemanticsProperties.Text) { emptyList() }.any {
+                        val name = it.text
+                        name.contains(title) && (name.trim() == title ||
+                            Regex("季|TV|电视|新番|全集|1992",RegexOption.IGNORE_CASE).containsMatchIn(name))
+                    }
+            }
+            // Existing real LazyRow exposes scroll semantics. Inspect its
+            // actual TV entries, including ones beyond initially visible movies.
+            compose.onNodeWithTag("catalog-film-rail").performScrollToNode(eligible)
+            val candidate = compose.onAllNodes(eligible).fetchSemanticsNodes().firstOrNull()
                 ?: throw Stop("NO_UNINSPECTED_TV_CANDIDATE_VISIBLE")
             val tag = candidate.config.getOrElse(SemanticsProperties.TestTag) { "" }
             val name = candidate.config.getOrElse(SemanticsProperties.Text) { emptyList() }
@@ -238,7 +248,7 @@ class FanTaiYingRealMainUiTest {
                 return
             }
             key(KeyEvent.KEYCODE_BACK)
-            compose.waitUntil(10_000) { displayed("search-input") && compose.onAllNodes(authorizedTitleCard()).fetchSemanticsNodes().isNotEmpty() }
+            compose.waitUntil(10_000) { exists("search-input") && exists("catalog-film-rail") }
         }
         throw Stop("TV_SERIES_WITH_THREE_REAL_EPISODES_NOT_FOUND")
     }
