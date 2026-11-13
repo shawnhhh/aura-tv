@@ -1,0 +1,63 @@
+{
+  "head": "69419944bd1adeba591528d090abffb12e932b66",
+  "run_id": "43395757545",
+  "event": "push",
+  "jobs": {
+    "VALIDATION_RESULT": "success",
+    "BUILD_RESULT": "success",
+    "NODES_RESULT": "failure",
+    "TV_RESULT": "success"
+  },
+  "nodes": {
+    "cheese": {
+      "environment": {
+        "head": "69419944bd1adeba591528d090abffb12e932b66",
+        "run_id": "43395757545",
+        "automatic_push_trigger": true,
+        "node": "cheese",
+        "kvm_ready": true,
+        "emulator_booted": true,
+        "apks_installed": true,
+        "instrumentation_started": true,
+        "last_infrastructure_stage": "instrumentation-started",
+        "provider_report_present": true,
+        "provider_verdict": "FAIL_PLAYBACK",
+        "provider_failure_stage": "first_frame_0",
+        "provider_failure_code": "MEDIA_PROBE_NETWORK_ERROR",
+        "first_frame": false,
+        "seek_verified": false,
+        "next_condition": "Inspect the first failed provider stage and compare original behavior; change code, network or legitimate authorization before another request."
+      },
+      "real_playback_accepted": false,
+      "verdict": "FAIL_PLAYBACK",
+      "failure_stage": "first_frame_0",
+      "failure_code": "MEDIA_PROBE_NETWORK_ERROR"
+    },
+    "wanou": {
+      "environment": {
+        "head": "69419944bd1adeba591528d090abffb12e932b66",
+        "run_id": "43395757545",
+        "automatic_push_trigger": true,
+        "node": "wanou",
+        "kvm_ready": true,
+        "emulator_booted": true,
+        "apks_installed": true,
+        "instrumentation_started": true,
+        "last_infrastructure_stage": "instrumentation-started",
+        "provider_report_present": true,
+        "provider_verdict": "FAIL_PLAYBACK",
+        "provider_failure_stage": "search",
+        "provider_failure_code": "SOURCE_EMPTY_RESPONSE",
+        "first_frame": false,
+        "seek_verified": false,
+        "next_condition": "Inspect the first failed provider stage and compare original behavior; change code, network or legitimate authorization before another request."
+      },
+      "real_playback_accepted": false,
+      "verdict": "FAIL_PLAYBACK",
+      "failure_stage": "search",
+      "failure_code": "SOURCE_EMPTY_RESPONSE"
+    }
+  },
+  "all_requested_nodes_accepted": false,
+  "p0_complete": false
+}

@@ -16,8 +16,8 @@
     "artifact_id": 14023356883,
     "zip_sha256": "251c2454cbf482e2ce87a25630bb7c142d4558d620dec1bf11c01838356c8720"
   },
-  "full_tv_job": "in_progress",
-  "acceptance_job": "waiting_for_full_tv",
+  "full_tv_job": "success",
+  "acceptance_job": "failure",
   "nodes": {
     "cheese": {
       "head": "69419944bd1adeba591528d090abffb12e932b66",
@@ -60,5 +60,12 @@
   "official_reference_scope": "SEARCH_UI_ONLY_NO_MEDIA",
   "official_reference_scope_verified": true,
   "p0_complete": false,
-  "next_condition": "Use the CI channel, never require local SDK. No repeat HERRIN requests without a specific code fix/new authorized network evidence. Original playback comparison is still unobserved; diagnose local response-header timeout vs late callback, and Wanou empty response without inferring no resources/login."
+  "next_condition": "Use the CI channel, never require local SDK. No repeat HERRIN requests without a specific code fix/new authorized network evidence. Original playback comparison is still unobserved; diagnose local response-header timeout vs late callback, and Wanou empty response without inferring no resources/login.",
+  "full_tv_tests": 260,
+  "full_tv_failures": 0,
+  "full_tv_skipped": 0,
+  "overall_workflow": "failure",
+  "final_acceptance_artifact_id": 14022724331,
+  "collector_current_revision_artifact_recheck": "PASS: exact existing artifacts, no new provider requests; both real failures still rejected",
+  "code_head_before_checkpoint": "84ec24424e3297c32c8ec244f492fca1cbf37a76"
 }
