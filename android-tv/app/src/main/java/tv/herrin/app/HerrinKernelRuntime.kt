@@ -22,6 +22,7 @@ interface WholeKernelPlayer {
     fun unbind(view: PlayerView)
     fun speed(value: Float): Float
     fun cycleTrack(type: Int): Boolean
+    fun selectTrack(type: Int, group: Int, index: Int): Boolean
     fun repeatOne(enabled: Boolean)
     fun skipSilence(enabled: Boolean)
     val skipSilenceEnabled: Boolean

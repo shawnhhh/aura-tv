@@ -349,6 +349,32 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         return true;
     }
 
+    /** Select on the existing upstream manager; never recreate the playback session. */
+    public boolean selectTrackForHost(int type, int groupIndex, int trackIndex) {
+        requireOpen(); ensurePlayer();
+        if (type != C.TRACK_TYPE_AUDIO && type != C.TRACK_TYPE_TEXT) return false;
+        if (type == C.TRACK_TYPE_TEXT && groupIndex == -1 && trackIndex == -1) {
+            var disabled = new com.fongmi.android.tv.bean.Track(type, "", "");
+            disabled.setSelected(false);
+            manager.setTrack(disabled.key(manager.getKey()));
+            return true;
+        }
+        var groups = manager.getPlayer().getCurrentTracks().getGroups();
+        if (groupIndex < 0 || groupIndex >= groups.size()) return false;
+        var group = groups.get(groupIndex);
+        if (group.getType() != type || trackIndex < 0 || trackIndex >= group.length ||
+            !group.isTrackSupported(trackIndex)) return false;
+        int ordinal = trackIndex;
+        for (int i = 0; i < groupIndex; i++)
+            if (groups.get(i).getType() == type) ordinal += groups.get(i).length;
+        var format = group.getTrackFormat(trackIndex);
+        var track = com.fongmi.android.tv.player.track.TrackUtil.createTrack(type,
+            format.label == null ? "" : format.label, format, ordinal);
+        track.setSelected(true);
+        manager.setTrack(track.key(manager.getKey()));
+        return true;
+    }
+
     private void updateState() {
         if (closed || observedPlayer == null) return;
         int state = observedPlayer.getPlaybackState();
@@ -552,9 +578,8 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     @Override public boolean seekToPreloaded(VodPlayRequest tag) { return manager != null && manager.seekToPreloaded(tag); }
     @Override public void clearPreload() { if (manager != null) manager.clearPreload(); }
     @Override public void loadDanmaku(Result result, History current, com.fongmi.android.tv.bean.Episode episode) {
-        if (manager != null) VodPlaybackMedia.searchDanmaku(result, current, episode,
-            value -> { if (manager != null) manager.setDanmaku(value); },
-            value -> { if (manager != null) manager.addDanmaku(value); });
+        // HERRIN intentionally disables danmaku; retain the shared upstream API.
+
     }
     @Override public void renderDetail(Vod item, History current) {
         currentVod = item; currentFlags = item.getFlags(); history = current; refreshDetail();

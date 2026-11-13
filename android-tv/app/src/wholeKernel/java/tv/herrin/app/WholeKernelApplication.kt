@@ -22,6 +22,7 @@ class WholeKernelApplication : KernelApplication(), WholeKernelInstaller {
             override fun unbind(view: PlayerView) = core.unbindForHost(view)
             override fun speed(value: Float) = core.speedForHost(value)
             override fun cycleTrack(type: Int) = core.cycleTrackForHost(type)
+            override fun selectTrack(type: Int, group: Int, index: Int) = core.selectTrackForHost(type, group, index)
             override fun repeatOne(enabled: Boolean) = core.repeatForHost(enabled)
             override fun skipSilence(enabled: Boolean) = core.skipSilenceForHost(enabled)
             override val skipSilenceEnabled get() = core.skipSilenceForHost()
