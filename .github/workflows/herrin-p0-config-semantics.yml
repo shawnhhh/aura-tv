@@ -12,7 +12,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Read real root header declarations without plugin or media execution
+      # Current actual node runs use JAR 6d10a60.../49 sites; the old 9d5f...
+      # configuration audit cannot establish the current header declarations.
+      - name: Read current legal header declarations without plugin or media execution
         shell: bash
         run: |
           python3 - <<'PYDIAG'
@@ -87,6 +89,10 @@ jobs:
               root=config(payload)
               report['body_sha256']=hashlib.sha256(payload).hexdigest()
               report['body_bytes']=len(payload)
+              spider_spec=root.get('spider','')
+              digest=spider_spec.rsplit(';md5;',1)[-1] if isinstance(spider_spec,str) else ''
+              report['declared_jar_md5']=digest if len(digest)==32 and all(c in '0123456789abcdefABCDEF' for c in digest) else None
+              report['node_count']=len(root.get('sites',[]))
               known_keys={'spider','sites','lives','headers','header','rules','parses','flags','ads','doh','proxy','wallpaper','port'}
               report['known_root_fields']=sorted(k for k in root if k in known_keys)
               report['root_headers']=header_shape(root.get('headers'))
@@ -96,7 +102,7 @@ jobs:
               report['rules_with_header_fields']=sum(isinstance(r,dict) and any(k in r for k in ('header','headers')) for r in rules) if isinstance(rules,list) else 0
               selected=[]
               for site in root.get('sites',[]):
-                  if not isinstance(site,dict) or not any(name in site.get('name','') for name in ('奶酪','玩偶哥哥')):continue
+                  if not isinstance(site,dict) or site.get('api') not in ('csp_T4Guard','csp_WoGGGuard'):continue
                   ext=site.get('ext')
                   ext_shape={'kind':type(ext).__name__,'chars':len(ext) if isinstance(ext,str) else None}
                   if isinstance(ext,str):
