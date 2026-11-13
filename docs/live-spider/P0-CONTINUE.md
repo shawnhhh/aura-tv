@@ -1,3 +1,58 @@
+# 最新断点：2026-11-13 原版会话极简控制层与媒体能力
+
+P0未完成。代码验证HEAD：`83288e1a40eb3fd931a8e37b794bb037a3041ef7`。
+本记录提交后HEAD以 `git rev-parse HEAD` 为准。开发分支仍
+`codex/herrin-p0-live-playback-20261110`，PR84实读Draft/open/unmerged，
+head仍08f6640（旧global-search分支），本轮未同步它。
+
+实质模块：bd4f170b（AV1/DV5/7/8及TrueHD/DTS能力）、930dac15（原版音轨/
+字幕显式选择、关闭字幕、停用弹幕回调）、c3200fdb（whole会话独立极简UI与面板）、
+4036c59c（遥控器长按暂停隐藏、Seek边界）、eda76c11/d018cad5（后台精确音轨
+技术信息及空音轨兼容）。未创建第二播放器。详情与A/B比较见
+[本轮记录](20261113-minimal-player-batch.zh-CN.md)。
+
+底座继续A，B也受同一匹配媒体依赖阻塞，没有真实编译证据支持换底座。
+原版完整core/adapter未编译；预检INVALID（未初始化源码/四AAR/定制Media3缺失）。
+未重复下载全部原版源码、未复验拒绝候选。未切生产入口，旧实现删除0，未新增隐式fallback。
+新UI尚无截图/TV仪器验证；DV/HDR/Atmos无实际输出徽标，未完成自动后端选择/真机透传。
+
+统一验证run43378025637：
+https://github.com/shawnhhh/aura-tv/actions/runs/43378025637
+最终结果FAILURE：job131729029449，contract、宿主Kotlin/Java、Lint、Debug全部通过；
+JVM727项，726通过/1失败/0 errors/0 skipped；新增KernelMediaAdmissionTest 2/2、
+KernelSeekBoundsTest 1/1通过。原始JUnit已下载核查，工件14016120847，ZIP SHA256
+`d4180ada39b663acc663483e817f192a9f4ee3c4bff4d83c2c6b620dd8199333`。
+原M476第33行确认为delayHeaders=false，事件含RESPONSE_HEADERS_RECEIVED、
+MEDIA_BODY_IO_TIMEOUT、MEDIA_IO_TIMEOUT，缺MEDIA_FAILURE_RESPONSE_BODY，验证下方根因。
+未修改旧探测实现，未放宽断言。本地diff检查、Python语法通过；Debug wrapper下载时沙箱
+SocketException，原版wrapper不存在退出127。无SDK/javac/adb/emulator/KVM。
+早期run43377688737@69561c06宿主Kotlin/Java与contract通过后被最终批替换取消，
+run43377935350@eda76c11也取消，不把二者算作最终完整结果。
+
+遗留M476根因：正文IO内层catch只发MEDIA_BODY_IO/ MEDIA_IO，直接返回NETWORK_ERROR，
+外层MEDIA_FAILURE_RESPONSE_BODY事件因此缺失；本轮仅为原断言添加事件序列诊断，
+未改旧路径、不删除/跳过/放宽断言。不是已修复，不认定flaky。
+TV/生命周期/焦点/宽高比/字幕音轨/HDR/音频设备分支、ABBA、搜索/网盘/直播设备回归、
+奶酪和玩偶真实播放均未执行；没有新首帧/60秒/Seek/重播/切集/详情返回或QR证据。
+
+下一轮准确续跑：
+
+```sh
+cd /workspace/aura-tv
+git status --short --branch
+git log -10 --oneline
+# 已核实run43378025637@83288e1a；原M476正文catch遗漏phase事件，勿无变化重跑。
+# GitHub CLI本环境API Forbidden，使用已连接GitHub fetch/workflow日志工具。
+# 获取合法且精确匹配的输入后才stage/编译，不能从APK提取或用拒绝候选替换。
+python3 android-tv/fongmi-kernel/verify_dependencies.py --directory /path/to/real-aars --report
+# 有既有固定305dff2检出及真实锁之后，按fongmi-kernel/README.md stage并构建core/adapter。
+# 然后才完成Application/同包冲突处理、生产接管与旧实现删除，再统一TV和真实节点验证。
+```
+
+---
+
+以下为历史断点，不覆盖上述最新记录。
+
 # 最新断点：2026-11-13 原版选择事务、宿主请求与严格来源优先级
 
 P0未完成。代码验证HEAD：`f7ac613380b57e1cd5d621d7af425b77756b5b8a`；

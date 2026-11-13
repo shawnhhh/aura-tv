@@ -105,3 +105,17 @@ Lint及Debug assemble通过，未上传APK。其通过只覆盖兼容性复核�
 生产Application/PlayerView切换与旧类清理、TV/焦点/生命周期/首页/TMDB/NAS/直播设备
 回归、ABBA、两个节点各自合法授权和真实视频专项；遗留M476阶段分类断言保持失败。
 没有验收APK，没有合并或同步PR84旧代码分支。所有代码提交已推指定独立分支。
+
+
+## 本轮极简原版会话UI批次（83288e1a）
+
+run43378025637/job131729029449已完成：contract、宿主Kotlin/Java、Lint、Debug通过；
+全部JVM727项/1失败/0 errors/0 skipped。新增媒体能力2/2、Seek1/1通过。
+M476第33行原断言保留，原始XML明确delayHeaders=false，收到响应头后正文超时，
+事件为MEDIA_BODY_IO_TIMEOUT、MEDIA_IO_TIMEOUT，没有MEDIA_FAILURE_RESPONSE_BODY；
+正文内层catch直接返回，绕过外层phase事件，根因已定位。遵照不修补旧播放器的约束，
+未改旧探测实现、不删除跳过放宽断言，完整工作流仍FAILURE。
+工件14016120847已下载核查，ZIP SHA256
+`d4180ada39b663acc663483e817f192a9f4ee3c4bff4d83c2c6b620dd8199333`。
+原版core/adapter仍被匹配依赖及未初始化原版检出阻塞，未完成接管。
+TV/ABBA/真实节点和杜比专项未执行。见20261113-minimal-player-batch.zh-CN.md及P0-CONTINUE.md。
