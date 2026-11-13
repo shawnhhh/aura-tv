@@ -25,6 +25,10 @@ on:
         description: 'Build device diagnostics and run full regressions without repeating provider requests (never node acceptance)'
         type: boolean
         default: false
+      artifact_only:
+        description: 'Build exact-SHA device APKs only; no regression or source acceptance claim'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -37,6 +41,7 @@ jobs:
   # while executable diagnostics still run and preserve their own real results.
   validation:
     name: A - Full JVM, lint and host build
+    if: ${{ !inputs.artifact_only && !contains(github.event.head_commit.message, '[artifact-only]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -131,7 +136,7 @@ jobs:
     name: C - Real ${{ matrix.node }} / ${{ matrix.film }} on Android
     # Explicit device preparation never repeats unchanged x86/ARM-translation
     # crashes. Normal runs retain the complete original strict acceptance path.
-    if: ${{ !inputs.diagnostic_only && !contains(github.event.head_commit.message, '[diagnostic-build-only]') }}
+    if: ${{ !inputs.artifact_only && !contains(github.event.head_commit.message, '[artifact-only]') && !inputs.diagnostic_only && !contains(github.event.head_commit.message, '[diagnostic-build-only]') }}
     needs: build
     strategy:
       fail-fast: false
@@ -198,11 +203,12 @@ jobs:
   # Preserve the existing complete TV/lifecycle suite, independently of A/B/C.
   tv-regression:
     name: Full Android TV and playback lifecycle regression
+    if: ${{ !inputs.artifact_only && !contains(github.event.head_commit.message, '[artifact-only]') }}
     uses: ./.github/workflows/android-emulator.yml
 
   acceptance:
     name: D - Evidence and real playback acceptance
-    if: ${{ always() && !inputs.diagnostic_only && !contains(github.event.head_commit.message, '[diagnostic-build-only]') }}
+    if: ${{ always() && !inputs.artifact_only && !contains(github.event.head_commit.message, '[artifact-only]') && !inputs.diagnostic_only && !contains(github.event.head_commit.message, '[diagnostic-build-only]') }}
     needs: [validation, build, nodes, tv-regression]
     runs-on: ubuntu-latest
     env:
