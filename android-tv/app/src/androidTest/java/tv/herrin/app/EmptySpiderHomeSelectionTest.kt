@@ -166,8 +166,13 @@ class EmptySpiderHomeSelectionTest {
         result.performSemanticsAction(SemanticsActions.RequestFocus)
         result.assertIsFocused()
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The detail surface is composed before the asynchronous worker reply.
+        // Wait for the actual required episode inside the ORIGINAL 10s budget,
+        // not merely for the loading container. Keep the final assertions below.
         compose.waitUntil(10_000) { runCatching {
             compose.onNodeWithTag("film-detail-list").assertIsDisplayed()
+                .performScrollToNode(hasTestTag("episode-2"))
+            compose.onNodeWithTag("episode-2").assertIsDisplayed()
         }.isSuccess }
         compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("episode-2"))
         compose.onNodeWithTag("episode-2").assertIsDisplayed()
