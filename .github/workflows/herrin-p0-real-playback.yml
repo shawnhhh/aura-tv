@@ -113,7 +113,7 @@ jobs:
           bash android-tv/scripts/build_live_arm_canary.sh
           python3 android-tv/scripts/build_m467_spider_fixture.py
           cd android-tv
-          gradle --build-cache --max-workers=2 -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi="$LIVE_INSTALL_ABI" :app:assembleDebug :app:assembleDebugAndroidTest
+          gradle --build-cache --max-workers=2 -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi="$LIVE_INSTALL_ABI" :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
           cp app/build/outputs/apk/debug/app-debug.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
           python3 scripts/live_native_device.py manifest --artifact "../diagnostic-apks/$LIVE_INSTALL_ABI" --sha "$GITHUB_SHA" --abi "$LIVE_INSTALL_ABI"
