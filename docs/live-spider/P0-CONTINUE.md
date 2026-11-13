@@ -1,43 +1,48 @@
-# 最新断点：2026-11-13 进入真实Media3，下一阶段为源站403/TV资源选择
+# 最新断点：2026-11-13 已进入Media3，当前检查API35原生转译兼容性
 
-P0未完成，视频首帧/60秒均未通过。唯一分支保持不变，不合并main，不发布验收APK。
+P0未完成：全部真实首帧/60秒/暂停/Seek/重播/切集验收仍未通过。
+代码已推唯一分支；原版参考仍为官方最新5.8.7（发布SHA已核实），未改APK。
 
-- 旧run43402215834@ab86f30a已结束：A/B/TV成功，两个真实节点与D失败。
-  蜡笔小新：奶酪返回217805字符JSON但旧驱动精确标题匹配超时；玩偶普通/quick空正文。
-- 实质修复1e33f8c0：明确用户选集后的已授权本机Spider媒体不再额外GET探测；
-  保留当前站点、端口、会话真实health检查，把媒体读取/超时/取消交给唯一正式播放器。
-  原版VideoViewModel/SiteApi也是解析后交播放器，无独立1.5秒媒体GET。
-  远端候选筛选及所有真实出帧验收不变，没有加长1.5秒超时，没有切未编译的新整核。
-- run43404975997@b32a80b6：A/B成功，完整JVM730/730（0失败/跳过），
-  新增SelectedSpiderPlaybackTest 3/3，含>1.5秒回调只由播放器传输触发一次、外站/过期拒绝。
-  原始JUnit工件14026359995，ZIP SHA256 b88659e6abc116b10928b87b13c8d8406c0544f3a6ecc31c1f13344855006526。
-  TV/D待最终记录，不能用旧HEAD结果替代。
-- **奶酪小城已真正进入Media3**：SELECTED_PROXY_MEDIA_DEFERRED_TO_PLAYER→
-  MEDIA3 PLAYBACK_INITIALIZING/BUFFERING；Spider约3038ms返回200/HLS/InputStream。
-  获取其HTTPS URL引用实际403 HTML→本机502→Media3网络错误2001；0首帧。
-  不重复此403，不猜UA/Referer/Cookie，不把403认作已确定的登录原因。
-- 奶酪蜡笔小新已进入真实详情，但首个匹配条目只有2集，严格门槛拒绝；未播放。
-  38050711修正带季名标题匹配；4e158d20继续检查其他真实候选的标题、TV类别和≥3集，
-  确认后才播放；记录实际来源集名，按1→2→3→重播顺序；首集失败即停止。
-- 玩偶两部均普通/quick空正文，无QR；对照原版确认第一页同样调用两参数searchContent，
-  home(true)→homeVideoContent已有；无证据支持改分页或猜测登录。
-- 新run43406275417@eb1bcd2a只重测奶酪/蜡笔小新；没有重发小城403或玩偶相同空查询。
-  当前正在构建/设备测试。四份前轮JSON见evidence/b32a80b6-*.json。
+实质播放修复1e33f8c0：明确选集的已授权本机媒体不再额外GET探测，保留当前站点/端口/
+会话真实health检查，交给唯一播放器读取及取消；未增加1.5秒超时，远端候选探测不变。
+run43404975997@b32a80b6完整JVM730/730（新延迟回调/外站/过期会话3/3），Lint/宿主
+Debug与TV通过；双节点/D失败。JUnit工件14026359995，ZIP SHA256
+b88659e6abc116b10928b87b13c8d8406c0544f3a6ecc31c1f13344855006526。
 
-下一步：有限次数读取43406275417奶酪/Shinchan报告及两轮TV/D终态，不重复触发。
-若确认TV候选与三集且首集进入播放器，沿真实首帧/错误继续定位；不得跳过后续错误。
-小城媒体下一恢复条件为同一合法授权下可读的HLS/媒体或原版实际媒体对照，当前原版
-只验证过选站/搜索，**没有原版播放成功/同样403的证据**，不宣称共同SOURCE_BLOCKED。
-玩偶需要原版真实搜索/直接浏览/公开授权返回证据；空正文不能判无资源或AUTH_BLOCKED。
+最新真实结果：
+- 奶酪《小城良方》：2026/29集/解析通过，Media3真实创建；回调3038ms返回HLS URL引用，
+  获取HTTPS引用实际403 HTML→本机502→播放器网络错误。后续没有重发此请求。
+- 原版同片：run43406918397核对标题/2026并观察到HLS_HEADER_INVALID，没有出帧证据。
+  不能宣称原版同样403；它在处理非标准HLS正文阶段已失败。
+- 奶酪TV：先修复标题精确匹配、误选2项剧场片、屏外搜索框判断、列表滚动；
+  349b21e2再修复“回调返回早于详情最终发布”的竞态，并绑定真实来源季号。
+  最终run43409473187@7d47fcc7明确第九季/93集/第001集；Media3创建，ARM64回调
+  返回200/HLS/InputStream（4388ms）及HTTPS引用，但进程SIGILL（libc/NDK转译栈），
+  未取得远端状态或媒体字节。ARMv7同季首集run43407266601则SIGSEGV，栈含插件/其他、
+  libc、NDK转译。不能仅凭这些栈认定是转译器而非插件故障。
+  更早0fa5c338记录曾因详情竞态跳到第八季，不把该轮当严格同季ABI对照。
+- 玩偶两片均普通/quick空正文，无QR。原版默认站点实测run43409666358@a619ab48：
+  UI核实玩偶为默认、进入首页、仅玩偶勾选后搜索；未观察公开授权提示或结果入口。
+  不能据此推断无资源/必须扫码；没有可证实的分页/extension协议修复。
+
+**先读正在执行的2f02cf4d对应的API35运行**：
+2f02cf4d仅将相同标准ARM64包的TV第九季首集放到官方API35 Google APIs镜像，
+核实Android11转译兼容性；没有猜UA/Referer、改插件、伪装系统或降低出帧门槛。
+此处run号在获取实际运行后更新，不能凭预估run号重复触发。
+若API35仍原生崩溃/不支持ARM执行，停止相同云端尝试，需要一次性原生ARM设备或
+合法匹配的插件/原生运行材料进一步核因；不能把目前数据说成已证明“只怪模拟器”。
+
+证据：evidence/b32a80b6-*.json、8e417abc-*.json、7d47fcc7-*.json、
+13c7b3c7-original-player-observation.json、a619ab48-original-wanou-default.json。
+新完整FongMi整核仍没有匹配依赖并未接管；本轮实际入口是现有稳定唯一Media3播放器。
 
 ```sh
 cd /workspace/aura-tv
 git status --short --branch
-git log -8 --oneline
-# 读取43406275417，别再跑ab86f30a或无变化小城403。
-# 有下一处实质TV驱动修复时才更新触发文件，提交信息含[cheese-shinchan]：
-# git add .github/p0-playback-trigger.json && git commit -m "ci: evidenced TV repair [cheese-shinchan]"
-# git push origin HEAD:refs/heads/codex/herrin-p0-live-playback-20261110
+git log -10 --oneline
+# 先读2f02cf4d对应API35运行，以及7d47fcc7的完整TV/D终态；不要再重发小城403。
+# 有一次性原生ARM64设备并已下载对应内部诊断包后，精确续跑（会清理本测试应用配置）：
+# LIVE_FILM_TITLE=蜡笔小新 LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_PREBUILT_APKS=diagnostic-apks LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
 ```
 
 ---

@@ -1,0 +1,63 @@
+{
+  "run_id": 43409666358,
+  "job_id": 131832630291,
+  "report": {
+    "scope": "OFFICIAL_REFERENCE_UI_AND_PLAYER_ERROR_OBSERVATION_NO_FRAME_ACCEPTANCE",
+    "herrin_acceptance": false,
+    "verdict": "REFERENCE_SEARCH_UI_OBSERVED_NOT_HERRIN_PASS",
+    "release": "FongMi/Release 5.8.7",
+    "warehouse": "http://www.饭太硬.net/tv",
+    "targets": [
+      {
+        "node": "玩偶",
+        "verdict": "REFERENCE_NOT_OBSERVED",
+        "playback_pass": false,
+        "failure_code": "REFERENCE_UI_TARGET_NOT_REACHED",
+        "elapsed_ms": 15352
+      }
+    ],
+    "stages": [
+      {
+        "stage": "open_settings",
+        "at_ms": 19723
+      },
+      {
+        "stage": "real_warehouse_configuration",
+        "at_ms": 39146
+      },
+      {
+        "stage": "original_default_wanou_home",
+        "at_ms": 52368
+      },
+      {
+        "stage": "restrict_search_to_authorized_nodes",
+        "at_ms": 85738
+      },
+      {
+        "stage": "target_only_search",
+        "at_ms": 162975
+      }
+    ],
+    "apk_sha256": "f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9",
+    "apk_modified_or_resigned": false,
+    "package_primary_abi": "armeabi-v7a",
+    "device_abis": "x86_64,x86,arm64-v8a,armeabi-v7a,armeabi",
+    "last_ui_shape": {
+      "known_controls": [
+        "text"
+      ],
+      "known_labels": [],
+      "known_focused_controls": []
+    },
+    "default_wanou_setting_verified": true,
+    "default_wanou_home_observed": true,
+    "public_authorization_ui_observed": false,
+    "search_scope_set_via_official_ui": [
+      "玩偶"
+    ],
+    "site_checkboxes_observed": 40,
+    "scope_verified_by_checkboxes": true,
+    "elapsed_ms": 188333,
+    "official_app_process_alive": true
+  }
+}
