@@ -4,6 +4,7 @@ package tv.herrin.app
 import android.os.Handler
 import android.os.Looper
 import tv.herrin.kernel.Kernel
+import tv.herrin.kernel.KernelDispatch
 import tv.herrin.kernel.KernelCutover
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.CompletableFuture
@@ -58,28 +59,10 @@ internal class HerrinKernelGateway : AutoCloseable {
 
     // Source aggregation may call from IO; upstream lifecycle and player APIs
     // are always entered on the main thread, without creating another worker.
-    private fun <T> submit(operation: (Kernel) -> CompletionStage<T>): CompletionStage<T> {
-        val result = CompletableFuture<T>()
-        val task = Runnable {
-            if (!result.isCancelled) {
-                try {
-                    val delegated = operation(cutover.requireKernel())
-                    delegated.whenComplete { value, failure ->
-                        if (failure == null) result.complete(value)
-                        else result.completeExceptionally(failure)
-                    }
-                    result.whenComplete { _, _ ->
-                        if (result.isCancelled) delegated.toCompletableFuture().cancel(false)
-                    }
-                } catch (failure: RuntimeException) {
-                    result.completeExceptionally(failure)
-                }
-            }
-        }
-        if (Looper.myLooper() == Looper.getMainLooper()) task.run()
-        else if (!main.post(task)) result.completeExceptionally(
-            IllegalStateException("Kernel main looper rejected operation"))
-        return result
-    }
+    private fun <T> submit(operation: (Kernel) -> CompletionStage<T>): CompletionStage<T> =
+        KernelDispatch.submit({ task ->
+            if (Looper.myLooper() == Looper.getMainLooper()) task.run()
+            else check(main.post(task)) { "Kernel main looper rejected operation" }
+        }, { cutover.requireKernel() }, { operation(it) })
     override fun close() = cutover.close()
 }

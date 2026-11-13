@@ -9,3 +9,9 @@ tasks.register('checkCutoverContract', JavaExec) {
     mainClass = 'tv.herrin.kernel.KernelCutoverContractCheck'
 }
 tasks.named('check').configure { dependsOn 'checkCutoverContract' }
+tasks.register('checkDispatchContract', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'tv.herrin.kernel.KernelDispatchContractCheck'
+}
+tasks.named('check').configure { dependsOn 'checkDispatchContract' }
