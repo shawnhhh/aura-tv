@@ -35,6 +35,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          # The action default still includes the retired SDK package "tools".
+          # Current Google repositories only provide cmdline-tools/platform-tools.
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -73,6 +77,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          # The action default still includes the retired SDK package "tools".
+          # Current Google repositories only provide cmdline-tools/platform-tools.
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -129,6 +137,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          # The action default still includes the retired SDK package "tools".
+          # Current Google repositories only provide cmdline-tools/platform-tools.
+          packages: platform-tools
       - uses: actions/download-artifact@v4
         with:
           name: p0-internal-diagnostic-apks
