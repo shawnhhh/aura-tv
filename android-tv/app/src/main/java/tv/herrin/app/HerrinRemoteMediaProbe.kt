@@ -165,6 +165,9 @@ internal class HerrinRemoteMediaProbe(
                     throw cancel
                 } catch (error: Exception) {
                     evidence("MEDIA_BYTES", "COUNT=$receivedBytes")
+                    // This inner catch returns before the outer phase reporter.
+                    // Preserve the actual failure phase without changing I/O or its result.
+                    evidence("MEDIA_FAILURE_RESPONSE_BODY", "")
                     evidence("MEDIA_BODY_IO_" + ioCode(error), "")
                     evidence("MEDIA_IO_" + ioCode(error), "")
                     return@readSourceResponse Result.NETWORK_ERROR

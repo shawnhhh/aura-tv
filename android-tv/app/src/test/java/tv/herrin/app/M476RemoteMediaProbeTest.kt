@@ -31,6 +31,8 @@ class M476RemoteMediaProbeTest {
             assertTrue(events.contains("MEDIA_CONNECT_FINISHED"))
             assertTrue(events.contains("MEDIA_REQUEST_HEADERS_SENT"))
             assertTrue("delayHeaders=$delayHeaders events=$events", events.contains(if(delayHeaders) "MEDIA_FAILURE_RESPONSE_HEADERS" else "MEDIA_FAILURE_RESPONSE_BODY"))
+            assertEquals(1, events.count { it == if (delayHeaders) "MEDIA_FAILURE_RESPONSE_HEADERS" else "MEDIA_FAILURE_RESPONSE_BODY" })
+            assertFalse(events.contains(if (delayHeaders) "MEDIA_FAILURE_RESPONSE_BODY" else "MEDIA_FAILURE_RESPONSE_HEADERS"))
             assertEquals(!delayHeaders,events.contains("MEDIA_RESPONSE_HEADERS_RECEIVED"))
             assertFalse(events.contains("MEDIA_CONNECT_FAILED"))
             assertEquals(1,server.requestCount)
