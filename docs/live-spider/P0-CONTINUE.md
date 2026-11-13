@@ -1,3 +1,74 @@
+# 最新断点：2026-11-13 原版选择事务、宿主请求与严格来源优先级
+
+P0未完成。代码验证HEAD：`f7ac613380b57e1cd5d621d7af425b77756b5b8a`；
+本记录提交后的当前HEAD以 `git rev-parse HEAD` 为准。唯一开发分支
+`codex/herrin-p0-live-playback-20261110`。PR84经GitHub连接器实读仍Draft，
+head为`08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7`，未同步代码，不自动合并。
+
+本批连续完成三个代码模块，随后一次统一验证：
+
+- `1a488c555a54a06c2f735bcb12f79ffe024abb92`：OriginalVodSession.beginSelection
+  取消旧VideoViewModel工作并重新关闭执行许可；原版selectFlag更新状态后再允许
+  明确选集，避免第二次切线先解析历史集。FongMiKernel.replay(long)改调原版
+  PlayerManager.replay，消除controller→host→controller递归；解绑双PlayerView端口，
+  snapshot保留错误码。没有重写原版状态机/解析器。
+- `dd14d516a7189edf4978673987f1c45adc61ad4e`：新增纯Java KernelDispatch，
+  Gateway统一使用。取消排队请求不进入内核，取消已委托请求同步取消其Future，
+  调度拒绝/原版类LinkageError均明确结束UI请求。新增独立JVM契约检查并绑定check。
+- `b8321b04ad7b4173d2b72f8daec8cdda36b83e56`：HerrinFilmRouter非流式路径
+  现在同样遵守NAS→云盘→用户所选影视点→其他站点；所选资源验证失败才转其他。
+  P0FastSourceSearchTest新增顺序、提前停止及验证失败后继续的回归；身份匹配保持。
+- `f7ac613380b57e1cd5d621d7af425b77756b5b8a`：最后统一触发宿主check、
+  Kotlin/Java编译、全部JVM单测、Lint及Debug。工作流run43355940615，
+  https://github.com/shawnhhh/aura-tv/actions/runs/43355940615 。结果见本批验证报告。
+
+真实修改文件：
+`android-tv/fongmi-kernel/adapter/src/main/java/tv/herrin/kernel/android/{OriginalVodSession,FongMiKernel}.java`、
+`android-tv/fongmi-kernel/contract/src/main/java/tv/herrin/kernel/KernelDispatch.java`、
+`android-tv/fongmi-kernel/contract/src/test/java/tv/herrin/kernel/KernelDispatchContractCheck.java`、
+`android-tv/fongmi-kernel/contract/build.gradle`、
+`android-tv/app/src/main/java/tv/herrin/app/{HerrinKernelGateway.kt,HerrinSourceRouter.kt}`、
+`android-tv/app/src/test/java/tv/herrin/app/P0FastSourceSearchTest.kt`及宿主CI工作流。
+
+A依赖查证：只读取TV305dff2的构建定义、版本目录和三个相关Java文件，未重下/重审
+1360文件或重测拒绝候选。原版仍以app/libs/*.aar为输入，版本目录未提供匹配
+Media3/MPV的发布坐标。现锁artifacts=[]；DecoderMode、DiscMenuController、
+SubtitleSelectionState、IsoDiscPreparation、PlayerView.setBackendPlayer及MPV定制
+Java类缺少已证明兼容输入。hook/tvbus仍要求对应源码版本、许可证与构建材料。
+不伪造二进制，不修改校验器，不从APK提取依赖。
+
+本地环境：JRE21存在但无javac/Android SDK/adb/emulator/KVM；原版submodule目录为空。
+遵照禁止重下全部源码的要求，没有执行submodule update。ECJ3.42从Maven Central
+下载至/tmp，contract Java17编译通过，Cutover与Dispatch两组检查通过；
+一条既有测试资源关闭warning保留。git diff --check及Python语法检查通过。
+依赖report为INVALID（源码未初始化且四个AAR缺失），不是许可证验证通过。
+完整core/adapter命令因原版gradlew不存在退出127；稳定宿主wrapper首次因默认
+Gradle目录不可写，改/tmp后因沙箱网络退出。Android结果只认上方精确SHA CI。
+
+B/C/D：仅上述边界修正，不声明原版Android类型/链接通过。已有wholeKernel页面、
+Application、PlayerView准备代码继续保留；稳定生产入口未启用wholeKernel。
+E：未正式切换、旧播放代码删除0、无隐式新旧回退接线。首页/海报/导航/直播未改。
+奶酪、玩偶本轮各自ENVIRONMENT_BLOCKED：新完整内核未编译接管且无设备，未发节点
+请求，未重复403。没有视频首帧/60秒/暂停/Seek/重播/第二集/返回详情结果；没有QR，
+不能标AUTH_BLOCKED或授权成功，历史源端403/空正文不当作本轮新结果。
+
+下一轮直接继续：
+
+```sh
+cd /workspace/aura-tv
+git status --short --branch
+git log -5 --oneline
+# 先读 docs/live-spider/20261113-kernel-validation.zh-CN.md 的精确SHA CI结果。
+# 仅从合法原始发布/对应源码取得匹配依赖；不要再验证两份已拒绝的媒体库。
+python3 android-tv/fongmi-kernel/verify_dependencies.py --directory /path/to/real-aars --report
+# 有已有305dff2检出及完整真实锁后再stage/core/adapter统一编译；不要以contract代替。
+# 随后才能迁移Application/同包类、生产接线、删除旧入口，再运行TV/ABBA/双真实节点。
+```
+
+---
+
+以下是历史检查点，不能覆盖上方最新状态。
+
 # 最新断点优先：MainActivity真实驱动（2026-11-10 18:52 UTC）
 
 **P0未完成。PR84仍Draft、未合并；集成头08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7，与最新开发头不同。** 此集成头的JVM715/715、Lint/Debug/API31、TV259/259（原TMDB断言保留且通过）、ABBA24/24已全部通过：runs42859957975、42859957535、42859957426，安全摘要见evidence/08f6640-*.json。不要重复同HEAD完整CI或48节点/ARM能力基线。ABBA只是软件AVD小样本，不能声称全面提速。
