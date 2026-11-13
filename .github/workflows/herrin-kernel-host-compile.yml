@@ -5,6 +5,7 @@ on:
   # Developer batches intentionally do not trigger full compilation on every
   # source commit. A workflow edit at the END of a batch triggers exactly one
   # host/contract validation for the current branch HEAD.
+  # Final batch includes the nullable-audio inspection correction.
   push:
     branches: ['codex/herrin-p0-live-playback-20261110']
     paths:
