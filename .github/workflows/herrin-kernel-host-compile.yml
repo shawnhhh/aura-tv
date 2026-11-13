@@ -1,7 +1,7 @@
 name: HERRIN kernel host compile only
 on:
-  # 2026-11-12 batch: validate cutover rejection/cancellation, approved-site guard,
-  # and host Handler dispatch after all source changes, once.
+  # 2026-11-13 batch: validate dispatch cancellation/linkage and source priority
+  # after all source changes, once. Complete original engine remains blocked.
   # Developer batches intentionally do not trigger full compilation on every
   # source commit. A workflow edit at the END of a batch triggers exactly one
   # host/contract validation for the current branch HEAD.
@@ -30,7 +30,7 @@ jobs:
           gradle-version: '8.9'
       - name: Batch-validate stable host and kernel contract only
         working-directory: android-tv
-        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac
+        run: gradle --build-cache :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - name: Audit approved-site search guard in uncompiled upstream adapter
         run: |
           python3 - <<'PY'
