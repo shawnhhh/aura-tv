@@ -57,7 +57,10 @@ run43440864678@325ccb01仍停设置页、未出现选站控件，REFERENCE_BLOCK
 - a8fb7b4a：既有PlaybackDiagnosticsIntegrationTest增加生产播放器MP4/HLS各60秒基准，
   原创6秒素材按1x循环，实际HTTP/TLS、首帧回调/画面、持续解码、暂停/Seek/释放。
   运行43440288111@7197daf2完整TV261项，260通过/新增基准首帧等待失败，0跳过；
-  基准与整体保持FAIL。正由run43443864964只读提取已保存工件的失败窗口，不重放媒体。
+  基准与整体保持FAIL。只读提取run43445620140证明原创MP4实际FIRST_FRAME=1185ms、
+  STATE=3；新用例的单一videoDecoderCounters在预热/循环中被替换，导致观测超时。
+  047bbf4d改按实际渲染器事件/播放器身份累计真实计数，不禁用生产预热，不放宽首帧/60秒/控制。
+  下一次PR完整TV回归验证修复；未有终态前不记录基准PASS。
   同轮完整JVM原JUnit已核730/730，0失败/跳过，3个探测回归通过；Lint/宿主成功。
   工件14044629422，ZIP SHA256 9454daabaf9524dac13db7a874a269b23488f2f1e76847fbe30cbf4cb762157b。
 - 31ddda92/41714a27：复用原ARM入口，默认prepare只读；精确SHA/两个APK哈希/真实ELF

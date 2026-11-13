@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.media3.exoplayer.ExoPlayer
 
 /** Debug-only host. Local test media is never accepted by production settings. */
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class PlaybackTestActivity : ComponentActivity() {
     lateinit var player: ExoPlayer
     var nextEpisodeRequests = 0
