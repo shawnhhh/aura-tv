@@ -204,13 +204,43 @@ class FanTaiYingRealMainUiTest {
     private fun hasTestTagPrefix(prefix: String) = SemanticsMatcher("tag starts with $prefix") {
         it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith(prefix)
     }
-    private fun authorizedTitleCard(): SemanticsMatcher {
-        var matcher = hasTestTagPrefix("card-") and hasText(title, substring = true) and hasClickAction()
-        if (title == "蜡笔小新") {
-            for (excluded in listOf("剧场", "劇場", "电影", "電影", "Movie", "movie", "特别篇", "特別篇"))
-                matcher = matcher and !hasText(excluded, substring = true)
+    private fun authorizedTitleCard() = hasTestTagPrefix("card-") and hasClickAction() and
+        SemanticsMatcher("authorized title, excluding theatrical titles") { node ->
+            val names = node.config.getOrElse(SemanticsProperties.Text) { emptyList() }.map { it.text }
+            names.any { name -> name.contains(title) && (title != "蜡笔小新" ||
+                listOf("剧场", "劇場", "电影", "電影", "movie", "特别篇", "特別篇").none { name.contains(it,ignoreCase=true) }) }
         }
-        return matcher
+    private fun selectTvCandidate() {
+        val seen = mutableSetOf<String>()
+        val inspected = JSONArray().also { report.put("tv_candidates_inspected",it) }
+        repeat(8) { attempt ->
+            val candidates = compose.onAllNodes(authorizedTitleCard()).fetchSemanticsNodes()
+            val candidate = candidates.firstOrNull { it.config.getOrElse(SemanticsProperties.TestTag) { "" } !in seen }
+                ?: throw Stop("NO_UNINSPECTED_TV_CANDIDATE_VISIBLE")
+            val tag = candidate.config.getOrElse(SemanticsProperties.TestTag) { "" }
+            val name = candidate.config.getOrElse(SemanticsProperties.Text) { emptyList() }
+                .firstOrNull { it.text.contains(title) }?.text.orEmpty()
+            seen += tag
+            val before = HerrinPlaybackDiagnosticJournal.export().lines().count { it.contains("DETAILS_EPISODES_RETURNED") }
+            step("tv_candidate_details_$attempt",45_000,"film-detail-list",action={activate(tag)},done={
+                displayed("film-detail-list") && HerrinPlaybackDiagnosticJournal.export().lines()
+                    .count { it.contains("DETAILS_EPISODES_RETURNED") } > before
+            })
+            compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-metadata"))
+            val count = journalCount("DETAILS_RETURNED") ?: 0
+            val category = text("detail-metadata")
+            val tvTitle = name.trim() == title || Regex("季|TV|电视|新番|全集|1992",RegexOption.IGNORE_CASE).containsMatchIn(name)
+            val tvCategory = category.contains("动漫") || category.contains("剧集")
+            inspected.put(JSONObject().put("title",name.take(120)).put("episode_count",count)
+                .put("tv_title_verified",tvTitle).put("tv_category_verified",tvCategory))
+            if (count >= 3 && tvTitle && tvCategory) {
+                report.put("selected_source_title",name.take(120)).put("tv_animation_title_verified",true)
+                return
+            }
+            key(KeyEvent.KEYCODE_BACK)
+            compose.waitUntil(10_000) { displayed("search-input") && compose.onAllNodes(authorizedTitleCard()).fetchSemanticsNodes().isNotEmpty() }
+        }
+        throw Stop("TV_SERIES_WITH_THREE_REAL_EPISODES_NOT_FOUND")
     }
     private fun returnDetails() {
         repeat(3) {
@@ -305,9 +335,10 @@ class FanTaiYingRealMainUiTest {
                 target.assertIsFocused()
                 key(KeyEvent.KEYCODE_DPAD_CENTER)
             }
-            step("details_and_episodes",45_000,"film-detail-list",action=openTitle,retry={
-                key(KeyEvent.KEYCODE_BACK); compose.waitUntil(5_000){displayed("search-input")}; openTitle()
-            },done={displayed("film-detail-list") && (journalCount("DETAILS_RETURNED")?:0)>=2})
+            if (title == "蜡笔小新") selectTvCandidate() else
+                step("details_and_episodes",45_000,"film-detail-list",action=openTitle,retry={
+                    key(KeyEvent.KEYCODE_BACK); compose.waitUntil(5_000){displayed("search-input")}; openTitle()
+                },done={displayed("film-detail-list") && (journalCount("DETAILS_RETURNED")?:0)>=2})
             compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-metadata"))
             if (expectedYear != null && !Regex("(?<![0-9])${expectedYear}(?![0-9])").containsMatchIn(text("detail-metadata")))
                 throw Stop("AUTHORIZED_YEAR_NOT_VERIFIED")
@@ -323,7 +354,10 @@ class FanTaiYingRealMainUiTest {
             val lines=journalCount("DETAIL_LINES_RETURNED")?:0
             report.put("alternate_line_available",lines>1)
             val operations=mutableListOf("first_episode","replay_same_episode","next_episode","return_first_episode","replay_after_details")
-            if(title=="蜡笔小新")operations.add(2,"third_episode")
+            if(title=="蜡笔小新") {
+                operations.clear()
+                operations += listOf("first_episode","next_episode","third_episode","replay_same_episode","return_first_episode","replay_after_details")
+            }
             if(lines>1)operations+="alternate_line"
             for ((index,op) in operations.withIndex()) {
                 if(index>0) {

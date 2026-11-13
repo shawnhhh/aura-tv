@@ -22,7 +22,7 @@ else:
     required = {'first_episode', 'replay_same_episode', 'next_episode', 'return_first_episode', 'replay_after_details'}
     if data.get('authorized_title') == '蜡笔小新':
         required.add('third_episode')
-        assert data.get('tv_animation_category_verified'), 'TV animation identity not verified'
+        assert data.get('tv_animation_title_verified') and data.get('tv_animation_category_verified'), 'TV animation identity not verified'
     assert required <= {x.get('operation') for x in data.get('playback_evidence', [])}, 'missing mandatory replay/episode/detail-return operations'
     assert data.get('returned_to_details') and data.get('details_ui_verified'), 'missing real player Back/details transition'
     assert all(x.get('pause_resume_verified') and x.get('seek_verified') and x.get('seek_rendered_frame_delta', 0) >= 3 for x in data.get('playback_evidence', [])), 'incomplete controls evidence'
