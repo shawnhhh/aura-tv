@@ -1,0 +1,41 @@
+"""Original UI locator unit fixtures only, never reference runtime evidence."""
+import importlib.util
+from pathlib import Path
+import unittest
+from unittest.mock import patch
+import xml.etree.ElementTree as ET
+
+spec = importlib.util.spec_from_file_location('reference', Path(__file__).with_name('herrin_fongmi_reference.py'))
+ref = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ref)
+
+
+class ReferenceUiTest(unittest.TestCase):
+    def test_real_clickable_parent_bounds_used_without_tab_or_double_toggle(self):
+        root = ET.fromstring('<node clickable="true" bounds="[10,20][110,60]"><node clickable="false" /></node>')
+        ref.parents = {root[0]: root}
+        with patch.object(ref, 'adb') as adb:
+            ref.tap_node(root[0])
+        adb.assert_called_once_with('shell', 'input', 'tap', '60', '40')
+
+    def test_selected_search_mode_is_not_toggled_off(self):
+        node = ET.Element('node', {'resource-id': ref.PACKAGE+':id/search', 'selected': 'true'})
+        with patch.object(ref, 'ui', return_value=[node]), patch.object(ref, 'tap_node') as tap:
+            ref.search_mode()
+        tap.assert_not_called()
+
+    def test_unconfirmed_search_mode_fails_closed(self):
+        node = ET.Element('node', {'resource-id': ref.PACKAGE+':id/search', 'selected': 'false'})
+        with patch.object(ref, 'ui', return_value=[node]), patch.object(ref, 'tap_node'):
+            with self.assertRaisesRegex(RuntimeError, 'SEARCH_MODE_NOT_SELECTED'):
+                ref.search_mode()
+
+    def test_scope_not_confirmed_when_an_extra_site_remains_enabled(self):
+        button = ET.Element('node', {'resource-id': ref.PACKAGE+':id/cancel'})
+        with patch.object(ref, 'search_mode'), patch.object(ref, 'ui', return_value=[button]), patch.object(ref, 'tap_node'), patch.object(ref, 'scan_sites', side_effect=[{'奶酪': False, '玩偶': False, 'other': False}, {'奶酪': True, '玩偶': True, 'other': True}]):
+            with self.assertRaisesRegex(RuntimeError, 'EXACT_TWO_SITE_SCOPE_NOT_CONFIRMED'):
+                ref.restrict_search()
+
+
+if __name__ == '__main__':
+    unittest.main()
