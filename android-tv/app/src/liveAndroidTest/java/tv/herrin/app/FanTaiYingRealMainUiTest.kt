@@ -175,12 +175,17 @@ class FanTaiYingRealMainUiTest {
             throw Stop(code)
         }
     }
+    private fun recordEpisodeLabel(number: Int, tag: String) {
+        val selections = report.optJSONArray("episode_selections") ?: JSONArray().also { report.put("episode_selections",it) }
+        selections.put(JSONObject().put("source_ordinal",number).put("ui_label",text(tag).take(120)))
+    }
     private fun episode(number: Int) {
         val list = compose.onNodeWithTag("film-detail-list")
         report.put("episode_selection_attempt",number).put("episode_driver_action","SCROLL_TO_EPISODES")
         list.performScrollToNode(hasTestTag("episode-$number") or hasTestTag("season-browser") or hasTestTag("group-season-browser"))
         if (exists("episode-$number")) {
             report.put("episode_ui_kind","SOURCE_EPISODE_BUTTON").put("episode_driver_action","ACTIVATE_EPISODE_BUTTON")
+            recordEpisodeLabel(number,"episode-$number")
             activate("episode-$number"); return
         }
         val grouped = exists("group-season-browser")
@@ -193,6 +198,7 @@ class FanTaiYingRealMainUiTest {
         val tag = cards.mapNotNull { it.config.getOrElse(SemanticsProperties.TestTag) { "" } }
             .singleOrNull { it.endsWith("-${number-1}") } ?: throw Stop("REAL_EPISODE_UI_NOT_FOUND")
         report.put("episode_driver_action","ACTIVATE_SEASON_EPISODE_CARD")
+        recordEpisodeLabel(number,tag)
         activate(tag)
     }
     private fun hasTestTagPrefix(prefix: String) = SemanticsMatcher("tag starts with $prefix") {
