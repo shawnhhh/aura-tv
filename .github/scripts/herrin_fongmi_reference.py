@@ -170,6 +170,16 @@ def dismiss_system_immersive_hint():
 def search_mode():
     nodes = ui()
     button = find(nodes, rid='search')
+    # The API35 trace still showed SettingActivity/vodHome focused directly
+    # after its real click. Await the destination SiteDialog before reading
+    # its controls; never send a second click that could close/toggle it.
+    until = time.monotonic()+8
+    while button is None and time.monotonic() < until:
+        if auth(nodes):
+            raise RuntimeError('REFERENCE_AUTH_UI_REQUIRES_PERSONAL_ACTION_UNVERIFIED')
+        time.sleep(.3)
+        nodes = ui()
+        button = find(nodes, rid='search')
     if button is None:
         raise RuntimeError('REFERENCE_SEARCH_MODE_MISSING')
     if button.get('selected') != 'true':
