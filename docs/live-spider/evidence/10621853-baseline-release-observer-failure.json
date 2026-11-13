@@ -1,0 +1,25 @@
+{
+  "run_id": 43451070143,
+  "head": "10621853b45db0344c04177c5d3e6fad13a56171",
+  "tests": 261,
+  "failed": [
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease",
+      "status": "failed",
+      "failure": "java.lang.IllegalStateException: Player is accessed on the wrong thread.\nCurrent thread: 'Instr: androidx.test.runner.AndroidJUnitRunner'\nExpected thread: 'main'\nSee https://developer.android.com/guide/topics/media/issues/player-accessed-on-wrong-thread\nat androidx.media3.exoplayer.ExoPlayerImpl.verifyApplicationThread(ExoPlayerImpl.java:3106)\nat androidx.media3.exoplayer.ExoPlayerImpl.isReleased(ExoPlayerImpl.java:1170)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease$lambda$24$lambda$23$lambda$22(PlaybackDiagnosticsIntegrationTest.kt:236)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.$r8$lambda$-gyOJUyuVlIiMBC2NtC_O47rOeM(Unknown Source:0)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest$$ExternalSyntheticLambda20.invoke(D8$$SyntheticClass:0)\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:434)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease$lambda$24(PlaybackDiagnosticsIntegrationTest.kt:236)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.$r8$lambda$ZXgTSj2hUhWjqLlv5zIweHH6Qmw(Unknown Source:0)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest$$ExternalSyntheticLambda35.invoke(D8$$SyntheticClass:0)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.fixtures(PlaybackDiagnosticsIntegrationTest.kt:100)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease(PlaybackDiagnosticsIntegrationTest.kt:134)\n"
+    }
+  ],
+  "mp4": {
+    "first_frame": true,
+    "compositor_frame": true,
+    "continuous_wall_ms": 60142,
+    "continuous_media_position_ms": 61112,
+    "rendered_frames": 1456,
+    "pause_resume": true,
+    "seek_and_frames": true,
+    "seek_acknowledged_position_ms": 3000
+  },
+  "hls": "NOT_ATTEMPTED_AFTER_RELEASE_OBSERVER_WRONG_THREAD",
+  "real_node_acceptance": false
+}

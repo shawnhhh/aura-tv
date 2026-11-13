@@ -131,6 +131,7 @@ jobs:
       - name: Verify sole-player ownership and native-device diagnostic boundaries
         run: |
           python3 android-tv/scripts/check_static.py
+          python3 -m unittest discover -s android-tv/scripts -p 'test_check_playback_boundary.py' -v
           python3 -m unittest discover -s android-tv/scripts -p 'test_live_native*.py' -v
           python3 -m unittest discover -s android-tv/scripts -p 'test_live_spider_error_shapes.py' -v
       - uses: actions/setup-java@v4
