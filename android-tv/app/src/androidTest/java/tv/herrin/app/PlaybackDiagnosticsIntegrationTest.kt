@@ -233,10 +233,16 @@ class PlaybackDiagnosticsIntegrationTest {
                         }
                         row.put("seek_and_frames", true).put("seek_acknowledged_position_ms", seekAcknowledgedAt)
                         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-                        compose.waitUntil(10_000) { decoder?.isReleased == true }
+                        compose.waitUntil(10_000) {
+                            var released = false
+                            scenario.onActivity { released = decoder?.isReleased == true }
+                            released
+                        }
                         row.put("released_on_back", true).put("verdict", "PASS")
                     }
-                    assertTrue("Activity teardown must release the sole player", decoder?.isReleased == true)
+                    var released = false
+                    inst.runOnMainSync { released = decoder?.isReleased == true }
+                    assertTrue("Activity teardown must release the sole player", released)
                 }
             }
             report.put("verdict", "PLAYER_CAPABILITY_PASS_NOT_REAL_NODE_PASS")
