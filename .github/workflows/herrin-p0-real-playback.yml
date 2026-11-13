@@ -24,9 +24,9 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: herrin-p0-live-${{ github.ref }}
-  # A corrected push supersedes an obsolete failed setup, instead of waiting
-  # behind its full TV suite before the fixed device path can start.
+  group: herrin-p0-live-${{ github.ref }}-${{ github.sha }}
+  # Different repaired SHAs keep independent evidence; do not cancel an
+  # existing complete regression while validating a genuine next repair.
   cancel-in-progress: true
 jobs:
   # A has no dependency relationship with B/C: a red regression must remain red

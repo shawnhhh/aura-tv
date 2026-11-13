@@ -1,6 +1,6 @@
 {
-  "attempt": "20261113-shinchan-three-episodes-1",
-  "reason": "Compare cheese and wanou real source results on Crayon Shin-chan series; try episodes 1, 2, 3 with unchanged first-frame, 60s, Seek and replay gates",
+  "attempt": "20261113-selected-player-owned-media-1",
+  "reason": "Remove the proven duplicate 1.5s selected-local media preflight; preserve session authorization and player-owned I/O. Correct TV season title matching; compare both authorized films.",
   "nodes": [
     "cheese",
     "wanou"
@@ -11,5 +11,9 @@
     1,
     2,
     3
+  ],
+  "film_titles": [
+    "小城良方",
+    "蜡笔小新"
   ]
 }
