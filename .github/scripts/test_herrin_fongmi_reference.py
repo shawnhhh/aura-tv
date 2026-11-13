@@ -59,6 +59,13 @@ class ReferenceUiTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'EXACT_TWO_SITE_SCOPE_NOT_CONFIRMED'):
                 ref.restrict_search()
 
+    def test_single_tv_target_does_not_require_two_sites(self):
+        button = ET.Element('node', {'resource-id': ref.PACKAGE+':id/cancel'})
+        with patch.object(ref, 'TARGETS', ('奶酪',)), patch.object(ref, 'report', {}), patch.object(ref, 'search_mode'), patch.object(ref, 'ui', return_value=[button]), patch.object(ref, 'tap_node'), patch.object(ref, 'scan_sites', side_effect=[{'奶酪': False, '玩偶': False, 'other': False}, {'奶酪': True, '玩偶': False, 'other': False}]):
+            ref.restrict_search()
+            self.assertTrue(ref.report['scope_verified_by_checkboxes'])
+            self.assertEqual(ref.report['search_scope_observation']['enabled_count'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

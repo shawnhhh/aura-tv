@@ -264,6 +264,14 @@ def restrict_search():
         raise RuntimeError('REFERENCE_CANCEL_ALL_NOT_CONFIRMED')
     selected = scan_sites(enable_targets=True)
     enabled = [name for name, value in selected.items() if value]
+    # Counts and the two public target labels only. The previous report lost
+    # the actual UI state behind a generic scope error; never infer source or
+    # playback failure from inability to establish this search checkbox scope.
+    report['search_scope_observation'] = dict(
+        requested=list(TARGETS), observed_rows=len(selected), enabled_count=len(enabled),
+        targets={target: dict(matched_rows=sum(target in name for name in selected),
+                              enabled_rows=sum(target in name for name in enabled)) for target in TARGETS},
+        unexpected_enabled_count=sum(not any(target in name for target in TARGETS) for name in enabled))
     if len(enabled) != len(TARGETS) or not all(sum(target in name for name in enabled) == 1 for target in TARGETS):
         raise RuntimeError('REFERENCE_EXACT_TWO_SITE_SCOPE_NOT_CONFIRMED')
     report['search_scope_set_via_official_ui'] = list(TARGETS)
