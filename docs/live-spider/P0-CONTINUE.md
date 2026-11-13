@@ -60,7 +60,11 @@ run43440864678@325ccb01仍停设置页、未出现选站控件，REFERENCE_BLOCK
   基准与整体保持FAIL。只读提取run43445620140证明原创MP4实际FIRST_FRAME=1185ms、
   STATE=3；新用例的单一videoDecoderCounters在预热/循环中被替换，导致观测超时。
   047bbf4d改按实际渲染器事件/播放器身份累计真实计数，不禁用生产预热，不放宽首帧/60秒/控制。
-  下一次PR完整TV回归验证修复；未有终态前不记录基准PASS。
+  复测run43446558463已通过首帧/实际画面，但6秒MediaItem循环重缓冲触发连续门槛失败；
+  同轮SpiderLoaderLifecycleTest的“主线程尚未执行”假设竞态暴露，261项259通过/2失败。
+  88b83bee用显式主线程屏障保留全部撤销断言；3a6c2b3b换72秒连续原创输入、保留
+  isPlaying/60秒墙钟并加强媒体位置≥60秒；adc6de0a修复API30 Shell导出非shell语法。
+  两次失败均保留，下一次完整TV通过前不记基准PASS。
   同轮完整JVM原JUnit已核730/730，0失败/跳过，3个探测回归通过；Lint/宿主成功。
   工件14044629422，ZIP SHA256 9454daabaf9524dac13db7a874a269b23488f2f1e76847fbe30cbf4cb762157b。
 - 31ddda92/41714a27：复用原ARM入口，默认prepare只读；精确SHA/两个APK哈希/真实ELF

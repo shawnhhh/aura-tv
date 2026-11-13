@@ -128,8 +128,9 @@ jobs:
       LIVE_INSTALL_ABI: ${{ inputs.abi || (contains(github.event.head_commit.message, '[arm64]') && 'arm64-v8a') || 'armeabi-v7a' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Verify native-device diagnostic privacy and artifact boundaries
+      - name: Verify sole-player ownership and native-device diagnostic boundaries
         run: |
+          python3 android-tv/scripts/check_static.py
           python3 -m unittest discover -s android-tv/scripts -p 'test_live_native*.py' -v
           python3 -m unittest discover -s android-tv/scripts -p 'test_live_spider_error_shapes.py' -v
       - uses: actions/setup-java@v4

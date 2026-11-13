@@ -42,6 +42,7 @@ jobs:
           test -s android-tv/app/src/androidTest/assets/synthetic-segment-00.ts
           grep -q WEBVTT android-tv/app/src/androidTest/assets/synthetic.vtt
           grep -q '#EXTM3U' android-tv/app/src/androidTest/assets/synthetic-hls.m3u8
+          printf '%s\n' 'e96d3d073c466240f7a71ca7910f24f7fa08a54a879c484313513c060dacbb0e  android-tv/app/src/androidTest/assets/playback-diagnostics/baseline-72.mp4' | sha256sum --check
           ls -lh android-tv/app/src/androidTest/assets/synthetic*
       - name: Rebuild original M4.67 DEX Spider fixture
         run: python3 android-tv/scripts/build_m467_spider_fixture.py
@@ -93,4 +94,16 @@ jobs:
             android-tv/app/build/reports/androidTests/
             android-tv/app/build/outputs/androidTest-results/
           if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve bounded original-player baseline and lifecycle evidence
+        if: ${{ always() && github.head_ref == 'codex/herrin-p0-live-playback-20261110' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-player-baseline
+          path: |
+            android-tv/build/emulator-evidence/player-baseline.json
+            android-tv/build/emulator-evidence/test-evidence/**/p0-baseline-*.png
+            android-tv/app/build/outputs/androidTest-results/**/TEST-tv.herrin.app.PlaybackDiagnosticsIntegrationTest*.xml
+            android-tv/app/build/outputs/androidTest-results/**/TEST-tv.herrin.app.SpiderLoaderLifecycleTest*.xml
+          if-no-files-found: error
           retention-days: 14

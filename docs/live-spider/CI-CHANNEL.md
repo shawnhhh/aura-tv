@@ -81,6 +81,9 @@ adb -s DEVICE_SERIAL install --abi arm64-v8a -r official-fongmi-5.8.7.apk
 安装、启动、搜索、Media3 READY或工作流Success都不是原版出帧证明。
 
 原创素材播放器基准位于既有`PlaybackDiagnosticsIntegrationTest`，使用生产
-AuthorizedPlaybackPanel/HerrinPlayerSession和真实Media3。六秒原创MP4/HLS按1x循环，各观察
-60秒真实墙钟、持续解码、实际HTTP读取、画面、暂停/Seek/释放，结果在
-`player-baseline.json`。这只证明播放器能力，不能替代任一饭太硬节点。
+AuthorizedPlaybackPanel/HerrinPlayerSession和真实Media3。72秒连续原创MP4、以原TS及标准
+discontinuity构成的72秒HLS，均保留60秒真实墙钟及媒体进度、持续播放/解码、实际HTTP读取、
+画面、暂停/Seek/释放门槛。素材来源、生成命令和校验见baseline-72.md。
+结果在`player-baseline.json`；小工件`p0-player-baseline`单独保留JSON、PNG和对应JUnit，
+避免整套TV工件超过附件读取上限。API30 UiAutomation按argv执行，保存证据不得直接拼接`&&`/管道。
+这只证明播放器能力，不能替代任一饭太硬节点。
