@@ -35,12 +35,20 @@ internal fun KernelMinimalControls(
     require(session.whole)
     val player = session.player
     var panel by remember { mutableStateOf<String?>(null) }
+    val audioFormat = player.currentTracks.groups.asSequence().filter { it.type == C.TRACK_TYPE_AUDIO }
+        .flatMap { group -> (0 until group.length).asSequence().filter(group::isTrackSelected).map(group::getTrackFormat) }
+        .firstOrNull()
         val context = LocalContext.current
     var capabilities by remember { mutableStateOf<DeviceMediaCapabilitySnapshot?>(null) }
-    LaunchedEffect(panel) {
+    LaunchedEffect(panel, audioFormat) {
         onPanel(panel != null)
         if (panel == "技术信息") capabilities = withContext(Dispatchers.IO) {
-            DeviceMediaCapabilitiesAndroid.inspect(context)
+            val snapshot = DeviceMediaCapabilitiesAndroid.inspect(context)
+            val mime = audioFormat?.sampleMimeType
+            if (mime == null) snapshot else snapshot.copy(audioFormats = listOf(
+                DeviceAudioCapability(mime, snapshot.decoderSupport(mime),
+                    DeviceMediaCapabilitiesAndroid.directPlayback(mime, audioFormat.sampleRate, audioFormat.channelCount),
+                    audioFormat.sampleRate, audioFormat.channelCount)))
         }
     }
     DisposableEffect(Unit) { onDispose { onPanel(false) } }
@@ -123,6 +131,10 @@ internal fun KernelMinimalControls(
                                     "${player.videoSize.width} × ${player.videoSize.height} / ${format?.frameRate ?: -1} fps\n" +
                                     "显示设备声明 HDR：${capabilities?.hdrFormats ?: "查询中"}\n" +
                                     "音轨：${PlaybackTransport.currentLabel(player, C.TRACK_TYPE_AUDIO)}\n" +
+                                    "音轨编码：${audioFormat?.sampleMimeType ?: "未知"} / ${audioFormat?.sampleRate ?: -1} Hz / ${audioFormat?.channelCount ?: -1} ch\n" +
+                                    "平台输出候选：${audioFormat?.let { capabilities?.audioDelivery(it.sampleMimeType.orEmpty(), it.sampleRate, it.channelCount) } ?: "未知"}\n" +
+                                    "DV 5/7/8 硬解声明：${DolbyVisionProfile.entries.joinToString { capabilities?.dolbyVisionAdmission(it)?.hardwareDecoder?.name ?: "未知" }}\n" +
+                                    "Profile 7 完整双层：未验证\n" +
                                     "实际 HDR / 音频输出路径：尚无已验证运行时证据", color = Color.White)
                             }
                         }
