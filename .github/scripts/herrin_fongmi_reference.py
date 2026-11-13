@@ -1,7 +1,7 @@
 """Unmodified official FongMi UI reference. Never a Herrin playback/auth PASS.
 
 Public UI + documented /action setting/search only. No DB injection, resigning,
-native hooks, private media endpoints, broad-source search or video selection.
+native hooks, private media endpoints, broad-source search or media URL injection.
 UI XML is temporary on the disposable device and removed; no QR image/content
 or raw logcat is published.
 """
@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 PACKAGE = 'com.fongmi.android.tv'
 TARGETS = ('奶酪', '玩偶')  # Actual configured labels; WoGGGuard is named 玩偶.
 WAREHOUSE = 'http://www.饭太硬.net/tv'
-report = dict(scope='OFFICIAL_REFERENCE_SEARCH_UI_ONLY_NO_MEDIA', herrin_acceptance=False,
+report = dict(scope='OFFICIAL_REFERENCE_UI_AND_PLAYER_ERROR_OBSERVATION_NO_FRAME_ACCEPTANCE', herrin_acceptance=False,
               verdict='REFERENCE_BLOCKED', release='FongMi/Release 5.8.7', warehouse=WAREHOUSE,
               targets=[], stages=[])
 stage = 'install'
@@ -225,6 +225,52 @@ def restrict_search():
     report['scope_verified_by_checkboxes'] = True
 
 
+def observe_original_player(row):
+    # Exact authorized title only, on the already restricted Cheese result.
+    # The unmodified client's own detail/player owns parsing and playback.
+    adb('logcat', '-c')
+    click(texts=('小城良方',), budget=15)
+    time.sleep(5)
+    nodes = ui()
+    row['detail_year_2026_visible'] = any(re.search(r'(?<![0-9])2026(?![0-9])', n.get('text', '')) for n in nodes)
+    row['detail_title_visible'] = any('小城良方' in n.get('text', '') for n in nodes)
+    if not row['detail_year_2026_visible'] or not row['detail_title_visible']:
+        key(4)
+        row['player_observation'] = 'REFERENCE_DETAIL_IDENTITY_NOT_VERIFIED'
+        return
+    time.sleep(20)  # Observe this one original playback attempt, no retries initiated by this script.
+    pids = set(adb('shell', 'pidof', PACKAGE, check=False).split())
+    raw = adb('logcat', '-d', '-t', '6000', '-v', 'threadtime', timeout=15)
+    scoped = []
+    for line in raw.splitlines():
+        match = re.match(r'\d\d-\d\d\s+\S+\s+(\d+)\s+\d+\s+[VDIWEF]\s+[^:]+:\s*(.*)', line)
+        if match and match[1] in pids:
+            scoped.append(match[2])
+    # Never publish raw lines, addresses, headers, exception messages or screenshots.
+    codes = {}
+    patterns = {
+        'HTTP_403': r'(?:Response code:|responseCode[=:])\s*403\b',
+        'HTTP_502': r'(?:Response code:|responseCode[=:])\s*502\b',
+        'HLS_HEADER_INVALID': r'Input does not start with the #EXTM3U header',
+        'DNS_ERROR': r'UnknownHostException',
+        'TLS_ERROR': r'SSLHandshakeException|SSLPeerUnverifiedException',
+        'IO_TIMEOUT': r'SocketTimeoutException',
+        'PARSER_EXCEPTION': r'ParserException',
+        'PLAYER_EXCEPTION': r'ExoPlaybackException',
+    }
+    for code, pattern in patterns.items():
+        count = sum(bool(re.search(pattern, line)) for line in scoped)
+        if count:
+            codes[code] = count
+    row['original_player_error_types'] = codes
+    row['original_player_log_scope'] = 'MATCHED_PACKAGE_PID_ONLY' if pids else 'NO_PID_OBSERVED'
+    row['original_player_initialized_log_observed'] = any('ExoPlayerImpl' in line and 'Init ' in line for line in scoped)
+    row['player_observation'] = 'ORIGINAL_MEDIA_ATTEMPT_ERRORS_OBSERVED' if codes else 'ORIGINAL_MEDIA_ATTEMPT_NO_CLASSIFIED_ERROR'
+    row['playback_pass'] = False
+    row['first_frame_verified'] = False
+    key(4)
+
+
 def action(kind, **values):
     # Only FongMi's documented local UI handoff; never Spider/media callbacks.
     with urlopen('http://127.0.0.1:19978/action?'+urlencode(dict(do=kind, **values)), timeout=5) as reply:
@@ -283,7 +329,10 @@ def main():
                 else:
                     row['authorized_title_visible']=any('小城良方' in n.get('text','') for n in nodes)
                     row['verdict']='REFERENCE_TITLE_VISIBLE' if row['authorized_title_visible'] else 'REFERENCE_NO_VISIBLE_MATCH_NOT_NO_RESOURCES'
-                # Never click a movie: year/source identity and media are not verified here.
+                    if name == '奶酪' and row['authorized_title_visible']:
+                        mark('cheese_original_detail_player_observation')
+                        observe_original_player(row)
+                # Error observations do not establish decoded frames or playback acceptance.
             except Exception as error:
                 row['failure_code']=str(error) if isinstance(error,RuntimeError) else type(error).__name__
             finally: row['elapsed_ms']=round((time.monotonic()-start)*1000)
