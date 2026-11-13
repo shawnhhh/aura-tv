@@ -25,22 +25,25 @@ b88659e6abc116b10928b87b13c8d8406c0544f3a6ecc31c1f13344855006526。
   UI核实玩偶为默认、进入首页、仅玩偶勾选后搜索；未观察公开授权提示或结果入口。
   不能据此推断无资源/必须扫码；没有可证实的分页/extension协议修复。
 
-**先读正在执行的2f02cf4d对应的API35运行**：
+**最新实际节点run43410792149@2f02cf4d已完成**：
 2f02cf4d仅将相同标准ARM64包的TV第九季首集放到官方API35 Google APIs镜像，
-核实Android11转译兼容性；没有猜UA/Referer、改插件、伪装系统或降低出帧门槛。
-此处run号在获取实际运行后更新，不能凭预估run号重复触发。
-若API35仍原生崩溃/不支持ARM执行，停止相同云端尝试，需要一次性原生ARM设备或
-合法匹配的插件/原生运行材料进一步核因；不能把目前数据说成已证明“只怪模拟器”。
+实际SDK35/ARM64、第九季93集、第001集均已核实；Media3创建后仍SIGILL，0媒体字节/0首帧。
+API35栈为libc/插件或其他原生模块；API30 ARM64含libc/NDK转译，ARMv7含插件/其他/libc/NDK。
+不能把它们说成已证明“只怪模拟器”，也不以延长网络超时或修改插件保护掩盖崩溃。
+停止相同云端尝试，需要一次性原生ARM设备对照，或合法匹配的插件源码/原生诊断材料
+进一步区分宿主JNI、插件与转译环境。当前没有可核验的下一处Kotlin/Java修复根因。
+本轮首集失败后未执行第2/3集及暂停/Seek/重播，不记这些操作通过。
 
 证据：evidence/b32a80b6-*.json、8e417abc-*.json、7d47fcc7-*.json、
-13c7b3c7-original-player-observation.json、a619ab48-original-wanou-default.json。
+13c7b3c7-original-player-observation.json、a619ab48-original-wanou-default.json、
+2f02cf4d-cheese-shinchan-api35.json及2f02cf4d-native-crash.json。
 新完整FongMi整核仍没有匹配依赖并未接管；本轮实际入口是现有稳定唯一Media3播放器。
 
 ```sh
 cd /workspace/aura-tv
 git status --short --branch
 git log -10 --oneline
-# 先读2f02cf4d对应API35运行，以及7d47fcc7的完整TV/D终态；不要再重发小城403。
+# 先读43410792149的完整JVM/Lint/TV/D终态；节点已完成且失败，不要重复本次云端请求。
 # 有一次性原生ARM64设备并已下载对应内部诊断包后，精确续跑（会清理本测试应用配置）：
 # LIVE_FILM_TITLE=蜡笔小新 LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_PREBUILT_APKS=diagnostic-apks LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
 ```
