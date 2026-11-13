@@ -125,8 +125,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        film: ${{ fromJSON(inputs.film == 'xiaocheng' && '["xiaocheng"]' || inputs.film == 'shinchan' && '["shinchan"]' || '["xiaocheng","shinchan"]') }}
-        node: ${{ fromJSON(inputs.node == 'cheese' && '["cheese"]' || inputs.node == 'wanou' && '["wanou"]' || '["cheese","wanou"]') }}
+        film: ${{ fromJSON(inputs.film == 'xiaocheng' && '["xiaocheng"]' || (inputs.film == 'shinchan' || contains(github.event.head_commit.message, '[cheese-shinchan]')) && '["shinchan"]' || '["xiaocheng","shinchan"]') }}
+        node: ${{ fromJSON((inputs.node == 'cheese' || contains(github.event.head_commit.message, '[cheese-shinchan]')) && '["cheese"]' || inputs.node == 'wanou' && '["wanou"]' || '["cheese","wanou"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -195,8 +195,8 @@ jobs:
     needs: [validation, build, nodes, tv-regression]
     runs-on: ubuntu-latest
     env:
-      EXPECTED_NODE: ${{ inputs.node || 'both' }}
-      EXPECTED_FILMS: ${{ inputs.film || 'both' }}
+      EXPECTED_NODE: ${{ inputs.node || (contains(github.event.head_commit.message, '[cheese-shinchan]') && 'cheese') || 'both' }}
+      EXPECTED_FILMS: ${{ inputs.film || (contains(github.event.head_commit.message, '[cheese-shinchan]') && 'shinchan') || 'both' }}
       VALIDATION_RESULT: ${{ needs.validation.result }}
       BUILD_RESULT: ${{ needs.build.result }}
       NODES_RESULT: ${{ needs.nodes.result }}

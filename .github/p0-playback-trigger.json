@@ -1,9 +1,8 @@
 {
-  "attempt": "20261113-selected-player-owned-media-1",
-  "reason": "Remove the proven duplicate 1.5s selected-local media preflight; preserve session authorization and player-owned I/O. Correct TV season title matching; compare both authorized films.",
+  "attempt": "20261113-shinchan-real-tv-candidate-2",
+  "reason": "Previous real candidate has only two episodes. Inspect bounded real TV details, require an actual three-episode TV title/category, run only cheese/Shinchan; do not resend the known Xiaocheng upstream 403.",
   "nodes": [
-    "cheese",
-    "wanou"
+    "cheese"
   ],
   "abi": "armeabi-v7a",
   "film_title": "蜡笔小新",
@@ -13,7 +12,6 @@
     3
   ],
   "film_titles": [
-    "小城良方",
     "蜡笔小新"
   ]
 }
