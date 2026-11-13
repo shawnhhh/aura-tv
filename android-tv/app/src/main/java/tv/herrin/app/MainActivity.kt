@@ -2287,17 +2287,20 @@ private fun Herrin(startup: StartupPresentation) {
                 HerrinPlaybackDiagnosticJournal.record("SOURCE", "KERNEL_MEDIA_VALIDATION_DEFERRED")
                 parsed
             } else if(parsed is PlaybackResult.Ready) {
-                val validation = withContext(Dispatchers.IO) {
-                    withTimeoutOrNull(4_000) {
-                        HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
-                            FongMiSessionAuthorization.isApproved(candidate, spiderBridge.approvedActiveSiteKey())
-                        }, evidence = { code, detail -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, detail, diagnosticSession) }).probe(parsed.media)
-                    }
+                val admitted = withContext(Dispatchers.IO) {
+                    SelectedSpiderPlayback.admit(parsed.media, spiderBridge.approvedActiveSiteKey(),
+                        remoteProbe = { media ->
+                            val validation = withTimeoutOrNull(4_000) {
+                                HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                                    FongMiSessionAuthorization.isApproved(candidate, spiderBridge.approvedActiveSiteKey())
+                                }, evidence = { code, detail -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, detail, diagnosticSession) }).probe(media)
+                            }
+                            HerrinPlaybackDiagnosticJournal.record("SOURCE", "MEDIA_PROBE_${validation?.name ?: "PROBE_TIMEOUT"}")
+                            validation == HerrinRemoteMediaProbe.Result.MEDIA
+                        }, evidence = { code -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, "", diagnosticSession) })
                 }
-                val code = validation?.name ?: "PROBE_TIMEOUT"
-                HerrinPlaybackDiagnosticJournal.record("SOURCE", "MEDIA_PROBE_$code")
-                if(validation == HerrinRemoteMediaProbe.Result.MEDIA) parsed else
-                    PlaybackResult.Unavailable("MEDIA_PROBE_$code：播放解析已返回，但媒体响应验证失败；可重试、换线路或返回其他影视点")
+                if(admitted) parsed else
+                    PlaybackResult.Unavailable("MEDIA_PROBE_REJECTED：当前来源授权或媒体响应验证失败；可重试、换线路或返回其他影视点")
             } else parsed
             // Record in the UI process: the :spider worker has a separate
             // in-memory journal. Without this, the on-TV journal says NO_EVENTS
