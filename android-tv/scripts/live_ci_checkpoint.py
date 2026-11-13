@@ -63,19 +63,23 @@ def checkpoint(directory, node):
     return data
 
 
-def aggregate(directory, nodes):
+def aggregate(directory, nodes, films=None):
     results = {}
-    for node in nodes:
-        folder = directory / ('p0-node-' + node)
+    selections = [(node, film) for node in nodes for film in (films or [None])]
+    for node, film in selections:
+        key = node + ('/' + film if film else '')
+        folder = directory / ('p0-node-' + node + ('-' + film if film else ''))
         data = read_report(folder / 'environment-checkpoint.json')
         report = read_report(folder / (node + '.json'))
         gate = subprocess.run(['python3', str(Path(__file__).with_name('verify_live_node_acceptance.py')),
                                '--node', node, '--directory', str(folder)],
                               capture_output=True, text=True)
         infrastructure = all(data.get(k) for k in ('kvm_ready', 'emulator_booted', 'apks_installed', 'instrumentation_started', 'instrumentation_completed'))
-        results[node] = {
+        expected_title = {'xiaocheng': '小城良方', 'shinchan': '蜡笔小新'}.get(film)
+        title_matches = expected_title is None or report.get('authorized_title') == expected_title
+        results[key] = {
             'environment': data,
-            'real_playback_accepted': bool(infrastructure and gate.returncode == 0 and
+            'real_playback_accepted': bool(infrastructure and title_matches and gate.returncode == 0 and
                                           report.get('verdict') == 'REAL_PLAYBACK_PASS'),
             'verdict': report.get('verdict', 'TEST_INFRASTRUCTURE_FAILED'),
             'failure_stage': report.get('failure_stage'),
@@ -87,7 +91,7 @@ def aggregate(directory, nodes):
                'event': os.environ.get('GITHUB_EVENT_NAME'), 'jobs': jobs, 'nodes': results,
                'android_toolchain_available': (directory / 'toolchain' / 'android-toolchain.txt').is_file() and jobs['BUILD_RESULT'] == 'success',
                'all_requested_nodes_accepted': accepted,
-               'p0_complete': accepted and set(nodes) == {'cheese', 'wanou'}}
+               'p0_complete': accepted and set(nodes) == {'cheese', 'wanou'} and set(films or []) == {'xiaocheng', 'shinchan'}}
     directory.mkdir(parents=True, exist_ok=True)
     (directory / 'environment-checkpoint.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary, indent=2))
@@ -104,11 +108,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--directory', default='evidence')
     parser.add_argument('--aggregate')
+    parser.add_argument('--films', choices=['both', 'xiaocheng', 'shinchan'])
     parser.add_argument('--node', choices=['cheese', 'wanou', 'both'], required=True)
     args = parser.parse_args()
     if args.aggregate:
         nodes = ['cheese', 'wanou'] if args.node == 'both' else [args.node]
-        raise SystemExit(0 if aggregate(Path(args.aggregate), nodes) else 1)
+        raise SystemExit(0 if aggregate(Path(args.aggregate), nodes, ['xiaocheng', 'shinchan'] if args.films == 'both' else ([args.films] if args.films else None)) else 1)
     if args.node == 'both':
         parser.error('per-device checkpoint requires one node')
     checkpoint(Path(args.directory), args.node)

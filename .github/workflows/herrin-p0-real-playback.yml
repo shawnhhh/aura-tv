@@ -12,6 +12,11 @@ on:
         type: choice
         options: [both, cheese, wanou]
         default: both
+      film:
+        description: 'Compare both authorized titles or select one'
+        type: choice
+        options: [both, xiaocheng, shinchan]
+        default: both
       abi:
         type: choice
         options: [armeabi-v7a, arm64-v8a]
@@ -52,7 +57,7 @@ jobs:
           python3 -m unittest discover -s android-tv/scripts -p 'test_live_spider_error_shapes.py' -v
       - name: Targeted M476 regression with unchanged network failure assertions
         working-directory: android-tv
-        run: gradle --build-cache --max-workers=2 :app:testDebugUnitTest --tests tv.herrin.app.M476RemoteMediaProbeTest
+        run: gradle --build-cache --max-workers=2 :app:testDebugUnitTest --tests tv.herrin.app.M476RemoteMediaProbeTest --tests tv.herrin.app.SelectedSpiderPlaybackTest
       - name: Complete JVM, contract, lint and Debug (even after targeted failure)
         if: ${{ !cancelled() }}
         working-directory: android-tv
@@ -115,16 +120,18 @@ jobs:
           retention-days: 30
 
   nodes:
-    name: C - Real ${{ matrix.node }} on Android
+    name: C - Real ${{ matrix.node }} / ${{ matrix.film }} on Android
     needs: build
     strategy:
       fail-fast: false
       matrix:
+        film: ${{ fromJSON(inputs.film == 'xiaocheng' && '["xiaocheng"]' || inputs.film == 'shinchan' && '["shinchan"]' || '["xiaocheng","shinchan"]') }}
         node: ${{ fromJSON(inputs.node == 'cheese' && '["cheese"]' || inputs.node == 'wanou' && '["wanou"]' || '["cheese","wanou"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
       LIVE_NODE: ${{ matrix.node }}
+      LIVE_FILM_TITLE: ${{ matrix.film == 'shinchan' && '蜡笔小新' || '小城良方' }}
       ARM_PACKAGE: 'true'
       LIVE_INSTALL_ABI: ${{ inputs.abi || 'armeabi-v7a' }}
       LIVE_PREBUILT_APKS: diagnostic-apks
@@ -172,7 +179,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p0-node-${{ matrix.node }}
+          name: p0-node-${{ matrix.node }}-${{ matrix.film }}
           path: evidence/
           if-no-files-found: error
           retention-days: 30
@@ -189,6 +196,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_NODE: ${{ inputs.node || 'both' }}
+      EXPECTED_FILMS: ${{ inputs.film || 'both' }}
       VALIDATION_RESULT: ${{ needs.validation.result }}
       BUILD_RESULT: ${{ needs.build.result }}
       NODES_RESULT: ${{ needs.nodes.result }}
@@ -206,7 +214,7 @@ jobs:
           path: collected/toolchain
       - name: Save durable checkpoint before enforcing acceptance
         if: always()
-        run: python3 android-tv/scripts/live_ci_checkpoint.py --aggregate collected --node "$EXPECTED_NODE"
+        run: python3 android-tv/scripts/live_ci_checkpoint.py --aggregate collected --node "$EXPECTED_NODE" --films "$EXPECTED_FILMS"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

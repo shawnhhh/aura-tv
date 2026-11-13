@@ -53,6 +53,22 @@ class CheckpointTest(unittest.TestCase):
             summary = json.loads((directory / 'environment-checkpoint.json').read_text())
             self.assertFalse(summary['nodes']['cheese']['real_playback_accepted'])
 
+    def test_each_requested_film_needs_its_own_correctly_identified_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            folder = directory / 'p0-node-cheese-shinchan'
+            folder.mkdir()
+            (folder / 'environment-checkpoint.json').write_text(json.dumps(dict.fromkeys(
+                ('kvm_ready', 'emulator_booted', 'apks_installed', 'instrumentation_started', 'instrumentation_completed'), True)))
+            # A passing report for the other title must never satisfy Shinchan.
+            (folder / 'cheese.json').write_text(json.dumps({'verdict': 'REAL_PLAYBACK_PASS', 'authorized_title': '小城良方'}))
+            with patch.object(collector.subprocess, 'run', return_value=SimpleNamespace(returncode=0)):
+                self.assertFalse(collector.aggregate(directory, ['cheese'], ['xiaocheng', 'shinchan']))
+            result = json.loads((directory / 'environment-checkpoint.json').read_text())
+            self.assertEqual(2, len(result['nodes']))
+            self.assertFalse(result['nodes']['cheese/shinchan']['real_playback_accepted'])
+            self.assertFalse(result['nodes']['cheese/xiaocheng']['real_playback_accepted'])
+
     def test_aggregate_missing_artifacts_persists_checkpoint_and_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertFalse(collector.aggregate(Path(tmp), ['cheese', 'wanou']))
