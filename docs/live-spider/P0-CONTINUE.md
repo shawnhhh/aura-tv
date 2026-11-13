@@ -45,7 +45,41 @@ API35栈为libc/插件或其他原生模块；API30 ARM64含libc/NDK转译，ARM
 此前只读工具遇302，现有限跟随真实服务器声明的公网重定向，禁止私网/降级，不记录URL或凭据。
 最新审计实际直接200、redirect_statuses=[]；不声称本次成功必然由重定向代码引起。
 原版ARM64/API35 TV对照曾被android:id/immersive_cling提示遮挡；已按实际android:id/ok
-做系统提示确认，正在run43417003907收尾。不是原版播放FAIL/PASS，先读真实终态再归因。
+做系统提示确认。run43417764644@447f0a23已到选站但scope未确认；后续公开UI定位/就绪修复
+run43440864678@325ccb01仍停设置页、未出现选站控件，REFERENCE_BLOCKED。官方SiteDialog
+在空列表时会自动dismiss；仅凭此现象无法把原因定为按键、配置失败或播放失败。不再重复相同UI操作。
+
+本轮继续提交（保持唯一开发分支；Draft PR85基于前一开发分支，未合并）：
+- 44bc3ca9/e2e4379c：一次性模拟器崩溃采集保留实际so basename、相对PC/Build ID、
+  信号/线程/数值寄存器；PC寄存器与回溯相对偏移分别保存。脱敏定向测试通过。
+  **旧证据已经丢弃完整栈/PC/寄存器，无法补回，也无法据此做可靠符号解析或判定重复释放。**
+  不重复API30/35崩溃实验，待合法匹配Build ID的原生诊断材料或一次性原生ARM设备。
+- a8fb7b4a：既有PlaybackDiagnosticsIntegrationTest增加生产播放器MP4/HLS各60秒基准，
+  原创6秒素材按1x循环，实际HTTP/TLS、首帧回调/画面、持续解码、暂停/Seek/释放。
+  运行43440288111@7197daf2的TV仍待终态；不要提前记录基准PASS。
+  同轮完整JVM原JUnit已核730/730，0失败/跳过，3个探测回归通过；Lint/宿主成功。
+  工件14044629422，ZIP SHA256 9454daabaf9524dac13db7a874a269b23488f2f1e76847fbe30cbf4cb762157b。
+- 31ddda92/41714a27：复用原ARM入口，默认prepare只读；精确SHA/两个APK哈希/真实ELF
+  架构先校验。只有run-on-disposable-device明确模式才安装并运行会重置本测试应用的驱动。
+  真机不读取/清理全局logcat，不读取其他应用数据，仅本应用报告及本UID本次退出元数据；
+  非root未取得完整栈时明确留缺口。**没有连接原生ARM设备，未发生真机验证。**
+- c8d30ad7：严格要求实际来源第九季和至少3集，不能以其他季通过验收；第1集失败立即停止。
+- 最新源码构建8d703279bf9d297a49387cda5fb3be9d8d5cb760，run43442562586只运行B及Lint，
+  等终态确认精确SHA内部诊断包。仅构建模式和无源回归模式均不执行C/D，不声称节点PASS。
+  原完整节点入口/所有严格断言保留，触发文件未改变，没有重新请求403或相同转译崩溃。
+
+本轮按固定原版公开实现核对（代码行为与真实运行证据分开）：
+| 环节 | 原版公开实现 | HERRIN实际现有路径/已知差异 |
+| --- | --- | --- |
+| JAR/Init | DexClassLoader→Init.init→Spider.init(ext) | 保留ABI搜索目录，服务器先于Init；无证据证明崩溃初始化点 |
+| 默认站点首页 | homeContent(true)→homeVideoContent | 显式选站走browse默认loadHome=true，顺序相同；空首页继续可搜索 |
+| 第1页搜索 | searchContent(keyword,quick)，后续页才三参数 | 第1页同为双参数；玩偶普通/quick均0字符，不能猜切到第2页有结果 |
+| playerContent/Proxy | 回调Object[]中InputStream直接chunked转发 | 私有会话Proxy另有HLS前缀检测/别名改写/单URL引用读取 |
+| HLS实证 | 小城原版HLS_HEADER_INVALID | HERRIN引用实际403 HTML→502；不得混称原版也403或假造请求头 |
+| 播放器 | 原版ParseJob/PlayerManager→Media3或MPV | 仍为当前唯一生产Media3；完整新整核与MPV未接管 |
+
+依赖锁android-tv/fongmi-kernel/dependencies.json已读取：FongMi/media 3c2cbe8、
+webhtv 4e30ffa均已有不匹配实证，本轮未重复审计/替换或空实现。
 
 证据：evidence/b32a80b6-*.json、8e417abc-*.json、7d47fcc7-*.json、
 13c7b3c7-original-player-observation.json、a619ab48-original-wanou-default.json、
@@ -56,7 +90,8 @@ API35栈为libc/插件或其他原生模块；API30 ARM64含libc/NDK转译，ARM
 cd /workspace/aura-tv
 git status --short --branch
 git log -10 --oneline
-# 先读43417003907原版TV对照终态；HERRIN节点/730 JVM/TV复核已完成，不要重复受阻云端请求。
+# 先读43440288111完整TV/原创基准、43442562586最终设备包构建；原版325ccb01仍BLOCKED。
+# 不要重复HERRIN受阻云端请求；精确真机安装命令见CI-CHANNEL.md，实际设备必须另行连接。
 # 有一次性原生ARM64设备并已下载对应内部诊断包后，精确续跑（会清理本测试应用配置）：
 # LIVE_FILM_TITLE=蜡笔小新 LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_PREBUILT_APKS=diagnostic-apks LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
 ```
