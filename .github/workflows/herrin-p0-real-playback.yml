@@ -21,6 +21,10 @@ on:
         type: choice
         options: [armeabi-v7a, arm64-v8a]
         default: armeabi-v7a
+      diagnostic_only:
+        description: 'Build device diagnostics and run full regressions without repeating provider requests (never node acceptance)'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -55,6 +59,8 @@ jobs:
         run: |
           python3 -m unittest discover -s android-tv/scripts -p 'test_live_ci_checkpoint.py' -v
           python3 -m unittest discover -s android-tv/scripts -p 'test_live_spider_error_shapes.py' -v
+          python3 -m unittest discover -s android-tv/scripts -p 'test_live_native_crash.py' -v
+          python3 -m unittest discover -s android-tv/scripts -p 'test_live_native_device.py' -v
       - name: Targeted M476 regression with unchanged network failure assertions
         working-directory: android-tv
         run: gradle --build-cache --max-workers=2 :app:testDebugUnitTest --tests tv.herrin.app.M476RemoteMediaProbeTest --tests tv.herrin.app.SelectedSpiderPlaybackTest
@@ -105,13 +111,15 @@ jobs:
           gradle --build-cache --max-workers=2 -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi="$LIVE_INSTALL_ABI" :app:assembleDebug :app:assembleDebugAndroidTest
           cp app/build/outputs/apk/debug/app-debug.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
+          python3 scripts/live_native_device.py manifest --artifact "../diagnostic-apks/$LIVE_INSTALL_ABI" --sha "$GITHUB_SHA" --abi "$LIVE_INSTALL_ABI"
+          echo 'Internal exact-SHA device diagnostics only; this artifact is NOT real-node playback acceptance.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           # Internal diagnostic transfer only; never an acceptance release.
           name: p0-internal-diagnostic-apks
           path: diagnostic-apks/
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -121,6 +129,9 @@ jobs:
 
   nodes:
     name: C - Real ${{ matrix.node }} / ${{ matrix.film }} on Android
+    # Explicit device preparation never repeats unchanged x86/ARM-translation
+    # crashes. Normal runs retain the complete original strict acceptance path.
+    if: ${{ !inputs.diagnostic_only && !contains(github.event.head_commit.message, '[diagnostic-build-only]') }}
     needs: build
     strategy:
       fail-fast: false
@@ -191,7 +202,7 @@ jobs:
 
   acceptance:
     name: D - Evidence and real playback acceptance
-    if: always()
+    if: ${{ always() && !inputs.diagnostic_only && !contains(github.event.head_commit.message, '[diagnostic-build-only]') }}
     needs: [validation, build, nodes, tv-regression]
     runs-on: ubuntu-latest
     env:
