@@ -1,6 +1,6 @@
 {
-  "attempt": "20261113-shinchan-current-jar-arm64-1",
-  "reason": "Actual T4Guard TV S9 has 93 episodes; first media callback crashed with SIGSEGV in libndk_translation on ARMv7. One standard ARM64-package comparison for current 6d10a60 JAR and same first episode. Do not repeat Xiaocheng 403.",
+  "attempt": "20261113-shinchan-bound-season-arm64-2",
+  "reason": "Actual UI trace exposed an early DETAILS_EPISODES_RETURNED race: await the final DETAILS_RETURNED event and bind the declared source season before episode selection. One corrected ARM64 same-season comparison, no Xiaocheng or Wanou reruns.",
   "nodes": [
     "cheese"
   ],
