@@ -58,13 +58,15 @@ internal object TvVisibleFrameEvidence {
         }
         // Shell-owned evidence survives instrumentation teardown and can be
         // pulled by android-tv/scripts/emulator_ci.sh after any test result.
-        val cmd = "mkdir -p /data/local/tmp/herrin-test-evidence && " +
-            "screencap -p /data/local/tmp/herrin-test-evidence/$label.png"
         runCatching {
-            inst.uiAutomation.executeShellCommand(cmd).use { descriptor ->
-                FileInputStream(descriptor.fileDescriptor).use { stdout ->
-                    val buffer = ByteArray(1024)
-                    while (stdout.read(buffer) >= 0) Unit
+            // UiAutomation on API30 executes argv, not shell operators.
+            for (cmd in listOf("mkdir -p /data/local/tmp/herrin-test-evidence",
+                "screencap -p /data/local/tmp/herrin-test-evidence/$label.png")) {
+                inst.uiAutomation.executeShellCommand(cmd).use { descriptor ->
+                    FileInputStream(descriptor.fileDescriptor).use { stdout ->
+                        val buffer = ByteArray(1024)
+                        while (stdout.read(buffer) >= 0) Unit
+                    }
                 }
             }
         }
