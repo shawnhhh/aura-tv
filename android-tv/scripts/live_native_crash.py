@@ -55,8 +55,16 @@ def classify(text, package="tv.herrin.app:spider"):
         code = re.search(r'signal \d+ \(SIG[A-Z]+\), code (-?\d+)', section)
         if code:
             row['signal_code'] = int(code[1])
-        row['registers'] = {name: '0x'+value.lower() for name, value in re.findall(
-            r'(?:^|\s)(x\d{1,2}|r\d{1,2}|sp|lr|pc|ip|fp|pstate|cpsr)\s+([0-9a-fA-F]{8,16})(?=\s|$)', section)}
+        registers = {}
+        for line in section.splitlines():
+            payload = re.sub(r'^.*?\bDEBUG\s*:\s*', '', line)
+            # A backtrace's relative "pc" must never overwrite the actual PC
+            # register from the tombstone register row.
+            if not re.match(r'^\s*(?:x\d{1,2}|r\d{1,2}|sp|lr|pc|ip|fp|pstate|cpsr)\s+[0-9a-fA-F]{8,16}\b', payload):
+                continue
+            registers.update({name: '0x'+value.lower() for name, value in re.findall(
+                r'(?:^|\s)(x\d{1,2}|r\d{1,2}|sp|lr|pc|ip|fp|pstate|cpsr)\s+([0-9a-fA-F]{8,16})(?=\s|$)', payload)})
+        row['registers'] = registers
         row['symbolization'] = 'RELATIVE_PCS_REQUIRE_MATCHING_BUILD_ID_ELF_AND_SYMBOLS' if detailed_frames else 'NO_FRAMES_IN_CRASH_BUFFER'
         result.append(row)
     return {'native_crashes': result[-4:]}

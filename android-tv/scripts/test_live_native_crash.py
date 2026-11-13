@@ -12,6 +12,7 @@ signal 4 (SIGILL), code 1 (ILL_ILLOPC), fault addr 0x000000123456abcd
 Abort message: 'token=private-secret https://private.example/a'
     x0 0000000000000012  x1 0000000000000034
     lr 0000001234560000  sp 0000007777770000
+11-13 12:00:00.000 123 456 F DEBUG :     pc 000000123456abcd  pstate 0000000060000000
 backtrace:
     #00 pc 00000000000a995c  /apex/private-secret/lib64/bionic/libc.so (syscall+28) (BuildId: 1234567890abcdef1234567890abcdef)
     #01 pc 0000000000012340  /data/user/0/private-secret/libnativeplugin.so (BuildId: abcdef1234567890abcdef1234567890)
@@ -27,6 +28,7 @@ signal 11 (SIGSEGV), code 1, fault addr 0x1234
         self.assertEqual(row['frames'][1]['relative_pc'], '0x0000000000012340')
         self.assertEqual(row['frames'][0]['system_symbol'], 'syscall+28')
         self.assertEqual(row['registers']['x1'], '0x0000000000000034')
+        self.assertEqual(row['registers']['pc'], '0x000000123456abcd')
         self.assertEqual(row['fault_address'], '0x000000123456abcd')
         self.assertEqual(len(data['native_crashes']), 1)
         for private in ('private-secret', 'https://', '/data/', '/apex/', 'libanother'):
