@@ -7,7 +7,7 @@ collect() {
     code=$?
     trap - EXIT
     adb logcat -d > build/emulator-evidence/logcat.txt 2>&1 || true
-    adb exec-out cat /data/local/tmp/herrin-test-evidence/player-baseline.json > build/emulator-evidence/player-baseline.json || true
+    adb exec-out base64 -d /data/local/tmp/herrin-test-evidence/player-baseline.b64 > build/emulator-evidence/player-baseline.json || true
     cat build/emulator-evidence/player-baseline.json
     # Only sanitized measurements: the perf test never logs source addresses, film URLs or tokens.
     grep 'HerrinPerf' build/emulator-evidence/logcat.txt > build/emulator-evidence/performance-measurements.log || true

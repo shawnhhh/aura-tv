@@ -64,10 +64,24 @@ class PlaybackDiagnosticsIntegrationTest {
                     }
                     if (path.startsWith("/status/"))
                         return MockResponse().setResponseCode(path.substringAfterLast('/').toInt())
+                    if (path == "/baseline.m3u8") {
+                        // Reuse the original six-second TS as twelve proper HLS
+                        // discontinuities on ONE 72s timeline, not MediaItem repeat.
+                        val playlist = buildString {
+                            append("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+                            repeat(12) { index ->
+                                if (index > 0) append("#EXT-X-DISCONTINUITY\n")
+                                append("#EXTINF:6.000000,\nsynthetic-segment-00.ts?baseline_part=$index\n")
+                            }
+                            append("#EXT-X-ENDLIST\n")
+                        }
+                        return MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(playlist)
+                    }
                     val (asset, mime) = when (path) {
                         "/primary.m3u8" -> return MockResponse().setResponseCode(403)
                         "/transient.m3u8" -> return MockResponse().setResponseCode(503)
                         "/mp4" -> "synthetic.mp4" to "video/mp4"
+                        "/baseline.mp4" -> "playback-diagnostics/baseline-72.mp4" to "video/mp4"
                         "/remote" -> "synthetic-remote.mp4" to "video/mp4"
                         "/hls" -> "synthetic-hls.m3u8" to "application/vnd.apple.mpegurl"
                         "/synthetic-segment-00.ts" -> "synthetic-segment-00.ts" to "video/mp2t"
@@ -105,7 +119,7 @@ class PlaybackDiagnosticsIntegrationTest {
         }
     }
 
-    /** Capability baseline only: original six-second clips loop at 1x for 60s.
+    /** Capability baseline only: 72s timelines derived from original fixtures.
      * This uses the production AuthorizedPlaybackPanel/HerrinPlayerSession and
      * real HTTP/TLS, Media3, decoder and Surface. It never counts as a source PASS.
      */
@@ -118,15 +132,15 @@ class PlaybackDiagnosticsIntegrationTest {
         report.put("formats", results).put("verdict", "FAIL")
         try {
             fixtures { server, requests ->
-                for ((kind, path) in listOf("mp4" to "/mp4", "hls" to "/hls")) {
-                    val row = JSONObject().put("format", kind).put("loop_original_six_second_fixture", true)
+                for ((kind, path) in listOf("mp4" to "/baseline.mp4", "hls" to "/baseline.m3u8")) {
+                    val row = JSONObject().put("format", kind).put("original_fixture_timeline_seconds", 72)
+                        .put("media_item_repeat", false)
                         .put("verdict", "FAIL")
                     results.put(row)
                     var decoder: androidx.media3.exoplayer.ExoPlayer? = null
                     launch(server, path).use { scenario ->
                         scenario.onActivity {
                             decoder = it.player
-                            it.player.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
                             it.player.setPlaybackSpeed(1f)
                         }
                         try {
@@ -174,6 +188,10 @@ class PlaybackDiagnosticsIntegrationTest {
                         }
                         row.put("continuous_wall_ms", android.os.SystemClock.elapsedRealtime() - started)
                             .put("rendered_frames", lastFrames).put("playing_samples", samples)
+                        scenario.onActivity {
+                            assertTrue("At least sixty seconds of actual media time must advance", it.player.currentPosition >= 60_000L)
+                            row.put("continuous_media_position_ms", it.player.currentPosition)
+                        }
                         assertTrue("Real media must have been requested", requests.contains(path))
                         if (kind == "hls") assertTrue("Actual HLS segment bytes must be requested", requests.any { it.endsWith(".ts") })
                         scenario.onActivity { it.player.pause() }
@@ -227,8 +245,13 @@ class PlaybackDiagnosticsIntegrationTest {
             // AGP uninstalls the app after connected tests, including failures.
             // Reuse shell-owned fixture evidence so this report survives.
             val encoded = android.util.Base64.encodeToString(report.toString().toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-            inst.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence && " +
-                "printf '%s' '$encoded' | base64 -d > /data/local/tmp/herrin-test-evidence/player-baseline.json").use { descriptor ->
+            inst.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence").use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
+            // API30 UiAutomation uses Runtime.exec(String), not a shell. A
+            // single-word sh script expands quoted argv and redirects safely;
+            // the only data argument is whitespace-free Base64, never script.
+            inst.uiAutomation.executeShellCommand("sh -c \"${'$'}@\">/data/local/tmp/herrin-test-evidence/player-baseline.b64 -- echo $encoded").use { descriptor ->
                 java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
             }
             android.util.Log.i("HerrinPlaybackBaseline", report.toString())
