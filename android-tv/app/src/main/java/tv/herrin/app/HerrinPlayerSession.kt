@@ -37,7 +37,9 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
     fun select(media: PlaybackMedia, position: Long): java.util.concurrent.CompletionStage<Void>? {
         check(!closed)
         if (whole && !isActiveWhole())
-            return java.util.concurrent.CompletableFuture.failedFuture(IllegalStateException("Retired playback UI lease"))
+            return java.util.concurrent.CompletableFuture<Void>().apply {
+                    completeExceptionally(IllegalStateException("Retired playback UI lease"))
+                }
         val ticket = media.kernelPlayback
         // Never replace an original-core playback selection with a personal
         // media ticket (or vice versa) on the same player session. A new
@@ -56,7 +58,9 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
         check(!closed)
         if (original != null) {
             if (!isActiveWhole())
-                return java.util.concurrent.CompletableFuture.failedFuture(IllegalStateException("Retired playback UI lease"))
+                return java.util.concurrent.CompletableFuture<Void>().apply {
+                    completeExceptionally(IllegalStateException("Retired playback UI lease"))
+                }
             val ticket = requireNotNull(media.kernelPlayback)
             requireNotNull(runtime).player(ticket) // Recheck session ownership.
             return runtime.gateway.play(ticket.episode, position)

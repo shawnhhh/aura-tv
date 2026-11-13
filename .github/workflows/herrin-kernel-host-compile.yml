@@ -32,8 +32,9 @@ jobs:
         run: bash .github/scripts/start_smb_fixture.sh
       - name: Compile, lint and assemble stable host and contract
         working-directory: android-tv
-        run: gradle --build-cache --max-workers=2 :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:lintDebug :app:assembleDebug
+        run: gradle --continue --build-cache --max-workers=2 :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:lintDebug :app:assembleDebug
       - name: Run all stable host JVM tests after compiler and lint workers finish
+        if: ${{ !cancelled() }}
         working-directory: android-tv
         run: gradle --build-cache --max-workers=2 :app:testDebugUnitTest
       - name: Preserve validation reports, never an acceptance APK
