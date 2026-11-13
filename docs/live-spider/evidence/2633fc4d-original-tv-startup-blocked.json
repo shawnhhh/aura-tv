@@ -1,0 +1,31 @@
+{
+  "run_id": 43417003907,
+  "head": "2633fc4d",
+  "job_id": 131857306070,
+  "report": {
+    "scope": "OFFICIAL_REFERENCE_UI_AND_PLAYER_ERROR_OBSERVATION_NO_FRAME_ACCEPTANCE",
+    "herrin_acceptance": false,
+    "verdict": "REFERENCE_BLOCKED",
+    "release": "FongMi/Release 5.8.7",
+    "warehouse": "http://www.饭太硬.net/tv",
+    "targets": [],
+    "stages": [
+      {
+        "stage": "open_settings",
+        "at_ms": 7305
+      }
+    ],
+    "apk_sha256": "cda5776ba2ee6f7dfdcd3d7c1a13095ba8672b9892d6fb9e1ba38f993ad66f3a",
+    "apk_modified_or_resigned": false,
+    "package_primary_abi": "arm64-v8a",
+    "device_abis": "x86_64,arm64-v8a",
+    "notification_permission_granted_for_startup": true,
+    "failure_stage": "open_settings",
+    "failure_code": "ParseError",
+    "elapsed_ms": 10860,
+    "native_crash_metadata": {
+      "native_crashes": []
+    },
+    "official_app_process_alive": true
+  }
+}

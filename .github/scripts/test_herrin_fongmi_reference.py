@@ -11,6 +11,22 @@ spec.loader.exec_module(ref)
 
 
 class ReferenceUiTest(unittest.TestCase):
+    def test_invalid_snapshot_is_reacquired_without_replaying_ui_actions(self):
+        responses = ['', '', '<hierarchy>', '', '', '<hierarchy><node /></hierarchy>']
+        with patch.object(ref, 'report', {}), patch.object(ref, 'adb', side_effect=responses) as adb, patch.object(ref.time, 'sleep'):
+            self.assertEqual(len(ref.ui()), 1)
+            self.assertEqual(len(ref.report['invalid_ui_snapshots']), 1)
+        self.assertEqual(adb.call_count, 6)
+        self.assertEqual([c.args[:3] for c in adb.call_args_list], [
+            ('shell', 'rm', '-f'), ('shell', 'uiautomator', 'dump'), ('exec-out', 'cat', '/data/local/tmp/p0-reference.xml')]*2)
+
+    def test_three_invalid_snapshots_fail_closed_without_exporting_xml(self):
+        with patch.object(ref, 'report', {}), patch.object(ref, 'adb', side_effect=['', '', '<secret-private>']*3), patch.object(ref.time, 'sleep'):
+            with self.assertRaisesRegex(RuntimeError, 'REFERENCE_UI_XML_SNAPSHOT_UNAVAILABLE'):
+                ref.ui()
+            self.assertEqual(len(ref.report['invalid_ui_snapshots']), 3)
+            self.assertNotIn('secret-private', str(ref.report))
+
     def test_real_clickable_parent_bounds_used_without_tab_or_double_toggle(self):
         root = ET.fromstring('<node clickable="true" bounds="[10,20][110,60]"><node clickable="false" /></node>')
         ref.parents = {root[0]: root}

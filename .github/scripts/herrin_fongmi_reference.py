@@ -42,9 +42,23 @@ def key(code):
 
 def ui():
     global parents
-    adb('shell', 'uiautomator', 'dump', '/data/local/tmp/p0-reference.xml', timeout=15)
-    data = adb('exec-out', 'cat', '/data/local/tmp/p0-reference.xml')
-    root=ET.fromstring(data)
+    # API35 startup produced a malformed hierarchy before any source action.
+    # Only retry acquiring a snapshot; never replay clicks/search/media calls,
+    # parse a stale file or treat an unavailable hierarchy as an empty screen.
+    for attempt in range(3):
+        adb('shell', 'rm', '-f', '/data/local/tmp/p0-reference.xml')
+        adb('shell', 'uiautomator', 'dump', '/data/local/tmp/p0-reference.xml', timeout=15)
+        data = adb('exec-out', 'cat', '/data/local/tmp/p0-reference.xml')
+        try:
+            root = ET.fromstring(data)
+            break
+        except ET.ParseError as error:
+            report.setdefault('invalid_ui_snapshots', []).append(dict(
+                attempt=attempt+1, bytes=len(data.encode()), code=error.code,
+                line=error.position[0], column=error.position[1]))
+            if attempt == 2:
+                raise RuntimeError('REFERENCE_UI_XML_SNAPSHOT_UNAVAILABLE') from None
+            time.sleep(.3)
     parents={child:parent for parent in root.iter() for child in parent}
     nodes=list(root.iter('node'))
     known={'vod','vodHome','vodUrl','title','positive','negative','search','select','cancel','mode','text',
