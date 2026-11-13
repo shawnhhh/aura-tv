@@ -198,6 +198,14 @@ class FanTaiYingRealMainUiTest {
     private fun hasTestTagPrefix(prefix: String) = SemanticsMatcher("tag starts with $prefix") {
         it.config.getOrElse(SemanticsProperties.TestTag) { "" }.startsWith(prefix)
     }
+    private fun authorizedTitleCard(): SemanticsMatcher {
+        var matcher = hasTestTagPrefix("card-") and hasText(title, substring = true) and hasClickAction()
+        if (title == "蜡笔小新") {
+            for (excluded in listOf("剧场", "劇場", "电影", "電影", "Movie", "movie", "特别篇", "特別篇"))
+                matcher = matcher and !hasText(excluded, substring = true)
+        }
+        return matcher
+    }
     private fun returnDetails() {
         repeat(3) {
             if (displayed("film-detail-list")) return
@@ -281,12 +289,12 @@ class FanTaiYingRealMainUiTest {
                 val journal=HerrinPlaybackDiagnosticJournal.export()
                 for (code in listOf("SOURCE_EMPTY_RESPONSE","SOURCE_AUTH_REQUIRED","SOURCE_ACCESS_DENIED","SOURCE_SESSION_EXPIRED","SOURCE_SEARCH_FAILED"))
                     if (journal.contains("SOURCE $code")) throw Stop(code)
-                compose.onAllNodes(hasTestTagPrefix("card-") and hasText(title) and hasClickAction())
+                compose.onAllNodes(authorizedTitleCard())
                     .fetchSemanticsNodes().isNotEmpty()
             })
             hideIme()
             val openTitle = {
-                val target=compose.onNode(hasTestTagPrefix("card-") and hasText(title) and hasClickAction())
+                val target=compose.onAllNodes(authorizedTitleCard()).onFirst()
                 target.performSemanticsAction(SemanticsActions.RequestFocus)
                 target.assertIsFocused()
                 key(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -299,6 +307,11 @@ class FanTaiYingRealMainUiTest {
                 throw Stop("AUTHORIZED_YEAR_NOT_VERIFIED")
             if (title == "蜡笔小新" && (journalCount("DETAILS_RETURNED") ?: 0) < 3)
                 throw Stop("SERIES_EPISODES_NOT_VERIFIED")
+            if (title == "蜡笔小新") {
+                val metadata = text("detail-metadata")
+                if (!(metadata.contains("动漫") || metadata.contains("剧集"))) throw Stop("TV_ANIMATION_CATEGORY_NOT_VERIFIED")
+                report.put("tv_animation_category_verified",true)
+            }
             report.put("film_identity_verified",true).put("episode_count",journalCount("DETAILS_RETURNED"))
                 .put("details_ui_verified",true)
             val lines=journalCount("DETAIL_LINES_RETURNED")?:0
