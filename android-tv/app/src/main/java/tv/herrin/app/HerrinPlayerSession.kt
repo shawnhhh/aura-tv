@@ -19,6 +19,7 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
     } else null
     val whole get() = original != null
     val isClosed get() = closed
+    @get:androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
     val skipSilenceEnabled get() = original?.skipSilenceEnabled ?: requireNotNull(legacy).player.skipSilenceEnabled
     val player: Player get() = original?.player ?: requireNotNull(legacy).player
     private var closed = false
