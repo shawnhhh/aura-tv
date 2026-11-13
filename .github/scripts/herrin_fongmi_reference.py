@@ -245,8 +245,13 @@ def observe_wanou_default_home():
         scroll_sites(nodes)
     else:
         raise RuntimeError('REFERENCE_DEFAULT_WANOU_NOT_FOUND')
-    home = find(ui(), rid='vodHome')
-    report['default_wanou_setting_verified'] = home is not None and '玩偶' in home.get('text', '')
+    # vodHome is an ImageView in the pinned original layout, not a text label.
+    # Reopen the genuine site chooser and verify SiteAdapter's selected text.
+    click(rid='vodHome',budget=25)
+    nodes = ui()
+    selected = find(nodes, contains='玩偶')
+    report['default_wanou_setting_verified'] = selected is not None and selected.get('selected') == 'true'
+    key(4)
     if not report['default_wanou_setting_verified']:
         raise RuntimeError('REFERENCE_DEFAULT_WANOU_NOT_CONFIRMED')
     key(4)
