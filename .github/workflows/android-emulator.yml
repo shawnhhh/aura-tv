@@ -96,7 +96,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Preserve bounded original-player baseline and lifecycle evidence
-        if: ${{ always() && github.head_ref == 'codex/herrin-p0-live-playback-20261110' }}
+        if: ${{ always() && (github.head_ref || github.ref_name) == 'codex/herrin-p0-live-playback-20261110' }}
         uses: actions/upload-artifact@v4
         with:
           name: p0-player-baseline
