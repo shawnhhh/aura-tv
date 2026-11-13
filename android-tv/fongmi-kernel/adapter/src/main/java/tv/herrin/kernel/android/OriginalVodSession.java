@@ -35,7 +35,6 @@ public final class OriginalVodSession implements AutoCloseable {
     private final VodPlaybackController controller;
     private boolean closed;
     private boolean playbackAllowed;
-    private VodPlayRequest deferredSelection;
     private final Observer<VodDetailResult> detail;
     private final Observer<PlaybackResult<VodPlayRequest>> playback;
     private final Observer<PlaybackResult<VodPlayRequest>> preload;
@@ -58,8 +57,7 @@ public final class OriginalVodSession implements AutoCloseable {
                 check(request.getKey());
                 // HERRIN opens details before the user presses Play. Preserve
                 // original controller selection state, but defer execution.
-                if (!playbackAllowed) deferredSelection = request;
-                else model.playerContent(request);
+                if (playbackAllowed) model.playerContent(request);
             }
             @Override public void resolveContent(VodPlayRequest request, Result result) {
                 check(request.getKey()); model.resolveContent(request, result);
@@ -96,7 +94,15 @@ public final class OriginalVodSession implements AutoCloseable {
         if (closed) throw new IllegalStateException("VOD session closed");
     }
     public void openDetail() { requireOpen(); controller.checkId(); }
-    public void allowPlayback() { requireOpen(); playbackAllowed = true; deferredSelection = null; }
+    public void beginSelection() {
+        requireOpen();
+        playbackAllowed = false;
+        // Cancel old worker results before the original controller changes its
+        // pending request. Keep its detail/history/expanded-episode state.
+        model.cancelContent();
+        model.cancelPreloadContent();
+    }
+    public void allowPlayback() { requireOpen(); playbackAllowed = true; }
     public void acceptDetail(String key, String id, Result result) {
         requireOpen(); controller.onDetailResult(new VodDetailResult(key, id, result));
     }

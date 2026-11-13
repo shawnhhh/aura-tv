@@ -84,6 +84,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private boolean authorizationPending;
     private boolean loaded;
     private Phase phase = Phase.IDLE;
+    private String errorCode = "";
 
     private record MovieEntry(String siteKey, Vod vod) {}
     private record Selection(String siteKey, Vod vod, Flag flag, com.fongmi.android.tv.bean.Episode episode) {}
@@ -254,6 +255,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         // selected; do not issue two Spider playerContent calls on one click.
         // OriginalVodSession still delegates both selection operations to the
         // unmodified upstream VOD controller.
+        vodSession.beginSelection();
         vodSession.selectLine(selected.flag());
         vodSession.allowPlayback();
         vodSession.selectEpisode(selected.episode());
@@ -386,18 +388,18 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         detailObserver = java.util.Objects.requireNonNull(next);
         if (latestDetail != null) detailObserver.accept(latestDetail);
     }
-    private void emit(Phase next, String code) { phase = next; publish(code); }
+    private void emit(Phase next, String code) { phase = next; errorCode = code; publish(code); }
     @Override public State snapshot() {
         requireOpen();
         if (vodSession != null && manager != null)
             vodSession.onProgress(System.currentTimeMillis(), manager.getPosition(), manager.getDuration());
         return new State(request, phase, manager == null ? 0 : manager.getPosition(),
-            manager == null ? 0 : manager.getDuration(), firstFrame, "", selectedEpisodeHandle, authorizationPending);
+            manager == null ? 0 : manager.getDuration(), firstFrame, errorCode, selectedEpisodeHandle, authorizationPending);
     }
     private void publish(String code) {
         if (!closed) {
             try { observer.accept(new State(request, phase, manager == null ? 0 : manager.getPosition(),
-                manager == null ? 0 : manager.getDuration(), firstFrame, code, selectedEpisodeHandle, authorizationPending)); }
+                manager == null ? 0 : manager.getDuration(), firstFrame, code.isEmpty() ? errorCode : code, selectedEpisodeHandle, authorizationPending)); }
             catch (RuntimeException error) { android.util.Log.e("HerrinKernel", "STATE_OBSERVER_FAILED"); }
         }
     }
@@ -443,7 +445,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private void releasePlayer() {
         if (observedPlayer != null) observedPlayer.removeListener(events);
         observedPlayer = null;
-        if (view != null) view.setPlayer(null);
+        if (view != null) { view.setBackendPlayer(null); view.setPlayer(null); }
         if (manager != null) manager.release();
         manager = null;
         firstFrame = false;
@@ -527,7 +529,12 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     }
     @Override public void stopPlaybackForRefresh() { if (manager != null) manager.stop(); }
     @Override public void resetPlaybackForError(String message) { stopPlaybackForRefresh(); emit(Phase.ERROR, "UPSTREAM_VOD_ERROR"); failAdmission(); }
-    @Override public void replay(long position) { requestedPosition = position; if (vodSession != null) vodSession.replay(); }
+    @Override public void replay(long position) {
+        // This is the controller's transport callback, not its replay command.
+        // Re-entering controller.replay() here recurses for ordinary media.
+        ensurePlayer();
+        manager.replay(position);
+    }
     @Override public void seekPlayback(long position) { if (manager != null) manager.seekTo(position); }
     @Override public void setPlaybackEnding(long ending) { if (manager != null) manager.setEnding(ending); }
     @Override public boolean isPlaybackEndingManaged() { return true; }
