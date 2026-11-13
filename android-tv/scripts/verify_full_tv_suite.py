@@ -77,6 +77,7 @@ REQUIRED_CLASSES = (
     "PlaybackTransportTest",
     "PlaybackButtonsTest",
     "PlaybackSessionIsolationTest",
+    "PlaybackDiagnosticsIntegrationTest",
     "MediaDecoderTest",
     "PosterArtworkTest",
 )

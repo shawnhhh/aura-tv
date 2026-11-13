@@ -24,6 +24,7 @@ class PlaybackTestActivity : ComponentActivity() {
     fun switchFixtureInPlace(url: String) { inPlaceFixture = url }
     val createdPlayers = java.util.concurrent.CopyOnWriteArrayList<ExoPlayer>()
     val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
+    val firstFramePlayers = java.util.concurrent.CopyOnWriteArrayList<ExoPlayer>()
     val cueTexts = java.util.concurrent.CopyOnWriteArrayList<String>()
     // Retain a short history: the final empty cue event on ENDED must not erase
     // evidence that Media3 really decoded a WebVTT caption earlier in the clip.
@@ -75,6 +76,7 @@ class PlaybackTestActivity : ComponentActivity() {
                             // state at attachment, including initial BUFFERING.
                             states.add(it.playbackState)
                             it.addListener(object : androidx.media3.common.Player.Listener {
+                                override fun onRenderedFirstFrame() { firstFramePlayers.addIfAbsent(it) }
                                 override fun onPlaybackStateChanged(state: Int) { states.add(state) }
                                 override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
                                     cueTexts.clear()

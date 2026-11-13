@@ -105,6 +105,106 @@ class PlaybackDiagnosticsIntegrationTest {
         }
     }
 
+    /** Capability baseline only: original six-second clips loop at 1x for 60s.
+     * This uses the production AuthorizedPlaybackPanel/HerrinPlayerSession and
+     * real HTTP/TLS, Media3, decoder and Surface. It never counts as a source PASS.
+     */
+    @Test fun productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease() {
+        val report = JSONObject().put("scope", "ORIGINAL_FIXTURE_PLAYER_CAPABILITY_ONLY")
+            .put("real_node_acceptance", false).put("whole_fongmi_kernel", false)
+            .put("sdk", android.os.Build.VERSION.SDK_INT)
+            .put("device_abis", org.json.JSONArray(android.os.Build.SUPPORTED_ABIS.toList()))
+        val results = org.json.JSONArray()
+        report.put("formats", results).put("verdict", "FAIL")
+        try {
+            fixtures { server, requests ->
+                for ((kind, path) in listOf("mp4" to "/mp4", "hls" to "/hls")) {
+                    val row = JSONObject().put("format", kind).put("loop_original_six_second_fixture", true)
+                        .put("verdict", "FAIL")
+                    results.put(row)
+                    var decoder: androidx.media3.exoplayer.ExoPlayer? = null
+                    launch(server, path).use { scenario ->
+                        scenario.onActivity {
+                            decoder = it.player
+                            it.player.repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                            it.player.setPlaybackSpeed(1f)
+                        }
+                        frames(scenario)
+                        scenario.onActivity {
+                            assertTrue("Real first-frame callback must be observed", it.firstFramePlayers.contains(it.player))
+                        }
+                        TvVisibleFrameEvidence.verify(inst, "p0-baseline-$kind-first-frame")
+                        row.put("first_frame", true).put("compositor_frame", true)
+                        val started = android.os.SystemClock.elapsedRealtime()
+                        var lastFrames = -1
+                        var lastProgress = started
+                        var samples = 0
+                        // Wall clock, never the accelerated Compose test clock.
+                        while (android.os.SystemClock.elapsedRealtime() - started < 60_000L) {
+                            scenario.onActivity {
+                                val player = it.player
+                                assertNull("Decoder must not report an error", player.playerError)
+                                assertTrue("Continuous baseline must remain playing", player.isPlaying)
+                                assertEquals(1f, player.playbackParameters.speed, 0f)
+                                player.videoDecoderCounters?.ensureUpdated()
+                                val count = player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                                if (count > lastFrames) {
+                                    lastFrames = count
+                                    lastProgress = android.os.SystemClock.elapsedRealtime()
+                                }
+                                assertTrue("Decoded frames stalled for five seconds",
+                                    android.os.SystemClock.elapsedRealtime() - lastProgress < 5_000L)
+                            }
+                            samples++
+                            Thread.sleep(250)
+                        }
+                        row.put("continuous_wall_ms", android.os.SystemClock.elapsedRealtime() - started)
+                            .put("rendered_frames", lastFrames).put("playing_samples", samples)
+                        assertTrue("Real media must have been requested", requests.contains(path))
+                        if (kind == "hls") assertTrue("Actual HLS segment bytes must be requested", requests.any { it.endsWith(".ts") })
+                        scenario.onActivity { it.player.pause() }
+                        Thread.sleep(350)
+                        var pausedAt = 0L
+                        scenario.onActivity { assertFalse(it.player.isPlaying); pausedAt = it.player.currentPosition }
+                        Thread.sleep(750)
+                        scenario.onActivity { assertTrue("Pause must hold actual position", kotlin.math.abs(it.player.currentPosition-pausedAt) < 150L) }
+                        var beforeResume = 0
+                        scenario.onActivity {
+                            beforeResume = it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                            it.player.play()
+                        }
+                        compose.waitUntil(10_000) {
+                            var resumed = false
+                            scenario.onActivity { resumed = it.player.isPlaying && (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > beforeResume+3 }
+                            resumed
+                        }
+                        row.put("pause_resume", true)
+                        var beforeSeek = 0
+                        scenario.onActivity {
+                            beforeSeek = it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                            it.player.seekTo(3_000L)
+                        }
+                        compose.waitUntil(10_000) {
+                            var decoded = false
+                            scenario.onActivity { decoded = it.player.isPlaying && it.player.currentPosition >= 3_000L &&
+                                (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > beforeSeek+3 }
+                            decoded
+                        }
+                        row.put("seek_and_frames", true)
+                        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                        compose.waitUntil(10_000) { decoder?.isReleased == true }
+                        row.put("released_on_back", true).put("verdict", "PASS")
+                    }
+                    assertTrue("Activity teardown must release the sole player", decoder?.isReleased == true)
+                }
+            }
+            report.put("verdict", "PLAYER_CAPABILITY_PASS_NOT_REAL_NODE_PASS")
+        } finally {
+            java.io.File(inst.targetContext.filesDir, "player-baseline.json").writeText(report.toString(2))
+            android.util.Log.i("HerrinPlaybackBaseline", report.toString())
+        }
+    }
+
     @Test fun tvRemoteDownFocusesControlsWhileLeftRightSeekAndQualityUsesMedia3Size() {
         fixtures { server, _ ->
             launch(server, "/remote").use { scenario ->
