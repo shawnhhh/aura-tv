@@ -30,7 +30,9 @@ class FanTaiYingRealMainUiTest {
     private val inst = InstrumentationRegistry.getInstrumentation()
     private val context = inst.targetContext
     private val warehouse = "http://www.饭太硬.net/tv"
-    private val title = "小城良方"
+    private val title = InstrumentationRegistry.getArguments().getString("herrinFilmTitle", "小城良方")
+        .takeIf { it == "小城良方" || it == "蜡笔小新" } ?: "小城良方"
+    private val expectedYear: Int? = if (title == "小城良方") 2026 else null
     private val stages = JSONArray()
     private lateinit var report: JSONObject
     private var currentStage = "config"
@@ -223,7 +225,7 @@ class FanTaiYingRealMainUiTest {
     private fun node(name: String, fileName: String) {
         val start = SystemClock.elapsedRealtime()
         report = JSONObject().put("node",name).put("warehouse",warehouse).put("authorized_title",title)
-            .put("authorized_year",2026).put("verdict","FAIL_PLAYBACK").put("stages",stages)
+            .put("authorized_year",expectedYear ?: JSONObject.NULL).put("verdict","FAIL_PLAYBACK").put("stages",stages)
             .put("playback_host_scope","PRODUCTION_MAIN_ACTIVITY").put("first_frame",false)
             .put("media3_created",false)
             .put("seek_verified",false).put("details_ui_verified",false).put("plugin_initialized",false)
@@ -293,12 +295,16 @@ class FanTaiYingRealMainUiTest {
                 key(KeyEvent.KEYCODE_BACK); compose.waitUntil(5_000){displayed("search-input")}; openTitle()
             },done={displayed("film-detail-list") && (journalCount("DETAILS_RETURNED")?:0)>=2})
             compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-metadata"))
-            if (!Regex("(?<![0-9])2026(?![0-9])").containsMatchIn(text("detail-metadata"))) throw Stop("AUTHORIZED_YEAR_NOT_VERIFIED")
+            if (expectedYear != null && !Regex("(?<![0-9])${expectedYear}(?![0-9])").containsMatchIn(text("detail-metadata")))
+                throw Stop("AUTHORIZED_YEAR_NOT_VERIFIED")
+            if (title == "蜡笔小新" && (journalCount("DETAILS_RETURNED") ?: 0) < 3)
+                throw Stop("SERIES_EPISODES_NOT_VERIFIED")
             report.put("film_identity_verified",true).put("episode_count",journalCount("DETAILS_RETURNED"))
                 .put("details_ui_verified",true)
             val lines=journalCount("DETAIL_LINES_RETURNED")?:0
             report.put("alternate_line_available",lines>1)
             val operations=mutableListOf("first_episode","replay_same_episode","next_episode","return_first_episode","replay_after_details")
+            if(title=="蜡笔小新")operations.add(2,"third_episode")
             if(lines>1)operations+="alternate_line"
             for ((index,op) in operations.withIndex()) {
                 if(index>0) {
@@ -309,7 +315,7 @@ class FanTaiYingRealMainUiTest {
                     compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("line-spider-1"))
                     activate("line-spider-1")
                 }
-                val number=if(op=="next_episode")2 else 1
+                val number=when(op) { "next_episode" -> 2; "third_episode" -> 3; else -> 1 }
                 val play = { episode(number) }
                 step("first_frame_$index",55_000,"film-detail-list",action=play,retry={returnDetails();play()},done={
                     failProductionGate()
