@@ -130,13 +130,17 @@ class PlaybackDiagnosticsIntegrationTest {
                             it.player.setPlaybackSpeed(1f)
                         }
                         try {
-                            frames(scenario)
+                            compose.waitUntil(30_000) {
+                                var rendered = false
+                                scenario.onActivity { rendered = it.renderedVideoFrames() > 3 }
+                                rendered
+                            }
                         } catch (failure: Throwable) {
                             scenario.onActivity {
                                 row.put("first_frame_error_code", it.player.playerError?.errorCodeName ?: "NONE")
                                     .put("first_frame_state", it.player.playbackState)
                                     .put("first_frame_play_when_ready", it.player.playWhenReady)
-                                    .put("first_frame_rendered", it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0)
+                                    .put("first_frame_rendered", it.renderedVideoFrames())
                             }
                             row.put("http_requests", requests.count { it == path })
                             throw failure
@@ -157,8 +161,7 @@ class PlaybackDiagnosticsIntegrationTest {
                                 assertNull("Decoder must not report an error", player.playerError)
                                 assertTrue("Continuous baseline must remain playing", player.isPlaying)
                                 assertEquals(1f, player.playbackParameters.speed, 0f)
-                                player.videoDecoderCounters?.ensureUpdated()
-                                val count = player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                                val count = it.renderedVideoFrames()
                                 if (count > lastFrames) {
                                     lastFrames = count
                                     lastProgress = android.os.SystemClock.elapsedRealtime()
@@ -181,12 +184,12 @@ class PlaybackDiagnosticsIntegrationTest {
                         scenario.onActivity { assertTrue("Pause must hold actual position", kotlin.math.abs(it.player.currentPosition-pausedAt) < 150L) }
                         var beforeResume = 0
                         scenario.onActivity {
-                            beforeResume = it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                            beforeResume = it.renderedVideoFrames()
                             it.player.play()
                         }
                         compose.waitUntil(10_000) {
                             var resumed = false
-                            scenario.onActivity { resumed = it.player.isPlaying && (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > beforeResume+3 }
+                            scenario.onActivity { resumed = it.player.isPlaying && it.renderedVideoFrames() > beforeResume+3 }
                             resumed
                         }
                         row.put("pause_resume", true)
@@ -201,13 +204,13 @@ class PlaybackDiagnosticsIntegrationTest {
                                         seekAcknowledgedAt = newPosition.positionMs
                                 }
                             })
-                            beforeSeek = it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0
+                            beforeSeek = it.renderedVideoFrames()
                             it.player.seekTo(3_000L)
                         }
                         compose.waitUntil(10_000) {
                             var decoded = false
                             scenario.onActivity { decoded = seekAcknowledgedAt == 3_000L && it.player.isPlaying && it.player.currentPosition >= 3_000L &&
-                                (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > beforeSeek+3 }
+                                it.renderedVideoFrames() > beforeSeek+3 }
                             decoded
                         }
                         row.put("seek_and_frames", true).put("seek_acknowledged_position_ms", seekAcknowledgedAt)

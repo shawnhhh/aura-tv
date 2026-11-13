@@ -25,6 +25,16 @@ class PlaybackTestActivity : ComponentActivity() {
     val createdPlayers = java.util.concurrent.CopyOnWriteArrayList<ExoPlayer>()
     val states = java.util.concurrent.CopyOnWriteArrayList<Int>()
     val firstFramePlayers = java.util.concurrent.CopyOnWriteArrayList<ExoPlayer>()
+    private val videoCounters = java.util.IdentityHashMap<ExoPlayer,
+        java.util.concurrent.CopyOnWriteArrayList<androidx.media3.exoplayer.DecoderCounters>>()
+    /** Prewarming/repeat can replace ExoPlayer's single counters reference
+     * before the active renderer stops. Count actual output from every observed
+     * renderer belonging to this player, never from a previous player session.
+     */
+    fun renderedVideoFrames(): Int = videoCounters[player].orEmpty().sumOf {
+        it.ensureUpdated()
+        it.renderedOutputBufferCount
+    }
     val cueTexts = java.util.concurrent.CopyOnWriteArrayList<String>()
     // Retain a short history: the final empty cue event on ENDED must not erase
     // evidence that Media3 really decoded a WebVTT caption earlier in the clip.
@@ -75,6 +85,16 @@ class PlaybackTestActivity : ComponentActivity() {
                             // Observe each actual player once and retain its real
                             // state at attachment, including initial BUFFERING.
                             states.add(it.playbackState)
+                            val owner = it
+                            val counters = java.util.concurrent.CopyOnWriteArrayList<androidx.media3.exoplayer.DecoderCounters>()
+                            videoCounters[owner] = counters
+                            owner.videoDecoderCounters?.let(counters::addIfAbsent)
+                            owner.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                                override fun onVideoEnabled(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                                    decoderCounters: androidx.media3.exoplayer.DecoderCounters) {
+                                    counters.addIfAbsent(decoderCounters)
+                                }
+                            })
                             it.addListener(object : androidx.media3.common.Player.Listener {
                                 override fun onRenderedFirstFrame() { firstFramePlayers.addIfAbsent(it) }
                                 override fun onPlaybackStateChanged(state: Int) { states.add(state) }
