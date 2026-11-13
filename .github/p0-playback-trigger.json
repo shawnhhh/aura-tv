@@ -1,0 +1,6 @@
+{
+  "attempt": "20261113-ci-channel-1",
+  "reason": "Independent build/device jobs and proven M476 phase event fix; execute both real MainActivity nodes",
+  "nodes": ["cheese", "wanou"],
+  "abi": "armeabi-v7a"
+}

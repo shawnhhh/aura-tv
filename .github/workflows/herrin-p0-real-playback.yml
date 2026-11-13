@@ -1,41 +1,126 @@
-name: HERRIN Legacy Playback Diagnostics (manual only)
+name: HERRIN P0 Real Playback
 on:
-  # Whole-core migration supersedes the automatic old-core repair loop.
-  # Retained for explicit historical diagnostics; never a new-core acceptance.
+  push:
+    branches: ['codex/herrin-p0-live-playback-20261110']
+    paths:
+      - '.github/p0-playback-trigger.json'
+      - '.github/workflows/herrin-p0-real-playback.yml'
   workflow_dispatch:
     inputs:
       node:
+        description: 'Real nodes to execute through production MainActivity'
         type: choice
-        options: [cheese, wanou]
-        default: cheese
+        options: [both, cheese, wanou]
+        default: both
       abi:
         type: choice
-        options: [arm64-v8a, armeabi-v7a]
-        default: arm64-v8a
-      production_http_first:
-        type: boolean
-        default: false
+        options: [armeabi-v7a, arm64-v8a]
+        default: armeabi-v7a
 permissions:
   contents: read
 concurrency:
-  group: herrin-p0-live-${{ github.ref }}-${{ (contains(github.event.head_commit.message, '[tmdb]') && 'tmdb') || inputs.node || (contains(github.event.head_commit.message, '[wanou]') && 'wanou' || 'cheese') }}
+  group: herrin-p0-live-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  repair:
-    if: ${{ !contains(github.event.head_commit.message, '[tmdb]') }}
+  # A has no dependency relationship with B/C: a red regression must remain red
+  # while executable diagnostics still run and preserve their own real results.
+  validation:
+    name: A - Full JVM, lint and host build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - run: bash .github/scripts/start_smb_fixture.sh
+      - name: Evidence collector and existing logcat classifier tests
+        run: |
+          python3 -m unittest discover -s android-tv/scripts -p 'test_live_ci_checkpoint.py' -v
+          python3 -m unittest discover -s android-tv/scripts -p 'test_live_spider_error_shapes.py' -v
+      - name: Targeted M476 regression with unchanged network failure assertions
+        working-directory: android-tv
+        run: gradle --build-cache --max-workers=2 :app:testDebugUnitTest --tests tv.herrin.app.M476RemoteMediaProbeTest
+      - name: Complete JVM, contract, lint and Debug (even after targeted failure)
+        if: ${{ !cancelled() }}
+        working-directory: android-tv
+        run: gradle --continue --build-cache --max-workers=2 :kernel-contract:check :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p0-full-validation
+          path: |
+            android-tv/app/build/test-results/
+            android-tv/app/build/reports/
+          retention-days: 30
+
+  build:
+    name: B - Diagnostic APK and AndroidTest
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
-      LIVE_NODES: ${{ contains(github.event.head_commit.message, '[both-nodes]') && 'both' || '' }}
-      LIVE_NODE: ${{ inputs.node || (contains(github.event.head_commit.message, '[wanou]') && 'wanou' || 'cheese') }}
+      LIVE_INSTALL_ABI: ${{ inputs.abi || 'armeabi-v7a' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install declared Android toolchain
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018'
+      - name: Build existing real-node diagnostic packages, no JVM prerequisite
+        run: |
+          mkdir -p "diagnostic-apks/$LIVE_INSTALL_ABI" evidence
+          java -version
+          gradle --version
+          sdkmanager --list_installed > evidence/android-toolchain.txt
+          bash android-tv/scripts/build_live_arm_canary.sh
+          python3 android-tv/scripts/build_m467_spider_fixture.py
+          cd android-tv
+          gradle --build-cache --max-workers=2 -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi="$LIVE_INSTALL_ABI" :app:assembleDebug :app:assembleDebugAndroidTest
+          cp app/build/outputs/apk/debug/app-debug.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
+      - uses: actions/upload-artifact@v4
+        with:
+          # Internal diagnostic transfer only; never an acceptance release.
+          name: p0-internal-diagnostic-apks
+          path: diagnostic-apks/
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p0-toolchain
+          path: evidence/
+          retention-days: 30
+
+  nodes:
+    name: C - Real ${{ matrix.node }} on Android
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(inputs.node == 'cheese' && '["cheese"]' || inputs.node == 'wanou' && '["wanou"]' || '["cheese","wanou"]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      LIVE_NODE: ${{ matrix.node }}
       ARM_PACKAGE: 'true'
-      LIVE_INSTALL_ABI: ${{ inputs.abi || (contains(github.event.head_commit.message, '[armv7]') && 'armeabi-v7a' || 'arm64-v8a') }}
+      LIVE_INSTALL_ABI: ${{ inputs.abi || 'armeabi-v7a' }}
       LIVE_PREBUILT_APKS: diagnostic-apks
       LIVE_METHOD_METADATA: 'false'
       LIVE_REQUIRE_ACCEPTANCE: 'true'
-      EMPTY_HOME_UI_TEST: ${{ contains(github.event.head_commit.message, '[empty-home]') && 'true' || 'false' }}
-      LIVE_PRODUCTION_HTTP_FIRST: ${{ (inputs.production_http_first || contains(github.event.head_commit.message, '[http-first]')) && 'true' || 'false' }}
-      LIVE_MAIN_UI: ${{ contains(github.event.head_commit.message, '[main-ui]') && 'true' || 'false' }}
+      LIVE_MAIN_UI: 'true'
       LIVE_DISPOSABLE_DEVICE: 'true'
     steps:
       - uses: actions/checkout@v4
@@ -43,29 +128,20 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - uses: actions/download-artifact@v4
         with:
-          gradle-version: '8.9'
-          cache-read-only: false
-      - name: Targeted proxy unit tests and diagnostic instrumentation build
-        shell: bash
+          name: p0-internal-diagnostic-apks
+          path: diagnostic-apks
+      - name: Enable and verify Linux KVM
         run: |
-          mkdir -p evidence "diagnostic-apks/$LIVE_INSTALL_ABI"
-          python3 -m unittest discover -s android-tv/scripts -p 'test_live_spider_error_shapes.py'
-          bash android-tv/scripts/build_live_arm_canary.sh
-          python3 android-tv/scripts/build_m467_spider_fixture.py
-          cd android-tv
-          gradle --build-cache :app:testDebugUnitTest --tests 'tv.herrin.app.nativeplayback.NativeFongMiHlsTest' --tests 'tv.herrin.app.nativeplayback.NativeFongMiProxyTest' --tests 'tv.herrin.app.SpiderProxyDiagnosticsTest' --tests 'tv.herrin.app.TvBoxSpiderBridgeTest' --tests 'tv.herrin.app.M476RemoteMediaProbeTest' --tests 'tv.herrin.app.SpiderManifestReferenceTest' --tests 'tv.herrin.app.SpiderRuntimeCompatTest' --tests 'tv.herrin.app.SelectedSpiderSearchStateTest' --tests 'tv.herrin.app.WarehouseHttpEvidenceTest' --tests 'tv.herrin.app.SpiderAuthorizationProtocolTest'
-          gradle --build-cache -PherrinLiveSourceTest=true -PherrinArmTranslationTest=true -PherrinLiveAbi="$LIVE_INSTALL_ABI" :app:assembleDebug :app:assembleDebugAndroidTest
-          cp app/build/outputs/apk/debug/app-debug.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
-          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk "../diagnostic-apks/$LIVE_INSTALL_ABI/"
-          cp app/build/test-results/testDebugUnitTest/TEST-*.xml ../evidence/
-      - name: Enable KVM
-        run: |
+          mkdir -p evidence
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Real selected Spider and production playback chain
+          test -r /dev/kvm && test -w /dev/kvm
+          touch evidence/kvm-ready
+      - name: Boot emulator, install APKs and run real MainActivity node
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -75,52 +151,51 @@ jobs:
           ram-size: 3072M
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash android-tv/scripts/run_p0_selected_nodes.sh
+          script: bash android-tv/scripts/run_live_nodes.sh
+      - name: Persist environment checkpoint even when boot or installation failed
+        if: always()
+        run: python3 android-tv/scripts/live_ci_checkpoint.py --directory evidence --node "$LIVE_NODE"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p0-real-playback-${{ env.LIVE_NODES || env.LIVE_NODE }}-diagnostics
+          name: p0-node-${{ matrix.node }}
           path: evidence/
+          if-no-files-found: error
           retention-days: 30
 
-  tmdb-regression:
-    if: contains(github.event.head_commit.message, '[tmdb]')
+  # Preserve the existing complete TV/lifecycle suite, independently of A/B/C.
+  tv-regression:
+    name: Full Android TV and playback lifecycle regression
+    uses: ./.github/workflows/android-emulator.yml
+
+  acceptance:
+    name: D - Evidence and real playback acceptance
+    if: always()
+    needs: [validation, build, nodes, tv-regression]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    env:
+      EXPECTED_NODE: ${{ inputs.node || 'both' }}
+      VALIDATION_RESULT: ${{ needs.validation.result }}
+      BUILD_RESULT: ${{ needs.build.result }}
+      NODES_RESULT: ${{ needs.nodes.result }}
+      TV_RESULT: ${{ needs.tv-regression.result }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/download-artifact@v4
         with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+          pattern: p0-node-*
+          path: collected
+      - uses: actions/download-artifact@v4
+        if: always()
         with:
-          gradle-version: '8.9'
-          cache-read-only: false
-      - name: Build diagnostic TV test package
-        run: |
-          python3 android-tv/scripts/build_m467_spider_fixture.py
-          cd android-tv
-          gradle --build-cache :app:testDebugUnitTest --tests 'tv.herrin.app.TmdbBrowseRepositoryTest'
-          gradle --build-cache :app:assembleDebug :app:assembleDebugAndroidTest
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Recheck original TMDB refresh assertion on TV
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: android-tv
-          arch: x86
-          profile: tv_1080p
-          ram-size: 3072M
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash android-tv/scripts/run_tmdb_refresh.sh
+          name: p0-toolchain
+          path: collected/toolchain
+      - name: Save durable checkpoint before enforcing acceptance
+        if: always()
+        run: python3 android-tv/scripts/live_ci_checkpoint.py --aggregate collected --node "$EXPECTED_NODE"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p0-tmdb-refresh-diagnostics
-          path: evidence/
+          name: p0-environment-checkpoint
+          path: collected/
           retention-days: 30

@@ -20,6 +20,8 @@ collect() {
     error_summary="evidence/spider-error-shapes-${LIVE_NODE:-all}.json"
     python3 android-tv/scripts/live_spider_error_shapes.py > "$error_summary" || true
     cat "$error_summary"
+    # Retain sanitized logcat classifications, never private provider messages.
+    cat "$crash_summary" "$error_summary" > "evidence/logcat-redacted-${LIVE_NODE:-all}.txt"
     cat evidence/system-abilist.txt evidence/native-bridge.txt evidence/bridge-files.txt evidence/package-abi.txt 2>/dev/null || true
     python3 - <<'SUMMARY'
 import json, os
@@ -46,6 +48,10 @@ SUMMARY
     exit "$result"
 }
 trap collect EXIT
+# Mark only stages confirmed by actual Android commands on this invocation.
+adb wait-for-device
+test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
+touch evidence/emulator-booted
 adb shell getprop ro.product.cpu.abilist > evidence/system-abilist.txt
 adb shell getprop ro.dalvik.vm.native.bridge > evidence/native-bridge.txt
 adb shell getprop ro.dalvik.vm.isa.arm >> evidence/native-bridge.txt
@@ -79,6 +85,7 @@ else
     adb install -r "$apk_dir/debug/app-debug.apk" | tee evidence/install.txt
     adb install -r "$apk_dir/androidTest/debug/app-debug-androidTest.apk"
 fi
+touch evidence/apks-installed
 adb shell dumpsys package tv.herrin.app | grep -E 'primaryCpuAbi|secondaryCpuAbi|nativeLibraryDir' > evidence/package-abi.txt || true
 if [[ -n "${LIVE_INSTALL_ABI:-}" ]]; then
     grep -F "primaryCpuAbi=$LIVE_INSTALL_ABI" evidence/package-abi.txt
@@ -89,6 +96,7 @@ if [[ "${LIVE_NODE:-}" == cheese ]]; then test_selector+='#cheeseRealNode'; fi
 if [[ "${LIVE_NODE:-}" == wanou ]]; then test_selector+='#wanouGegeRealNode'; fi
 # Disposable CI emulator only: scope fixed error classifications to this invocation.
 adb logcat -c
+touch evidence/instrumentation-started
 adb shell am instrument "${instrument_args[@]}" -w -r -e class "$test_selector" tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/instrumentation.txt
 python3 - <<'PY'
 import json, os
