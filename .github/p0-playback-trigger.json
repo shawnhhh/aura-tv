@@ -1,6 +1,6 @@
 {
-  "attempt": "20261113-shinchan-real-tv-candidate-2",
-  "reason": "Previous real candidate has only two episodes. Inspect bounded real TV details, require an actual three-episode TV title/category, run only cheese/Shinchan; do not resend the known Xiaocheng upstream 403.",
+  "attempt": "20261113-shinchan-real-tv-candidate-3",
+  "reason": "Actual first item is theatrical title with two entries. Use existing LazyRow scroll semantics to locate a real TV-season title; returning search header may be offscreen, so require existing search and rail rather than visible header. Only cheese/Shinchan.",
   "nodes": [
     "cheese"
   ],
