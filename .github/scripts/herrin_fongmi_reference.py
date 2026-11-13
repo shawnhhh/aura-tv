@@ -112,6 +112,15 @@ def tap_node(node):
     adb('shell', 'input', 'tap', str((bounds[0]+bounds[2])//2), str((bounds[1]+bounds[3])//2))
 
 
+def activate_focused(node):
+    target = node
+    while target.get('clickable') != 'true' and target in parents:
+        target = parents[target]
+    if not any(n.get('focused') == 'true' for n in target.iter()):
+        raise RuntimeError('REFERENCE_TARGET_NOT_FOCUSED_AFTER_TOUCH')
+    key(23)
+
+
 def search_mode():
     nodes = ui()
     button = find(nodes, rid='search')
@@ -120,6 +129,11 @@ def search_mode():
     if button.get('selected') != 'true':
         tap_node(button)
     button = find(ui(), rid='search')
+    if button is not None and button.get('selected') != 'true':
+        # Actual run a91f84cf: the first touch focused this leanback button
+        # without toggling it. Activate ONLY after observing that exact state.
+        activate_focused(button)
+        button = find(ui(), rid='search')
     if button is None or button.get('selected') != 'true':
         raise RuntimeError('REFERENCE_SEARCH_MODE_NOT_SELECTED')
 
@@ -166,7 +180,11 @@ def scan_sites(enable_targets=False):
             wanted = any(target in name for target in TARGETS)
             if enable_targets and wanted and not checked:
                 tap_node(node)
-                current = [(n, c) for n, c, _ in site_rows(ui()) if n == name]
+                current_rows = [(n, c, v) for n, c, v in site_rows(ui()) if n == name]
+                if len(current_rows) == 1 and not current_rows[0][1]:
+                    activate_focused(current_rows[0][2])
+                    current_rows = [(n, c, v) for n, c, v in site_rows(ui()) if n == name]
+                current = [(n, c) for n, c, _ in current_rows]
                 if current != [(name, True)]:
                     raise RuntimeError('REFERENCE_TARGET_CHECK_NOT_CONFIRMED')
                 found[name] = True
@@ -189,6 +207,12 @@ def restrict_search():
     if cancel is None:
         raise RuntimeError('REFERENCE_CANCEL_ALL_MISSING')
     tap_node(cancel)
+    nodes = ui()
+    if any(checked for _, checked, _ in site_rows(nodes)):
+        cancel = find(nodes, rid='cancel')
+        if cancel is None:
+            raise RuntimeError('REFERENCE_CANCEL_ALL_MISSING')
+        activate_focused(cancel)
     disabled = scan_sites()
     if len(disabled) <= 2 or any(disabled.values()):
         raise RuntimeError('REFERENCE_CANCEL_ALL_NOT_CONFIRMED')

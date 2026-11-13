@@ -26,9 +26,16 @@ class ReferenceUiTest(unittest.TestCase):
 
     def test_unconfirmed_search_mode_fails_closed(self):
         node = ET.Element('node', {'resource-id': ref.PACKAGE+':id/search', 'selected': 'false'})
-        with patch.object(ref, 'ui', return_value=[node]), patch.object(ref, 'tap_node'):
+        with patch.object(ref, 'ui', return_value=[node]), patch.object(ref, 'tap_node'), patch.object(ref, 'activate_focused'):
             with self.assertRaisesRegex(RuntimeError, 'SEARCH_MODE_NOT_SELECTED'):
                 ref.search_mode()
+
+    def test_focus_only_touch_gets_one_confirmed_remote_activation(self):
+        focused = ET.Element('node', {'resource-id': ref.PACKAGE+':id/search', 'selected': 'false', 'focused': 'true', 'clickable': 'true'})
+        selected = ET.Element('node', {'resource-id': ref.PACKAGE+':id/search', 'selected': 'true'})
+        with patch.object(ref, 'ui', side_effect=[[focused], [focused], [selected]]), patch.object(ref, 'tap_node'), patch.object(ref, 'key') as key:
+            ref.search_mode()
+        key.assert_called_once_with(23)
 
     def test_scope_not_confirmed_when_an_extra_site_remains_enabled(self):
         button = ET.Element('node', {'resource-id': ref.PACKAGE+':id/cancel'})
