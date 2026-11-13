@@ -31,6 +31,7 @@ on:
         default: false
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: herrin-p0-live-${{ github.ref }}-${{ github.sha }}
   # Different repaired SHAs keep independent evidence; do not cancel an
@@ -90,6 +91,35 @@ jobs:
       LIVE_INSTALL_ABI: ${{ inputs.abi || (contains(github.event.head_commit.message, '[arm64]') && 'arm64-v8a') || 'armeabi-v7a' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Read the existing failed baseline artifact without another media run
+        if: contains(github.event.head_commit.message, '[baseline-evidence]')
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 43440288111
+          name: HERRIN-emulator-evidence
+          path: prior-tv-evidence
+      - name: Print only the baseline window and original fixture report
+        if: contains(github.event.head_commit.message, '[baseline-evidence]')
+        shell: python
+        run: |
+          import json, re
+          from pathlib import Path
+          log = next(Path('prior-tv-evidence').rglob('logcat.txt')).read_text(errors='replace').splitlines()
+          start = next((i for i, line in enumerate(log) if 'started: productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease' in line), None)
+          end = next((i for i, line in enumerate(log) if start is not None and i > start and 'finished: productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease' in line), len(log))
+          print('ORIGINAL_BASELINE_LOG_WINDOW_FOUND=' + str(start is not None))
+          if start is None:
+              raise SystemExit('BASELINE_WINDOW_UNAVAILABLE')
+          window = log[start:end+1]
+          for line in window:
+              if 'HerrinPlaybackBaseline' in line:
+                  print(line[line.index('HerrinPlaybackBaseline'):])
+          relevant = [line for line in window if re.search(r'ExoPlayerImplInternal|Caused by:|Exception|Error|at tv.herrin|at androidx.media3', line)]
+          for line in relevant[:90]:
+              line = re.sub(r'https?://[^\s<>]+', '[URL_REDACTED]', line)
+              line = re.sub(r'(?i)(cookie|authorization|token|password|secret)\s*[:=].*', '[CREDENTIAL_REDACTED]', line)
+              print(line[:600])
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
