@@ -1,10 +1,10 @@
 {
-  "attempt": "20261113-shinchan-real-tv-candidate-3",
-  "reason": "Actual first item is theatrical title with two entries. Use existing LazyRow scroll semantics to locate a real TV-season title; returning search header may be offscreen, so require existing search and rail rather than visible header. Only cheese/Shinchan.",
+  "attempt": "20261113-shinchan-current-jar-arm64-1",
+  "reason": "Actual T4Guard TV S9 has 93 episodes; first media callback crashed with SIGSEGV in libndk_translation on ARMv7. One standard ARM64-package comparison for current 6d10a60 JAR and same first episode. Do not repeat Xiaocheng 403.",
   "nodes": [
     "cheese"
   ],
-  "abi": "armeabi-v7a",
+  "abi": "arm64-v8a",
   "film_title": "蜡笔小新",
   "episodes": [
     1,
