@@ -189,6 +189,12 @@ class FanTaiYingRealMainUiTest {
             activate("episode-$number"); return
         }
         val grouped = exists("group-season-browser")
+        val selectedSeason = report.optInt("selected_source_season",0)
+        if (grouped && selectedSeason > 0) {
+            activate("group-season-tab-$selectedSeason")
+            compose.waitUntil(5_000) { text("group-season-label").startsWith("第${selectedSeason}季") }
+            report.put("selected_season_label",text("group-season-label"))
+        }
         val row = if(grouped) "group-season-cards" else "season-cards"
         val prefix = if(grouped) "group-season-card-" else "season-card-"
         report.put("episode_ui_kind",if(grouped) "GROUPED_SEASON" else "SOURCE_SEASON")
@@ -231,10 +237,10 @@ class FanTaiYingRealMainUiTest {
             val name = candidate.config.getOrElse(SemanticsProperties.Text) { emptyList() }
                 .firstOrNull { it.text.contains(title) }?.text.orEmpty()
             seen += tag
-            val before = HerrinPlaybackDiagnosticJournal.export().lines().count { it.contains("DETAILS_EPISODES_RETURNED") }
+            val before = HerrinPlaybackDiagnosticJournal.export().lines().count { it.contains("SPIDER DETAILS_RETURNED COUNT=") }
             step("tv_candidate_details_$attempt",45_000,"film-detail-list",action={activate(tag)},done={
                 displayed("film-detail-list") && HerrinPlaybackDiagnosticJournal.export().lines()
-                    .count { it.contains("DETAILS_EPISODES_RETURNED") } > before
+                    .count { it.contains("SPIDER DETAILS_RETURNED COUNT=") } > before
             })
             compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-metadata"))
             val count = journalCount("DETAILS_RETURNED") ?: 0
@@ -245,6 +251,7 @@ class FanTaiYingRealMainUiTest {
                 .put("tv_title_verified",tvTitle).put("tv_category_verified",tvCategory))
             if (count >= 3 && tvTitle && tvCategory) {
                 report.put("selected_source_title",name.take(120)).put("tv_animation_title_verified",true)
+                ShowGroupMatcher.titleParts(name).second?.let { report.put("selected_source_season",it) }
                 return
             }
             key(KeyEvent.KEYCODE_BACK)
