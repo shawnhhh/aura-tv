@@ -65,6 +65,21 @@ crash buffer记录，保留相对PC、实际共享库basename、Build ID、数�
 限定本次开始后的`:spider`进程退出原因/状态/时间。未公开的完整栈标记证据缺口，不因未读而报“无崩溃”。
 有对应Build ID的合法ELF/调试符号后，才可用NDK llvm-symbolizer/ndk-stack定位；没有时不得猜函数。
 
+同一一次性原生ARM64设备的原版参照安装（未改包/未重签名）：
+
+```sh
+curl --fail --location --proto '=https' \
+  https://github.com/FongMi/Release/releases/download/5.8.7/leanback-arm64_v8a.apk -o official-fongmi-5.8.7.apk
+printf '%s\n' 'cda5776ba2ee6f7dfdcd3d7c1a13095ba8672b9892d6fb9e1ba38f993ad66f3a  official-fongmi-5.8.7.apk' | sha256sum --check
+adb -s DEVICE_SERIAL install --abi arm64-v8a -r official-fongmi-5.8.7.apk
+```
+
+设备端用原版公开设置界面导入同一饭太硬仓库，只勾选当前节点，确认实际第九季/真实集数；
+按同一网络和合法授权分别观察首帧/60秒/控制。不要在日常FongMi安装上替换配置。
+现有原版CI脚本只适用于一次性模拟器，**不要直接在日常电视运行**：它会读取模拟器crash buffer。
+两个应用的版本、ABI、配置声明JAR MD5和授权状态必须分别记录；不同快照不当严格A/B。
+安装、启动、搜索、Media3 READY或工作流Success都不是原版出帧证明。
+
 原创素材播放器基准位于既有`PlaybackDiagnosticsIntegrationTest`，使用生产
 AuthorizedPlaybackPanel/HerrinPlayerSession和真实Media3。六秒原创MP4/HLS按1x循环，各观察
 60秒真实墙钟、持续解码、实际HTTP读取、画面、暂停/Seek/释放，结果在
