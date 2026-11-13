@@ -47,6 +47,13 @@ class ReferenceUiTest(unittest.TestCase):
         tap.assert_not_called()
         key.assert_not_called()
 
+    def test_settings_site_picker_uses_real_click_target_once(self):
+        node = ET.Element('node', {'resource-id': ref.PACKAGE+':id/vodHome', 'focused': 'true'})
+        with patch.object(ref, 'ui', return_value=[node]), patch.object(ref, 'tap_node') as tap, patch.object(ref, 'key') as key:
+            ref.click(rid='vodHome')
+        tap.assert_called_once_with(node)
+        key.assert_not_called()
+
     def test_unconfirmed_search_mode_fails_closed(self):
         node = ET.Element('node', {'resource-id': ref.PACKAGE+':id/search', 'selected': 'false'})
         with patch.object(ref, 'ui', return_value=[node]), patch.object(ref, 'tap_node'), patch.object(ref, 'activate_focused'):

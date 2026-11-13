@@ -103,6 +103,12 @@ def click(*, rid=None, texts=(), contains=None, scroll=False, budget=18):
         if auth(nodes): raise RuntimeError('REFERENCE_AUTH_UI_REQUIRES_PERSONAL_ACTION_UNVERIFIED')
         n = find(nodes, rid=rid, texts=texts, contains=contains)
         if n is not None:
+            if rid == 'vodHome':
+                # Two API35 runs retained SettingActivity/vodHome focused
+                # after DPAD_CENTER, even after waiting for SiteDialog. Use
+                # this compiled click target's actual bounds exactly once.
+                tap_node(n)
+                return
             # Use the real TV/keyboard focus path. Touch coordinates on leanback
             # cards/buttons may only focus them; never double-activate toggles.
             target=n
