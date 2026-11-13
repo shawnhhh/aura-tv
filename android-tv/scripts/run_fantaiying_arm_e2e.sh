@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Explicit, on-device-only live provider verification; not part of ordinary CI.
 set -euo pipefail
+if [[ "${1:-}" == --p0-native ]]; then
+  shift
+  exec python3 "$(dirname "$0")/live_native_device.py" "$@"
+fi
 APP_APK="${1:-app/build/outputs/apk/debug/app-debug.apk}"
 TEST_APK="${2:-app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk}"
 SITE_KEY="${3:-YGP}"

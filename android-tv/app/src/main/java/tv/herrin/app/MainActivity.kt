@@ -629,7 +629,9 @@ private fun Herrin(startup: StartupPresentation) {
     var liveUrlDraft by rememberSaveable { mutableStateOf(prefs.livePlaylistUrl) }
     var epgUrlDraft by rememberSaveable { mutableStateOf(prefs.liveEpgUrl) }
     var importProfilesDraft by rememberSaveable { mutableStateOf("") }
-    val tvBoxRepository = remember(context) { TvBoxConfigRepository(context) }
+    val tvBoxRepository = remember(context) { TvBoxConfigRepository(context, onImportHttpStatus = {
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_HTTP_RESPONSE", "STATUS=$it")
+    }) }
     val tvBoxVodRepo = remember { TvBoxVodRepository() }
     val spiderBridge = remember(context) { TvBoxSpiderBridge(context) }
     DisposableEffect(spiderBridge) { onDispose { spiderBridge.close() } }
@@ -657,6 +659,25 @@ private fun Herrin(startup: StartupPresentation) {
     // HTTP metadata/playlist access is enabled by default; plugin execution is
     // limited to a user-applied source or a previously pinned JAR fingerprint.
     var tvBoxAllowHttp by remember { mutableStateOf(true) }
+    SideEffect { spiderBridge.configureKernelWarehouse(prefs.tvBoxWarehouseUrl, tvBoxAllowHttp) }
+    val kernelPages = remember(context) { HerrinKernelRuntime.find()?.pages }
+    LaunchedEffect(kernelPages?.revision) {
+        if (kernelPages != null) {
+            providerFilms = providerFilms?.map { item ->
+                kernelPages.latest(item)?.let { FilmMetadataEnrichment.mergeSourceDetails(item, it) } ?: item
+            }
+            tmdbState.tmdbResolved.toMap().forEach { (id, metadata) ->
+                kernelPages.latest(metadata)?.let { fresh ->
+                    val source = fresh.spiderOrigin?.site
+                    if (source == spiderBridge.approvedActiveSiteKey()) {
+                        tmdbState.tmdbResolved[id] = FilmMetadataEnrichment.mergeSourceDetails(metadata, fresh)
+                        if (tmdbState.tmdbPlaybackRoutes.sourceFilm(id) != fresh)
+                            tmdbState.tmdbPlaybackRoutes.spider(id, requireNotNull(source), fresh)
+                    }
+                }
+            }
+        }
+    }
     var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
     var tvBoxLoadEpoch by remember { zeroIntState() }
@@ -753,6 +774,7 @@ private fun Herrin(startup: StartupPresentation) {
             launch(Dispatchers.IO) { tvBoxRepository.loadUserWarehouse(address) }
         }
         if (settingsTvBoxOnly && tvBoxSingle != null) {
+            spiderBridge.configureKernelWarehouse(address, tvBoxAllowHttp)
             // Import must activate an actual catalog, not just display 49 names
             // under Settings while the home page stays on the demo collection.
             val config = tvBoxSingle!!
@@ -1022,9 +1044,12 @@ private fun Herrin(startup: StartupPresentation) {
     }
     // Media rekeys (refresh, episode and line) keep their active source. Only
     // leaving the player releases its Spider resources and next play rehydrates.
-    DisposableEffect(screen == "player", spiderActive) {
+    val kernelPlaybackSceneLease = spiderBridge.kernelPlaybackLease()
+    DisposableEffect(screen == "player", spiderActive, kernelPlaybackSceneLease) {
         val ownsPlayback = screen == "player" && spiderActive
-        onDispose { if (ownsPlayback) spiderBridge.releasePlayback() }
+        // Retire only the session that originally entered this playback scene.
+        // A later site/warehouse load can coexist with a delayed old disposal.
+        onDispose { if (ownsPlayback) spiderBridge.releasePlayback(kernelPlaybackSceneLease) }
     }
 
     LaunchedEffect(screen, filmId) {
@@ -1064,6 +1089,13 @@ private fun Herrin(startup: StartupPresentation) {
     var showSearchAdvancedFilters by rememberSaveable { mutableStateOf(false) }
     var episode by rememberSaveable { mutableIntStateOf(1) }
     var line by rememberSaveable { mutableStateOf("演示线路 A") }
+    LaunchedEffect(kernelPages?.selectedCoordinate) {
+        val coordinate = kernelPages?.selectedCoordinate
+        if (coordinate != null && screen == "player") {
+            episode = coordinate.first
+            line = coordinate.second
+        }
+    }
     val playbackDiagnosticId = remember(screen, filmId, episode, line, playerRetryEpoch) { PlaybackDiagnosticSession.newId() }
     var detailSelectedSeason by rememberSaveable { zeroIntState() }
     var restoreSeasonFocus by remember { mutableStateOf(false) }
@@ -1127,20 +1159,59 @@ private fun Herrin(startup: StartupPresentation) {
         snapshotFlow { tmdbBrowseState.allFilms() }.collect { tmdbState.tmdbBrowseIndex = it }
     }
 
-    LaunchedEffect(screen, query, metadataToken, tmdbState.globalSearch.page, tmdbState.globalSearch.retry) {
+    val selectedSearchKey = if (screen == "search" && metadataToken.isBlank() && spiderActive)
+        spiderBridge.approvedActiveSiteKey() else null
+    val selectedSearchSite = if (selectedSearchKey != null)
+        tvBoxSingle?.sites?.firstOrNull { it.spiderApi != null && it.key == selectedSearchKey }
+        else null
+    LaunchedEffect(screen, query, metadataToken, tmdbState.globalSearch.page, tmdbState.globalSearch.retry,
+        selectedSearchSite, if (selectedSearchSite != null) tvBoxVodScope else null,
+        selectedSearchSite != null && tmdbState.sourceForeground) {
         if (screen == "search") {
-            val key = SourceHealthIndex.digest(query + "|" + metadataToken)
+            if (query.trim().length >= 2) {
+                val route = when {
+                    metadataToken.isNotBlank() -> "SEARCH_ROUTE_TMDB"
+                    !spiderActive -> "SEARCH_ROUTE_NO_SELECTED_SOURCE"
+                    selectedSearchKey == null -> "SEARCH_ROUTE_NO_SITE_DESCRIPTOR"
+                    selectedSearchSite == null -> "SEARCH_ROUTE_SITE_NOT_IN_CONFIG"
+                    !tmdbState.sourceForeground -> "SEARCH_ROUTE_BACKGROUND"
+                    else -> "SEARCH_ROUTE_SELECTED_SPIDER"
+                }
+                HerrinPlaybackDiagnosticJournal.record("SOURCE", route,
+                    "COUNT=${query.trim().length.coerceAtMost(99999)}")
+            }
+            if (selectedSearchSite != null && !tmdbState.sourceForeground) return@LaunchedEffect
+            val consent = spiderBridge.configurationTicket()
+            val root = prefs.tvBoxWarehouseUrl
+            val runtime = selectedSearchSite?.jar ?: tvBoxSingle?.spiderJar.orEmpty()
+            val key = SourceHealthIndex.digest(if (selectedSearchSite == null) query + "|" + metadataToken
+                else listOf(query, root, runtime, selectedSearchSite.key, consent,
+                    tmdbState.globalSearch.retry).joinToString("|"))
             if (key != tmdbState.globalSearch.requestKey) {
                 tmdbState.globalSearch.requestKey = key
                 tmdbState.globalSearch.page = 1
                 tmdbState.globalSearch.totalPages = 0
-                tmdbState.globalSearch.status = "正在查询 TMDB…"
+                tmdbState.globalSearch.status = if (selectedSearchSite == null) "正在查询 TMDB…"
+                    else "正在搜索 ${selectedSearchSite.name}…"
             }
             if (tmdbState.globalSearch.page == 1) {
                 tmdbState.globalSearch.films = emptyList()
                 delay(350)
             }
-            tmdbState.globalSearch.load(tmdbDiscovery, query, metadataToken)
+            if (selectedSearchSite == null) tmdbState.globalSearch.load(tmdbDiscovery, query, metadataToken)
+            else {
+                tmdbState.globalSearch.loadSelectedSpider(query, selectedSearchSite.name) {
+                    if (!TvBoxSpiderPolicy.mayRun(false, root, runtime,
+                            prefs.tvBoxTrustedSpiderRootUrl, prefs.tvBoxTrustedSpiderJarSpec))
+                        SpiderResult.Failure("SOURCE_SESSION_EXPIRED")
+                    else withContext(Dispatchers.IO + SpiderSearchAuthority(consent)) {
+                        spiderBridge.search(selectedSearchSite, query)
+                    }
+                }
+                tmdbState.globalSearch.selectedSourceFailure?.let {
+                    HerrinPlaybackDiagnosticJournal.record("SOURCE", it)
+                }
+            }
         }
     }
     LaunchedEffect(metadataToken) {
@@ -1534,7 +1605,8 @@ private fun Herrin(startup: StartupPresentation) {
                             verifiedLine!!.episode to verifiedLine.line
                     }
                     HerrinPlaybackDiagnosticJournal.record("SOURCE",
-                        if (passed) "MEDIA_BYTES_VERIFIED" else "MEDIA_BYTES_REJECTED")
+                        if (verifiedLine?.mediaBytesVerified == false) "KERNEL_SELECTION_ADMITTED_MEDIA_PENDING"
+                        else if (passed) "MEDIA_BYTES_VERIFIED" else "MEDIA_BYTES_REJECTED")
                     passed
                 },
                 selectRemote = { offer, _ ->
@@ -2211,18 +2283,25 @@ private fun Herrin(startup: StartupPresentation) {
                 }
             }
             val parsed = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp)
-            spiderResolved = if(parsed is PlaybackResult.Ready) {
-                val validation = withContext(Dispatchers.IO) {
-                    withTimeoutOrNull(4_000) {
-                        HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
-                            FongMiSessionAuthorization.isApproved(candidate, spiderBridge.approvedActiveSiteKey())
-                        }, evidence = { code, detail -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, detail, diagnosticSession) }).probe(parsed.media)
-                    }
+            spiderResolved = if(parsed is PlaybackResult.Ready && parsed.media.kernelPlayback != null) {
+                HerrinPlaybackDiagnosticJournal.record("SOURCE", "KERNEL_MEDIA_VALIDATION_DEFERRED")
+                parsed
+            } else if(parsed is PlaybackResult.Ready) {
+                val admitted = withContext(Dispatchers.IO) {
+                    SelectedSpiderPlayback.admit(parsed.media, spiderBridge.approvedActiveSiteKey(),
+                        remoteProbe = { media ->
+                            val validation = withTimeoutOrNull(4_000) {
+                                HerrinRemoteMediaProbe(authorizeLocal = { candidate ->
+                                    FongMiSessionAuthorization.isApproved(candidate, spiderBridge.approvedActiveSiteKey())
+                                }, evidence = { code, detail -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, detail, diagnosticSession) }).probe(media)
+                            }
+                            HerrinPlaybackDiagnosticJournal.record("SOURCE", "MEDIA_PROBE_${validation?.name ?: "PROBE_TIMEOUT"}")
+                            validation == HerrinRemoteMediaProbe.Result.MEDIA
+                        }, evidence = { code -> HerrinPlaybackDiagnosticJournal.record("SOURCE", code, "", diagnosticSession) })
                 }
-                val code = validation?.name ?: "PROBE_TIMEOUT"
-                HerrinPlaybackDiagnosticJournal.record("SOURCE", "MEDIA_PROBE_$code")
-                if(validation == HerrinRemoteMediaProbe.Result.MEDIA) parsed else
-                    PlaybackResult.Unavailable("MEDIA_PROBE_$code：播放解析已返回，但媒体响应验证失败；可重试、换线路或返回其他影视点")
+                if (!admitted) HerrinPlaybackDiagnosticJournal.record("SOURCE", "MEDIA_PROBE_REJECTED", "", diagnosticSession)
+                if(admitted) parsed else
+                    PlaybackResult.Unavailable("MEDIA_PROBE_REJECTED：当前来源授权或媒体响应验证失败；可重试、换线路或返回其他影视点")
             } else parsed
             // Record in the UI process: the :spider worker has a separate
             // in-memory journal. Without this, the on-TV journal says NO_EVENTS
@@ -2563,6 +2642,11 @@ private fun Herrin(startup: StartupPresentation) {
     }
     fun openMovie(item: Film) {
         if (screen == "search") tmdbState.searchReturnFocus = "card-${item.id}"
+        // Index only the title actually selected by the user. Its original
+        // source proof stays intact; normal detail/replay validation still owns it.
+        if (screen == "search" && spiderActive && item.spiderVodId != null &&
+            item.spiderOrigin?.site == spiderBridge.approvedActiveSiteKey())
+            providerFilms = (listOf(item) + providerFilms.orEmpty().filterNot { it.id == item.id }).take(240)
         // The user chooses a film first, then its real episode and source.
         // Never start playback merely because a poster was selected.
         if (tmdbDiscovery.identity(item) != null && item.id !in tmdbState.tmdbResolved) tmdbState.tmdbResolved[item.id] = item

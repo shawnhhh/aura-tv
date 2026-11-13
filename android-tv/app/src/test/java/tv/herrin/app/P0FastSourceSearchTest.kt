@@ -157,4 +157,41 @@ class P0FastSourceSearchTest {
             streaming=true,verifyRemote={_,_->probes++;throw SourceHttpFailure(401)},remoteDetails={it.film})
         assertTrue(result.lookup.options.isEmpty());assertEquals(1,probes)
     }
+    @Test fun batchLookupPreservesPersonalThenPreferredThenOtherSources() = runBlocking {
+        for (winner in listOf("nas", "cloud", "preferred", "other")) {
+            val searched = mutableListOf<String>()
+            val providers = listOf("other" to HerrinSourceType.TVBOX_CMS,
+                "preferred" to HerrinSourceType.TVBOX_SPIDER,
+                "cloud" to HerrinSourceType.CLOUD, "nas" to HerrinSourceType.NAS).map { (key, kind) ->
+                object : HerrinFilmSource {
+                    override val id = key
+                    override val type = kind
+                    override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> {
+                        searched += id
+                        return if (id == winner) listOf(HerrinSourceMovie(id, type, movie(), "movie")) else emptyList()
+                    }
+                }
+            }
+            val result = HerrinFilmRouter(providers, "preferred").find(request)
+            assertEquals(winner, result.options.single().sourceId)
+            val order = listOf("nas", "cloud", "preferred", "other")
+            assertEquals(order.take(order.indexOf(winner) + 1), searched)
+        }
+    }
+    @Test fun batchLookupValidatesPreferredBeforeFallingThrough() = runBlocking {
+        val validated = mutableListOf<String>()
+        val providers = listOf("other", "preferred").map { key -> object : HerrinFilmSource {
+            override val id = key
+            override val type = HerrinSourceType.TVBOX_CMS
+            override suspend fun search(identity: HerrinFilmIdentity) =
+                listOf(HerrinSourceMovie(id, type, movie(), "movie"))
+        } }
+        val result = HerrinFilmRouter(providers, "preferred").find(request) { offers ->
+            validated += offers.first().sourceId
+            offers.filter { it.sourceId != "preferred" }
+        }
+        assertEquals(listOf("preferred", "other"), validated)
+        assertEquals("other", result.options.single().sourceId)
+    }
+
 }

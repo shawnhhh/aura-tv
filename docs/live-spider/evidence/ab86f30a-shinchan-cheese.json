@@ -1,0 +1,81 @@
+{
+  "node": "奶酪",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "蜡笔小新",
+  "authorized_year": null,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 3835
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 5025
+    },
+    {
+      "stage": "search",
+      "result": "FAILED",
+      "failure_code": "STAGE_TIMEOUT",
+      "elapsed_ms": 30006
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": false,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "armv7l",
+    "process_64bit": false,
+    "production_selected_abi": "armeabi-v7a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "奶酪",
+  "spider_api": "csp_T4Guard",
+  "node_count": 49,
+  "config_saved": true,
+  "declared_jar_md5": "6d10a60af6c0976836933c5f3cf9e8a7",
+  "failure_stage": "search",
+  "failure_code": "STAGE_TIMEOUT",
+  "driver_failure_structure": "CAUSE tv.herrin.app.FanTaiYingRealMainUiTest$Stop\ntv.herrin.app.FanTaiYingRealMainUiTest.step:129\ntv.herrin.app.FanTaiYingRealMainUiTest.node:277\ntv.herrin.app.FanTaiYingRealMainUiTest.cheeseRealNode:222\njava.lang.reflect.Method.invoke:-1\norg.junit.runners.model.FrameworkMethod$1.runReflectiveCall:59\norg.junit.internal.runners.model.ReflectiveCallable.run:12\norg.junit.runners.model.FrameworkMethod.invokeExplosively:56\norg.junit.internal.runners.statements.InvokeMethod.evaluate:17\norg.junit.rules.ExternalResource$1.evaluate:54\nandroidx.compose.ui.test.junit4.AndroidComposeTestRule$apply$1$evaluate$1.invoke:272\nandroidx.compose.ui.test.junit4.AndroidComposeTestRule$apply$1$evaluate$1.invoke:271\nandroidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.withDisposableContent:505",
+  "search_input_length": 4,
+  "search_input_matches_authorized_title": true,
+  "main_activity_lifecycle": "RESUMED",
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 217805
+      }
+    ],
+    "response_chars": 217805,
+    "shape": "JSON_LIST"
+  },
+  "sdk_network_scope": "PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+44943ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+45785ms SPIDER INITIALIZE_STARTED\nT+50121ms SPIDER INITIALIZE_RETURNED MS=4335\nT+51737ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+52090ms SPIDER SEARCH_STARTED\nT+52975ms SPIDER SEARCH_RETURNED MS=885",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 40473
+}

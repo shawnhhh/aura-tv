@@ -1,0 +1,65 @@
+name: HERRIN P0 Official FongMi Reference (not acceptance)
+on:
+  push:
+    branches: ['codex/herrin-p0-live-playback-20261110']
+    paths: ['.github/workflows/herrin-p0-upstream-reference.yml', '.github/scripts/herrin_fongmi_reference.py']
+  workflow_dispatch:
+    inputs:
+      scenario:
+        type: choice
+        options: [wanou_home, cheese_media, cheese_tv]
+        default: wanou_home
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Pushes observe WoGG home only. Repeating the Cheese media comparison
+      # requires an explicit manual scenario, never an incidental commit marker.
+      REFERENCE_SCENARIO: ${{ inputs.scenario || (contains(github.event.head_commit.message, '[tv-reference]') && 'cheese_tv') || 'wanou_home' }}
+      REFERENCE_WANOU_HOME: ${{ (inputs.scenario == 'cheese_media' || inputs.scenario == 'cheese_tv' || contains(github.event.head_commit.message, '[tv-reference]')) && 'false' || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reference UI scope regression
+        run: python3 -m unittest discover -s .github/scripts -p 'test_herrin_fongmi_reference.py' -v
+      - name: Fetch unmodified official release and verify published digest
+        shell: bash
+        run: |
+          mkdir -p reference-apk reference-evidence
+          if [[ "$REFERENCE_SCENARIO" == cheese_tv ]]; then
+            asset=leanback-arm64_v8a.apk
+            digest=cda5776ba2ee6f7dfdcd3d7c1a13095ba8672b9892d6fb9e1ba38f993ad66f3a
+          else
+            asset=leanback-armeabi_v7a.apk
+            digest=f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9
+          fi
+          curl --fail --location --proto '=https' --max-time 180 "https://github.com/FongMi/Release/releases/download/5.8.7/$asset" -o reference-apk/official.apk
+          printf '%s  reference-apk/official.apk\n' "$digest" | sha256sum --check
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Original client public configuration and target-only search UI
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.REFERENCE_SCENARIO == 'cheese_tv' && 35 || 30 }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          ram-size: 3072M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: python3 .github/scripts/herrin_fongmi_reference.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: official-fongmi-reference-NOT-HERRIN-ACCEPTANCE
+          path: reference-evidence/*.json
+          retention-days: 14
+

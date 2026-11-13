@@ -41,10 +41,21 @@ internal object SpiderProxyDiagnostics {
         throw failure
     }
 
-    fun <T> observe(context: Context, block: () -> T): T = observe({ value, failure ->
-        persist(context, shape(value, failure))
-        if (failure != null) SpiderFailureTrace.record(context, failure)
-    }, block)
+    fun <T> observe(context: Context, block: () -> T): T {
+        val began = System.nanoTime()
+        runCatching { persist(context, JSONObject().put("outcome", "CALLBACK_ENTERED")) }
+        return observe({ value, failure ->
+            persist(context, shape(value, failure).put("elapsed_ms",
+                ((System.nanoTime()-began)/1_000_000).coerceIn(0,160_000)))
+            if (failure != null) SpiderFailureTrace.record(context, failure)
+        }, block)
+    }
+
+    /** Computed server response, including one completed AFTER a caller timeout. */
+    fun response(context: Context, status: Int, range: Boolean) {
+        runCatching { persist(context, JSONObject().put("outcome", "HOST_PROXY_RESPONSE")
+            .put("status",status.coerceIn(100,599)).put("range",range)) }
+    }
 
     fun failure(context: Context, code: String) {
         require(code.matches(Regex("[A-Z][A-Z0-9_]{1,63}")))

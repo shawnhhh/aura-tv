@@ -63,8 +63,8 @@ internal data class DeviceMediaCapabilitySnapshot(
 
 /** Stable numeric Android HDR values, independently testable without an Android runtime. */
 internal object DeviceMediaCapabilities {
-    val videoMimes = setOf("video/hevc", "video/dolby-vision")
-    val audioMimes = setOf("audio/ac3", "audio/eac3", "audio/eac3-joc")
+    val videoMimes = setOf("video/hevc", "video/dolby-vision", "video/av01")
+    val audioMimes = setOf("audio/ac3", "audio/eac3", "audio/eac3-joc", "audio/true-hd", "audio/vnd.dts", "audio/vnd.dts.hd")
 
     fun hdrFormats(types: IntArray): Set<DeviceHdrFormat> = types.asSequence().mapNotNull { type ->
         when (type) {
@@ -80,5 +80,41 @@ internal object DeviceMediaCapabilities {
         "audio/ac3", "audio/eac3" -> DolbyAudioKind.DOLBY_AUDIO
         "audio/eac3-joc" -> DolbyAudioKind.DOLBY_ATMOS
         else -> null
+    }
+}
+
+/** Codec declarations are admission hints only, never HDR/output badges. */
+internal enum class DolbyVisionProfile(val codecProfile: Int) {
+    PROFILE_5(32), PROFILE_7(128), PROFILE_8(256)
+}
+internal data class DolbyVisionAdmission(
+    val display: MediaSupport,
+    val hardwareDecoder: MediaSupport,
+    /** Android's Profile 7 flag does not prove enhancement-layer reconstruction. */
+    val fullDualLayerVerified: Boolean = false
+)
+internal fun DeviceMediaCapabilitySnapshot.dolbyVisionAdmission(profile: DolbyVisionProfile): DolbyVisionAdmission {
+    val candidates = decoders.filter { it.mime.equals("video/dolby-vision", true) &&
+        it.profiles.any { level -> level.profile == profile.codecProfile } }
+    val support = when {
+        !decoderQuerySucceeded -> MediaSupport.UNKNOWN
+        candidates.any { it.hardwareAccelerated == MediaSupport.SUPPORTED } -> MediaSupport.SUPPORTED
+        candidates.any { it.hardwareAccelerated == MediaSupport.UNKNOWN } -> MediaSupport.UNKNOWN
+        else -> MediaSupport.UNSUPPORTED
+    }
+    return DolbyVisionAdmission(hdrSupport(DeviceHdrFormat.DOLBY_VISION), support)
+}
+
+/** Exact stream shape matters: a 48 kHz/5.1 probe cannot authorize TrueHD 192 kHz/7.1. */
+internal enum class AudioDelivery { DIRECT_CANDIDATE, DECODE_TO_PCM, UNVERIFIED }
+internal fun DeviceMediaCapabilitySnapshot.audioDelivery(
+    mime: String, sampleRateHz: Int, channelCount: Int
+): AudioDelivery {
+    val exact = audioFormats.firstOrNull { it.mime.equals(mime, true) &&
+        it.sampleRateHz == sampleRateHz && it.channelCount == channelCount }
+    return when {
+        exact?.directPlaybackSupport == MediaSupport.SUPPORTED -> AudioDelivery.DIRECT_CANDIDATE
+        decoderSupport(mime) == MediaSupport.SUPPORTED -> AudioDelivery.DECODE_TO_PCM
+        else -> AudioDelivery.UNVERIFIED
     }
 }

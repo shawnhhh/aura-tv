@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/FongMi/TV.git",
+  "commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+  "tree": "ff767c4056622dea97c4c624a63d415ce3b66178",
+  "version_name": "5.8.7",
+  "license": "GPL-3.0",
+  "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+  "role": "baseline_candidate_not_integrated",
+  "playable_baseline_verified": false,
+  "official_apk_source_commit_verified": false
+}

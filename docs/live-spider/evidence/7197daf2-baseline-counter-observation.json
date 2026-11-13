@@ -1,0 +1,18 @@
+{
+  "scope": "ORIGINAL_FIXTURE_PLAYER_CAPABILITY_ONLY",
+  "real_node_acceptance": false,
+  "failed_tv_run": 43440288111,
+  "saved_log_read_run": 43445620140,
+  "head_under_test": "7197daf25ba5b3818de36a0673aadacba790264a",
+  "fixture_format": "mp4",
+  "production_media3_created": true,
+  "production_first_frame_callback": true,
+  "first_frame_ms": 1185,
+  "compositor_frame_verified": false,
+  "continuous_60_seconds_verified": false,
+  "test_verdict": "FAIL_FIRST_FRAME_COUNTER_WAIT",
+  "observer_root_cause": "Repeat/prewarming enables multiple actual video renderers. The single public videoDecoderCounters reference is replaced onVideoEnabled and cleared onVideoDisabled; it is not a stable total of all active rendered output.",
+  "running_sdk_source": "androidx/media@1.9.4:ExoPlayerImpl.getVideoDecoderCounters,onVideoEnabled,onVideoDisabled",
+  "fix_commit": "047bbf4d",
+  "fix": "Debug observer retains actual AnalyticsListener.onVideoEnabled counters per player identity and totals their rendered output; first-frame callback, compositor, 60s wall clock, controls and release gates remain mandatory. No production prewarming setting is disabled."
+}

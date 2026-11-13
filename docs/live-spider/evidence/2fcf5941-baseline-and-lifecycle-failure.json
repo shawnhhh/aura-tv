@@ -1,0 +1,27 @@
+{
+  "run_id": 43446558463,
+  "head": "2fcf5941aa74b1cc2622562900624e85bccbbca7",
+  "tests": 261,
+  "failed": [
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Continuous baseline must remain playing\nat org.junit.Assert.fail(Assert.java:89)\nat org.junit.Assert.assertTrue(Assert.java:42)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease$lambda$23$lambda$22$lambda$10(PlaybackDiagnosticsIntegrationTest.kt:162)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.$r8$lambda$8PwBQAStOfYf2KdTkX8Gfoi6epM(Unknown Source:0)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest$$ExternalSyntheticLambda29.perform(D8$$SyntheticClass:0)\nat androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)\nat androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)\nat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:462)\nat java.util.concurrent.FutureTask.run(FutureTask.java:266)\nat android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2223)\nat android.os.Handler.handleCallback(Handler.java:938)\nat android.os.Handler.dispatchMessage(Handler.java:99)\nat android.os.Looper.loop(Looper.java:223)\nat android.app.ActivityThread.main(ActivityThread.java:7656)\nat java.lang.reflect.Method.invoke(Native Method)\nat com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:592)\nat com.android.internal.os.ZygoteInit.main(ZygoteInit.java:947)\n"
+    },
+    {
+      "class": "tv.herrin.app.SpiderLoaderLifecycleTest",
+      "test": "browseQueuedBeforeItsFirstMainDispatchCannotLoadAfterRevocation",
+      "status": "failed",
+      "failure": "java.lang.AssertionError\nat org.junit.Assert.fail(Assert.java:87)\nat org.junit.Assert.assertTrue(Assert.java:42)\nat org.junit.Assert.assertTrue(Assert.java:53)\nat tv.herrin.app.SpiderLoaderLifecycleTest$browseQueuedBeforeItsFirstMainDispatchCannotLoadAfterRevocation$1.invokeSuspend(SpiderLoaderLifecycleTest.kt:47)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)\nat kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)\nat kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)\nat kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:85)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:59)\nat kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:38)\nat kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)\nat tv.herrin.app.SpiderLoaderLifecycleTest.browseQueuedBeforeItsFirstMainDispatchCannotLoadAfterRevocation(SpiderLoaderLifecycleTest.kt:30)\n"
+    }
+  ],
+  "baseline_first_frame_and_compositor_passed": true,
+  "continuous_60_seconds_passed": false,
+  "real_node_acceptance": false,
+  "fixes": {
+    "continuous_original_media": "3a6c2b3b",
+    "queued_main_fixture": "88b83bee",
+    "capture_export": "adc6de0a"
+  }
+}

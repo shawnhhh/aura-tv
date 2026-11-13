@@ -10,7 +10,7 @@ if [[ "${EMPTY_HOME_UI_TEST:-false}" == true ]]; then
     if ! python3 - <<'PY'
 from pathlib import Path
 output=Path('evidence/empty-home-ui.txt').read_text()
-assert 'OK (2 tests)' in output and 'FAILURES!!!' not in output and 'INSTRUMENTATION_FAILED' not in output, output
+assert 'OK (3 tests)' in output and 'FAILURES!!!' not in output and 'INSTRUMENTATION_FAILED' not in output, output
 PY
     then result=1; fi
 fi

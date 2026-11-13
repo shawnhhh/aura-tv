@@ -1,0 +1,122 @@
+plugins { alias libs.plugins.android.library }
+
+def upstream = file('../../vendor/fongmi-core/upstream')
+def externalLibraries = providers.gradleProperty('fongmiLibraries').map { file(it) }
+// The local Maven coordinates match stage_dependencies.py exactly; an AAR is
+// never injected directly into this Android library or substituted with stock Media3.
+def dependencyLock = providers.gradleProperty('fongmiDependencyLock').map { rootProject.file(it) }
+    .getOrElse(rootProject.file('dependencies.json'))
+def lockedArtifacts = new groovy.json.JsonSlurper().parse(dependencyLock).artifacts
+def originalCoordinates = lockedArtifacts.collect { entry ->
+    def binaryName = new File(entry.path.toString()).name
+    if (!binaryName.endsWith('.aar')) throw new GradleException('Locked binary must be an AAR: ' + binaryName)
+    def name = binaryName.substring(0, binaryName.length() - 4)
+    "tv.herrin.original:${name}:${entry.source_commit.toString().take(12)}.${entry.sha256.toString().take(12)}@aar"
+}
+def verifyInputs = tasks.register('verifyKernelDependencies', Exec) {
+    def directory = externalLibraries.getOrElse(file('../unresolved-libraries'))
+    commandLine 'python3', rootProject.file('verify_dependencies.py'), '--directory', directory,
+        '--lock', dependencyLock
+}
+def hostSources = layout.buildDirectory.dir('generated/herrinHost')
+def prepareHost = tasks.register('prepareKernelHostSources') {
+    inputs.file(new File(upstream, 'app/src/main/java/com/fongmi/android/tv/server/Nano.java'))
+    outputs.dir(hostSources)
+    doLast {
+        def original = inputs.files.singleFile.getText('UTF-8')
+        if (original.count('super(port);') != 1) throw new GradleException('Nano binding patch no longer applies')
+        def target = hostSources.get().file('host/Nano.java').asFile
+        target.parentFile.mkdirs()
+        // Only the listening address changes. All original processes, headers,
+        // proxy response handling and HLS bytes remain upstream-owned.
+        target.setText(original.replace('super(port);', 'super("127.0.0.1", port);'), 'UTF-8')
+    }
+}
+
+android {
+    namespace = 'com.fongmi.android.tv'
+    compileSdk = libs.versions.compileSdk.get().toInteger()
+    defaultConfig {
+        minSdk = libs.versions.minSdk.get().toInteger()
+        targetSdk = libs.versions.targetSdk.get().toInteger()
+        consumerProguardFiles upstream.toPath().resolve('app/proguard-rules.pro').toFile()
+        buildConfigField 'String', 'APPLICATION_ID', '"tv.herrin.app"'
+        buildConfigField 'String', 'VERSION_NAME', '"5.8.7-herrin-integration"'
+        buildConfigField 'int', 'VERSION_CODE', '587'
+        manifestPlaceholders.runtimeCatalog = 'https://github.com/FongMi/Release/releases/download/module/catalog.json'
+        javaCompileOptions.annotationProcessorOptions.arguments += [
+            'room.schemaLocation': layout.buildDirectory.dir('schemas').get().asFile.toString(),
+            'eventBusIndex': 'com.fongmi.android.tv.event.EventIndex'
+        ]
+    }
+    buildFeatures { buildConfig = true; viewBinding = true }
+    flavorDimensions = ['device']
+    productFlavors { leanback { dimension 'device' } }
+    sourceSets.main {
+        // Whole source trees, including upstream engine implementations. No
+        // fake Media3 API or playback algorithm is supplied by this build.
+        java.srcDirs = [new File(upstream, 'app/src/main/java'), hostSources]
+        java.exclude 'com/fongmi/android/tv/server/Nano.java'
+        res.srcDirs = [new File(upstream, 'app/src/main/res')]
+        assets.srcDirs = [new File(upstream, 'app/src/main/assets')]
+        aidl.srcDirs = [new File(upstream, 'app/src/main/aidl')]
+        jniLibs.srcDirs = [new File(upstream, 'app/src/main/jniLibs')]
+    }
+    sourceSets.leanback {
+        java.srcDirs = [new File(upstream, 'app/src/leanback/java')]
+        res.srcDirs = [new File(upstream, 'app/src/leanback/res')]
+    }
+    compileOptions {
+        coreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+    lint { disable 'UnsafeOptInUsageError'; disable 'ExpiredTargetSdkVersion' }
+}
+
+configurations.configureEach {
+    exclude group: 'stax', module: 'stax-api'
+    exclude group: 'xpp3', module: 'xpp3'
+    exclude group: 'com.android.support'
+    resolutionStrategy.force libs.okhttp
+}
+
+dependencies {
+    api project(':catvod')
+    // Real original AARs are staged as pinned local Maven modules *before* Gradle
+    // starts. Direct fileTree AAR dependencies would make AGP reject this library.
+    originalCoordinates.each { api(it) }
+    implementation libs.appcompat
+    implementation libs.lifecycle.service
+    implementation libs.media
+    implementation libs.palette
+    implementation libs.recyclerview
+    implementation libs.room.runtime
+    implementation libs.splashscreen
+    implementation libs.swiperefreshlayout
+    implementation libs.viewpager2
+    implementation libs.android.gif.drawable
+    implementation libs.bundles.glide
+    implementation libs.bundles.jupnp
+    implementation libs.customactivityoncrash
+    implementation libs.eventbus
+    implementation libs.flexbox
+    implementation libs.rtmp.client
+    implementation libs.lottie
+    implementation libs.material
+    implementation libs.materialdesigncolors
+    implementation libs.nanohttpd
+    implementation libs.newpipeextractor
+    implementation libs.permissionx
+    implementation libs.simple.xml
+    implementation libs.textdrawable
+    implementation libs.leanback
+    implementation libs.androidautosize
+    annotationProcessor libs.room.compiler
+    annotationProcessor libs.eventbus.annotation.processor
+    annotationProcessor libs.glide.compiler
+    coreLibraryDesugaring libs.desugar
+}
+// Only this full-kernel compilation depends on external engine inputs. Contract
+// and independent modules remain buildable; no fake AAR is generated on failure.
+tasks.named('preBuild').configure { dependsOn verifyInputs, prepareHost }

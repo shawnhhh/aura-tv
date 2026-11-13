@@ -1,0 +1,103 @@
+{
+  "upstream_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+  "toolchain": {
+    "gradle": "9.7.1",
+    "agp": "9.4.0",
+    "java": 21,
+    "compileSdk": 37
+  },
+  "media_candidate": {
+    "repository": "https://github.com/FongMi/media",
+    "commit": "3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d",
+    "branch": "release-1.11.0-fongmi",
+    "license": "Apache-2.0 (native transitive licenses require separate inspection)",
+    "status": "NOT_COMPATIBLE_PROVENANCE_NOT_ESTABLISHED",
+    "reason": "The recursive public tree lacks DecoderMode, DiscMenuController, IsoDiscPreparation and SubtitleSelectionState required by TV@305dff2. Do not use it as a proven replacement.",
+    "modules": [
+      "libraries/mpvplayer",
+      "libraries/decoder_ffmpeg"
+    ]
+  },
+  "native_candidates": [
+    {
+      "repository": "https://github.com/FongMi/mpv-android",
+      "status": "SOURCE_CANDIDATE_NOT_VERSION_MATCHED"
+    },
+    {
+      "repository": "https://github.com/FongMi/mpv",
+      "status": "SOURCE_CANDIDATE_NOT_VERSION_MATCHED"
+    },
+    {
+      "repository": "https://github.com/FongMi/FFmpeg",
+      "status": "SOURCE_CANDIDATE_NOT_VERSION_MATCHED"
+    }
+  ],
+  "official_release": {
+    "url": "https://github.com/FongMi/Release/releases/tag/5.8.7",
+    "status": "APK_ONLY_NOT_A_BUILD_DEPENDENCY",
+    "reason": "The immutable release lists four APK assets, no AAR inputs or corresponding build manifest. No APK extraction/decompilation substitutes for corresponding source."
+  },
+  "required_external_archives": [
+    "lib-mpvplayer-release.aar",
+    "lib-decoder-ffmpeg-release.aar"
+  ],
+  "required_upstream_archives": [
+    "app/libs/hook-release.aar",
+    "app/libs/tvbus-release.aar"
+  ],
+  "artifacts": [],
+  "required_original_apis": [
+    "androidx.media3.common.DecoderMode",
+    "androidx.media3.common.DiscMenuController",
+    "androidx.media3.common.text.SubtitleSelectionState",
+    "androidx.media3.exoplayer.iso.IsoDiscPreparation"
+  ],
+  "artifact_coordinate_policy": "tv.herrin.original:<aar-stem>:<source-sha12>.<binary-sha12>@aar",
+  "media_candidate_audits": [
+    {
+      "repository": "https://github.com/webhtv/webhtv",
+      "commit": "4e30ffaf219b1db15fe5662aeff6f9820e2b32bf",
+      "version": "1.11.0-alpha01-fongmi",
+      "status": "REJECTED_INCOMPATIBLE_API",
+      "ci_run": "https://github.com/shawnhhh/aura-tv/actions/runs/43144759251",
+      "evidence": "SHA-256 passed for common, exoplayer, and ui AARs, but required DecoderMode, DiscMenuController, SubtitleSelectionState, IsoDiscPreparation, and PlayerView.setBackendPlayer are absent.",
+      "must_not_be_staged": true
+    }
+  ],
+  "media3_classpath_policy": "Only explicitly locked origin=media3 AARs with real required APIs, full source/sha256/license and complete binary coverage may be staged; no stock Media3 fallback.",
+  "native_candidate_audits": [
+    {
+      "repository": "https://github.com/FongMi/media",
+      "commit": "3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d",
+      "tv_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+      "ci_run": "https://github.com/shawnhhh/aura-tv/actions/runs/43152499210",
+      "status": "REJECTED_TV_NATIVE_JAVA_API_INCOMPATIBLE",
+      "gradle_release_build": "SUCCESS_153_TASKS",
+      "source_built_arm_abis": [
+        "arm64-v8a",
+        "armeabi-v7a"
+      ],
+      "native_archives": [
+        {
+          "name": "lib-mpvplayer-release.aar",
+          "sha256": "915579744201054d0079ff3a4661c18804febe0683208854bb837be8d5e4518d",
+          "java_class_count": 174
+        },
+        {
+          "name": "lib-decoder-ffmpeg-release.aar",
+          "sha256": "3efae9f489cd936d2aea4be1dede874b731d68617a49ca42f3c2ab229b52effb",
+          "java_class_count": 10
+        }
+      ],
+      "original_tv_import_count": 11,
+      "missing_classes": [
+        "androidx.media3.mpvplayer.MpvConfigFileInspector",
+        "androidx.media3.mpvplayer.MpvDecoderMode",
+        "androidx.media3.mpvplayer.MpvSubtitleContentLoader",
+        "androidx.media3.mpvplayer.media.MpvDrmSupport"
+      ],
+      "must_not_be_staged": true,
+      "reason": "Both pinned source-built native AARs package valid ARM ELF but lack four classes imported by original TV@305dff2; cannot substitute native candidates for the exact original-core Java ABI."
+    }
+  ]
+}

@@ -89,5 +89,9 @@ internal object CrashJournal {
 }
 
 class HerrinApplication : android.app.Application() {
-    override fun onCreate() { super.onCreate(); CrashJournal.install(this) }
+    override fun onCreate() {
+        super.onCreate()
+        CrashJournal.install(this)
+        HerrinKernelRuntime.attach(this)
+    }
 }

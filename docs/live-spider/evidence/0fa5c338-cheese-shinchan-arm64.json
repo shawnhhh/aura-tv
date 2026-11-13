@@ -1,0 +1,159 @@
+{
+  "node": "奶酪",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "蜡笔小新",
+  "authorized_year": null,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 5567
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 7196
+    },
+    {
+      "stage": "search",
+      "result": "PASS",
+      "elapsed_ms": 1548
+    },
+    {
+      "stage": "tv_candidate_details_0",
+      "result": "PASS",
+      "elapsed_ms": 1147
+    },
+    {
+      "stage": "tv_candidate_details_1",
+      "result": "PASS",
+      "elapsed_ms": 752
+    },
+    {
+      "stage": "first_frame_0",
+      "result": "FAILED",
+      "failure_code": "MEDIA3_ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+      "elapsed_ms": 10234
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": true,
+  "seek_verified": false,
+  "details_ui_verified": true,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "奶酪",
+  "spider_api": "csp_T4Guard",
+  "node_count": 49,
+  "config_saved": true,
+  "declared_jar_md5": "6d10a60af6c0976836933c5f3cf9e8a7",
+  "tv_candidates_inspected": [
+    {
+      "title": "蜡笔小新第九季",
+      "episode_count": 0,
+      "tv_title_verified": true,
+      "tv_category_verified": true
+    },
+    {
+      "title": "蜡笔小新第八季",
+      "episode_count": 93,
+      "tv_title_verified": true,
+      "tv_category_verified": true
+    }
+  ],
+  "selected_source_title": "蜡笔小新第八季",
+  "tv_animation_title_verified": true,
+  "tv_animation_category_verified": true,
+  "film_identity_verified": true,
+  "episode_count": 93,
+  "alternate_line_available": false,
+  "episode_selection_attempt": 1,
+  "episode_driver_action": "ACTIVATE_SEASON_EPISODE_CARD",
+  "episode_ui_kind": "GROUPED_SEASON",
+  "episode_selections": [
+    {
+      "source_ordinal": 1,
+      "ui_label": "HERRIN ▶ 第1集"
+    }
+  ],
+  "failure_stage": "first_frame_0",
+  "failure_code": "MEDIA3_ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+  "driver_failure_structure": "CAUSE tv.herrin.app.FanTaiYingRealMainUiTest$Stop\ntv.herrin.app.FanTaiYingRealMainUiTest.playerRead$lambda$19:162\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$rxJfOH-QMzNAFDa3_k6z4cWi3rs:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda11.invoke:0\nandroidx.compose.ui.test.AndroidSynchronization_androidKt.runOnUiThread$lambda$0:37\nandroidx.compose.ui.test.AndroidSynchronization_androidKt.$r8$lambda$opyMdTZ52jorqLaIG4SKpPr_Zno:0\nandroidx.compose.ui.test.AndroidSynchronization_androidKt$$ExternalSyntheticLambda0.call:0\njava.util.concurrent.FutureTask.run:266\njava.util.concurrent.Executors$RunnableAdapter.call:462\njava.util.concurrent.FutureTask.run:266\nandroid.app.Instrumentation$SyncRunnable.run:2223\nandroid.os.Handler.handleCallback:938\nandroid.os.Handler.dispatchMessage:99",
+  "worker_exit": "原生组件崩溃（JNI/so）",
+  "main_activity_lifecycle": "RESUMED",
+  "proxy_callback_shapes": [
+    {
+      "outcome": "HOST_PROXY_RESPONSE",
+      "status": 204,
+      "range": false
+    },
+    {
+      "outcome": "HOST_PROXY_RESPONSE",
+      "status": 204,
+      "range": false
+    },
+    {
+      "outcome": "CALLBACK_ENTERED"
+    },
+    {
+      "outcome": "CALLBACK_ARRAY",
+      "length": 3,
+      "mime_kind": "HLS",
+      "types": [
+        "java.lang.Integer",
+        "java.lang.String",
+        "java.io.ByteArrayInputStream"
+      ],
+      "status": 200,
+      "elapsed_ms": 4253
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_URL_REFERENCE"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_TARGET_HTTPS"
+    }
+  ],
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 217805
+      }
+    ],
+    "response_chars": 217805,
+    "shape": "JSON_LIST"
+  },
+  "sdk_network_scope": "PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+49668ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+51079ms SPIDER INITIALIZE_STARTED\nT+56833ms SPIDER INITIALIZE_RETURNED MS=5754\nT+59057ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+59471ms SPIDER SEARCH_STARTED\nT+60156ms SPIDER SEARCH_RETURNED MS=684\nT+62603ms SPIDER DETAILS_EPISODES_STARTED\nT+62791ms SPIDER DETAILS_EPISODES_RETURNED MS=188\nT+62797ms SPIDER DETAILS_RETURNED COUNT=93\nT+62797ms SPIDER DETAIL_LINES_RETURNED COUNT=1\nT+63037ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+63416ms SPIDER SEARCH_STARTED\nT+63794ms SPIDER SEARCH_RETURNED MS=377\nT+64540ms SPIDER DETAILS_EPISODES_STARTED\nT+64543ms SPIDER DETAILS_EPISODES_STARTED\nT+64770ms SPIDER DETAILS_EPISODES_RETURNED MS=227\nT+64790ms SPIDER DETAILS_RETURNED COUNT=156\nT+64790ms SPIDER DETAIL_LINES_RETURNED COUNT=1\nT+64791ms SPIDER DETAILS_EPISODES_STARTED\nT+65087ms SPIDER DETAILS_EPISODES_RETURNED MS=295\nT+65169ms SPIDER DETAILS_RETURNED COUNT=156\nT+65169ms SPIDER DETAIL_LINES_RETURNED COUNT=1\nT+65905ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SOURCE SELECTION_STARTED\nT+66477ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESOLVE_STARTED\nT+66961ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESOLVE_RETURNED MS=483\nT+66962ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER PARSER_DIRECT\nT+66962ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESPONSE_URL_STRING\nT+66962ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESPONSE_PARSE VALUE=0\nT+66962ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESPONSE_JX VALUE=0\nT+66962ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER HEADER_FALLBACK\nT+66963ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER PARSER_DIRECT\nT+66963ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESPONSE_URL_STRING\nT+66963ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESPONSE_PARSE VALUE=0\nT+66963ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER RESPONSE_JX VALUE=0\nT+66963ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER HEADER_FALLBACK\nT+66964ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER PLAYER_CONTENT_RETURNED\nT+66965ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 PROXY HEALTH_STARTED\nT+66989ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 PROXY HEALTH_READY\nT+67018ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SOURCE SELECTED_PROXY_HEALTH_READY\nT+67018ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SOURCE SELECTED_PROXY_MEDIA_DEFERRED_TO_PLAYER\nT+67019ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 SPIDER MEDIA_ROUTE_READY\nT+67285ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 MEDIA3 PLAYBACK_INITIALIZING ATTEMPT=1\nT+67292ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 MEDIA3 PLAYBACK_STATE STATE=2\nT+75007ms MEDIA3 PLAYBACK_ERROR CODE=2001\nT+75009ms SID=d0a5caa3-dffd-48f1-a911-f050b3107a79 MEDIA3 PLAYBACK_STATE STATE=1",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 30796
+}

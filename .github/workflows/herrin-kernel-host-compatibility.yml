@@ -1,0 +1,39 @@
+name: HERRIN host compatibility and full TV recheck
+on:
+  push:
+    branches: ['codex/herrin-p0-live-playback-20261110']
+    paths: ['.github/workflows/herrin-kernel-host-compatibility.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      # Targeted verification of the final annotation-only correction after
+      # unified JVM run43357720463. Its 723/724 result remains a FAILURE;
+      # this workflow cannot establish JVM, whole core or playback acceptance.
+      - name: Verify API26 host compilation lint debug and contract
+        working-directory: android-tv
+        run: gradle --continue --build-cache --max-workers=2 :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:lintDebug :app:assembleDebug
+      - name: Preserve compatibility reports only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-host-compatibility-reports
+          path: android-tv/app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+
+  tv-recheck:
+    # Reuse the complete unfiltered suite, no provider requests. The real-node
+    # run remains failed; this only verifies the fixture readiness correction.
+    uses: ./.github/workflows/android-emulator.yml

@@ -280,7 +280,8 @@ internal object TvBoxHeaderCodec {
     }
 }
 
-internal class TvBoxConfigRepository(private val context: Context? = null) {
+internal class TvBoxConfigRepository(private val context: Context? = null,
+    private val onImportHttpStatus: (Int) -> Unit = {}) {
     /** Search never spends the fast budget serially refreshing every warehouse. */
     suspend fun forSearch(input:String,allowHttp:Boolean,allowNetwork:Boolean,persistFetched:Boolean=true):TvBoxConfig?=withContext(Dispatchers.IO){
         val address=TvBoxUrl.normalize(input,allowHttp)?:return@withContext null
@@ -368,6 +369,7 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
         try {
             readSourceResponse(importClient, okhttp3.Request.Builder().url(valid)
                 .header("Accept", "application/json, text/plain").header("Accept-Encoding", "identity").build()) { response ->
+                runCatching { onImportHttpStatus(response.code) }
                 if (response.code in 300..399) return@readSourceResponse cached(valid)
                     ?: TvBoxConfig.Error("WAREHOUSE_REDIRECT：配置发生跳转；请检查最终地址后重新输入")
                 if (!response.isSuccessful) return@readSourceResponse cached(valid)

@@ -11,6 +11,7 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.After
 import org.junit.rules.ExternalResource
 import java.io.File
 import java.security.MessageDigest
@@ -22,6 +23,7 @@ class EmptySpiderHomeSelectionTest {
     private val server = MockWebServer()
     private lateinit var jarSpec: String
     private lateinit var cachedJar: File
+    private var inputUsed = false
     @get:Rule(order = 0) val fixture = object : ExternalResource() {
         override fun before() {
             context.getSharedPreferences("herrin", 0).edit().clear().commit()
@@ -50,6 +52,22 @@ class EmptySpiderHomeSelectionTest {
         compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag(tag).assertIsFocused()
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+    }
+    private fun awaitIme(shown: Boolean) {
+        compose.waitUntil(5_000) {
+            val state = inst.uiAutomation.executeShellCommand("dumpsys input_method").use { fd ->
+                java.io.FileInputStream(fd.fileDescriptor).bufferedReader().use { it.readText() }
+            }.substringAfter("Input method service state for ", "")
+            state.contains("mInputViewStarted=$shown") && state.contains("mWindowVisible=$shown")
+        }
+    }
+    @After fun dismissOwnedInput() {
+        if (!inputUsed) return
+        runCatching { compose.onNodeWithTag("search").performSemanticsAction(SemanticsActions.RequestFocus) }
+        compose.runOnUiThread {
+            compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+        }
+        awaitIme(false)
     }
     private fun importOriginalFixture() {
         compose.waitUntil(10_000) { runCatching {
@@ -114,5 +132,54 @@ class EmptySpiderHomeSelectionTest {
         assertSelectedEmptySource(advanced = true)
         activate("search")
         compose.onNodeWithTag("search-input").assertIsDisplayed()
+    }
+
+    @Test fun selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken() {
+        importOriginalFixture()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-source-sites"))
+        activate("settings-source-sites")
+        compose.onNodeWithTag("site-list").performScrollToNode(hasTestTag("site-select-0"))
+        activate("site-select-0")
+        assertSelectedEmptySource()
+        assertEquals("", Preferences(context).tmdbReadToken)
+        activate("search")
+        inputUsed = true
+        compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        awaitIme(true)
+        compose.onNodeWithTag("search-input").performTextReplacement("Original synthetic fixture")
+        val resultCard = SemanticsMatcher("actual result card") {
+            it.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { "" }.startsWith("card-")
+        } and hasText("Original synthetic fixture") and hasClickAction()
+        compose.waitUntil(10_000) { runCatching {
+            compose.onNode(resultCard).assertExists()
+        }.isSuccess }
+        val result = compose.onNode(resultCard)
+        result.performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.runOnUiThread {
+            compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+        }
+        compose.waitUntil(5_000) {
+            !compose.activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
+        }
+        awaitIme(false)
+        result.performSemanticsAction(SemanticsActions.RequestFocus)
+        result.assertIsFocused()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The detail surface is composed before the asynchronous worker reply.
+        // Wait for the actual required episode inside the ORIGINAL 10s budget,
+        // not merely for the loading container. Keep the final assertions below.
+        compose.waitUntil(10_000) { runCatching {
+            compose.onNodeWithTag("film-detail-list").assertIsDisplayed()
+                .performScrollToNode(hasTestTag("episode-2"))
+            compose.onNodeWithTag("episode-2").assertIsDisplayed()
+        }.isSuccess }
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("episode-2"))
+        compose.onNodeWithTag("episode-2").assertIsDisplayed()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5_000) { runCatching {
+            compose.onNodeWithTag("search-input").assertIsDisplayed()
+                .assertTextContains("Original synthetic fixture", substring = true)
+        }.isSuccess }
     }
 }

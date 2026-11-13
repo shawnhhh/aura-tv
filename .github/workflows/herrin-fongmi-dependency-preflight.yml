@@ -1,0 +1,69 @@
+name: HERRIN FongMi original dependency preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/herrin-p0-live-playback-20261110']
+    paths:
+      - '.github/workflows/herrin-fongmi-dependency-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Check original dependency tools (no media downloads)
+        run: |
+          python3 -m py_compile android-tv/fongmi-kernel/verify_dependencies.py \
+            android-tv/fongmi-kernel/stage_dependencies.py
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'android-tv/fongmi-kernel')
+          from stage_dependencies import coordinate
+          entry = {'path': 'lib-mpvplayer-release.aar',
+                   'source_commit': 'a' * 40, 'sha256': 'b' * 64}
+          assert coordinate(entry) == (
+              'tv.herrin.original', 'lib-mpvplayer-release', 'aaaaaaaaaaaa.bbbbbbbbbbbb')
+          print('Original binary Maven coordinate policy: PASS')
+          PY
+      - name: Report actual absent source inputs
+        working-directory: android-tv
+        run: |
+          python3 fongmi-kernel/verify_dependencies.py \
+            --directory fongmi-kernel/unresolved-libraries \
+            --lock fongmi-kernel/dependencies.json --report > /tmp/herrin-fongmi-report.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          state = json.loads(Path('/tmp/herrin-fongmi-report.json').read_text())
+          assert state['status'] == 'DEPENDENCY_BLOCKED', state
+          assert set(state['missing_external']) == {
+              'lib-mpvplayer-release.aar', 'lib-decoder-ffmpeg-release.aar'}, state
+          assert set(state['missing_upstream']) == {
+              'app/libs/hook-release.aar', 'app/libs/tvbus-release.aar'}, state
+          assert state['upstream_commit'] == '305dff233cde512e2c83f71529b7c3ecfd61fefc'
+          assert state['media3_import_count'] > 0
+          print('Source inputs safely blocked; no fabricated ready build')
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+              summary.write('Dependency preparation only: NOT P0 acceptance.\n\n')
+              summary.write('Original AAR inputs remain missing. No APK or playback tested.\n\n')
+              summary.write(json.dumps(state, ensure_ascii=False, indent=2))
+          PY
+      - name: Assert source build does not package direct local AARs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path('android-tv/fongmi-kernel/core/build.gradle').read_text()
+          settings = Path('android-tv/fongmi-kernel/settings.gradle').read_text()
+          assert 'originalCoordinates.each { api(it) }' in gradle
+          assert "api fileTree(dir: new File(upstream, 'app/libs')" not in gradle
+          assert "includeGroup 'tv.herrin.original'" in settings
+          print('Original core uses hash-locked Maven inputs')
+          PY
