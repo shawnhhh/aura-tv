@@ -1,4 +1,4 @@
-name: HERRIN kernel host compatibility only
+name: HERRIN host compatibility and full TV recheck
 on:
   push:
     branches: ['codex/herrin-p0-live-playback-20261110']
@@ -32,3 +32,8 @@ jobs:
           name: kernel-host-compatibility-reports
           path: android-tv/app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
+
+  tv-recheck:
+    # Reuse the complete unfiltered suite, no provider requests. The real-node
+    # run remains failed; this only verifies the fixture readiness correction.
+    uses: ./.github/workflows/android-emulator.yml
