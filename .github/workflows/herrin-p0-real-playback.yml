@@ -165,7 +165,7 @@ jobs:
       - name: Boot emulator, install APKs and run real MainActivity node
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: ${{ contains(github.event.head_commit.message, '[api35]') && 35 || 30 }}
           target: google_apis
           arch: x86_64
           profile: pixel_2

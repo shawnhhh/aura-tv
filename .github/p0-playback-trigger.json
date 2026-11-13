@@ -1,6 +1,6 @@
 {
-  "attempt": "20261113-shinchan-bound-season-arm64-2",
-  "reason": "Actual UI trace exposed an early DETAILS_EPISODES_RETURNED race: await the final DETAILS_RETURNED event and bind the declared source season before episode selection. One corrected ARM64 same-season comparison, no Xiaocheng or Wanou reruns.",
+  "attempt": "20261113-shinchan-same-tv-api35-arm64-1",
+  "reason": "Both Android11 translation ABIs crashed on the verified TV first episode. One official API35 Google APIs image comparison, matching targetSdk35, same standard ARM64 app and S9/E001; no source header guesses or Xiaocheng/Wanou retries.",
   "nodes": [
     "cheese"
   ],
@@ -13,5 +13,6 @@
   ],
   "film_titles": [
     "蜡笔小新"
-  ]
+  ],
+  "android_api": 35
 }
