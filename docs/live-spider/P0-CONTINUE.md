@@ -1,3 +1,47 @@
+# 最新断点：2026-11-13 进入真实Media3，下一阶段为源站403/TV资源选择
+
+P0未完成，视频首帧/60秒均未通过。唯一分支保持不变，不合并main，不发布验收APK。
+
+- 旧run43402215834@ab86f30a已结束：A/B/TV成功，两个真实节点与D失败。
+  蜡笔小新：奶酪返回217805字符JSON但旧驱动精确标题匹配超时；玩偶普通/quick空正文。
+- 实质修复1e33f8c0：明确用户选集后的已授权本机Spider媒体不再额外GET探测；
+  保留当前站点、端口、会话真实health检查，把媒体读取/超时/取消交给唯一正式播放器。
+  原版VideoViewModel/SiteApi也是解析后交播放器，无独立1.5秒媒体GET。
+  远端候选筛选及所有真实出帧验收不变，没有加长1.5秒超时，没有切未编译的新整核。
+- run43404975997@b32a80b6：A/B成功，完整JVM730/730（0失败/跳过），
+  新增SelectedSpiderPlaybackTest 3/3，含>1.5秒回调只由播放器传输触发一次、外站/过期拒绝。
+  原始JUnit工件14026359995，ZIP SHA256 b88659e6abc116b10928b87b13c8d8406c0544f3a6ecc31c1f13344855006526。
+  TV/D待最终记录，不能用旧HEAD结果替代。
+- **奶酪小城已真正进入Media3**：SELECTED_PROXY_MEDIA_DEFERRED_TO_PLAYER→
+  MEDIA3 PLAYBACK_INITIALIZING/BUFFERING；Spider约3038ms返回200/HLS/InputStream。
+  获取其HTTPS URL引用实际403 HTML→本机502→Media3网络错误2001；0首帧。
+  不重复此403，不猜UA/Referer/Cookie，不把403认作已确定的登录原因。
+- 奶酪蜡笔小新已进入真实详情，但首个匹配条目只有2集，严格门槛拒绝；未播放。
+  38050711修正带季名标题匹配；4e158d20继续检查其他真实候选的标题、TV类别和≥3集，
+  确认后才播放；记录实际来源集名，按1→2→3→重播顺序；首集失败即停止。
+- 玩偶两部均普通/quick空正文，无QR；对照原版确认第一页同样调用两参数searchContent，
+  home(true)→homeVideoContent已有；无证据支持改分页或猜测登录。
+- 新run43406275417@eb1bcd2a只重测奶酪/蜡笔小新；没有重发小城403或玩偶相同空查询。
+  当前正在构建/设备测试。四份前轮JSON见evidence/b32a80b6-*.json。
+
+下一步：有限次数读取43406275417奶酪/Shinchan报告及两轮TV/D终态，不重复触发。
+若确认TV候选与三集且首集进入播放器，沿真实首帧/错误继续定位；不得跳过后续错误。
+小城媒体下一恢复条件为同一合法授权下可读的HLS/媒体或原版实际媒体对照，当前原版
+只验证过选站/搜索，**没有原版播放成功/同样403的证据**，不宣称共同SOURCE_BLOCKED。
+玩偶需要原版真实搜索/直接浏览/公开授权返回证据；空正文不能判无资源或AUTH_BLOCKED。
+
+```sh
+cd /workspace/aura-tv
+git status --short --branch
+git log -8 --oneline
+# 读取43406275417，别再跑ab86f30a或无变化小城403。
+# 有下一处实质TV驱动修复时才更新触发文件，提交信息含[cheese-shinchan]：
+# git add .github/p0-playback-trigger.json && git commit -m "ci: evidenced TV repair [cheese-shinchan]"
+# git push origin HEAD:refs/heads/codex/herrin-p0-live-playback-20261110
+```
+
+---
+
 # 最新断点：2026-11-13 Android CI通道实际恢复，双节点已运行
 
 **环境通道已可用，P0播放仍FAIL；不要再以本地缺SDK作为停止条件。**
