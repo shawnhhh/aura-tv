@@ -220,12 +220,11 @@ class FanTaiYingRealMainUiTest {
         val seen = mutableSetOf<String>()
         val inspected = JSONArray().also { report.put("tv_candidates_inspected",it) }
         repeat(8) { attempt ->
-            val eligible = authorizedTitleCard() and SemanticsMatcher("uninspected TV series title") { node ->
+            val eligible = authorizedTitleCard() and SemanticsMatcher("uninspected season nine TV series title") { node ->
                 node.config.getOrElse(SemanticsProperties.TestTag) { "" } !in seen &&
                     node.config.getOrElse(SemanticsProperties.Text) { emptyList() }.any {
                         val name = it.text
-                        name.contains(title) && (name.trim() == title ||
-                            Regex("季|TV|电视|新番|全集|1992",RegexOption.IGNORE_CASE).containsMatchIn(name))
+                        name.contains(title) && ShowGroupMatcher.titleParts(name).second == 9
                     }
             }
             // Existing real LazyRow exposes scroll semantics. Inspect its
@@ -249,7 +248,7 @@ class FanTaiYingRealMainUiTest {
             val tvCategory = category.contains("动漫") || category.contains("剧集")
             inspected.put(JSONObject().put("title",name.take(120)).put("episode_count",count)
                 .put("tv_title_verified",tvTitle).put("tv_category_verified",tvCategory))
-            if (count >= 3 && tvTitle && tvCategory) {
+            if (count >= 3 && tvTitle && tvCategory && ShowGroupMatcher.titleParts(name).second == 9) {
                 report.put("selected_source_title",name.take(120)).put("tv_animation_title_verified",true)
                 ShowGroupMatcher.titleParts(name).second?.let { report.put("selected_source_season",it) }
                 return
@@ -257,7 +256,7 @@ class FanTaiYingRealMainUiTest {
             key(KeyEvent.KEYCODE_BACK)
             compose.waitUntil(10_000) { exists("search-input") && exists("catalog-film-rail") }
         }
-        throw Stop("TV_SERIES_WITH_THREE_REAL_EPISODES_NOT_FOUND")
+        throw Stop("TV_SEASON_NINE_WITH_THREE_REAL_EPISODES_NOT_FOUND")
     }
     private fun returnDetails() {
         repeat(3) {
