@@ -89,16 +89,20 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
         if (streaming) return firstVerified(identity,health,onEvent,accept)
         val errors = linkedMapOf<String, String>()
         val searched = mutableListOf<String>()
+        val preferred = sources.firstOrNull { it.id == preferredSourceId &&
+            it.type in listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER) }
         val sourceStages = listOf(
-            listOf(HerrinSourceType.NAS),
-            listOf(HerrinSourceType.CLOUD),
-            listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER)
+            sources.filter { it.type == HerrinSourceType.NAS },
+            sources.filter { it.type == HerrinSourceType.CLOUD },
+            listOfNotNull(preferred),
+            sources.filter { it.type in listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER) && it !== preferred }
         )
         for (stage in sourceStages) {
-            val tier = if (stage.first() == HerrinSourceType.TVBOX_CMS)
+            if (stage.isEmpty()) continue
+            val tier = if (stage.first().type in listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER))
                 HerrinSourceTier.TVBOX else HerrinSourceTier.PERSONAL
             val results = mutableListOf<HerrinSourceMovie>()
-            val stageSources = sources.filter { it.type in stage }.distinctBy { it.id }.take(16)
+            val stageSources = stage.distinctBy { it.id }.take(16)
             suspend fun fetch(source: HerrinFilmSource): Pair<List<HerrinSourceMovie>, String?> {
                 return try {
                     val matches = withTimeoutOrNull(6_000L) { source.search(identity) }
