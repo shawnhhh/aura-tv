@@ -1,6 +1,15 @@
 {
-  "attempt": "20261113-ci-channel-1",
-  "reason": "Independent build/device jobs and proven M476 phase event fix; execute both real MainActivity nodes",
-  "nodes": ["cheese", "wanou"],
-  "abi": "armeabi-v7a"
+  "attempt": "20261113-shinchan-three-episodes-1",
+  "reason": "Compare cheese and wanou real source results on Crayon Shin-chan series; try episodes 1, 2, 3 with unchanged first-frame, 60s, Seek and replay gates",
+  "nodes": [
+    "cheese",
+    "wanou"
+  ],
+  "abi": "armeabi-v7a",
+  "film_title": "蜡笔小新",
+  "episodes": [
+    1,
+    2,
+    3
+  ]
 }
