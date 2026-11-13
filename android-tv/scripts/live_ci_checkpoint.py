@@ -24,6 +24,10 @@ def checkpoint(directory, node):
     stage = next((name for name in ('instrumentation-started', 'apks-installed',
                                    'emulator-booted', 'kvm-ready')
                   if (directory / name).exists()), 'RUNNER_SETUP')
+    output = directory / 'instrumentation.txt'
+    text = output.read_text() if output.exists() else ''
+    completed = 'OK (1 test)' in text and not any(x in text for x in
+                ('INSTRUMENTATION_FAILED', 'FAILURES!!!'))
     data = {
         'head': os.environ.get('GITHUB_SHA'),
         'run_id': os.environ.get('GITHUB_RUN_ID'),
@@ -33,6 +37,7 @@ def checkpoint(directory, node):
         'emulator_booted': (directory / 'emulator-booted').exists(),
         'apks_installed': (directory / 'apks-installed').exists(),
         'instrumentation_started': (directory / 'instrumentation-started').exists(),
+        'instrumentation_completed': completed,
         'last_infrastructure_stage': stage,
         'provider_report_present': bool(report),
         'provider_verdict': report.get('verdict'),
@@ -47,10 +52,6 @@ def checkpoint(directory, node):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / 'environment-checkpoint.json').write_text(json.dumps(data, indent=2) + '\n')
     # A report alone does not establish that the instrumentation completed.
-    output = (directory / 'instrumentation.txt')
-    text = output.read_text() if output.exists() else ''
-    completed = 'OK (1 test)' in text and not any(x in text for x in
-                ('INSTRUMENTATION_FAILED', 'FAILURES!!!'))
     passed = completed and data['apks_installed'] and report.get('verdict') == 'REAL_PLAYBACK_PASS'
     suite = ET.Element('testsuite', name='RealMainActivity.' + node,
                        tests='1', failures=str(int(not passed)), errors='0', skipped='0')
@@ -71,7 +72,7 @@ def aggregate(directory, nodes):
         gate = subprocess.run(['python3', str(Path(__file__).with_name('verify_live_node_acceptance.py')),
                                '--node', node, '--directory', str(folder)],
                               capture_output=True, text=True)
-        infrastructure = all(data.get(k) for k in ('kvm_ready', 'emulator_booted', 'apks_installed', 'instrumentation_started'))
+        infrastructure = all(data.get(k) for k in ('kvm_ready', 'emulator_booted', 'apks_installed', 'instrumentation_started', 'instrumentation_completed'))
         results[node] = {
             'environment': data,
             'real_playback_accepted': bool(infrastructure and gate.returncode == 0 and
@@ -84,6 +85,7 @@ def aggregate(directory, nodes):
     accepted = all(x['real_playback_accepted'] for x in results.values()) and all(x == 'success' for x in jobs.values())
     summary = {'head': os.environ.get('GITHUB_SHA'), 'run_id': os.environ.get('GITHUB_RUN_ID'),
                'event': os.environ.get('GITHUB_EVENT_NAME'), 'jobs': jobs, 'nodes': results,
+               'android_toolchain_available': (directory / 'toolchain' / 'android-toolchain.txt').is_file() and jobs['BUILD_RESULT'] == 'success',
                'all_requested_nodes_accepted': accepted,
                'p0_complete': accepted and set(nodes) == {'cheese', 'wanou'}}
     directory.mkdir(parents=True, exist_ok=True)

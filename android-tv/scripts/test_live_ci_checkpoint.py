@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 spec = importlib.util.spec_from_file_location('checkpoint', Path(__file__).with_name('live_ci_checkpoint.py'))
@@ -34,6 +36,22 @@ class CheckpointTest(unittest.TestCase):
             self.assertTrue(data['apks_installed'])
             self.assertEqual('SOURCE_EMPTY_RESPONSE', data['provider_failure_code'])
             self.assertEqual('1', ET.parse(path / 'TEST-real-wanou.xml').getroot().attrib['failures'])
+
+    def test_failed_instrumentation_cannot_be_promoted_by_a_passing_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            path = directory / 'p0-node-cheese'
+            path.mkdir()
+            for marker in ('kvm-ready', 'emulator-booted', 'apks-installed', 'instrumentation-started'):
+                (path / marker).touch()
+            (path / 'instrumentation.txt').write_text('INSTRUMENTATION_FAILED')
+            (path / 'cheese.json').write_text(json.dumps({'verdict': 'REAL_PLAYBACK_PASS'}))
+            data = collector.checkpoint(path, 'cheese')
+            self.assertFalse(data['instrumentation_completed'])
+            with patch.object(collector.subprocess, 'run', return_value=SimpleNamespace(returncode=0)):
+                self.assertFalse(collector.aggregate(directory, ['cheese']))
+            summary = json.loads((directory / 'environment-checkpoint.json').read_text())
+            self.assertFalse(summary['nodes']['cheese']['real_playback_accepted'])
 
     def test_aggregate_missing_artifacts_persists_checkpoint_and_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
