@@ -114,7 +114,7 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         latest[detail.movie().handle()] ?: projectDetail(detail)
     }
     @Synchronized fun media(film: Film, number: Int, line: String): PlaybackResult = try {
-        val selected = ticket(film, number, line).copy(replay = lastRequestedEpisode == line)
+        val selected = ticket(film, number, line).copy(replay = lastRequestedEpisode == line, title = "${film.title} · 第${number}集")
         lastRequestedEpisode = line
         PlaybackResult.Ready(PlaybackMedia("kernel-selection:$line", kernelPlayback = selected))
     } catch (_: IllegalArgumentException) { PlaybackResult.Unavailable("来源会话或选集已变化，请返回详情重新选择") }

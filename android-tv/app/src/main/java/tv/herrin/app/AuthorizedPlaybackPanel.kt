@@ -131,6 +131,7 @@ private fun AuthorizedPlaybackSession(
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var showVerification by remember { mutableStateOf(false) }
+    var kernelPanelOpen by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
     val retryControl = remember { FocusRequester() }
@@ -400,14 +401,14 @@ private fun AuthorizedPlaybackSession(
             PlayerRemoteFocusPolicy.Destination.NONE -> Unit
         }
     }
-    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification) {
+    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification, kernelPanelOpen) {
         // A focused button must not pin the overlay forever. Any remote key restarts
         // this timer; while paused the controls remain available for resuming.
         if (!isLive && controlsVisible && player.isPlaying &&
-            playbackState == Player.STATE_READY && !showVerification && errorMessage == null) {
+            playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && errorMessage == null) {
             // Compact controls clear quickly so they do not obstruct film.
             // An explicitly expanded TV settings sheet gets more time.
-            delay(if (advancedControlsVisible) 8_000 else 4_500)
+            delay(if (playback.whole) 4_000 else if (advancedControlsVisible) 8_000 else 4_500)
             controlsVisible = false
             if (!testDiagnostics) advancedControlsVisible = false
             playerRootFocus.requestFocus()
@@ -718,7 +719,11 @@ private fun AuthorizedPlaybackSession(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        if (PlayerRemoteFocusPolicy.showTransport(
+        if (playback.whole && controlsVisible && errorMessage == null) KernelMinimalControls(
+            playback, media.kernelPlayback?.title.orEmpty(), shownPosition, shownDuration,
+            initialControl, moreControl, { requestBack("kernel-back") }, ::applyRemoteSeek,
+            { controlsInteractionEpoch++ }, { kernelPanelOpen = it }, onLineSelection, onEpisodeSelection)
+        if (!playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.78f).padding(bottom = 24.dp)
