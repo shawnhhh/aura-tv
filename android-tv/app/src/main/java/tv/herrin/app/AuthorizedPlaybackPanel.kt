@@ -132,6 +132,7 @@ private fun AuthorizedPlaybackSession(
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var showVerification by remember { mutableStateOf(false) }
     var kernelPanelOpen by remember { mutableStateOf(false) }
+    var kernelRemoteHeld by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
     val initialControl = remember { FocusRequester() }
     val retryControl = remember { FocusRequester() }
@@ -401,11 +402,11 @@ private fun AuthorizedPlaybackSession(
             PlayerRemoteFocusPolicy.Destination.NONE -> Unit
         }
     }
-    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification, kernelPanelOpen) {
+    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification, kernelPanelOpen, kernelRemoteHeld) {
         // A focused button must not pin the overlay forever. Any remote key restarts
         // this timer; while paused the controls remain available for resuming.
         if (!isLive && controlsVisible && player.isPlaying &&
-            playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && errorMessage == null) {
+            playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && !kernelRemoteHeld && errorMessage == null) {
             // Compact controls clear quickly so they do not obstruct film.
             // An explicitly expanded TV settings sheet gets more time.
             delay(if (playback.whole) 4_000 else if (advancedControlsVisible) 8_000 else 4_500)
@@ -498,6 +499,11 @@ private fun AuthorizedPlaybackSession(
         .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
+        if (playback.whole && key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER)) {
+            kernelRemoteHeld = key.action == KeyEvent.ACTION_DOWN
+        }
         if (key.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT || key.keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
                 if (key.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) onNextEpisode?.invoke() else onPreviousEpisode?.invoke()

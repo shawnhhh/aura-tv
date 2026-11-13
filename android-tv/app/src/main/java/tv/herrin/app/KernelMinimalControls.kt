@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -34,8 +35,7 @@ internal fun KernelMinimalControls(
     require(session.whole)
     val player = session.player
     var panel by remember { mutableStateOf<String?>(null) }
-    var revision by remember { mutableIntStateOf(0) }
-    val context = LocalContext.current
+        val context = LocalContext.current
     var capabilities by remember { mutableStateOf<DeviceMediaCapabilitySnapshot?>(null) }
     LaunchedEffect(panel) {
         onPanel(panel != null)
@@ -76,7 +76,7 @@ internal fun KernelMinimalControls(
                 TextButton(onClick = {
                     if (player.playWhenReady) session.pause() else session.play()
                     onInteraction()
-                }, modifier = Modifier.focusRequester(initialFocus).testTag("kernel-toggle")) {
+                }, modifier = Modifier.focusRequester(initialFocus).focusProperties { down = settingsFocus }.testTag("kernel-toggle")) {
                     Text(if (player.playWhenReady) "Ⅱ" else "▷", color = Color.White)
                 }
                 TextButton(onClick = { onSeek(10_000) }) { Text("10 ↷", color = Color.White) }
@@ -101,19 +101,19 @@ internal fun KernelMinimalControls(
                                 item { TextButton(onClick = { open("技术信息") }) { Text("技术信息") } }
                             }
                             "倍速" -> items(PlaybackTransport.speeds) { speed ->
-                                TextButton(onClick = { session.manager.setSpeed(speed); revision++; panel = null; onInteraction() }) { Text("${speed}x") }
+                                TextButton(onClick = { session.manager.setSpeed(speed); panel = null; onInteraction() }) { Text("${speed}x") }
                             }
                             "音轨", "字幕" -> {
                                 val type = if (name == "音轨") C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT
                                 if (type == C.TRACK_TYPE_TEXT) item {
-                                    TextButton(onClick = { session.manager.selectTrack(type, -1, -1); revision++; panel = null; onInteraction() }) { Text("关闭字幕") }
+                                    TextButton(onClick = { session.manager.selectTrack(type, -1, -1); panel = null; onInteraction() }) { Text("关闭字幕") }
                                 }
                                 val options = PlaybackTransport.options(player, type)
                                 if (options.isEmpty()) item { Text("暂无可用轨道", color = Color.White) }
                                 items(options) { option ->
                                     TextButton(onClick = {
                                         session.manager.selectTrack(type, option.groupIndex, option.trackIndex)
-                                        revision++; panel = null; onInteraction()
+                                        panel = null; onInteraction()
                                     }) { Text((if (option.selected) "✓ " else "") + option.label) }
                                 }
                             }

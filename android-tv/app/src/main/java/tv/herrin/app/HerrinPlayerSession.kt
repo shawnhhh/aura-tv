@@ -114,7 +114,7 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
         fun seekBy(delta: Long): Long {
             if (!whole) return requireNotNull(legacy).manager.seekBy(delta)
             if (!isActiveWhole()) return player.currentPosition
-            val destination = (player.currentPosition + delta).coerceAtLeast(0)
+            val destination = tv.herrin.kernel.SeekBounds.offset(player.currentPosition, delta, player.duration)
             requireNotNull(runtime).gateway.seek(destination)
             return destination
         }
