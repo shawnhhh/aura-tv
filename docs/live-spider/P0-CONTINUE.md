@@ -1,6 +1,7 @@
 # 最新断点：2026-11-13 原版选择事务、宿主请求与严格来源优先级
 
 P0未完成。代码验证HEAD：`f7ac613380b57e1cd5d621d7af425b77756b5b8a`；
+最新兼容验证HEAD：`7063fe8dda15bbb269bcfe8956b565a659be48bb`；
 本记录提交后的当前HEAD以 `git rev-parse HEAD` 为准。唯一开发分支
 `codex/herrin-p0-live-playback-20261110`。PR84经GitHub连接器实读仍Draft，
 head为`08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7`，未同步代码，不自动合并。
@@ -20,7 +21,15 @@ head为`08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7`，未同步代码，不自动�
   P0FastSourceSearchTest新增顺序、提前停止及验证失败后继续的回归；身份匹配保持。
 - `f7ac613380b57e1cd5d621d7af425b77756b5b8a`：最后统一触发宿主check、
   Kotlin/Java编译、全部JVM单测、Lint及Debug。工作流run43355940615，
-  https://github.com/shawnhhh/aura-tv/actions/runs/43355940615 。结果见本批验证报告。
+  https://github.com/shawnhhh/aura-tv/actions/runs/43355940615 。结果：宿主Kotlin/Java与contract通过，724项JVM中6失败。
+  5项SMB因本工作流未启动原夹具，1项媒体超时阶段断言失败（根因未确认）。
+  `9a1b6c7c`补齐原SMB夹具并先完成编译/Lint/Debug再跑全部JVM；
+  新run43356896048中SMB启动成功，Lint暴露6个宿主兼容错误，JVM未执行。
+  `8a2f2ffc`修复API26 Future和证据getter的Media3 OptIn；不改/跳过断言。
+  最终统一run43357720463：Debug成功、JVM723/724（M476第33行阶段分类断言仍失败），
+  Lint剩余1处getter声明，0d5c52cb已补。7063fe8d定向复核编译/Lint/Debug，
+  最终定向run43358681621@7063fe8d的contract、Kotlin/Java、Lint、Debug全部成功；
+  不把它替代完整JVM的723/724、0跳过失败结论，也不代表完整core/adapter或出帧。
 
 真实修改文件：
 `android-tv/fongmi-kernel/adapter/src/main/java/tv/herrin/kernel/android/{OriginalVodSession,FongMiKernel}.java`、
@@ -59,6 +68,7 @@ cd /workspace/aura-tv
 git status --short --branch
 git log -5 --oneline
 # 先读 docs/live-spider/20261113-kernel-validation.zh-CN.md 的精确SHA CI结果。
+# 已确认遗留M476阶段分类断言失败：原第33行。保留原断言及旧路径不补丁的约束。
 # 仅从合法原始发布/对应源码取得匹配依赖；不要再验证两份已拒绝的媒体库。
 python3 android-tv/fongmi-kernel/verify_dependencies.py --directory /path/to/real-aars --report
 # 有已有305dff2检出及完整真实锁后再stage/core/adapter统一编译；不要以contract代替。
