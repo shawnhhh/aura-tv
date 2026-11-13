@@ -8,6 +8,8 @@ file paths, stack memory, URLs, tokens or other applications' crash sections.
 import json
 import re
 import subprocess
+import os
+from pathlib import Path
 
 
 def classify(text, package="tv.herrin.app:spider"):
@@ -70,7 +72,25 @@ def classify(text, package="tv.herrin.app:spider"):
     return {'native_crashes': result[-4:]}
 
 
-if __name__ == '__main__':
+def collect(physical=False, owned_record=None):
+    if physical:
+        # Real TVs can contain other applications' crash records. Do not read
+        # the global crash buffer there, even for later in-memory redaction.
+        return dict(native_crashes=[], collection_scope='OWN_APPLICATION_EXIT_INFO_ONLY',
+                    own_process_exit_metadata={k: v for k, v in (owned_record or {}).items()
+                        if k in ('reason_code', 'exit_status', 'pid', 'timestamp_ms') and type(v) is int},
+                    evidence_gap='FULL_NATIVE_STACK_NOT_AVAILABLE_WITHOUT_MATCHING_LEGAL_DIAGNOSTIC_MATERIAL')
     captured = subprocess.run(['adb', 'logcat', '-b', 'crash', '-d', '-t', '600'],
                               capture_output=True, text=True, timeout=15)
-    print(json.dumps(classify(captured.stdout), indent=2))
+    return classify(captured.stdout)
+
+
+if __name__ == '__main__':
+    physical = os.environ.get('LIVE_PHYSICAL_DEVICE') == 'true'
+    record = None
+    if physical and os.environ.get('LIVE_NODE') in ('cheese', 'wanou'):
+        try:
+            record = json.loads(Path('evidence', os.environ['LIVE_NODE']+'.json').read_text()).get('own_process_exit_metadata')
+        except (OSError, ValueError):
+            pass
+    print(json.dumps(collect(physical, record), indent=2))

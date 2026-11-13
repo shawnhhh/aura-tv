@@ -58,9 +58,11 @@ bash android-tv/scripts/run_fantaiying_arm_e2e.sh --p0-native run-on-disposable-
 只在新的环境/授权依据下执行。证据保存于`native-device-evidence/SHA12-node-film/`。
 再次运行前保留并移走仓库`evidence/`，驱动不会静默覆盖旧证据。
 
-旧崩溃证据只留信号/模块分类，无法补回PC/寄存器。新采集器只解析这两个授权播放包的
-crash buffer，保留相对PC、实际共享库basename、Build ID、数值寄存器和信号；不导出
+旧崩溃证据只留信号/模块分类，无法补回PC/寄存器。一次性模拟器的新采集器只导出这两个授权播放包的
+crash buffer记录，保留相对PC、实际共享库basename、Build ID、数值寄存器和信号；不导出
 私有路径、abort正文、内存内容、URL/账号或其他应用日志。不提取官方APK充当依赖。
+真实设备模式不读取或清理全局logcat，只使用本应用文件及本UID的ApplicationExitInfo（API30+），
+限定本次开始后的`:spider`进程退出原因/状态/时间。未公开的完整栈标记证据缺口，不因未读而报“无崩溃”。
 有对应Build ID的合法ELF/调试符号后，才可用NDK llvm-symbolizer/ndk-stack定位；没有时不得猜函数。
 
 原创素材播放器基准位于既有`PlaybackDiagnosticsIntegrationTest`，使用生产

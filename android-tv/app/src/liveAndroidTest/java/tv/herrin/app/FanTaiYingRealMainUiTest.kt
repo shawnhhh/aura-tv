@@ -284,6 +284,7 @@ class FanTaiYingRealMainUiTest {
 
     private fun node(name: String, fileName: String) {
         val start = SystemClock.elapsedRealtime()
+        val startedWallMs = System.currentTimeMillis()
         report = JSONObject().put("node",name).put("warehouse",warehouse).put("authorized_title",title)
             .put("authorized_year",expectedYear ?: JSONObject.NULL).put("verdict","FAIL_PLAYBACK").put("stages",stages)
             .put("playback_host_scope","PRODUCTION_MAIN_ACTIVITY").put("first_frame",false)
@@ -439,6 +440,9 @@ class FanTaiYingRealMainUiTest {
             runCatching{report.put("search_response_shape",JSONObject(File(context.filesDir,"spider-search-shape.json").readText()))}
             runCatching{report.put("sdk_network_scope","PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED")
                 .put("sdk_network_evidence",JSONArray(File(context.filesDir,"spider-network-shape.json").readText()))}
+            SpiderExitDiagnostics.recentMetadata(context, startedWallMs)?.let {
+                report.put("own_process_exit_metadata", JSONObject(it))
+            }
             report.put("safe_player_journal",HerrinPlaybackDiagnosticJournal.export())
                 .put("observed_network_media_bytes_after_listener",bytes.get()).put("elapsed_ms",SystemClock.elapsedRealtime()-start)
             File(context.filesDir,"live-node-$fileName.json").writeText(report.toString(2)+"\n")

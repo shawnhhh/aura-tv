@@ -118,7 +118,7 @@ if [[ "${LIVE_MAIN_UI:-false}" == true ]]; then test_selector=tv.herrin.app.FanT
 if [[ "${LIVE_NODE:-}" == cheese ]]; then test_selector+='#cheeseRealNode'; fi
 if [[ "${LIVE_NODE:-}" == wanou ]]; then test_selector+='#wanouGegeRealNode'; fi
 # Disposable CI emulator only: scope fixed error classifications to this invocation.
-adb logcat -c
+if [[ "${LIVE_PHYSICAL_DEVICE:-false}" != true ]]; then adb logcat -c; fi
 touch evidence/instrumentation-started
 adb shell am instrument "${instrument_args[@]}" -w -r -e class "$test_selector" tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee evidence/instrumentation.txt
 python3 - <<'PY'

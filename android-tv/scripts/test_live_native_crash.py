@@ -1,9 +1,18 @@
 import json
 import unittest
-from live_native_crash import classify
+from unittest.mock import patch
+from live_native_crash import classify, collect
 
 
 class NativeCrashTest(unittest.TestCase):
+    def test_physical_device_never_reads_global_or_other_app_logs(self):
+        with patch('live_native_crash.subprocess.run') as run:
+            data = collect(True, {'reason_code': 5, 'exit_status': 4, 'url': 'private-secret'})
+        run.assert_not_called()
+        self.assertEqual(data['own_process_exit_metadata'], {'reason_code': 5, 'exit_status': 4})
+        self.assertNotIn('private-secret', json.dumps(data))
+        self.assertEqual(data['native_crashes'], [])
+
     def test_exact_module_relative_pc_registers_without_private_paths_or_messages(self):
         text = '''*** *** ***
 ABI: 'arm64'

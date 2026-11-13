@@ -38,4 +38,22 @@ internal object SpiderExitDiagnostics {
             reasonLabel(exited.reason)
         }.getOrNull()
     }
+
+    /** Own-UID metadata for an explicitly bounded diagnostic invocation.
+     * Never reads a trace, crash description, another package or global logcat.
+     */
+    fun recentMetadata(context: Context, sinceMs: Long): Map<String, Long>? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return runCatching {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                ?: return@runCatching null
+            val now = System.currentTimeMillis()
+            val exited = manager.getHistoricalProcessExitReasons(context.packageName, 0, 12)
+                .filter { it.processName == context.packageName + ":spider" }
+                .filter { it.timestamp in sinceMs..now }
+                .maxByOrNull { it.timestamp } ?: return@runCatching null
+            mapOf("reason_code" to exited.reason.toLong(), "exit_status" to exited.status.toLong(),
+                "pid" to exited.pid.toLong(), "timestamp_ms" to exited.timestamp)
+        }.getOrNull()
+    }
 }
