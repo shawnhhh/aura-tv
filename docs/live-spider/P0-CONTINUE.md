@@ -1,6 +1,12 @@
-# 最新断点：2026-11-13 已进入Media3，当前检查API35原生转译兼容性
+# 最新断点：2026-11-13 真实Media3已接通，源访问/原生运行边界仍阻塞出帧
 
 P0未完成：全部真实首帧/60秒/暂停/Seek/重播/切集验收仍未通过。
+最新完整JVM730/730（0失败/跳过）、Lint/宿主成功，工件14030310663，ZIP SHA256
+97abab94f20c4e7cde33c63ea4aa20be26565bcd82b482ffdf5ce13060e33cd5。
+run43410792149原TV259/260失败保留：空首页夹具只等详情容器即查episode-2的异步竞态。
+52e38a5b在原10秒内等待真实episode-2，原断言保留；只复用完整TV回归，不重发源请求。
+复核run43413805649@92eb718a宿主兼容/Lint/Debug与TV260/260成功，0失败/跳过、68必测类齐全。
+真实节点CI/D仍FAILURE，复核通过不覆盖或替代真实视频失败。
 代码已推唯一分支；原版参考仍为官方最新5.8.7（发布SHA已核实），未改APK。
 
 实质播放修复1e33f8c0：明确选集的已授权本机媒体不再额外GET探测，保留当前站点/端口/
@@ -34,6 +40,13 @@ API35栈为libc/插件或其他原生模块；API30 ARM64含libc/NDK转译，ARM
 进一步区分宿主JNI、插件与转译环境。当前没有可核验的下一处Kotlin/Java修复根因。
 本轮首集失败后未执行第2/3集及暂停/Seek/重播，不记这些操作通过。
 
+当前配置审计run43417003939@2633fc4d已成功读取：声明JAR 6d10a60...、49站，
+奶酪/玩偶、根级、规则均无声明请求头；不把旧9d5f配置的结论冒充当前读取。
+此前只读工具遇302，现有限跟随真实服务器声明的公网重定向，禁止私网/降级，不记录URL或凭据。
+最新审计实际直接200、redirect_statuses=[]；不声称本次成功必然由重定向代码引起。
+原版ARM64/API35 TV对照曾被android:id/immersive_cling提示遮挡；已按实际android:id/ok
+做系统提示确认，正在run43417003907收尾。不是原版播放FAIL/PASS，先读真实终态再归因。
+
 证据：evidence/b32a80b6-*.json、8e417abc-*.json、7d47fcc7-*.json、
 13c7b3c7-original-player-observation.json、a619ab48-original-wanou-default.json、
 2f02cf4d-cheese-shinchan-api35.json及2f02cf4d-native-crash.json。
@@ -43,7 +56,7 @@ API35栈为libc/插件或其他原生模块；API30 ARM64含libc/NDK转译，ARM
 cd /workspace/aura-tv
 git status --short --branch
 git log -10 --oneline
-# 先读43410792149的完整JVM/Lint/TV/D终态；节点已完成且失败，不要重复本次云端请求。
+# 先读43417003907原版TV对照终态；HERRIN节点/730 JVM/TV复核已完成，不要重复受阻云端请求。
 # 有一次性原生ARM64设备并已下载对应内部诊断包后，精确续跑（会清理本测试应用配置）：
 # LIVE_FILM_TITLE=蜡笔小新 LIVE_MAIN_UI=true LIVE_DISPOSABLE_DEVICE=true LIVE_NODE=cheese ARM_PACKAGE=true LIVE_INSTALL_ABI=arm64-v8a LIVE_PREBUILT_APKS=diagnostic-apks LIVE_METHOD_METADATA=false LIVE_REQUIRE_ACCEPTANCE=true bash android-tv/scripts/run_live_nodes.sh
 ```
