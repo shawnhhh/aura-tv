@@ -49,6 +49,11 @@ def ui():
     nodes=list(root.iter('node'))
     known={'vod','vodHome','vodUrl','title','positive','negative','search','select','cancel','mode','text',
            'permission_allow_button','permission_allow_foreground_only_button','button1','button2'}
+    # Public compiled widget identifiers only; never text/content-desc/QR values.
+    allowed_packages = {PACKAGE, 'android', 'com.android.permissioncontroller', 'com.google.android.permissioncontroller', 'com.android.settings'}
+    public_ids = sorted({n.get('resource-id','') for n in nodes
+                         if n.get('package') in allowed_packages and re.fullmatch(r'[A-Za-z0-9_.]+:id/[A-Za-z0-9_]{1,80}', n.get('resource-id',''))})
+    report['last_public_widget_ids'] = public_ids[:64]
     report['last_ui_shape'] = dict(known_controls=sorted({n.get('resource-id','').split('/')[-1]
         for n in nodes if n.get('resource-id','').split('/')[-1] in known}),
         known_labels=sorted({n.get('text') for n in nodes if n.get('text') in
@@ -348,6 +353,12 @@ def main():
         report['package_primary_abi']=next((x.split('=',1)[1].strip() for x in info.splitlines() if 'primaryCpuAbi=' in x),'unknown')
         report['device_abis']=adb('shell','getprop','ro.product.cpu.abilist').strip()
         if report['package_primary_abi']!=REFERENCE_ABI:raise RuntimeError('EXPECTED_STANDARD_ABI_INSTALL')
+        if TV_REFERENCE:
+            # The pinned original HomeActivity explicitly requests notifications
+            # on API33+. Grant only this declared OS permission on our disposable
+            # emulator; this is unrelated to source login or QR authorization.
+            adb('shell','pm','grant',PACKAGE,'android.permission.POST_NOTIFICATIONS')
+            report['notification_permission_granted_for_startup'] = True
         adb('shell','monkey','-p',PACKAGE,'-c','android.intent.category.LAUNCHER','1')
         adb('forward','tcp:19978','tcp:9978')
         mark('open_settings')
@@ -397,6 +408,14 @@ def main():
         if isinstance(error,HTTPError):report['http_status']=error.code
     finally:
         report['elapsed_ms']=round((time.monotonic()-begin)*1000)
+        try:
+            crash_raw = adb('logcat', '-b', 'crash', '-d', '-t', '600', timeout=15)
+            spec = importlib.util.spec_from_file_location('reference_crashes', Path('android-tv/scripts/live_native_crash.py'))
+            classifier = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(classifier)
+            report['native_crash_metadata'] = classifier.classify(crash_raw, PACKAGE)
+        except Exception:
+            report['native_crash_observation'] = 'UNAVAILABLE'
         try:report['official_app_process_alive']=bool(adb('shell','pidof',PACKAGE,check=False).strip())
         except Exception:pass
         try:adb('shell','rm','-f','/data/local/tmp/p0-reference.xml',check=False)
