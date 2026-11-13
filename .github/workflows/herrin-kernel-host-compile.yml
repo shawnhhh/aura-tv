@@ -1,6 +1,6 @@
 name: HERRIN kernel host compile only
 on:
-  # 2026-11-13 batch: validate dispatch cancellation/linkage and source priority
+  # 2026-11-13 batch: validate original-session minimal chrome and media admission
   # after all source changes, once. Complete original engine remains blocked.
   # Developer batches intentionally do not trigger full compilation on every
   # source commit. A workflow edit at the END of a batch triggers exactly one
