@@ -39,6 +39,7 @@ internal fun TmdbBrowseRails(
 ) {
     val scope = rememberCoroutineScope()
     val navigation = remember { arrayOfNulls<Job>(1) }
+    val pendingRow = remember(page) { arrayOfNulls<Int>(1) }
     DisposableEffect(page) { onDispose { navigation[0]?.cancel(); navigation[0] = null } }
     val specs = TmdbRailSpec.forPage(page)
     val lists = buildList<Pair<String, List<Film>>> {
@@ -79,9 +80,14 @@ internal fun TmdbBrowseRails(
                                 if (event.type == KeyEventType.KeyDown &&
                                     event.nativeKeyEvent.keyCode in setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)) {
                                     val up = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP
-                                    val targetIndex = if (up) (rowIndex - 1 downTo 0).firstOrNull { lists[it].second.isNotEmpty() }
-                                        else (rowIndex + 1 until lists.size).firstOrNull { lists[it].second.isNotEmpty() }
+                                    // Key repeats can arrive before scroll/requestFocus commits on the
+                                    // next frame. Route from that pending destination, not the old
+                                    // poster still receiving input, or Down/Up escapes to the hero.
+                                    val fromRow = if (navigation[0]?.isActive == true) pendingRow[0] ?: rowIndex else rowIndex
+                                    val targetIndex = if (up) (fromRow - 1 downTo 0).firstOrNull { lists[it].second.isNotEmpty() }
+                                        else (fromRow + 1 until lists.size).firstOrNull { lists[it].second.isNotEmpty() }
                                     navigation[0]?.cancel()
+                                    pendingRow[0] = targetIndex ?: fromRow
                                     navigation[0] = scope.launch {
                                         if (targetIndex == null) { if (up) requester("play").requestFocus() }
                                         else {

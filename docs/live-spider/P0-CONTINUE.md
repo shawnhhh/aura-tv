@@ -1,3 +1,15 @@
+# 2026-11-15 CI 实测后修复连续导航目标
+
+6cfa8bd5: JVM732/732、Lint/Debug、ARM64诊断构建通过；TV262项/1失败，唯一失败是新增
+TmdbBrowsePageTest:88 快速上下30轮最终焦点等待超时（非崩溃）。旧海报在下一帧前仍接收按键，
+取消前一跳后又从旧rowIndex路由，Down/Up会误跳到hero。TmdbBrowseRails现从进行中的目标行续算，
+保留原断言/超时。最终提交和回归以实际Git/Actions为准。
+本次最近播放、极简UI、HTTPS配对HTTP保存均在原始JUnit通过；MP4/HLS均60秒/暂停/Seek/释放通过。
+真实节点/真机崩溃仍未验收，不得用上述夹具结果替代。初次API31系统SystemUI NavigationBar空指针
+导致uiautomator null root，只重跑该作业；不修改应用去绕过系统异常。
+
+---
+
 # 2026-11-15 批量修复续点（真实节点仍未验收）
 
 保留 ee0c4694，分支不变，PR85 Draft/open/unmerged。
