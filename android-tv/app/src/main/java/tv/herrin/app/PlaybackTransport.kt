@@ -81,6 +81,21 @@ object PlaybackTransport {
         return TrackUtil.setTrackSelection(player, track)
     }
 
+    fun select(player: Player, type: Int, groupIndex: Int, trackIndex: Int,
+               select: (Track) -> Boolean): Boolean {
+        if (!player.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)) return false
+        if (type == C.TRACK_TYPE_TEXT && groupIndex == -1 && trackIndex == -1)
+            return select(Track(type, "", "").apply { isSelected = false })
+        val option = options(player, type).firstOrNull {
+            it.groupIndex == groupIndex && it.trackIndex == trackIndex
+        } ?: return false
+        val group = player.currentTracks.groups[groupIndex]
+        val ordinal = player.currentTracks.groups.take(groupIndex).filter { it.type == type }
+            .sumOf { it.length } + trackIndex
+        return select(TrackUtil.createTrack(type, option.label, group.getTrackFormat(trackIndex), ordinal)
+            .apply { isSelected = true })
+    }
+
     fun currentLabel(player: Player, type: Int): String {
         val tracks = options(player, type)
         return tracks.firstOrNull { it.selected }?.label

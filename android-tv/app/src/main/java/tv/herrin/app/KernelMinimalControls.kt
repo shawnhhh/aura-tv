@@ -32,7 +32,6 @@ internal fun KernelMinimalControls(
     onBack: () -> Unit, onSeek: (Long) -> Unit, onInteraction: () -> Unit,
     onPanel: (Boolean) -> Unit, onLines: (() -> Unit)?, onEpisodes: (() -> Unit)?
 ) {
-    require(session.whole)
     val player = session.player
     var panel by remember { mutableStateOf<String?>(null) }
     val audioFormat = player.currentTracks.groups.asSequence().filter { it.type == C.TRACK_TYPE_AUDIO }
@@ -62,7 +61,7 @@ internal fun KernelMinimalControls(
     Box(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 24.dp)) {
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Color(0x66000000)),
             verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹", color = Color.White) }
+            TextButton(onClick = onBack, modifier = Modifier.testTag("player-back")) { Text("‹", color = Color.White) }
             Text(title, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1)
             TextButton(onClick = { open("设置") }, modifier = Modifier.focusRequester(settingsFocus)
                 .testTag("kernel-settings")) { Text("⚙", color = Color.White) }
@@ -70,28 +69,28 @@ internal fun KernelMinimalControls(
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0x99000000))
             .padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(clock(position), color = Color.White)
-                Text(clock(duration), color = Color.White)
+                Text(clock(position), color = Color.White, modifier = Modifier.testTag("player-position-label"))
+                Text(clock(duration), color = Color.White, modifier = Modifier.testTag("player-duration-label"))
             }
             LinearProgressIndicator(progress = {
                 if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
             }, modifier = Modifier.fillMaxWidth().height(3.dp), color = Color.White,
                 trackColor = Color(0x66555555))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { open("倍速") }, modifier = Modifier.weight(1f)) {
+                TextButton(onClick = { open("倍速") }, modifier = Modifier.weight(1f).testTag("transport-speed")) {
                     Text("${player.playbackParameters.speed}x", color = Color.White)
                 }
-                TextButton(onClick = { onSeek(-10_000) }) { Text("↶ 10", color = Color.White) }
+                TextButton(onClick = { onSeek(-10_000) }, modifier = Modifier.testTag("transport-rewind")) { Text("↶ 10", color = Color.White) }
                 TextButton(onClick = {
                     if (player.playWhenReady) session.pause() else session.play()
                     onInteraction()
-                }, modifier = Modifier.focusRequester(initialFocus).focusProperties { down = settingsFocus }.testTag("kernel-toggle")) {
+                }, modifier = Modifier.focusRequester(initialFocus).focusProperties { up = settingsFocus }.testTag(if (session.whole) "kernel-toggle" else "transport-toggle")) {
                     Text(if (player.playWhenReady) "Ⅱ" else "▷", color = Color.White)
                 }
-                TextButton(onClick = { onSeek(10_000) }) { Text("10 ↷", color = Color.White) }
+                TextButton(onClick = { onSeek(10_000) }, modifier = Modifier.testTag("transport-forward")) { Text("10 ↷", color = Color.White) }
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { open("音轨") }) { Text("音轨", color = Color.White) }
-                    TextButton(onClick = { open("字幕") }) { Text("字幕", color = Color.White) }
+                    TextButton(onClick = { open("音轨") }, modifier = Modifier.testTag("transport-audio")) { Text("音轨", color = Color.White) }
+                    TextButton(onClick = { open("字幕") }, modifier = Modifier.testTag("transport-subtitle")) { Text("字幕", color = Color.White) }
                 }
             }
         }
@@ -105,8 +104,8 @@ internal fun KernelMinimalControls(
                     LazyColumn {
                         when (name) {
                             "设置" -> {
-                                onLines?.let { action -> item { TextButton(onClick = { panel = null; action() }) { Text("线路") } } }
-                                onEpisodes?.let { action -> item { TextButton(onClick = { panel = null; action() }) { Text("选集") } } }
+                                onLines?.let { action -> item { TextButton(onClick = { panel = null; action() }, modifier = Modifier.testTag("transport-lines")) { Text("线路") } } }
+                                onEpisodes?.let { action -> item { TextButton(onClick = { panel = null; action() }, modifier = Modifier.testTag("transport-episodes")) { Text("选集") } } }
                                 item { TextButton(onClick = { open("技术信息") }) { Text("技术信息") } }
                             }
                             "倍速" -> items(PlaybackTransport.speeds) { speed ->

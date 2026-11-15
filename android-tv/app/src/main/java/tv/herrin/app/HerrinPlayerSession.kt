@@ -126,7 +126,8 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
             isActiveWhole() && requireNotNull(original).cycleTrack(type)
         } else requireNotNull(legacy).manager.cycleTrack(type)
         fun selectTrack(type: Int, group: Int, index: Int): Boolean =
-            isActiveWhole() && requireNotNull(original).selectTrack(type, group, index)
+            if (whole) isActiveWhole() && requireNotNull(original).selectTrack(type, group, index)
+            else !closed && PlaybackTransport.select(player, type, group, index, requireNotNull(legacy).manager::setTrack)
         fun setRepeatOne(value: Boolean) { if (isActiveWhole()) requireNotNull(original).repeatOne(value) else if (!whole && !closed) requireNotNull(legacy).manager.setRepeatOne(value) }
         fun setSkipSilenceEnabled(value: Boolean) { if (isActiveWhole()) requireNotNull(original).skipSilence(value) else if (!whole && !closed) requireNotNull(legacy).manager.setSkipSilenceEnabled(value) }
     }

@@ -25,86 +25,37 @@ import org.junit.runner.RunWith
 class M453BufferingRemoteFocusInstrumentedTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun ordinaryPlayerHasNoUpperLeftTextNorRelocatedDebugButtons() {
+    @Test fun productionPlayerUsesMinimalControlsAndSettingsOnTheSoleSession() {
         val server = MockWebServer()
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         server.start()
-        val media = PlaybackMedia(server.url("/clean-player.mp4").toString())
+        val media = PlaybackMedia(server.url("/clean-player.mp4").toString(), displayTitle = "Original fixture")
         val players = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Any, Boolean>())
         try {
-            // This is the actual consumer player entry, NOT PlaybackTestActivity
-            // with its explicit isolated testDiagnostics=true.
             compose.setContent {
                 AuthorizedPlaybackPanel(media = media, onPlayer = { players.add(it) }, onBack = {})
             }
-            compose.waitUntil(7_000) {
-                runCatching {
-                    compose.onNodeWithTag("transport-toggle").assertExists()
-                    compose.onNodeWithTag("transport-more").assertExists()
-                }.isSuccess
-            }
-            // Consumer playback must start as a short, two-row control strip:
-            // extra settings and all developer diagnostics are not composed.
-            compose.onNodeWithTag("transport-speed").assertDoesNotExist()
-            compose.onNodeWithTag("transport-audio").assertDoesNotExist()
-            compose.onNodeWithTag("transport-subtitle").assertDoesNotExist()
-            compose.onNodeWithTag("transport-viewport-mode").assertDoesNotExist()
-            compose.onNodeWithTag("danmaku-controls").assertDoesNotExist()
-            compose.onNodeWithTag("player-verification-toggle").assertDoesNotExist()
-            compose.onNodeWithTag("player-back-control").assertDoesNotExist()
-            compose.onNodeWithTag("player-verification-status").assertDoesNotExist()
-            compose.onNodeWithTag("player-journey-status").assertDoesNotExist()
-
-            // Actual native TV remote Center opens advanced settings, not a
-            // test-only performClick on the additional "more" button.
-            compose.onNodeWithTag("transport-more")
+            compose.waitUntil(7_000) { runCatching {
+                compose.onNodeWithTag("transport-toggle").assertExists()
+                compose.onNodeWithTag("kernel-settings").assertExists()
+            }.isSuccess }
+            compose.onNodeWithText("Original fixture").assertExists()
+            for (tag in listOf("transport-speed", "transport-audio", "transport-subtitle", "player-back",
+                "transport-rewind", "transport-forward", "player-position-label", "player-duration-label"))
+                compose.onNodeWithTag(tag).assertExists()
+            for (tag in listOf("danmaku-controls", "transport-repeat", "transport-skip-silence",
+                "player-quality-label", "transport-viewport-mode", "transport-more", "player-verification-toggle"))
+                compose.onNodeWithTag(tag).assertDoesNotExist()
+            compose.onNodeWithTag("kernel-settings")
                 .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            compose.waitForIdle()
-            compose.onNodeWithTag("transport-more").assertIsFocused()
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
-                KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.waitUntil(5_000) {
-                runCatching {
-                    compose.onNodeWithTag("transport-viewport-mode").assertExists()
-                    compose.onNodeWithTag("transport-speed").assertExists()
-                    compose.onNodeWithTag("danmaku-controls").assertExists()
-                }.isSuccess
-            }
-            compose.onNodeWithTag("transport-viewport-mode")
-                .assertTextEquals("画面：完整显示（等比例）")
-                .assert(hasClickAction().not())
-            compose.runOnIdle { org.junit.Assert.assertEquals("Opening settings must retain the sole player identity", 1, players.size) }
-
-            // An expanded submenu must permit UP to return to the previous
-            // row. The old parent key interceptor hid every control on UP,
-            // making multi-row TV settings awkward or impossible to navigate.
-            compose.onNodeWithTag("transport-repeat")
-                .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            compose.waitForIdle()
-            compose.onNodeWithTag("transport-repeat").assertIsFocused()
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
-                KeyEvent.KEYCODE_DPAD_UP)
-            compose.waitForIdle()
-            compose.onNodeWithTag("transport-more").assertExists()
-            compose.onNodeWithTag("transport-viewport-mode").assertExists()
-
-            // Return to compact HUD without removing or relocating the user's
-            // explicitly deleted upper-left technical labels.
-            compose.onNodeWithTag("transport-more")
-                .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
-                KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.waitUntil(5_000) {
-                runCatching {
-                    compose.onNodeWithTag("transport-viewport-mode").assertDoesNotExist()
-                    compose.onNodeWithTag("transport-speed").assertDoesNotExist()
-                }.isSuccess
-            }
-            compose.onNodeWithTag("player-verification-toggle").assertDoesNotExist()
-            compose.onNodeWithTag("player-back-control").assertDoesNotExist()
-        } finally {
-            server.shutdown()
-        }
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+            compose.onNodeWithText("技术信息").assertExists()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            compose.onNodeWithTag("transport-toggle").assertExists()
+            compose.onNodeWithTag("transport-subtitle").performClick()
+            compose.onNodeWithText("关闭字幕").performClick()
+            compose.runOnIdle { org.junit.Assert.assertEquals("Settings retain sole player", 1, players.size) }
+        } finally { server.shutdown() }
     }
 
     @Test fun remoteDownFocusesTransportEvenWhenNoMediaBytesHaveArrived() {

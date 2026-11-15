@@ -173,6 +173,7 @@ private fun AuthorizedPlaybackSession(
     var kernelFirstFrame by remember(playback) { mutableStateOf(false) }
     val displayPlayer = remember(playback) { mutableStateOf(playback.player) }
     var currentMediaSession by remember(playback) { mutableStateOf<MediaSession?>(null) }
+    val decoderEvidence = remember(playback) { PlaybackDecoderEvidence() }
     val player = remember(playback, displayPlayer.value) {
         journey.begin(0, candidates.size, android.os.SystemClock.elapsedRealtime())
         displayPlayer.value.apply {
@@ -217,8 +218,11 @@ private fun AuthorizedPlaybackSession(
                         .firstOrNull()?.dataSpec?.uri?.toString() ?: retries.current.uri
                     val failure = FongMiPlaybackRecovery.classify(error.errorCodeName,
                         httpStatus, error, failedUrl)
+                    val decoderDiagnostic = (this@apply as? ExoPlayer)?.let { decoderEvidence.report(it, error) }
+                    if (decoderDiagnostic != null) android.util.Log.i("HerrinDecoderEvidence", decoderDiagnostic)
                     val diagnostic = PlaybackErrorReport.media(error.errorCodeName,
-                        error.errorCode, httpStatus, error, failedUrl, activeVariant + 1, candidates.size)
+                        error.errorCode, httpStatus, error, failedUrl, activeVariant + 1, candidates.size) +
+                        (decoderDiagnostic?.let { "\n$it" } ?: "")
                     HerrinPlaybackDiagnosticJournal.record("MEDIA3", "PLAYBACK_ERROR",
                         "CODE=${error.errorCode}")
                     // FongMi source fallback: a server-side 5xx on one explicitly
@@ -309,6 +313,11 @@ private fun AuthorizedPlaybackSession(
             addListener(events)
             if (!playback.whole) playback.manager.onTimeout = events::onPlayerError
         }
+    }
+    DisposableEffect(player) {
+        val exo = player as? ExoPlayer
+        exo?.addAnalyticsListener(decoderEvidence)
+        onDispose { exo?.removeAnalyticsListener(decoderEvidence) }
     }
     fun reportProgress() {
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
@@ -409,7 +418,7 @@ private fun AuthorizedPlaybackSession(
             playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && !kernelRemoteHeld && errorMessage == null) {
             // Compact controls clear quickly so they do not obstruct film.
             // An explicitly expanded TV settings sheet gets more time.
-            delay(if (playback.whole) 4_000 else if (advancedControlsVisible) 8_000 else 4_500)
+            delay(if (testDiagnostics && advancedControlsVisible) 8_000 else 4_000)
             controlsVisible = false
             if (!testDiagnostics) advancedControlsVisible = false
             playerRootFocus.requestFocus()
@@ -499,7 +508,7 @@ private fun AuthorizedPlaybackSession(
         .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
-        if (playback.whole && key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_UP,
+        if (!isLive && key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_UP,
                 KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT,
                 KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER)) {
             kernelRemoteHeld = key.action == KeyEvent.ACTION_DOWN
@@ -725,11 +734,11 @@ private fun AuthorizedPlaybackSession(
             val seconds = (ms / 1000L).coerceAtLeast(0L)
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
-        if (playback.whole && controlsVisible && errorMessage == null) KernelMinimalControls(
-            playback, media.kernelPlayback?.title.orEmpty(), shownPosition, shownDuration,
-            initialControl, moreControl, { requestBack("kernel-back") }, ::applyRemoteSeek,
+        if (!isLive && !testDiagnostics && controlsVisible && errorMessage == null) KernelMinimalControls(
+            playback, media.kernelPlayback?.title ?: media.displayTitle, shownPosition, shownDuration,
+            initialControl, moreControl, { onBack() }, ::applyRemoteSeek,
             { controlsInteractionEpoch++ }, { kernelPanelOpen = it }, onLineSelection, onEpisodeSelection)
-        if (!playback.whole && PlayerRemoteFocusPolicy.showTransport(
+        if (testDiagnostics && !playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.78f).padding(bottom = 24.dp)

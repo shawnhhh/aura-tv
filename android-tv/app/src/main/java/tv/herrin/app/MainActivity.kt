@@ -3960,7 +3960,7 @@ private fun Herrin(startup: StartupPresentation) {
                     key(catalogScope, film.id, historyEpisode, historyLine, playerRetryEpoch) {
                     val historyTicket = remember(chosenMedia) { watchHistory.begin(historyScope, film.id, historyEpisode, historyLine) }
                     AuthorizedPlaybackPanel(
-                        media = chosenMedia.copy(diagnosticSessionId = playbackDiagnosticId),
+                        media = chosenMedia.copy(diagnosticSessionId = playbackDiagnosticId, displayTitle = film.title),
                         onNextEpisode = if (SeasonPlayback.adjacent(film, historyEpisode, historyLine, 1) != null) ({ changeEpisode(1) }) else null,
                         onPreviousEpisode = if (SeasonPlayback.adjacent(film, historyEpisode, historyLine, -1) != null) ({ changeEpisode(-1) }) else null,
                         onPlayer = {
