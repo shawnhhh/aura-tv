@@ -1,3 +1,14 @@
+# 2026-11-15 第二次完整回归后的 HTTPS 会话结束修复
+
+2bdb5f13 全部JVM732/732、Lint/Debug、ARM64诊断、API31通过；TV262项/1失败。
+连续30轮上下/快速分类/详情焦点恢复已通过，唯一失败为 LanConfigurationTest:52 /end读取gzip/chunked正文时
+EOFException。实际原因：pairing.close让250ms reaper在NanoHTTPD完成发送前stop所有socket。
+核对固定NanoHTTPD2.3.1源码后，现立即撤销配对权限，暂阻reaper抢先stop，在Response.send完成并flush后
+finally关闭监听；不增加任意延迟，不放宽原EOF/200断言。最终SHA/CI待实际读取。
+真实HTTP配置地址本轮只GET一次，403 text/plain，拒绝位置未证实；不再重试，不把它当配对失败。
+
+---
+
 # 2026-11-15 CI 实测后修复连续导航目标
 
 6cfa8bd5: JVM732/732、Lint/Debug、ARM64诊断构建通过；TV262项/1失败，唯一失败是新增

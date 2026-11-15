@@ -13,6 +13,7 @@ internal class LanConfigServer(
     private val applied: (String) -> Unit
 ) : NanoHTTPD(host, 0) {
     val pairing = ConfigPairingSession(maxLifetimeMs = 30 * 60_000L)
+    private val endingResponse = java.util.concurrent.atomic.AtomicBoolean(false)
     private val reaper by lazy { java.util.Timer("lan-config-expiry", true) }
     internal val certificate = LanTlsIdentity(context).load(host)
     val fingerprint: String = MessageDigest.getInstance("SHA-256").digest(certificate.certificate.encoded)
@@ -23,17 +24,28 @@ internal class LanConfigServer(
         val tls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
         makeSecure(tls.sslContext().serverSocketFactory, null)
         reaper.scheduleAtFixedRate(object : java.util.TimerTask() {
-            override fun run() { if (pairing.expired()) end() }
+            override fun run() { if (pairing.expired() && !endingResponse.get()) end() }
         }, 250L, 250L)
     }
     override fun serve(session: IHTTPSession): Response {
-        fun response(code: Response.Status, body: String, type: String = "application/json"): Response =
-            newFixedLengthResponse(code, type, body).apply {
+        fun response(code: Response.Status, body: String, type: String = "application/json",
+                     closeAfterSend: Boolean = false): Response {
+            val bytes = body.toByteArray(Charsets.UTF_8)
+            val result = if (closeAfterSend) object : Response(code, type,
+                java.io.ByteArrayInputStream(bytes), bytes.size.toLong()) {
+                override fun send(outputStream: java.io.OutputStream) {
+                    // NanoHTTPD 2.3.1 finishes gzip/chunks and flushes inside send.
+                    // Revoke immediately, but never let the reaper truncate /end.
+                    try { super.send(outputStream) } finally { this@LanConfigServer.end() }
+                }
+            } else newFixedLengthResponse(code, type, body)
+            return result.apply {
                 addHeader("Cache-Control", "no-store")
                 addHeader("X-Content-Type-Options", "nosniff")
                 addHeader("Referrer-Policy", "no-referrer")
                 addHeader("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'")
             }
+        }
         if (session.headers["host"] != "$host:$listeningPort" || pairing.expired())
             return response(Response.Status.FORBIDDEN, "{}")
         if (session.method == Method.GET && session.uri in setOf("/", "/center.js", "/center.css")) {
@@ -130,7 +142,12 @@ internal class LanConfigServer(
                     prefs.cloudWebDavUrl=url
                     applied("nas");JSONObject().put("ok",true)
                 }
-                "/end" -> { pairing.close(); JSONObject().put("ok", true) }
+                "/end" -> {
+                    if (!endingResponse.compareAndSet(false, true))
+                        return response(Response.Status.FORBIDDEN, "{}")
+                    pairing.close()
+                    return response(Response.Status.OK, "{\"ok\":true}", closeAfterSend = true)
+                }
                 "/status" -> JSONObject().put("endpoint", TmdbEndpoints.current)
                     .put("tokenConfigured", prefs.tmdbReadToken.isNotBlank())
                     .put("tvbox", prefs.tvBoxWarehouseUrl).put("m3u", prefs.livePlaylistUrl)

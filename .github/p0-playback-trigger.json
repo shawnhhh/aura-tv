@@ -1,5 +1,5 @@
 {
-  "attempt": "20261115-observed-burst-focus-fix",
+  "attempt": "20261115-observed-end-response-eof",
   "reason": "Batch catalog page preservation/retry, production minimal UI and safe decoder evidence; full regression plus ARM64 diagnostics only. Do not repeat unchanged provider failures.",
   "nodes": [
     "cheese"
