@@ -1,3 +1,16 @@
+# 2026-11-15 批量修复续点（真实节点仍未验收）
+
+保留 ee0c4694，分支不变，PR85 Draft/open/unmerged。
+f57b62ea 修复延迟刷新吞分页、失败页重试；3c1a48ff 接入生产极简控制与实际解码器诊断；
+a3af3805 扩展指定 HTTP 源的 TLS 配对保存/通知/持久化测试。后续修正移除生产弹幕渲染、
+实体 Back 直接返回详情。详情见 [本轮报告](20261115-batch-repair.md)。
+首批 CI：https://github.com/shawnhhh/aura-tv/actions/runs/43700904084 。最终修正 SHA/CI 以实际 Git/Actions 为准，
+不要把运行中当通过；每个最终修正 SHA 需完整回归和 ARM64 内部诊断包。
+新增分类循环、快速切换、分页保留及失败页重试测试；最近播放既有测试未删除。
+没有新真机堆栈/4003/QR/真实源导入与激活验收；不重试无变化403/SIG，不宣称稳定。
+
+---
+
 # 最新断点：P0真实节点未出帧；当前生产播放器原创基准已通过
 
 唯一分支：`codex/herrin-p0-live-playback-20261110`；[Draft PR85](https://github.com/shawnhhh/aura-tv/pull/85)，未合并。

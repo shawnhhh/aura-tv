@@ -484,12 +484,6 @@ private fun AuthorizedPlaybackSession(
     val backGate = remember { PlaybackBackGate() }
     fun requestBack(source: String, physicalKey: Long? = null) {
         if (!backGate.accept(physicalKey, android.os.SystemClock.uptimeMillis())) return
-        if (!testDiagnostics && controlsVisible && !isLive) {
-            controlsVisible = false
-            advancedControlsVisible = false
-            playerRootFocus.requestFocus()
-            return
-        }
         android.util.Log.i("HerrinPlayerBack",
             "source=$source focus=${context.javaClass.simpleName} released=${playback.isClosed}")
         onBack()
@@ -625,7 +619,7 @@ private fun AuthorizedPlaybackSession(
             modifier = Modifier.fillMaxSize()
         )
         }
-        if (!isLive && !playback.whole) Media3DanmakuOverlay(player, media.uri, media.danmakuSources,
+        if (testDiagnostics && !isLive && !playback.whole) Media3DanmakuOverlay(player, media.uri, media.danmakuSources,
             danmaku.value, Modifier.fillMaxSize())
         val hasDecodedVideo = if (playback.whole) kernelFirstFrame else (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 0
         if (isLive) {
