@@ -1,6 +1,6 @@
 {
-  "attempt": "20261113-shinchan-same-tv-api35-arm64-1",
-  "reason": "Both Android11 translation ABIs crashed on the verified TV first episode. One official API35 Google APIs image comparison, matching targetSdk35, same standard ARM64 app and S9/E001; no source header guesses or Xiaocheng/Wanou retries.",
+  "attempt": "20261115-batch-ui-catalog-diagnostics",
+  "reason": "Batch catalog page preservation/retry, production minimal UI and safe decoder evidence; full regression plus ARM64 diagnostics only. Do not repeat unchanged provider failures.",
   "nodes": [
     "cheese"
   ],
