@@ -15,3 +15,12 @@ Evidence limits:
 - Retained ee0c4694 and its recent→details→explicit continue→player→details→recent regression. Existing full TV suite includes P0RecentPlaybackReturnTest and MP4/HLS sixty-second original-media baseline. Original media does not validate Fantaiying.
 
 Local verification: static pinned-source/single-player checks passed; four playback-boundary Python tests passed. Gradle assemble attempted with writable /tmp Gradle home; sandbox socket restriction blocked distribution download (no local SDK/device). Full verification and ARM64 internal diagnostic artifacts requested in the single final CI batch. See current Actions status, not this file, for execution results. No acceptance release.
+
+
+## Final measured validation
+
+Executable SHA efc0ba974e7605be361565bddd48434fad018200. Run43704718685: JVM732/732, Lint/Debug, ARM64 diagnostic build and TV262/262 all pass, no failures/errors/skips. Raw TV XML contains94 classes; required-class gate passes. API31 startup/hot resume passes in43704722411.
+
+CI exposed two actual failures after the initial batch: fast alternating D-pad ended on the wrong focus destination (ComposeTimeoutException at TmdbBrowsePageTest:88), fixed in2bdb5f13 by continuing from the pending target; then /end returned an incomplete gzip/chunked body (EOFException at LanConfigurationTest:52), fixed inefc0ba97 by revoking authorization immediately and closing sockets after NanoHTTPD Response.send flushes. Original assertions retained. Final raw JUnit confirms both pass.
+
+Original MP4/HLS respectively60116/60155ms wall time and1458/1444 frames, pause/resume, seek/new frames and release pass. These remain original-fixture capability evidence only. Diagnostic artifact14157973111 has been downloaded and SHA/ELF-verified. Real HTTP config GET was403 text/plain (denial origin unproven); no successful external import/activation or new real-node/device/QR acceptance. No stable release.

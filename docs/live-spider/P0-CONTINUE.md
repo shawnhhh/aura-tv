@@ -1,3 +1,26 @@
+# 最终续点：2026-11-15 批量修复回归通过，P0真实节点仍未验收
+
+已验证代码SHA：`efc0ba974e7605be361565bddd48434fad018200`；后续仅本交付记录提交，无代码变更。
+分支不变，PR85保持Draft/open/unmerged，保留ee0c4694；不使用Superpowers。
+
+- [统一CI 43704718685](https://github.com/shawnhhh/aura-tv/actions/runs/43704718685)：JVM732/732、Lint/Debug、ARM64诊断、TV262/262，0失败/错误/跳过。原始XML含94个执行类，必测门禁完整通过。
+- [API31 43704722411](https://github.com/shawnhhh/aura-tv/actions/runs/43704722411)：启动/热恢复通过。
+- 连续上下30轮、快速分类切换、分页、慢网刷新、详情焦点恢复、最近播放导航、生产极简UI、HTTPS配对HTTP源保存/通知/持久化及会话结束均在原始JUnit通过。
+- MP4/HLS原创素材分别60116/60155ms墙钟、1458/1444渲染帧，暂停恢复、Seek至3000ms后新帧及返回释放通过；**不等于饭太硬节点通过**。
+- [ARM64内部诊断工件14157973111](https://github.com/shawnhhh/aura-tv/actions/runs/43704718685/artifacts/14157973111)：已下载核验精确SHA、APK哈希与AArch64 ELF。ZIP SHA256 `cdc421d17cbd89fcdb317033b76ad46f1676a543e0ea15aa77f3fc3e15e742f3`，仅内部诊断，非稳定版。
+
+实质提交：f57b62ea分页保留/正确失败页重试；3c1a48ff生产极简控制/解码诊断；a3af3805 HTTP源配对测试；6cfa8bd5实体Back直返详情/移除生产弹幕；2bdb5f13按尚未提交的焦点目标续算连续D-pad；efc0ba97会话失效立即生效、结束响应flush后再关闭HTTPS监听。
+首次TV新增焦点测试超时、第二次/end正文EOF均保留且实际修复，未放宽断言；最终全部通过。
+
+未完成：没有新真机闪退堆栈、实际奶酪4003或玩偶真实QR；不把焦点超时当真机崩溃根因。
+指定HTTP配置地址一次普通GET收到403 text/plain，拒绝位置未证实；未取得可导入正文，不再重试，不能算实际导入/影视点激活通过。
+既有奶酪媒体403/SIG和玩偶空正文不无变化重放。仍需新合法源/授权响应，或一次原生ARM64设备/匹配符号证据。
+诊断prepare沿用下方脚本，下载本轮工件并替换sha为efc0ba97完整值；不清理日常电视配置。
+
+[本轮详细报告](20261115-batch-repair.md) · [最终脱敏结果](evidence/20261115-batch-validation.json)
+
+---
+
 # 2026-11-15 第二次完整回归后的 HTTPS 会话结束修复
 
 2bdb5f13 全部JVM732/732、Lint/Debug、ARM64诊断、API31通过；TV262项/1失败。
