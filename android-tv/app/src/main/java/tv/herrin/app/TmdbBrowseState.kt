@@ -17,6 +17,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
     val rows = mutableStateMapOf<String, TmdbRailState>()
     val scrolls = mutableMapOf<String, LazyListState>()
     private val pending = mutableMapOf<String, TmdbBrowseBatch>()
+    private val failedPages = mutableMapOf<String, Int>()
     private val loads = mutableMapOf<String, Mutex>()
     private var focused: String? = null
     fun row(spec: TmdbRailSpec) = rows[spec.key] ?: TmdbRailState()
@@ -24,7 +25,14 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
     fun allFilms() = TmdbBrowsePage.entries.flatMap(::films).distinctBy(Film::id)
     fun focus(key: String?) {
         if (focused != key) {
-            focused?.let { old -> pending.remove(old)?.let { publish(old, it) } }
+            focused?.let { old -> pending.remove(old)?.let { batch ->
+                // A deferred first-page refresh must not erase pages loaded while focused.
+                val current = rows[old] ?: TmdbRailState()
+                publish(old, batch)
+                if (current.page > 1) rows[old] = rows.getValue(old).copy(
+                    entries = (batch.entries + current.entries).distinctBy { it.film.id },
+                    page = current.page, hasMore = current.hasMore, error = current.error, loading = current.loading)
+            } }
             focused = key
         }
     }
@@ -65,7 +73,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
         val current = row(spec)
         if (!current.loading && current.hasMore) load(spec, (current.page + 1).coerceAtLeast(1), false)
     }
-    suspend fun retry(spec: TmdbRailSpec) = load(spec, if (row(spec).page == 0) 1 else row(spec).page, true)
+    suspend fun retry(spec: TmdbRailSpec) = load(spec, failedPages[spec.key] ?: if (row(spec).page == 0) 1 else row(spec).page, true)
     private suspend fun load(spec: TmdbRailSpec, page: Int, force: Boolean) = loads.getOrPut(spec.key) { Mutex() }.withLock {
         // A replacement LaunchedEffect can start before the cancelled owner's
         // finally/catch finishes. Wait for that owner instead of dropping refresh.
@@ -83,6 +91,8 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
                     }
                 }
             }
+            currentCoroutineContext().ensureActive()
+            failedPages.remove(spec.key)
             if (page == 1 && focused == spec.key && row(spec).entries.isNotEmpty()) {
                 pending[spec.key] = batch
                 rows[spec.key] = row(spec).copy(loading = false)
@@ -91,6 +101,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
             rows[spec.key] = row(spec).copy(loading = false)
             throw cancel
         } catch (_: Exception) {
+            failedPages[spec.key] = page
             rows[spec.key] = row(spec).copy(loading = false, error = true)
         }
     }

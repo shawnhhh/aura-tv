@@ -69,6 +69,29 @@ class TmdbBrowsePageTest {
         compose.onNodeWithTag("nav-电影").performSemanticsAction(SemanticsActions.RequestFocus){it()}
         compose.onNodeWithTag("nav-电影").assertIsFocused()
     }
+    @Test fun repeatedDpadAndRapidCategoryChangesKeepCachedPostersAndRestoreDetailsFocus() {
+        ready()
+        val inst = InstrumentationRegistry.getInstrumentation()
+        repeat(4) {
+            for (page in listOf("电影", "剧集", "动漫", "综艺")) {
+                compose.onNodeWithTag("nav-$page").performClick()
+                compose.onNodeWithTag("tmdb-page-" + TmdbBrowsePage.from(page)!!.name.lowercase()).assertExists()
+            }
+        }
+        compose.onNodeWithTag("nav-电影").performClick()
+        val card = compose.onNodeWithTag("card-tmdb-movie-11")
+        card.performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        repeat(30) {
+            inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+            inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
+        }
+        compose.waitUntil(5000) { runCatching { card.assertIsFocused() }.isSuccess }
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("film-detail-list").assertExists()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5000) { runCatching { card.assertIsFocused() }.isSuccess }
+    }
+
     @Test fun homeKeepsRecentThenTrendingThenDomesticAndNoRegionSubtitle() {
         ready()
         compose.onNodeWithTag("tmdb-heading-recent").assertTextEquals("最近播放")

@@ -74,6 +74,42 @@ class TmdbBrowseRepositoryTest {
         } finally { release.countDown();initial?.cancelAndJoin();directory.deleteRecursively() }
     }
 
+    @Test fun deferredRefreshCannotErasePagesLoadedWhileFocused(): Unit = runBlocking {
+        val fixture = TmdbBrowseFixture()
+        val state = TmdbBrowseState(TmdbBrowseRepository(fixture), "fixture")
+        val spec = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.LATEST)
+        state.refresh(TmdbBrowsePage.MOVIE)
+        state.focus(spec.key)
+        state.refresh(TmdbBrowsePage.MOVIE, true)
+        state.more(spec)
+        val paged = state.row(spec).entries.map { it.film.id }
+        assertEquals(2, state.row(spec).page)
+        assertTrue(paged.size > 1)
+        state.focus(null)
+        assertEquals(paged, state.row(spec).entries.map { it.film.id })
+        assertEquals(2, state.row(spec).page)
+        assertEquals(paged.size, paged.toSet().size)
+    }
+
+    @Test fun failedNextPageRetryRequestsFailedPageAndRetainsContent(): Unit = runBlocking {
+        val fixture = TmdbBrowseFixture()
+        val state = TmdbBrowseState(TmdbBrowseRepository(fixture), "fixture")
+        val spec = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.LATEST)
+        state.refresh(TmdbBrowsePage.MOVIE)
+        val initial = state.row(spec).entries
+        fixture.offline = true
+        state.more(spec)
+        assertTrue(state.row(spec).error)
+        assertEquals(initial, state.row(spec).entries)
+        assertEquals(1, state.row(spec).page)
+        fixture.offline = false
+        state.retry(spec)
+        assertFalse(state.row(spec).error)
+        assertEquals(2, state.row(spec).page)
+        assertTrue(state.row(spec).entries.containsAll(initial))
+        assertTrue(state.row(spec).entries.size > initial.size)
+    }
+
     @Test fun releaseProofDoesNotConfuseTheatricalFutureOrUnknownWithDigital() {
         assertEquals(TmdbAvailability.THEATRICAL_ONLY, TmdbReleaseEvidence.evaluate("movie", movie(3 to "2026-01-01"), day).state)
         assertEquals(TmdbAvailability.UPCOMING, TmdbReleaseEvidence.evaluate("movie", movie(4 to "2026-11-10"), day).state)
