@@ -4988,7 +4988,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     providerFilms != null && film.playbackEpisodes.isEmpty() -> "暂无可播选集"
                                     film.playbackEpisodes.isEmpty() -> "▶ 播放演示"
                                     else -> "▶ 播放授权片源"
-                                }, selected = true, reduced = reduceMotion) {
+                                }, modifier = Modifier.testTag("detail-play-cta"), selected = true, reduced = reduceMotion) {
                                     if (showGroup != null && groupResume != null)
                                         playGroupSource(groupResume.first)
                                     else if (showGroup != null && groupSection?.episodes?.isNotEmpty() == true)
