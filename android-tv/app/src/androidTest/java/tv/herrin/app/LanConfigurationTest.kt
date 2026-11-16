@@ -43,6 +43,11 @@ class LanConfigurationTest {
             try {
                 assertEquals(200, post("/sources", org.json.JSONObject().put("url", "http://www.饭太硬.net/tv").toString(), session).first)
                 assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), prefs.tvBoxWarehouseUrl)
+                val invalid = post("/sources", org.json.JSONObject()
+                    .put("url", "ftp://example.invalid/file").toString(), session)
+                assertEquals(400, invalid.first)
+                assertEquals("SOURCE_URL_INVALID", org.json.JSONObject(invalid.second).getString("code"))
+                assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), prefs.tvBoxWarehouseUrl)
                 assertEquals(listOf("sources"), applied.toList())
                 assertEquals(prefs.tvBoxWarehouseUrl, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
                 assertEquals(trustedRoot,prefs.tvBoxTrustedSpiderRootUrl)

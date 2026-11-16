@@ -162,9 +162,14 @@ internal class LanConfigServer(
                 }
                 "/sources" -> {
                     val raw = input.getString("url")
-                    val url = if (raw.isBlank()) "" else AdditionalServiceConfigs.sourceAddress(raw)
+                    // Accept the same HTTP(S) TVBox address policy as the TV settings.
+                    // Respond with a bounded code, never the URL, on malformed input.
+                    val url = if (raw.isBlank()) "" else TvBoxUrl.normalize(raw, allowHttp = true)
+                        ?: return response(Response.Status.BAD_REQUEST,
+                            "{\"code\":\"SOURCE_URL_INVALID\"}")
                     prefs.tvBoxWarehouseUrl = url
-                    // This never grants permission to execute a new Spider JAR.
+                    // Persisted primary source is independent of remote availability.
+                    // A successful save does not execute newly supplied Spider JARs.
                     applied("sources"); JSONObject().put("ok", true)
                 }
                 "/live" -> {
@@ -184,7 +189,10 @@ internal class LanConfigServer(
             response(Response.Status.OK, output.toString())
         } catch (_: Exception) {
             // Exception messages may include a credential or source URL; never return/log them.
-            response(Response.Status.BAD_REQUEST, "{\"error\":\"配置无效或保存失败\"}")
+            val code = if (session.uri == "/sources") "SOURCE_SAVE_OR_APPLY_FAILED"
+                else "CONFIG_INVALID"
+            response(Response.Status.BAD_REQUEST, JSONObject().put("code", code)
+                .put("error", "配置无效或保存失败").toString())
         }
     }
     private fun address(raw: String): String {

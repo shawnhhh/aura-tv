@@ -4,7 +4,17 @@ history.replaceState(null,'',location.pathname);
 const status=document.querySelector('#status');
 async function call(path,value={}){
  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Herrin-Session':session},body:JSON.stringify(value),cache:'no-store',credentials:'omit'});
- if(!r.ok)throw Error(r.status===403?'会话已失效，请从电视重新开启':'配置无效或保存失败');return r.json();
+ if(!r.ok){
+   if(r.status===403)throw Error('会话已失效，请从电视重新开启');
+   const detail=await r.json().catch(()=>({}));
+   const messages={
+     SOURCE_URL_INVALID:'影视源地址格式不受支持；请确认输入的是完整的 HTTP(S) TVBox 配置地址',
+     SOURCE_SAVE_OR_APPLY_FAILED:'电视端保存或应用影视源失败；请在电视设置中核对是否已保存',
+     CONFIG_INVALID:'配置无效或保存失败'
+   };
+   throw Error(messages[detail.code]||'配置无效或保存失败');
+ }
+ return r.json();
 }
 document.querySelector('#pair').onclick=async()=>{
  if(!document.querySelector('#verified').checked){status.textContent='请先核对证书指纹';return;}
