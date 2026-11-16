@@ -585,12 +585,12 @@ private fun Herrin(startup: StartupPresentation) {
     val phoneSourceImport = remember(context) { LanSourceImport(context) }
     var phoneSourceId by remember { mutableStateOf<String?>(null) }
     var candidateRoot by remember { mutableStateOf("") }
-    fun finishPhoneSource(expectedId: String?) {
-        val id = expectedId?.takeIf { it == phoneSourceId } ?: return
-        if (phoneSourceImport.activate(id)) {
-            candidateRoot = ""
-            phoneSourceId = null
-        }
+    fun finishPhoneSource(expectedId: String?): Boolean {
+        if (expectedId == null) return phoneSourceId == null
+        if (expectedId != phoneSourceId || !phoneSourceImport.activate(expectedId)) return false
+        candidateRoot = ""
+        phoneSourceId = null
+        return true
     }
     fun failPhoneSource(code: String) { phoneSourceId?.let { phoneSourceImport.update(it, "FAILED", code) } }
     var configuredTvBoxUrl by remember { mutableStateOf(prefs.tvBoxWarehouseUrl) }
@@ -753,12 +753,12 @@ private fun Herrin(startup: StartupPresentation) {
             return@LaunchedEffect
         }
         if (phoneSourceId == null) {
-        spiderActive = false
-        activeCmsSite = null
-        spiderBridge.close()
-        tvBoxSingle = null
-        tvBoxShowAllSites = false
-        tvBoxHerrinCatalog = null
+            spiderActive = false
+            activeCmsSite = null
+            spiderBridge.close()
+            tvBoxSingle = null
+            tvBoxShowAllSites = false
+            tvBoxHerrinCatalog = null
         } else {
             phoneSourceId?.let { phoneSourceImport.update(it, "AWAITING_SITE") }
         }
@@ -884,7 +884,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
             }
             if (chosen != null) {
-                finishPhoneSource(pendingImportId)
+                if (!finishPhoneSource(pendingImportId)) return@LaunchedEffect
                 configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
                 prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
                 prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(chosen.first, config.spiderJar)
@@ -3033,7 +3033,7 @@ private fun Herrin(startup: StartupPresentation) {
                                                 tvBoxStatus = "影视点未返回影片目录"
                                                 return@launch
                                             }
-                                            finishPhoneSource(pendingImportId)
+                                            if (!finishPhoneSource(pendingImportId)) return@launch
                                             configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
                                             spiderActive = false
                                             activeCmsSite = site
@@ -3061,7 +3061,7 @@ private fun Herrin(startup: StartupPresentation) {
                                                 tvBoxStatus = "影视点未返回影片目录，可重新选择站点"
                                                 return@launch
                                             }
-                                            finishPhoneSource(pendingImportId)
+                                            if (!finishPhoneSource(pendingImportId)) return@launch
                                             configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
                                             spiderActive = true
                                             activeCmsSite = null
@@ -4235,6 +4235,9 @@ private fun Herrin(startup: StartupPresentation) {
                                 tvBoxSelectedName = ""
                                 tvBoxRunSpiderAfterApply = true
                                 vodImportFeedback = "读取中…"
+                                phoneSourceId?.let { phoneSourceImport.update(it, "SUPERSEDED") }
+                                phoneSourceId = null
+                                candidateRoot = ""
                                 tvBoxRequest = tvBoxUrlDraft.trim() to true
                                 tvBoxLoadEpoch++
                             }
@@ -4272,6 +4275,9 @@ private fun Herrin(startup: StartupPresentation) {
                         item { TvButton("导入并缓存 TVBox JSON", modifier = Modifier.testTag("tvbox-import-json-save"),
                             reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
                             tvBoxSelectedName = ""
+                            phoneSourceId?.let { phoneSourceImport.update(it, "SUPERSEDED") }
+                            phoneSourceId = null
+                            candidateRoot = ""
                             tvBoxRequest = tvBoxUrlDraft.trim() to true
                             tvBoxImportJsonRequest = tvBoxJsonDraft
                             tvBoxLoadEpoch++
@@ -4617,7 +4623,7 @@ private fun Herrin(startup: StartupPresentation) {
                                                             tvBoxStatus = "影视点未返回影片目录"
                                                             return@launch
                                                         }
-                                                        finishPhoneSource(pendingImportId)
+                                                        if (!finishPhoneSource(pendingImportId)) return@launch
                                                         configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
                                                         spiderActive = false
                                                         activeCmsSite = site
@@ -4656,7 +4662,7 @@ private fun Herrin(startup: StartupPresentation) {
                                                             tvBoxStatus = "影视点未返回影片目录，可重新选择站点"
                                                             return@launch
                                                         }
-                                                        finishPhoneSource(pendingImportId)
+                                                        if (!finishPhoneSource(pendingImportId)) return@launch
                                                         configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
                                                         spiderActive = true
                                                         activeCmsSite = null

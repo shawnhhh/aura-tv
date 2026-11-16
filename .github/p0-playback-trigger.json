@@ -1,6 +1,6 @@
 {
-  "attempt": "20261115-observed-end-response-eof",
-  "reason": "Batch catalog page preservation/retry, production minimal UI and safe decoder evidence; full regression plus ARM64 diagnostics only. Do not repeat unchanged provider failures.",
+  "attempt": "20261116-loading-phone-auth-batch",
+  "reason": "Delayed network pagination and D-pad category cancellation, transactional phone source import with actual site activation, FongMi authorization state IPC and original-fixture parse/decode/session regression. Full validation and ARM64 internal diagnostics; real provider acceptance remains pending.",
   "nodes": [
     "cheese"
   ],
