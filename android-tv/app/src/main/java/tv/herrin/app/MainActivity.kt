@@ -756,12 +756,14 @@ private fun Herrin(startup: StartupPresentation) {
             spiderActive = false
             activeCmsSite = null
             spiderBridge.close()
-            tvBoxSingle = null
-            tvBoxShowAllSites = false
-            tvBoxHerrinCatalog = null
         } else {
             phoneSourceId?.let { phoneSourceImport.update(it, "AWAITING_SITE") }
         }
+        // Candidate metadata must never reuse the previous single warehouse's
+        // sites when the new root is a multi-warehouse list.
+        tvBoxSingle = null
+        tvBoxShowAllSites = false
+        tvBoxHerrinCatalog = null
         when (val result = loadedConfig) {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
@@ -895,6 +897,7 @@ private fun Herrin(startup: StartupPresentation) {
                 SystemClock.elapsedRealtime() - scanStarted >= TvBoxAutoScanPolicy.TOTAL_BUDGET_MS)
                 scanBudgetExceeded = true
             if (chosen != null) {
+                if (!chosenSpider) spiderBridge.close()
                 spiderActive = chosenSpider
                 activeCmsSite = if (chosenSpider) null else chosen.first
                 providerFilms = chosen.second

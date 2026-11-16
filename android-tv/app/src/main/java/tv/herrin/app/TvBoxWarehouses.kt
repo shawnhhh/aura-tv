@@ -398,7 +398,9 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
                         runCatching { save(valid, json) }
                         if (parsed is TvBoxConfig.Single && wrapped != null) parsed.copy(wrappedInImage = true) else parsed
                     }
-                    is TvBoxConfig.Error -> cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：${parsed.reason}")
+                    is TvBoxConfig.Error -> cached(valid) ?: TvBoxConfig.Error(
+                        (if (runCatching { JSONObject(json).has("urls") }.getOrDefault(false))
+                            "WAREHOUSE_PARSE_FAILED" else "WAREHOUSE_FORMAT_INVALID") + "：${parsed.reason}")
                     else -> parsed
                 }
             }

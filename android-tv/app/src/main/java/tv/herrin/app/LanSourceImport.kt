@@ -43,6 +43,7 @@ internal class LanSourceImport(context: Context) {
         fun failure(reason: String): String = when {
             "HTTP 403" in reason -> "SOURCE_HTTP_403"
             "WAREHOUSE_HTTP_ERROR" in reason -> "SOURCE_HTTP_ERROR"
+            "WAREHOUSE_PARSE_FAILED" in reason -> "SOURCE_WAREHOUSE_PARSE_FAILED"
             "WAREHOUSE_FORMAT_INVALID" in reason -> "SOURCE_BODY_INVALID"
             "WAREHOUSE_URL_INVALID" in reason -> "SOURCE_URL_INVALID"
             "WAREHOUSE_" in reason -> "SOURCE_FETCH_FAILED"

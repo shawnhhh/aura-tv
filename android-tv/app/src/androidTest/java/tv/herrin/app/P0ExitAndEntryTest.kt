@@ -145,12 +145,31 @@ class P0ExitAndEntryTest {
             }
             assertEquals(fixture.url("/box.json").toString(),
                 Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            val workingRoot = fixture.url("/box.json").toString()
+            for ((path, response, code) in listOf(
+                Triple("/denied.json", okhttp3.mockwebserver.MockResponse().setResponseCode(403), "SOURCE_HTTP_403"),
+                Triple("/invalid.json", okhttp3.mockwebserver.MockResponse().setBody("not-json"), "SOURCE_BODY_INVALID"),
+                Triple("/warehouses.json", okhttp3.mockwebserver.MockResponse().setBody("""{"urls":[]}"""), "SOURCE_WAREHOUSE_PARSE_FAILED")
+            )) {
+                fixture.enqueue(response)
+                val failed = post("/sources", org.json.JSONObject().put("url", fixture.url(path).toString()), key)
+                var result = org.json.JSONObject()
+                compose.waitUntil(15000) {
+                    result = post("/sources/status", org.json.JSONObject().put("importId", failed.getString("importId")), key)
+                    result.optString("state") == "FAILED"
+                }
+                assertEquals(code, result.getString("code"))
+                assertEquals(workingRoot, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            }
             compose.onNodeWithTag("phone-config-close").performClick()
             compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("vod-apply-feedback"))
-            compose.waitUntil(15000) { runCatching { compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("成功") }.isSuccess }
+            compose.waitUntil(15000) { runCatching { compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("配置读取失败") }.isSuccess }
             assertEquals("/box.json", fixture.takeRequest().path)
             assertTrue(fixture.takeRequest().path!!.startsWith("/cms?"))
-            assertEquals(2, fixture.requestCount)
+            assertEquals("/denied.json", fixture.takeRequest().path)
+            assertEquals("/invalid.json", fixture.takeRequest().path)
+            assertEquals("/warehouses.json", fixture.takeRequest().path)
+            assertEquals(5, fixture.requestCount)
         }
     }
 }
