@@ -1,0 +1,90 @@
+{
+  "source_sha": "dbf8b005f445242e91cfc5715082787215606fbc",
+  "preserved_baseline": "2c5a2a5b0b171367a136e446dbf1a596397e05b7",
+  "branch": "codex/herrin-p0-live-playback-20261110",
+  "pull_request": 85,
+  "serial_development": true,
+  "subagents_used": false,
+  "superpowers_used": false,
+  "first_run": {
+    "id": 43976591594,
+    "source_sha": "95c9aaf90909bfcbd8e13bf243b33b58dc72aeb1",
+    "tv_result": "ANDROID_TEST_COMPILATION_FAILED",
+    "instrumentation_executed": false,
+    "errors": [
+      "UNRESOLVED_MEMBER_ASSERTION_IMPORT",
+      "MISSING_EXPERIMENTAL_TEST_API_OPT_IN"
+    ],
+    "assertions_weakened": false
+  },
+  "validation": {
+    "run_id": 43977498940,
+    "url": "https://github.com/shawnhhh/aura-tv/actions/runs/43977498940",
+    "jvm_lint_debug": "SUCCESS",
+    "arm64_diagnostic_build": "SUCCESS",
+    "full_tv": "SUCCESS",
+    "offline_python_tests": 29,
+    "offline_python_failures": 0,
+    "android12_startup": {
+      "run_id": 43977508869,
+      "result": "SUCCESS"
+    },
+    "tmdb_abba": {
+      "run_id": 43977508863,
+      "result": "SUCCESS"
+    },
+    "jvm_tests": 734,
+    "jvm_failures": 0,
+    "jvm_errors": 0,
+    "jvm_skipped": 0,
+    "tv_tests": 269,
+    "tv_failures": 0,
+    "tv_errors": 0,
+    "tv_skipped": 0,
+    "tv_required_class_gate": "PASSED",
+    "preflight_tests": 19,
+    "workflow_result": "SUCCESS",
+    "tv_evidence_artifact_id": 14283211958,
+    "jvm_evidence_artifact_id": 14282490941,
+    "verified_new_test_classes": [
+      "TmdbBrowseLoadingNavigationTest",
+      "LanSourceImportTest",
+      "P0ExitAndEntryTest",
+      "SpiderAuthorizationPlaybackTest",
+      "SpiderPasswordAuthorizationTest"
+    ]
+  },
+  "diagnostic_artifact": {
+    "id": 14280984626,
+    "url": "https://github.com/shawnhhh/aura-tv/actions/runs/43977498940/artifacts/14280984626",
+    "scope": "INTERNAL_DIAGNOSTIC_NOT_PLAYBACK_ACCEPTANCE",
+    "zip_sha256_from_github": "631fe341252d7316679a1170f8e6e90f19b620cdb349ab33922eabb6ad4631eb",
+    "app_sha256_from_ci_manifest": "371a7a59dd39b1e53bc03ba919c280aa69553f3ee29a9caa992dff9a014311c6",
+    "android_test_sha256_from_ci_manifest": "7e0c907aeea1f03f8ed87a12253c54416d1781138fbf0a322ffc2dcfc9388e74",
+    "ci_manifest_elf_class": 2,
+    "ci_manifest_elf_machine": 183,
+    "local_download": "HTTP_403_NOT_LOCALLY_REVERIFIED"
+  },
+  "upstream_comparison": {
+    "repository": "FongMi/TV",
+    "revision": "305dff2",
+    "path": "app/src/main/java/com/fongmi/android/tv/ui/dialog/SpiderDialog.java",
+    "verified_host_differences": [
+      "BUTTON_VALIDATION_SCOPE_LOST_AFTER_IPC",
+      "CALLBACK_ENABLED_UPDATES_IGNORED",
+      "EMPTY_ERROR_STRINGS_PREVENTED_CLOSE"
+    ],
+    "same_real_node_config_and_authorization_first_divergence": "UNKNOWN"
+  },
+  "acceptance": {
+    "physical_tcl_crash_root_cause_confirmed": false,
+    "real_fantaiying_import_accepted": false,
+    "real_cloud_authorization_accepted": false,
+    "real_cloud_parsing_accepted": false,
+    "real_cloud_video_frames_accepted": false,
+    "cloud_fixture_is_real_provider_acceptance": false,
+    "unchanged_403_or_native_crash_experiments_replayed": false,
+    "official_login_protection_bypassed": false,
+    "p0_complete": false
+  }
+}

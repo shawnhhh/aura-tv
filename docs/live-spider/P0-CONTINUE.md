@@ -1,3 +1,32 @@
+# 最新续点：2026-11-16 三专项宿主修复统一回归通过；真实节点仍未验收
+
+已验证代码 SHA：`dbf8b005f445242e91cfc5715082787215606fbc`。其后的交付提交仅修改文档/证据，无生产代码变化。
+保留 `2c5a2a5b`；指定P0分支及PR85不变，Draft/open/unmerged，无Superpowers、子代理、main/master合并或force push。
+
+- [统一 CI 43977498940](https://github.com/shawnhhh/aura-tv/actions/runs/43977498940)：JVM734/734、Lint、Debug、ARM64诊断构建通过；TV269/269，0失败/错误/跳过，19项前置回归及必测类门禁通过。
+- [标准Debug / Android12启动43977508869](https://github.com/shawnhhh/aura-tv/actions/runs/43977508869)通过；[TMDB同设备ABBA43977508863](https://github.com/shawnhhh/aura-tv/actions/runs/43977508863)通过。本机离线脚本29/29通过。
+- 分类：`0cff35c0`绑定分页和焦点任务生命周期，跨帧重新解析目标并等待真实布局；`acd7f021`去重未验证的冷启动HOT预览。实际网络门控覆盖首次预览/分页未返回的D-pad、返回瞬间导航、旧列表替换、加载时切分类及16张原创背景/海报并发解码、缓存上限，均通过。**没有真机闪退栈，不宣称已确认或修复TCL实机崩溃根因。**
+- 手机：`e8ae0435`持久化候选/电视回调实际导入/手机状态回查；`95c9aaf9`拒绝旧激活、手动替代候选；`87da602f`隔离新多仓和旧单仓，并区分正文/仓库解析错误。实际MainActivity HTTPS配对→HTTP配置→CMS影片→ACTIVE，以及403/无效正文/仓库解析失败保留旧URL均通过；IDN/Punycode与重建配置存储断言通过。新Spider仍需电视显式选择授权。
+- 授权：`c57e48f5`保留FongMi按钮validate范围和callback启停更新，空错误不阻止关闭，按来源展示二维码或表单；`98f753ee`修复测试导入。实际独立进程IPC、二维码展示/取消、无二维码访问码、分步刷新、授权后继续原解析及生产Media3实际解码、会话复用/过期重新授权均通过。**这是原创模拟平台，不是任何真实网盘节点验收。**
+
+[ARM64内部诊断工件14280984626](https://github.com/shawnhhh/aura-tv/actions/runs/43977498940/artifacts/14280984626)：
+源码绑定dbf8b005，CI生成清单并检查AArch64 ELF(class2/machine183)。应用APK SHA256 `371a7a59dd39b1e53bc03ba919c280aa69553f3ee29a9caa992dff9a014311c6`；
+ZIP元数据SHA256 `631fe341252d7316679a1170f8e6e90f19b620cdb349ab33922eabb6ad4631eb`。
+本地下载收到HTTP403，未本地重新校验；不能冒称已下载核验。工件只供内部诊断，非稳定版。
+[TV原始证据14283211958](https://github.com/shawnhhh/aura-tv/actions/runs/43977498940/artifacts/14283211958)；[JVM/Lint证据14282490941](https://github.com/shawnhhh/aura-tv/actions/runs/43977498940/artifacts/14282490941)。
+
+首轮43976591594@95c9aaf9因AndroidTest编译错误未执行仪器用例，记录保留；修正opt-in及导入后完整复验，没有删测/跳过/放宽断言。
+详细脱敏结果：[20261116-loading-phone-auth.json](evidence/20261116-loading-phone-auth.json)。
+
+下一轮直接从dbf8b005的已验代码及本交付HEAD续跑：
+1. 取TCL最新last-safe-crash/退出诊断，确认遥控器实机退出的首个异常；不用模拟器全绿冒充实机根因。
+2. 有新合法可访问配置响应时，验证指定饭太硬地址的真实正文和影视点激活；历史HTTP403不无变化重放。
+3. 用同节点、同配置/JAR摘要、同合法授权条件，对照固定原版与Herrin最早差异，取得真实Runtime.dialog/Activity/Proxy调用证据，再修复真实玩偶/夸父链路。
+4. 真实夸克/阿里/百度/115/UC及其他插件的授权机制、解析、实际出帧均仍未验收；没有合法登录会话不伪造QR、Cookie或成功回调，不绕过官方保护。
+奶酪502/4003、UI重设计、最近播放其他优化、杜比/字幕未纳入本轮。
+
+---
+
 # 2026-11-16 首轮 CI 编译失败后续跑
 
 首轮统一 run [43976591594](https://github.com/shawnhhh/aura-tv/actions/runs/43976591594) @95c9aaf9：
