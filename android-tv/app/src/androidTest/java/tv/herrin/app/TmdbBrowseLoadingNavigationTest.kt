@@ -11,7 +11,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -20,13 +20,77 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Cold production repository with a held HTTP page, rather than a static cache. */
+@OptIn(ExperimentalTestApi::class)
 class TmdbBrowseLoadingNavigationTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun coldFirstPagePreviewHasStableUniqueKeysWhileProofAndDpadOverlap() {
+        val release = CountDownLatch(1)
+        val entered = CountDownLatch(1)
+        val fixture = TmdbBrowseFixture()
+        val state = TmdbBrowseState(TmdbBrowseRepository(ArtworkJsonFetcher { url, token ->
+            if (Regex(".*/(movie|tv)/[0-9]+.*").matches(url)) {
+                entered.countDown(); release.await()
+            }
+            val raw = fixture.load(url, token)
+            if (url.contains("/trending/movie/week")) {
+                val json = org.json.JSONObject(raw)
+                val first = json.getJSONArray("results").getJSONObject(0)
+                // Model overlapping upstream rows before detail verification.
+                json.put("results", org.json.JSONArray().put(first).put(first)
+                    .put(org.json.JSONObject(first.toString()).put("id", 72))).toString()
+            } else raw
+        }), "fixture")
+        val requesters = mutableMapOf<String, FocusRequester>()
+        val spec = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.HOT)
+        compose.setContent { MaterialTheme {
+            LaunchedEffect(state) { state.refresh(TmdbBrowsePage.MOVIE) }
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                TmdbBrowseRails(state, TmdbBrowsePage.MOVIE, emptyList(), true,
+                    { requesters.getOrPut(it) { FocusRequester() } }, { _, _ -> }, { _, _ -> })
+            }
+        } }
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            compose.waitUntil(5000) { state.row(spec).entries.isNotEmpty() }
+            assertTrue(state.row(spec).loading)
+            assertEquals(2, state.row(spec).entries.size)
+            val card = compose.onNodeWithTag("card-tmdb-movie-11")
+            card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            card.performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.DirectionRight) }
+            compose.onNodeWithTag("card-tmdb-movie-72").assertIsFocused()
+            release.countDown()
+            compose.waitUntil(5000) { !state.row(spec).loading }
+            compose.onNodeWithTag("card-tmdb-movie-72").performKeyInput { pressKey(Key.DirectionDown) }
+            compose.waitUntil(5000) { runCatching {
+                compose.onNodeWithTag("tmdb-movie-domestic-tmdb-movie-101").assertIsFocused()
+            }.isSuccess }
+        } finally { release.countDown() }
+    }
 
     @Test fun delayedPageAllowsDpadAndIsCancelledOnCategoryChange() {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val interrupted = AtomicBoolean()
+        val images = okhttp3.mockwebserver.MockWebServer()
+        val imageRequests = java.util.concurrent.atomic.AtomicInteger()
+        val original = android.graphics.Bitmap.createBitmap(1920, 1080, android.graphics.Bitmap.Config.ARGB_8888)
+        val bytes = java.io.ByteArrayOutputStream().apply {
+            original.eraseColor(android.graphics.Color.BLUE)
+            assertTrue(original.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, this))
+        }.toByteArray()
+        original.recycle()
+        images.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): okhttp3.mockwebserver.MockResponse {
+                imageRequests.incrementAndGet()
+                return okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "image/png")
+                    .setBodyDelay(40, TimeUnit.MILLISECONDS).setBody(okio.Buffer().write(bytes))
+            }
+        }
+        images.start()
+        val imageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val cache = AuthorizedPosterCache(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext)
+        var decodes: Deferred<List<android.graphics.Bitmap?>>? = null
         val fixture = TmdbBrowseFixture()
         val state = TmdbBrowseState(TmdbBrowseRepository(ArtworkJsonFetcher { url, token ->
             if (url.contains("/trending/movie/week") && url.contains("page=2")) {
@@ -50,6 +114,12 @@ class TmdbBrowseLoadingNavigationTest {
             compose.onNodeWithTag("tmdb-more-movie-hot").performScrollTo().performClick()
             assertTrue("next HTTP page must actually start", entered.await(5, TimeUnit.SECONDS))
             assertTrue(state.row(spec).loading)
+            decodes = imageScope.async {
+                (0 until 16).map { i -> async {
+                    cache.load(images.url("/original-$i.png").toString(), allowHttp = true, hero = i == 0)
+                } }.awaitAll()
+            }
+            compose.waitUntil(5000) { imageRequests.get() > 0 }
             val card = compose.onNodeWithTag("card-tmdb-movie-11")
             card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             repeat(12) { card.performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.DirectionUp) } }
@@ -58,7 +128,18 @@ class TmdbBrowseLoadingNavigationTest {
             compose.onNodeWithTag("tmdb-page-series").assertExists()
             compose.waitUntil(5000) { interrupted.get() && !state.row(spec).loading }
             assertEquals("cancelled page cannot publish into the old category", 1, state.row(spec).page)
-        } finally { release.countDown() }
+            val bitmaps = runBlocking { withTimeout(10000) { requireNotNull(decodes).await() } }
+            assertTrue("all original hero/poster requests must really decode", bitmaps.all { it != null })
+            assertTrue(bitmaps.first()!!.width >= 960)
+            assertTrue(bitmaps.drop(1).all { it!!.width <= 640 })
+            assertEquals(16, imageRequests.get())
+            val bound = (Runtime.getRuntime().maxMemory() / 12).coerceIn(8L * 1024 * 1024, 32L * 1024 * 1024)
+            assertTrue("decoded cache must remain bounded", AuthorizedPosterCache.memoryBytes <= bound)
+        } finally {
+            release.countDown()
+            imageScope.cancel()
+            images.shutdown()
+        }
     }
 
     @Test fun nextPageReturnAndReplacementKeepNavigationOnCurrentPosters() {

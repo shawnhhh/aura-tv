@@ -250,7 +250,7 @@ internal class TmdbBrowseRepository(
                         spec.page == TmdbBrowsePage.HOME || it.film.category == spec.page.label
                     }
                 }
-                if (previews.isNotEmpty()) onPreview(TmdbBrowseBatch(previews.take(20), page, more, previews.count { it.availability.state == TmdbAvailability.UNKNOWN }))
+                if (previews.isNotEmpty()) onPreview(TmdbBrowseBatch(previews.distinctBy { it.film.id }.take(20), page, more, previews.count { it.availability.state == TmdbAvailability.UNKNOWN }))
             }
             candidates.asSequence().filter { seen.add(it.second + "-" + it.first.optInt("id")) }.take(limit).toList().map { (row, type) -> async {
                 try { entry(row, type, proof(type, row.getInt("id"), token), token) }
