@@ -1,3 +1,15 @@
+# 2026-11-16 首轮 CI 编译失败后续跑
+
+首轮统一 run [43976591594](https://github.com/shawnhhh/aura-tv/actions/runs/43976591594) @95c9aaf9：
+TV emulator 已启动，但 AndroidTest Kotlin 编译失败，仪器用例0项，不当成设备通过。
+明确错误：SpiderPasswordAuthorizationTest 多余的 assertDoesNotExist import；TmdbBrowseLoadingNavigationTest 缺少 ExperimentalTestApi opt-in。均已修正，原断言保留。
+`acd7f021` 还去重冷启动 HOT 预览，补充真实延迟详情与 D-pad、16张原创1920x1080图片并发解码/缓存上限断言。
+`87da602f` 隔离新多仓与旧单仓；正式配对链路验证403/无效正文/仓库解析错误及旧有效URL不变。
+`98f753ee` 修正授权UI测试编译。完整CI、ARM64工件仍须以下新精确SHA实读，不沿用旧成功。
+本机全部离线脚本测试29/29通过。下一步读取修正后的统一CI；任何新失败按原始日志修复。
+
+---
+
 # 2026-11-16 串行批量开发：统一验证待执行，真实节点仍未验收
 
 基线为最新远端 `2c5a2a5b0b171367a136e446dbf1a596397e05b7`，原修复保留。

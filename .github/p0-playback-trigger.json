@@ -1,6 +1,6 @@
 {
-  "attempt": "20261116-loading-phone-auth-batch",
-  "reason": "Delayed network pagination and D-pad category cancellation, transactional phone source import with actual site activation, FongMi authorization state IPC and original-fixture parse/decode/session regression. Full validation and ARM64 internal diagnostics; real provider acceptance remains pending.",
+  "attempt": "20261116-observed-test-compile-repair",
+  "reason": "Repair observed AndroidTest compile errors; verify cold preview key deduplication, simultaneous original hero/poster decode during delayed pagination, and actual paired-phone HTTP403/body/warehouse failure preservation. Keep original assertions and real nodes unaccepted.",
   "nodes": [
     "cheese"
   ],
