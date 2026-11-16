@@ -53,6 +53,7 @@ REQUIRED_CLASSES = (
     "TmdbBrowsePageTest",
     "TmdbBrowseRefreshTest",
     "TmdbBrowsePaginationTest",
+    "TmdbBrowseLoadingNavigationTest",
     "P0Top250NavigationTest",
     "HeroArtworkRetentionTest",
     "M467FongMiTrackRestoreTest",
