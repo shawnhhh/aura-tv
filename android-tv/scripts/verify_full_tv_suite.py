@@ -10,6 +10,9 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 REQUIRED_CLASSES = (
+    "SpiderAuthorizationInstrumentedTest",
+    "SpiderAuthorizationPlaybackTest",
+    "SpiderPasswordAuthorizationTest",
     "HerrinSplashTest",
     "LanConfigurationTest",
     "LanSourceImportTest",
