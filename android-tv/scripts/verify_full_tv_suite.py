@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 REQUIRED_CLASSES = (
     "HerrinSplashTest",
     "LanConfigurationTest",
+    "LanSourceImportTest",
     "LanHttpConfigurationTest",
     "LanTlsIdentityTest",
     "SmbRealPlaybackTest",

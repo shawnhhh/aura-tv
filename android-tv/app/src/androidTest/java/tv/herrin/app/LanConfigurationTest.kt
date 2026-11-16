@@ -42,18 +42,24 @@ class LanConfigurationTest {
             val trustedJar=prefs.tvBoxTrustedSpiderJarSpec
             try {
                 assertEquals(200, post("/sources", org.json.JSONObject().put("url", "http://www.饭太硬.net/tv").toString(), session).first)
-                assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), prefs.tvBoxWarehouseUrl)
+                assertEquals(previous, prefs.tvBoxWarehouseUrl)
+                assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), LanSourceImport(InstrumentationRegistry.getInstrumentation().targetContext).current()!!.url)
                 val invalid = post("/sources", org.json.JSONObject()
                     .put("url", "ftp://example.invalid/file").toString(), session)
                 assertEquals(400, invalid.first)
                 assertEquals("SOURCE_URL_INVALID", org.json.JSONObject(invalid.second).getString("code"))
-                assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), prefs.tvBoxWarehouseUrl)
+                assertEquals(previous, prefs.tvBoxWarehouseUrl)
+                assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), LanSourceImport(InstrumentationRegistry.getInstrumentation().targetContext).current()!!.url)
                 assertEquals(listOf("sources"), applied.toList())
                 assertEquals(prefs.tvBoxWarehouseUrl, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
                 assertEquals(trustedRoot,prefs.tvBoxTrustedSpiderRootUrl)
                 assertEquals(trustedJar,prefs.tvBoxTrustedSpiderJarSpec)
                 assertFalse(TvBoxSpiderPolicy.mayRun(false,prefs.tvBoxWarehouseUrl,"new.jar",trustedRoot,trustedJar))
-            } finally { prefs.tvBoxWarehouseUrl = previous }
+            } finally {
+                prefs.tvBoxWarehouseUrl = previous
+                InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("herrin",0)
+                    .edit().remove("phone_source_import").commit()
+            }
             assertEquals(200, post("/end", "{}", session).first)
             try { assertEquals(403, post("/status", "{}", session).first) }
             catch (_: java.io.IOException) { assertTrue(server.pairing.expired()) }

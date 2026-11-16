@@ -8,6 +8,8 @@ async function call(path,value={}){
    if(r.status===403)throw Error('会话已失效，请从电视重新开启');
    const detail=await r.json().catch(()=>({}));
    const messages={
+     SOURCE_SAVE_FAILED:'影视源候选配置保存失败，原配置保留',
+     SOURCE_NOTIFY_FAILED:'已保存候选配置，但未能通知电视；请重新打开电视配置页',
      SOURCE_URL_INVALID:'影视源地址格式不受支持；请确认输入的是完整的 HTTP(S) TVBox 配置地址',
      SOURCE_SAVE_OR_APPLY_FAILED:'电视端保存或应用影视源失败；请在电视设置中核对是否已保存',
      CONFIG_INVALID:'配置无效或保存失败'
@@ -26,6 +28,27 @@ document.querySelector('#pair').onclick=async()=>{
  status.textContent='已配对，各模块共用会话；最长 30 分钟，退出电视配置页立即结束';
  }catch(e){status.textContent=e.message;}finally{polling=false;}
 };
+const sourceErrors={
+ SOURCE_HTTP_403:'源站 HTTP 403：服务器拒绝访问，原配置保留',
+ SOURCE_HTTP_ERROR:'源站 HTTP 请求失败，原配置保留',
+ SOURCE_BODY_INVALID:'配置正文无效，原配置保留',
+ SOURCE_WAREHOUSE_PARSE_FAILED:'仓库解析失败，原配置保留',
+ SOURCE_FETCH_FAILED:'配置读取失败，请在电视查看网络状态',
+ SOURCE_SITE_ACTIVATION_FAILED:'影视点激活失败，原配置保留；可在电视重新选择站点'
+};
+let sourcePoll=0;
+async function watchSource(importId){
+ const ticket=++sourcePoll;
+ while(session && ticket===sourcePoll){
+   const r=await call('/sources/status',{importId});
+   if(ticket!==sourcePoll)return;
+   if(r.state==='ACTIVE'){status.textContent='影视点加载成功，已导入影视源';return;}
+   if(r.state==='FAILED'){status.textContent=sourceErrors[r.code]||'影视源导入失败，原配置保留';return;}
+   if(r.state==='SUPERSEDED'){status.textContent='已被后续配置替代';return;}
+   status.textContent=r.state==='AWAITING_SITE'?'配置已读取，请在电视选择影视点并确认新 Spider 授权':'候选配置已保存，等待电视读取';
+   await new Promise(r=>setTimeout(r,1000));
+ }
+}
 let module='tmdb';
 async function refreshEntries(){
  document.querySelector('#cloud').hidden=module!=='nas';document.querySelector('#smb').hidden=module!=='nas';
@@ -41,7 +64,7 @@ async function refreshEntries(){
  if(module==='nas')button('测试',async()=>{status.textContent=(await call('/nas/test',{id:entry.id})).result;});list.append(row);});
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('form').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();if(module==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}});
-document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(f));if(f.id==='smb')data.encryption=f.elements.encryption.checked;await call('/'+f.id,data);f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
+document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(f));if(f.id==='smb')data.encryption=f.elements.encryption.checked;const result=await call('/'+f.id,data);if(f.id==='sources'){await watchSource(result.importId);return;}f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
 document.querySelector('#test').onclick=async()=>{try{status.textContent=(await call('/tmdb/test')).result;await refreshTmdbStatus();}catch(e){status.textContent=e.message;}};
 document.querySelector('#end').onclick=async()=>{try{await call('/end');}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束，请在电视重新开启';}};
 // Editing a long form is activity; refresh only while the user is actively editing.

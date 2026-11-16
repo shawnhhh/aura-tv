@@ -107,6 +107,8 @@ class P0ExitAndEntryTest {
             fixture.start()
             fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
                 .setBody("""{"sites":[{"name":"扫码刷新样本","api":"${fixture.url("/cms")}"}]}"""))
+            fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"list":[{"vod_id":"phone-fixture","vod_name":"Original phone import"}]}"""))
             compose.onNodeWithTag("settings").performClick()
             compose.onNodeWithTag("phone-config-main").performClick()
             compose.onNodeWithTag("phone-config-http").assertDoesNotExist()
@@ -135,12 +137,20 @@ class P0ExitAndEntryTest {
             compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("phone-config-approve").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithTag("phone-config-approve").performClick()
             val key = post("/pair", pair).getString("session")
-            post("/sources", org.json.JSONObject().put("url", fixture.url("/box.json").toString()), key)
-            compose.waitUntil(15000) { fixture.requestCount > 0 }
+            val submitted = post("/sources", org.json.JSONObject().put("url", fixture.url("/box.json").toString()), key)
+            assertEquals("SAVED", submitted.getString("state"))
+            val importId = submitted.getString("importId")
+            compose.waitUntil(15000) {
+                post("/sources/status", org.json.JSONObject().put("importId", importId), key).getString("state") == "ACTIVE"
+            }
+            assertEquals(fixture.url("/box.json").toString(),
+                Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
             compose.onNodeWithTag("phone-config-close").performClick()
             compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("vod-apply-feedback"))
-            compose.waitUntil(15000) { runCatching { compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置") }.isSuccess }
+            compose.waitUntil(15000) { runCatching { compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("成功") }.isSuccess }
             assertEquals("/box.json", fixture.takeRequest().path)
+            assertTrue(fixture.takeRequest().path!!.startsWith("/cms?"))
+            assertEquals(2, fixture.requestCount)
         }
     }
 }

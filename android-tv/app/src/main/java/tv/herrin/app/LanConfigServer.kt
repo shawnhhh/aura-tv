@@ -160,6 +160,7 @@ internal class LanConfigServer(
                     prefs.tmdbReadToken = token
                     applied("tmdb"); JSONObject().put("ok", true)
                 }
+                "/sources/status" -> LanSourceImport(context).status(input.getString("importId"))
                 "/sources" -> {
                     val raw = input.getString("url")
                     // Accept the same HTTP(S) TVBox address policy as the TV settings.
@@ -167,10 +168,15 @@ internal class LanConfigServer(
                     val url = if (raw.isBlank()) "" else TvBoxUrl.normalize(raw, allowHttp = true)
                         ?: return response(Response.Status.BAD_REQUEST,
                             "{\"code\":\"SOURCE_URL_INVALID\"}")
-                    prefs.tvBoxWarehouseUrl = url
-                    // Persisted primary source is independent of remote availability.
-                    // A successful save does not execute newly supplied Spider JARs.
-                    applied("sources"); JSONObject().put("ok", true)
+                    val store = LanSourceImport(context)
+                    val saved = try { store.save(url) } catch (_: Exception) {
+                        return response(Response.Status.INTERNAL_ERROR, "{\"code\":\"SOURCE_SAVE_FAILED\"}")
+                    }
+                    try { applied("sources") } catch (_: Exception) {
+                        store.update(saved.id, "FAILED", "SOURCE_NOTIFY_FAILED")
+                        return response(Response.Status.INTERNAL_ERROR, "{\"code\":\"SOURCE_NOTIFY_FAILED\"}")
+                    }
+                    JSONObject().put("ok", true).put("importId", saved.id).put("state", "SAVED")
                 }
                 "/live" -> {
                     val m3u = address(input.getString("m3u")); val epg = address(input.getString("epg"))
