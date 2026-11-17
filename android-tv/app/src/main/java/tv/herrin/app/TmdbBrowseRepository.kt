@@ -25,6 +25,9 @@ internal class TmdbBrowseRepository(
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     private val network = Semaphore(3)
+    // Reserve one of the three network slots for visible browse lists.
+    // Slow per-title release proofs may use at most two slots.
+    private val proofNetwork = Semaphore(2)
     private val proofMemory = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, Pair<Long, JSONObject>>(512, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, JSONObject>>?) = size > 512
@@ -63,20 +66,28 @@ internal class TmdbBrowseRepository(
         val previousResponse = responses[key]
         return requestLocks[(key.hashCode() and Int.MAX_VALUE) % requestLocks.size].withLock {
             responses[key]?.takeIf { (!force || it !== previousResponse) && clock() - it.first in 0..30_000L }?.let { return@withLock JSONObject(it.second) }
-            network.withPermit {
-                if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
-                runInterruptible(Dispatchers.IO) {
-                    val endpoint = TmdbEndpoints.PRIMARY + path + (if ('?' in path) "&" else "?") + "language=zh-CN"
-                    val raw = fetcher.load(endpoint, token) ?: throw IOException("TMDB_EMPTY_RESPONSE")
-                    if (raw.length > 1_000_000) throw IOException("TMDB_RESPONSE_LIMIT")
-                    val json = JSONObject(raw)
-                    if (json.optBoolean("success", true).not()) throw IOException("TMDB_REJECTED")
-                    responses[key] = clock() to raw
-                    json
+            val request: suspend () -> JSONObject = {
+                network.withPermit {
+                    if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
+                    runInterruptible(Dispatchers.IO) {
+                        val endpoint = TmdbEndpoints.PRIMARY + path + (if ('?' in path) "&" else "?") + "language=zh-CN"
+                        val raw = fetcher.load(endpoint, token) ?: throw IOException("TMDB_EMPTY_RESPONSE")
+                        if (raw.length > 1_000_000) throw IOException("TMDB_RESPONSE_LIMIT")
+                        val json = JSONObject(raw)
+                        if (json.optBoolean("success", true).not()) throw IOException("TMDB_REJECTED")
+                        responses[key] = clock() to raw
+                        json
+                    }
                 }
             }
+            // Release/episode proof calls are individually slow or rate-limited.
+            // They must not occupy all three slots while HOT/DOMESTIC lists wait.
+            if (Regex("^/(movie|tv)/[0-9]+(?:/|\\?|$)").containsMatchIn(path)) {
+                proofNetwork.withPermit { request() }
+            } else request()
         }
     }
+
     private val rowFields = setOf("id", "title", "name", "original_title", "original_name", "release_date",
         "first_air_date", "overview", "poster_path", "backdrop_path", "vote_average", "vote_count",
         "genre_ids", "adult", "popularity", "media_type", "origin_country", "query_origin_country")
