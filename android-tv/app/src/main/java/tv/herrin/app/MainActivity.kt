@@ -2927,8 +2927,10 @@ private fun Herrin(startup: StartupPresentation) {
         // breathes. Fade reveals an existing underlay instead of an empty frame.
         if ((!splash || startup.prepareHome) && screen != "player" && screen != "live-player" &&
             (!sourceConfigured || films.isNotEmpty())) {
-            HeroArtworkTransition(backdropFilm.takeIf { it.id == displayFilm.id } ?: displayFilm,
-                reduced = reduceMotion, modifier = Modifier.fillMaxSize())
+            key(if (screen == "browse") category else screen) {
+                HeroArtworkTransition(backdropFilm.takeIf { it.id == displayFilm.id } ?: displayFilm,
+                    reduced = reduceMotion, modifier = Modifier.fillMaxSize())
+            }
             // Cinematic image stays full-bleed. Scrims protect legibility without flattening the artwork.
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
                 0.0f to Color(0xEA05080D), 0.36f to Color(0xBD060A11),
