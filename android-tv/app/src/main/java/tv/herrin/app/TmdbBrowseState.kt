@@ -38,7 +38,8 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
     }
     private fun publish(key: String, batch: TmdbBrowseBatch) {
         val old = rows[key] ?: TmdbRailState()
-        val entries = if (batch.page == 1) batch.entries else (old.entries + batch.entries).distinctBy { it.film.id }
+        val combined = if (batch.page == 1) batch.entries else (old.entries + batch.entries).distinctBy { it.film.id }
+        val entries = if (key.endsWith("-latest")) combined.sortedByDescending { it.availability.date } else combined
         rows[key] = old.copy(entries = entries, page = batch.page, hasMore = batch.hasMore,
             unknown = batch.unknown, loading = false, error = false)
     }

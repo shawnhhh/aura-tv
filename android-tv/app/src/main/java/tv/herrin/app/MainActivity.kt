@@ -308,7 +308,7 @@ private fun TvHeaderIconButton(
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .clip(shape)
         .background(if (focused && gear) Color.White.copy(alpha = 0.16f) else if (focused) Color(0xFFF4F4F4)
-            else if (selected) Color(0xFF3A3D43) else Color.Transparent)
+            else if (selected && !gear) Color(0xFF3A3D43) else Color.Transparent)
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(if (gear) 18.dp else 17.dp)) {
@@ -3419,11 +3419,10 @@ private fun Herrin(startup: StartupPresentation) {
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            TvButton("管理 NAS / 云盘",
+                            TvButton("管理个人媒体库",
                                 modifier = Modifier.testTag("my-manage-personal-sources").focusRequester(requester("my-manage-personal-sources")),
                                 reduced = reduceMotion) {
-                                // NAS / cloud editors are in the existing
-                                // compact Content Sources settings section.
+                                settingsModule = "个人媒体库"
                                 settingsTvBoxOnly = true
                                 screen = "settings"
                             }
@@ -5302,6 +5301,7 @@ private fun Herrin(startup: StartupPresentation) {
                     item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
                             reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() }
+                        if (screen == "settings") Spacer(Modifier.weight(1f))
                         if (screen == "settings") TvButton("手机扫码配置", Modifier.testTag("phone-config-main")
                             .focusRequester(requester("phone-config-main")), reduceMotion,
                             onFocus = { focusId = "phone-config-main" }) { lanConfigOpen = true }

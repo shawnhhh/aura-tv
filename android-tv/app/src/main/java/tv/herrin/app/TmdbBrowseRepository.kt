@@ -339,14 +339,19 @@ internal class TmdbBrowseRepository(
         var checked = 0
         var failed = 0
         val day = today()
-        // Five source pages per UI page; fixed mapping prevents skipping candidates at pagination.
+        val previous = if (page > 1) read(prefix(token) + "-page-" + spec.key + "-${page-1}") else null
+        val startPage = previous?.optInt("next", (page-1)*5+1) ?: ((page-1)*5+1)
+        var nextSource = startPage
+        // Up to five source pages per UI page; fixed mapping prevents skipping candidates at pagination.
         // Maximum 40 candidate proofs, three HTTP requests in flight, shared proof cache.
         for (offset in 0 until 5) {
-            val sourcePage = (page - 1) * 5 + offset + 1
+            val sourcePage = startPage + offset
+            nextSource = sourcePage + 1
+            more = false
             if (sourcePage > 500) break
             for (pool in TmdbLatestPolicy.pools(spec.page)) for (type in spec.types) {
                 val market = if (spec.page == TmdbBrowsePage.DOCUMENTARY) null
-                    else TmdbLatestPolicy.releaseMarkets(spec.page).sorted().let { it[offset % it.size] }
+                    else TmdbLatestPolicy.releaseMarkets(spec.page).toList().let { it[offset % it.size] }
                 var path = spec.endpoints(type, day).first()
                 if (type == "movie") {
                     path = path.replace("&region=US", market?.let { "&region=$it" }.orEmpty())
@@ -388,7 +393,7 @@ internal class TmdbBrowseRepository(
         }
         if (accepted.isEmpty() && failed > 0) throw IOException("TMDB_LATEST_UNAVAILABLE")
         val batch = TmdbBrowseBatch(select(spec, accepted), page, more && page < 50)
-        write(key, JSONObject().put("saved", clock()).put("more", batch.hasMore)
+        write(key, JSONObject().put("saved", clock()).put("more", batch.hasMore).put("next", nextSource)
             .put("entries", JSONArray().apply { accepted.forEach {
                 put(JSONObject().put("type", it.type).put("row", it.raw).put("proof", it.proof))
             } }))

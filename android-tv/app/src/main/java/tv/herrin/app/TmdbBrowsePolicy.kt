@@ -43,7 +43,7 @@ internal data class TmdbRailSpec(val page: TmdbBrowsePage, val kind: TmdbRailKin
     fun minVotes(type: String) = if (type == "movie") 300 else 100
     companion object {
         fun forPage(page: TmdbBrowsePage) = (if (page == TmdbBrowsePage.HOME)
-            listOf(TmdbRailKind.HOT, TmdbRailKind.LATEST) else TmdbRailKind.entries).map { TmdbRailSpec(page, it) }
+            listOf(TmdbRailKind.HOT, TmdbRailKind.DOMESTIC, TmdbRailKind.LATEST) else TmdbRailKind.entries).map { TmdbRailSpec(page, it) }
     }
 }
 
