@@ -22,13 +22,12 @@ import androidx.compose.ui.semantics.contentDescription
 import kotlin.math.cos
 
 internal object WordmarkMotion {
-    const val REVEAL_MS = 1800f
+    const val REVEAL_MS = 2250f
     const val BREATH_MS = 2400f
-    const val MIN_READY_MS = REVEAL_MS + BREATH_MS
-    fun brightness(elapsedMs: Float): Float = if (elapsedMs < REVEAL_MS) 1f else
-        (0.85 + 0.15 * cos((elapsedMs - REVEAL_MS) / BREATH_MS * 2 * Math.PI)).toFloat()
-    fun glow(elapsedMs: Float): Float = if(elapsedMs<REVEAL_MS)0f else
-        ((1-cos((elapsedMs-REVEAL_MS)/BREATH_MS*2*Math.PI))*.5).toFloat()
+    const val BREATH_START_MS = REVEAL_MS - 1050f
+    const val MIN_READY_MS = REVEAL_MS
+    fun brightness(elapsedMs: Float): Float = if (elapsedMs < BREATH_START_MS) 1f else
+        (0.85 + 0.15 * cos((elapsedMs - BREATH_START_MS) / BREATH_MS * 2 * Math.PI)).toFloat()
     fun ready(elapsedMs: Float) = elapsedMs >= MIN_READY_MS
     fun reveal(elapsedMs: Float): Float = (elapsedMs / REVEAL_MS).coerceIn(0f, 1f)
 }
@@ -66,13 +65,14 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             completeOnce()
             return@LaunchedEffect
         }
+        visible() // Prepare the home concurrently with the reveal.
         val start = withFrameNanos { it }
         var reportedVisible = false
         var reportedReady = false
         while (true) {
             val now = withFrameNanos { it }
             elapsed.floatValue = (now - start) / 1_000_000f
-            if (!reportedVisible && elapsed.floatValue >= WordmarkMotion.REVEAL_MS * 0.08f) {
+            if (!reportedVisible && elapsed.floatValue > 0f) {
                 reportedVisible = true
                 StartupTiming.wordmarkVisible()
             }

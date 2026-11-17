@@ -1,18 +1,12 @@
 package tv.herrin.app
 
-/** Reusable feathered reveal shaders and vector halo strokes; no full-screen bitmap/layer per frame. */
+/** Reusable feathered reveal shaders and fixed vector paths; no full-screen bitmap/layer per frame. */
 internal class WordmarkRenderer {
     private val path=requireNotNull(androidx.core.graphics.PathParser.createPathFromPathData(PATH))
     private val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{color=android.graphics.Color.WHITE}
     private val left=android.graphics.LinearGradient(0f,0f,80f,0f,android.graphics.Color.TRANSPARENT,android.graphics.Color.WHITE,android.graphics.Shader.TileMode.CLAMP)
     private val right=android.graphics.LinearGradient(0f,0f,80f,0f,android.graphics.Color.WHITE,android.graphics.Color.TRANSPARENT,android.graphics.Shader.TileMode.CLAMP)
     private val lm=android.graphics.Matrix();private val rm=android.graphics.Matrix()
-    private val haloWidths=floatArrayOf(32f,20f,10f,4f)
-    private val haloAlpha=intArrayOf(18,34,64,100)
-    private val halo=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color=android.graphics.Color.WHITE;style=android.graphics.Paint.Style.STROKE
-        strokeJoin=android.graphics.Paint.Join.ROUND;strokeCap=android.graphics.Paint.Cap.ROUND
-    }
     fun draw(canvas:android.graphics.Canvas,width:Float,height:Float,time:Float){
         if(time<=0f)return // No dim prepaint anywhere in the wordmark.
         val scale=minOf(width/960f,height/180f)
@@ -20,17 +14,9 @@ internal class WordmarkRenderer {
         canvas.translate((width-960*scale)/2,(height-180*scale)/2);canvas.scale(scale,scale)
         val progress=WordmarkMotion.reveal(time)
         if(progress>=1){
-            val haloSaved=canvas.save()
-            canvas.clipOutPath(path)
-            val strength=WordmarkMotion.glow(time)
-            for(i in haloWidths.indices){
-                halo.strokeWidth=haloWidths[i];halo.alpha=(haloAlpha[i]*strength).toInt()
-                canvas.drawPath(path,halo)
-            }
-            canvas.restoreToCount(haloSaved)
             paint.shader=null;paint.alpha=(WordmarkMotion.brightness(time)*255).toInt();canvas.drawPath(path,paint)
         }else{
-            paint.alpha=255
+            paint.alpha=(WordmarkMotion.brightness(time)*255).toInt()
             val eased=progress*progress*(3-2*progress)
             val radius=560f*eased
             lm.setTranslate(480f-radius,0f);left.setLocalMatrix(lm);paint.shader=left
