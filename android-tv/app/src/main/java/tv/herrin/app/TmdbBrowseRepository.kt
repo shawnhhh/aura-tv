@@ -326,6 +326,7 @@ internal class TmdbBrowseRepository(
             } }))
         batch
     }
+    private val nextPages = ConcurrentHashMap<String, Int>()
     private val pageLocks = Array(32) { Mutex() }
     private suspend fun loadLatest(spec: TmdbRailSpec, page: Int, token: String, force: Boolean,
         onPreview: suspend (TmdbBrowseBatch) -> Unit): TmdbBrowseBatch =
@@ -334,15 +335,28 @@ internal class TmdbBrowseRepository(
         val old = read(key)
         if (!force && old != null && clock() - old.optLong("saved") in 0..3_600_000L)
             return@withLock decodeBatch(spec, page, token, old)
+        val previousKey = prefix(token) + "-page-" + spec.key + "-${page-1}"
+        val previous = if (page > 1) read(previousKey) else null
         val accepted = mutableListOf<TmdbBrowseEntry>()
         val seen = hashSetOf<String>()
+        // Carry verified surplus into the next UI page instead of dropping it at the 20-card boundary.
+        if (previous != null) {
+            val displayed = decodeBatch(spec, page-1, token, previous).entries.map { it.film.id }.toSet()
+            val surplus = previous.optJSONArray("entries") ?: JSONArray()
+            for (i in 0 until surplus.length()) {
+                val wrapper = JSONObject().put("entries", JSONArray().put(surplus.getJSONObject(i)))
+                decodeBatch(spec, page, token, wrapper).entries.firstOrNull()?.let {
+                    seen.add(it.type + "-" + it.raw.optInt("id"))
+                    if (it.film.id !in displayed) accepted += it
+                }
+            }
+        }
         var more = false
         var checked = 0
         val proofErrors = java.util.concurrent.atomic.AtomicInteger()
         var failed = 0
         val day = today()
-        val previous = if (page > 1) read(prefix(token) + "-page-" + spec.key + "-${page-1}") else null
-        val startPage = previous?.optInt("next", (page-1)*5+1) ?: ((page-1)*5+1)
+        val startPage = previous?.optInt("next", (page-1)*5+1) ?: nextPages[previousKey] ?: ((page-1)*5+1)
         var nextSource = startPage
         // Up to five source pages per UI page; fixed mapping prevents skipping candidates at pagination.
         // Maximum 40 candidate proofs, three HTTP requests in flight, shared proof cache.
@@ -399,7 +413,8 @@ internal class TmdbBrowseRepository(
         }
         if (completed == null) { nextSource = (nextSource - 1).coerceAtLeast(startPage); more = true }
         if (accepted.isEmpty() && (failed > 0 || proofErrors.get() > 0 || completed == null)) throw IOException("TMDB_LATEST_UNAVAILABLE")
-        val batch = TmdbBrowseBatch(select(spec, accepted), page, more && page < 50)
+        nextPages[key] = nextSource
+        val batch = TmdbBrowseBatch(select(spec, accepted), page, (more || accepted.size > 20) && page < 50)
         write(key, JSONObject().put("saved", clock()).put("more", batch.hasMore).put("next", nextSource)
             .put("entries", JSONArray().apply { accepted.forEach {
                 put(JSONObject().put("type", it.type).put("row", it.raw).put("proof", it.proof))
