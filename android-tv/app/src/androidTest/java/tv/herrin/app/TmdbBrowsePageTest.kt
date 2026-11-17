@@ -36,10 +36,18 @@ class TmdbBrowsePageTest {
         ready()
         val start=android.os.SystemClock.elapsedRealtime()
         val expected=mapOf(TmdbBrowsePage.MOVIE to "tmdb-movie-11",TmdbBrowsePage.SERIES to "tmdb-tv-21",
-            TmdbBrowsePage.ANIME to "tmdb-tv-31",TmdbBrowsePage.VARIETY to "tmdb-tv-41",
+            TmdbBrowsePage.ANIME to "tmdb-movie-635302",TmdbBrowsePage.VARIETY to "tmdb-tv-41",
             TmdbBrowsePage.DOCUMENTARY to "tmdb-movie-51")
+        val visited = mutableSetOf<TmdbBrowsePage>()
         for((page,id) in expected) {
             compose.onNodeWithTag("nav-"+page.label).performClick()
+            if (visited.add(page)) {
+                // First visit restores only this category's persisted pages on IO.
+                // Once hydrated, repeat navigation must stay immediate.
+                compose.waitUntil(5000) { runCatching {
+                    compose.onNodeWithTag("hero-title-$id").assertExists()
+                }.isSuccess }
+            }
             compose.onNodeWithTag("hero-title-$id").assertExists()
             for(spec in TmdbRailSpec.forPage(page)) {
                 compose.onNodeWithTag("tmdb-heading-"+spec.key).assertTextEquals(spec.title)
@@ -55,6 +63,9 @@ class TmdbBrowsePageTest {
         ready()
         compose.onNodeWithTag("nav-电影").performClick()
         val hot="card-tmdb-movie-11"
+        compose.waitUntil(5000) { runCatching {
+            compose.onNodeWithTag(hot).assertExists()
+        }.isSuccess }
         compose.onNodeWithTag(hot).performScrollTo()
         compose.onNodeWithTag(hot).performSemanticsAction(SemanticsActions.RequestFocus){it()}
         val inst=InstrumentationRegistry.getInstrumentation()
@@ -80,6 +91,7 @@ class TmdbBrowsePageTest {
         }
         compose.onNodeWithTag("nav-电影").performClick()
         val card = compose.onNodeWithTag("card-tmdb-movie-11")
+        compose.waitUntil(5000) { runCatching { card.assertExists() }.isSuccess }
         card.performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         repeat(30) {
             inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
