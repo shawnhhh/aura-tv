@@ -50,7 +50,7 @@ class P0CachedHomeHeroTest {
         // not that its asynchronous local catalog projection has published.
         // Retained failure tree 42431720138 showed the correct hero 127 ms
         // after the old entry assertion. Keep the same 10s entry bound, then
-        // retain every immediate rapid-category/title/backdrop assertion below.
+        // keep repeat-visit assertions immediate; first visits hydrate the selected local cache.
         compose.waitUntil(10000) { runCatching {
             compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
             compose.onNodeWithTag("hero-title-tmdb-movie-11").assertTextEquals("Original 11")
@@ -60,9 +60,20 @@ class P0CachedHomeHeroTest {
             "剧集" to "tmdb-tv-21", "动漫" to "tmdb-tv-31", "综艺" to "tmdb-tv-41",
             "纪录片" to "tmdb-movie-51", "Top 250" to "tmdb-movie-61", "电影" to "tmdb-movie-11",
             "首页" to "tmdb-movie-11", "电影" to "tmdb-movie-11", "剧集" to "tmdb-tv-21", "电影" to "tmdb-movie-11")
+        val visited = mutableSetOf("首页")
+        var previousId = "tmdb-movie-11"
         for ((category,id) in expected) {
             compose.onNodeWithTag("nav-$category").performClick()
             android.util.Log.i("HerrinCachedHero","asserting_category=$category expected=$id")
+            if (visited.add(category)) {
+                // Only the home cache gates startup. First visits hydrate their bounded cache on IO;
+                // they must discard the previous category immediately, then publish the correct hero.
+                if (previousId != id) compose.onNodeWithTag("hero-art-$previousId").assertDoesNotExist()
+                compose.waitUntil(3000) { runCatching {
+                    compose.onNodeWithTag("hero-title-$id").assertTextEquals("Original ${id.substringAfterLast('-')}")
+                }.isSuccess }
+            }
+            previousId = id
             compose.onNodeWithTag("hero-title-$id").assertTextEquals("Original ${id.substringAfterLast('-')}")
             compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("hero-art-$id").assertExists() }.isSuccess }
             if (category == "Top 250") {
