@@ -62,12 +62,19 @@ class EmptySpiderHomeSelectionTest {
         }
     }
     @After fun dismissOwnedInput() {
-        if (!inputUsed) return
-        runCatching { compose.onNodeWithTag("search").performSemanticsAction(SemanticsActions.RequestFocus) }
-        compose.runOnUiThread {
-            compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+        try {
+            if (inputUsed) {
+                runCatching { compose.onNodeWithTag("search").performSemanticsAction(SemanticsActions.RequestFocus) }
+                compose.runOnUiThread {
+                    compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+                }
+                awaitIme(false)
+            }
+        } finally {
+            // The diagnostic test intentionally recreates MainActivity. Finish
+            // its current instance before ActivityScenarioRule teardown.
+            runCatching { compose.activityRule.scenario.onActivity { if (!it.isFinishing) it.finish() } }
         }
-        awaitIme(false)
     }
     private fun importOriginalFixture() {
         compose.waitUntil(10_000) { runCatching {
