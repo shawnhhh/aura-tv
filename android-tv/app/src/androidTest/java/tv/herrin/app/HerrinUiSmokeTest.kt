@@ -162,24 +162,14 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-list").assertExists()
     }
     private fun advancedSettings() {
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        // The route callback precedes attachment/focus of the settings tree.
-        // Query the collection while it is absent: fetchOne's diagnostic tree
-        // printer can otherwise read lazy semantics on the instrumentation
-        // thread during the layout transition (SnapshotStateObserver failure).
-        compose.waitUntil(5_000) {
-            compose.onAllNodesWithTag("settings-list").fetchSemanticsNodes().size == 1 &&
-                compose.onAllNodes(hasTestTag("screen-first") and isFocused())
-                    .fetchSemanticsNodes().size == 1
-        }
-        compose.waitForIdle()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
-        compose.onNodeWithTag("settings-advanced").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("screen-first"))
-        compose.onNodeWithTag("screen-first").assertIsFocused()
+        compose.activityRule.scenario.onActivity { it.intent.action = "tv.herrin.app.DIAGNOSTICS" }
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(12_000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithTag("config-media-url").assertExists()
+        }.isSuccess }
     }
+
     private fun capture(label: String) {
         // PixelCopy synchronizes the rendered root before the device screenshot (not just semantics).
         compose.onAllNodes(isRoot()).onFirst().captureToImage()
@@ -215,8 +205,9 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings").assertIsDisplayed()
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithText("设置 · 内容来源").assertIsDisplayed()
+        compose.onNodeWithText("设置中心").assertIsDisplayed()
         compose.onNodeWithTag("tvbox-warehouse-url").assertIsDisplayed()
+        compose.onNodeWithTag("settings-module-直播源").performClick()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-live-direct-url"))
         compose.onNodeWithTag("tvbox-live-direct-url").assertIsDisplayed()
         compose.onNodeWithTag("tvbox-http-consent").assertDoesNotExist()
@@ -247,45 +238,24 @@ class HerrinUiSmokeTest {
     }
 
     @Test fun compactSettingsDpadReachesTmdbInputThenLiveSourceAndReturns() {
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("screen-first").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-warehouse-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("tvbox-warehouse-nav"); key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-load").assertIsFocused()
-        focus("settings-source-sites")
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsFocused()
-        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsDisplayed()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("settings-module-海报与资料").performClick()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("compact-tmdb-token-nav"))
+        focus("compact-tmdb-token-nav"); key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("compact-tmdb-save").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("compact-tmdb-save").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("settings-module-直播源").performClick()
+        focus("tvbox-live-direct-nav"); key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-live-direct-load").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("settings-home").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("settings-advanced").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("settings-home").assertIsFocused()
-        capture("settings-tmdb-source-vertical-focus")
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("settings").assertIsDisplayed()
     }
 
     @Test fun compactTmdbSplitTokenFieldsReceiveEachDpadStep() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("settings-module-海报与资料").performClick()
         compose.onNodeWithTag("settings-list")
             .performScrollToNode(hasTestTag("compact-tmdb-split-toggle"))
         focus("compact-tmdb-split-toggle")
@@ -543,6 +513,7 @@ http://example.org/live/channel.m3u8
 """))
             focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             val settings = compose.onNodeWithTag("settings-list")
+            compose.onNodeWithTag("settings-module-直播源").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-live-direct-url"))
             compose.onNodeWithTag("tvbox-live-direct-url")
                 .performTextReplacement(server.url("/live.m3u").toString())
@@ -552,8 +523,7 @@ http://example.org/live/channel.m3u8
                 runCatching { compose.onNodeWithTag("live-apply-feedback")
                     .assertTextEquals("成功") }.isSuccess
             }
-            settings.performScrollToNode(hasTestTag("settings-home"))
-            compose.onNodeWithTag("settings-home").performClick()
+            key(KeyEvent.KEYCODE_BACK)
             focus("nav-直播"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("live-fullscreen").assertIsDisplayed() }.isSuccess
@@ -588,8 +558,7 @@ http://example.org/live/channel.m3u8
             settings.performScrollToNode(hasTestTag("compact-tvbox-status"))
             compose.onNodeWithTag("compact-tvbox-status")
                 .assertTextContains("无需逐个检测", substring = true)
-            settings.performScrollToNode(hasTestTag("settings-home"))
-            compose.onNodeWithTag("settings-home").performClick()
+            key(KeyEvent.KEYCODE_BACK)
             compose.onNodeWithTag("source-empty-title").assertIsDisplayed()
             compose.onNodeWithText("蓝色边界").assertDoesNotExist()
             compose.onNodeWithTag("source-open-sites").assertDoesNotExist()

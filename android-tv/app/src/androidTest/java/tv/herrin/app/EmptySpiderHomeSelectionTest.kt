@@ -125,8 +125,9 @@ class EmptySpiderHomeSelectionTest {
     }
     @Test fun advancedPreviewRetainsEmptyInitializedSource() {
         importOriginalFixture()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
-        activate("settings-advanced")
+        compose.activityRule.scenario.onActivity { it.intent.action = "tv.herrin.app.DIAGNOSTICS" }
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(12_000) { runCatching { compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-spider-0"))
         activate("tvbox-spider-0")
         assertSelectedEmptySource(advanced = true)

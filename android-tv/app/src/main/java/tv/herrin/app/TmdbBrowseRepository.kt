@@ -60,8 +60,9 @@ internal class TmdbBrowseRepository(
         })
     private suspend fun get(path: String, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + path
+        val previousResponse = responses[key]
         return requestLocks[(key.hashCode() and Int.MAX_VALUE) % requestLocks.size].withLock {
-            responses[key]?.takeIf { !force && clock() - it.first in 0..30_000L }?.let { return@withLock JSONObject(it.second) }
+            responses[key]?.takeIf { (!force || it !== previousResponse) && clock() - it.first in 0..30_000L }?.let { return@withLock JSONObject(it.second) }
             network.withPermit {
                 if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
                 runInterruptible(Dispatchers.IO) {

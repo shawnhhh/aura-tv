@@ -83,8 +83,8 @@ class P0ExitAndEntryTest {
         compose.onNodeWithTag("phone-config-close").assertIsDisplayed()
         back();compose.onNodeWithTag("phone-config-dialog").assertDoesNotExist()
         compose.onNodeWithTag("exit-dialog").assertDoesNotExist()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tmdb-phone-config"))
-        compose.onNodeWithTag("tmdb-phone-config").performClick()
+        compose.onNodeWithTag("settings-module-海报与资料").performClick()
+        compose.onNodeWithTag("phone-config-main").performClick()
         compose.onAllNodesWithTag("phone-config-dialog").assertCountEquals(1)
         back();compose.onNodeWithTag("settings-list").assertExists()
     }

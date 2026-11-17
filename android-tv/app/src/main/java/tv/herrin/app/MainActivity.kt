@@ -172,7 +172,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         StartupTiming.start()
         super.onCreate(savedInstanceState)
-        val startup=StartupPresentation()
+        val startup=StartupPresentation().apply {
+            // Explicit debug-only diagnostics; no consumer navigation entry.
+            diagnostics = intent.action == "tv.herrin.app.DIAGNOSTICS" &&
+                applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        }
         presentation=startup
         if(android.os.Build.VERSION.SDK_INT>=31) {
             splashScreen.setOnExitAnimationListener { native ->
@@ -1074,6 +1078,9 @@ private fun Herrin(startup: StartupPresentation) {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    LaunchedEffect(startup.diagnostics) {
+        if (startup.diagnostics) { settingsTvBoxOnly = false; screen = "settings" }
+    }
     val playbackScene = screen == "player" || screen == "live-player"
     LaunchedEffect(playbackScene, startup.showing) {
         val activity = context as? ComponentActivity ?: return@LaunchedEffect
@@ -5270,8 +5277,7 @@ private fun Herrin(startup: StartupPresentation) {
                         configInputFocused = false
                         uiScope.launch { settingsListState.scrollToItem(0) }
                     }
-                    LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize()
-, state = settingsListState,
+                    LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize(), state = settingsListState,
                     contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
                     verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
                     item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
