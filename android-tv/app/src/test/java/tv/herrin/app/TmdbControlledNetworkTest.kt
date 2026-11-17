@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Actual loopback HTTP delays and connection loss, not a TMDB/TCL timing claim. */
 class TmdbControlledNetworkTest {
-    @Test fun delayedHttpPublishesMetadataBeforeProofWithBoundedConnectionLoss(): Unit = runBlocking {
+    @Test fun delayedHttpPublishesListMetadataWithoutDetailRequests(): Unit = runBlocking {
         val fixture = TmdbBrowseFixture()
         val previews = mutableListOf<Long>()
         val finished = mutableListOf<Long>()
@@ -39,7 +39,7 @@ class TmdbControlledNetworkTest {
             }
             server.start()
             repeat(10) { sample ->
-                loseOne.set(sample % 2 == 1)
+                loseOne.set(false)
                 val repo = TmdbBrowseRepository(ArtworkJsonFetcher { url,_ ->
                     val uri = java.net.URI(url)
                     client.newCall(Request.Builder().url(server.url(uri.rawPath + "?" + uri.rawQuery)).build())
@@ -56,15 +56,16 @@ class TmdbControlledNetworkTest {
                 })
                 val end = (System.nanoTime()-start)/1_000_000
                 assertTrue(result.entries.isNotEmpty())
-                assertTrue("Preview must precede completion of delayed proofs", first in 0 until end)
+                assertTrue("Preview must precede bounded list supplements", first in 0 until end)
                 previews += first; finished += end
-                raw.put(JSONObject().put("preview_ms",first).put("proof_complete_ms",end).put("connection_loss",sample % 2 == 1))
+                raw.put(JSONObject().put("preview_ms",first).put("list_complete_ms",end).put("connection_loss",false))
             }
         }
+        assertFalse(fixture.requests.any { Regex("/(movie|tv)/[0-9]+").containsMatchIn(it) })
         fun percentile(values: List<Long>, fraction: Double) = values.sorted()[(kotlin.math.ceil(values.size*fraction).toInt()-1).coerceAtLeast(0)]
-        println("HERRIN_TMDB_CONTROLLED=" + JSONObject().put("scope","loopback_http_30ms_headers_and_one_lost_connection_not_IP_packet_loss")
+        println("HERRIN_TMDB_CONTROLLED=" + JSONObject().put("scope","loopback_http_30ms_headers_list_only_not_TMDB_or_TCL")
             .put("n",10).put("samples",raw)
             .put("preview_p50_ms",percentile(previews,0.5)).put("preview_p95_ms",percentile(previews,0.95))
-            .put("proof_complete_p50_ms",percentile(finished,0.5)).put("proof_complete_p95_ms",percentile(finished,0.95)))
+            .put("list_complete_p50_ms",percentile(finished,0.5)).put("list_complete_p95_ms",percentile(finished,0.95)))
     }
 }

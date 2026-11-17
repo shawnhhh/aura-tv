@@ -33,7 +33,7 @@ class TmdbBrowseLoadingNavigationTest {
                 entered.countDown(); release.await()
             }
             val raw = fixture.load(url, token)
-            if (url.contains("/trending/movie/week")) {
+            if ((url.contains("/discover/movie") && url.contains("sort_by=popularity.desc") && !url.contains("with_origin_country"))) {
                 val json = org.json.JSONObject(raw)
                 val first = json.getJSONArray("results").getJSONObject(0)
                 // Model overlapping upstream rows before detail verification.
@@ -53,7 +53,7 @@ class TmdbBrowseLoadingNavigationTest {
         try {
             assertTrue(entered.await(5, TimeUnit.SECONDS))
             compose.waitUntil(5000) { state.row(spec).entries.isNotEmpty() }
-            assertTrue(state.row(spec).loading)
+            compose.waitUntil(5000) { !state.row(spec).loading } // HOT no longer waits for per-title proof.
             assertEquals(2, state.row(spec).entries.size)
             val card = compose.onNodeWithTag("card-tmdb-movie-11")
             card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
@@ -93,7 +93,7 @@ class TmdbBrowseLoadingNavigationTest {
         var decodes: Deferred<List<android.graphics.Bitmap?>>? = null
         val fixture = TmdbBrowseFixture()
         val state = TmdbBrowseState(TmdbBrowseRepository(ArtworkJsonFetcher { url, token ->
-            if (url.contains("/trending/movie/week") && url.contains("page=2")) {
+            if ((url.contains("/discover/movie") && url.contains("sort_by=popularity.desc") && !url.contains("with_origin_country")) && url.contains("page=2")) {
                 entered.countDown()
                 try { check(release.await(15, TimeUnit.SECONDS)) }
                 catch (cancel: InterruptedException) { interrupted.set(true); throw cancel }
@@ -113,7 +113,7 @@ class TmdbBrowseLoadingNavigationTest {
         try {
             compose.onNodeWithTag("tmdb-more-movie-hot").performScrollTo().performClick()
             assertTrue("next HTTP page must actually start", entered.await(5, TimeUnit.SECONDS))
-            assertTrue(state.row(spec).loading)
+            compose.waitUntil(5000) { !state.row(spec).loading } // HOT no longer waits for per-title proof.
             decodes = imageScope.async {
                 (0 until 16).map { i -> async {
                     cache.load(images.url("/original-$i.png").toString(), allowHttp = true, hero = i == 0)
@@ -147,7 +147,7 @@ class TmdbBrowseLoadingNavigationTest {
         val release = CountDownLatch(1)
         val fixture = TmdbBrowseFixture()
         val state = TmdbBrowseState(TmdbBrowseRepository(ArtworkJsonFetcher { url, token ->
-            if (url.contains("/trending/movie/week") && url.contains("page=2")) {
+            if ((url.contains("/discover/movie") && url.contains("sort_by=popularity.desc") && !url.contains("with_origin_country")) && url.contains("page=2")) {
                 entered.countDown(); check(release.await(15, TimeUnit.SECONDS))
             }
             fixture.load(url, token)

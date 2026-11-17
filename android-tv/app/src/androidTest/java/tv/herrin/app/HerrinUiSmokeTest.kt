@@ -166,7 +166,7 @@ class HerrinUiSmokeTest {
         compose.activityRule.scenario.recreate()
         compose.waitUntil(12_000) { runCatching {
             compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
-            compose.onNodeWithTag("config-media-url").assertExists()
+            compose.onNodeWithText("高级设置").assertExists()
         }.isSuccess }
     }
 
