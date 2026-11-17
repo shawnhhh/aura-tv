@@ -34,7 +34,7 @@ internal class TmdbBrowseRepository(
     private val ambiguous = ConcurrentHashMap<String, Set<Int>>()
     private val parser = HerrinTmdbDiscovery()
     private fun prefix(token: String) = MessageDigest.getInstance("SHA-256")
-        .digest(("browse-v2|zh-CN|$token").toByteArray()).joinToString("") { "%02x".format(it) }
+        .digest(("browse-v3|zh-CN|$token").toByteArray()).joinToString("") { "%02x".format(it) }
     private fun today() = Instant.ofEpochMilli(clock()).atZone(ZoneOffset.UTC).toLocalDate()
     private fun file(key: String) = directory?.let { File(it, "$key.json") }
     private fun read(key: String): JSONObject? = file(key)?.takeIf { it.isFile && it.length() in 1..1_000_000 }
@@ -66,7 +66,7 @@ internal class TmdbBrowseRepository(
     }
     private val rowFields = setOf("id", "title", "name", "original_title", "original_name", "release_date",
         "first_air_date", "overview", "poster_path", "backdrop_path", "vote_average", "vote_count",
-        "genre_ids", "adult", "popularity", "media_type")
+        "genre_ids", "adult", "popularity", "media_type", "origin_country", "query_origin_country")
     private fun safeRow(row: JSONObject) = JSONObject().apply {
         rowFields.forEach { if (row.has(it)) put(it, row.get(it)) }
     }
@@ -93,18 +93,14 @@ internal class TmdbBrowseRepository(
             put("last_episode_to_air", JSONObject().put("air_date", it.optString("air_date").take(10)))
         }
         raw.optJSONObject("release_dates")?.optJSONArray("results")?.let { countries ->
-            val earliest = mutableMapOf<Int, String>()
-            for (i in 0 until minOf(100, countries.length())) {
-                val rows = countries.optJSONObject(i)?.optJSONArray("release_dates") ?: continue
-                for (j in 0 until minOf(100, rows.length())) rows.optJSONObject(j)?.let {
-                    val type = it.optInt("type")
-                    val day = it.optString("release_date").take(10)
-                    if (type in 1..6 && runCatching { java.time.LocalDate.parse(day) }.isSuccess &&
-                        (earliest[type] == null || day < earliest.getValue(type))) earliest[type] = day
+            // Keep country and type: collapsing worldwide dates destroys release-market evidence.
+            put("release_dates", JSONObject().put("results", JSONArray().apply {
+                for (i in 0 until minOf(100, countries.length())) {
+                    val country = countries.optJSONObject(i) ?: continue
+                    put(JSONObject().put("iso_3166_1", country.optString("iso_3166_1"))
+                        .put("release_dates", country.optJSONArray("release_dates") ?: JSONArray()))
                 }
-            }
-            put("release_dates", JSONObject().put("results", JSONArray().put(JSONObject().put("release_dates",
-                JSONArray().apply { earliest.forEach { (type, date) -> put(JSONObject().put("type", type).put("release_date", date)) } }))))
+            }))
         }
     }
 
@@ -156,7 +152,10 @@ internal class TmdbBrowseRepository(
             val disk = read(key)
             val recent = disk?.takeIf { !force && clock() - it.optLong("saved") in 0..86_400_000L }?.optJSONObject("proof")
             if (recent != null) { proofMemory[key] = disk.optLong("saved") to recent; learn(type, id, recent, token); return@withLock recent }
-            val fresh = get("/$type/$id" + if (type == "movie") "?append_to_response=release_dates" else "", token)
+            val fresh = if (type == "movie") {
+                val releases = get("/movie/$id/release_dates", token)
+                JSONObject().put("id", id).put("release_dates", releases)
+            } else get("/$type/$id", token)
             if (fresh.optInt("id") != id) throw IOException("TMDB_ID_MISMATCH")
             safeProof(fresh).also {
                 proofMemory[key] = clock() to it
@@ -175,7 +174,7 @@ internal class TmdbBrowseRepository(
         val category = TmdbAnimeIp.category(type, id, genres,
             proof.optJSONObject("belongs_to_collection")?.optInt("id"), collectionMap(token))
         val countries = buildSet {
-            proof.optJSONArray("origin_country")?.let { a -> for (i in 0 until minOf(8, a.length())) add(a.optString(i)) }
+            (row.optJSONArray("origin_country") ?: proof.optJSONArray("origin_country"))?.let { a -> for (i in 0 until minOf(8, a.length())) add(a.optString(i)) }
             proof.optJSONArray("production_countries")?.let { a -> for (i in 0 until minOf(20, a.length()))
                 a.optJSONObject(i)?.optString("iso_3166_1")?.let(::add) }
         }.filter { it.matches(Regex("[A-Z]{2}")) }.toSet()
@@ -198,26 +197,34 @@ internal class TmdbBrowseRepository(
         val rows = json.optJSONArray("entries") ?: JSONArray()
         val items = (0 until minOf(100, rows.length())).mapNotNull { i ->
             val r = rows.optJSONObject(i) ?: return@mapNotNull null
-            entry(r.getJSONObject("row"), r.getString("type"), r.getJSONObject("proof"), token)?.takeIf { eligible(spec, it) }
+            entry(r.getJSONObject("row"), r.getString("type"), r.getJSONObject("proof"), token)?.let { e ->
+                if (spec.kind == TmdbRailKind.LATEST) e.copy(availability = TmdbReleaseEvidence.evaluate(e.type, e.proof, today(),
+                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets)) else e
+            }?.takeIf { eligible(spec, it) }
         }
         return TmdbBrowseBatch(select(spec, items), page, json.optBoolean("more"), json.optInt("unknown"))
     }
     private fun select(spec: TmdbRailSpec, entries: List<TmdbBrowseEntry>): List<TmdbBrowseEntry> = when (spec.kind) {
         TmdbRailKind.DOMESTIC -> TmdbDomesticAllocator.allocate(entries, 12)
         TmdbRailKind.RATED -> entries.sortedByDescending { it.film.ratingValue ?: 0.0 }.distinctBy { it.film.id }.take(20)
-        TmdbRailKind.LATEST -> entries.sortedByDescending { it.availability.date }.distinctBy { it.film.id }.take(20)
+        TmdbRailKind.LATEST -> TmdbLatestPolicy.allocate(spec.page, entries)
         else -> entries.distinctBy { it.film.id }.take(20)
     }
 
     fun eligible(spec: TmdbRailSpec, entry: TmdbBrowseEntry): Boolean =
-        entry.availability.state == TmdbAvailability.AVAILABLE &&
-            (spec.page == TmdbBrowsePage.HOME || entry.film.category == spec.page.label) &&
+        (spec.kind != TmdbRailKind.LATEST || entry.availability.state == TmdbAvailability.AVAILABLE) &&
+            (spec.page == TmdbBrowsePage.HOME || entry.film.category == spec.page.label ||
+                (spec.page == TmdbBrowsePage.ANIME && spec.kind == TmdbRailKind.LATEST &&
+                    entry.raw.optJSONArray("genre_ids")?.let { a -> (0 until a.length()).any { a.optInt(it) == 16 } } == true)) &&
+            (spec.kind != TmdbRailKind.LATEST || TmdbLatestPolicy.pools(spec.page).any { pool ->
+                pool.isEmpty() || TmdbLatestPolicy.matches(entry, pool) }) &&
             (spec.kind != TmdbRailKind.RATED || entry.votes >= spec.minVotes(entry.type)) &&
             (spec.kind != TmdbRailKind.DOMESTIC || entry.countries.any { it in setOf("CN", "HK", "TW") })
 
     suspend fun load(spec: TmdbRailSpec, page: Int, token: String, force: Boolean = false,
         onPreview: suspend (TmdbBrowseBatch) -> Unit = {}): TmdbBrowseBatch = withContext(Dispatchers.IO) {
         require(page in 1..50)
+        if (spec.kind == TmdbRailKind.LATEST) return@withContext loadLatest(spec, page, token, force, onPreview)
         val key = prefix(token) + "-page-" + spec.key + "-$page"
         val old = read(key)
         if (!force && old != null && clock() - old.optLong("saved") in 0..21_600_000L)
@@ -253,7 +260,11 @@ internal class TmdbBrowseRepository(
                 if (previews.isNotEmpty()) onPreview(TmdbBrowseBatch(previews.distinctBy { it.film.id }.take(20), page, more, previews.count { it.availability.state == TmdbAvailability.UNKNOWN }))
             }
             candidates.asSequence().filter { seen.add(it.second + "-" + it.first.optInt("id")) }.take(limit).toList().map { (row, type) -> async {
-                try { entry(row, type, proof(type, row.getInt("id"), token), token) }
+                try {
+                    // Lists already contain artwork, votes, genres and dates. Expand only on detail entry.
+                    val evidence = JSONObject().put("origin_country", row.optJSONArray("origin_country") ?: JSONArray())
+                    entry(row, type, evidence, token)
+                }
                 catch (cancel: CancellationException) { throw cancel }
                 catch (_: Exception) { null }
             } }.awaitAll().also { results ->
@@ -294,4 +305,74 @@ internal class TmdbBrowseRepository(
             } }))
         batch
     }
+    private val pageLocks = Array(32) { Mutex() }
+    private suspend fun loadLatest(spec: TmdbRailSpec, page: Int, token: String, force: Boolean,
+        onPreview: suspend (TmdbBrowseBatch) -> Unit): TmdbBrowseBatch =
+        pageLocks[(spec.key.hashCode() and Int.MAX_VALUE) % pageLocks.size].withLock {
+        val key = prefix(token) + "-page-" + spec.key + "-$page"
+        val old = read(key)
+        if (!force && old != null && clock() - old.optLong("saved") in 0..3_600_000L)
+            return@withLock decodeBatch(spec, page, token, old)
+        val accepted = mutableListOf<TmdbBrowseEntry>()
+        val seen = hashSetOf<String>()
+        var more = false
+        var checked = 0
+        var failed = 0
+        val day = today()
+        // Five source pages per UI page; fixed mapping prevents skipping candidates at pagination.
+        // Maximum 40 candidate proofs, three HTTP requests in flight, shared proof cache.
+        for (offset in 0 until 5) {
+            val sourcePage = (page - 1) * 5 + offset + 1
+            if (sourcePage > 500) break
+            for (pool in TmdbLatestPolicy.pools(spec.page)) for (type in spec.types) {
+                val market = if (spec.page == TmdbBrowsePage.DOCUMENTARY) null
+                    else listOf("US", "CN", "HK", "TW", "MO")[offset]
+                var path = spec.endpoints(type, day).first()
+                if (type == "movie") {
+                    path = path.replace("&region=US", market?.let { "&region=$it" }.orEmpty())
+                }
+                if (pool.isNotEmpty()) path += "&with_origin_country=" + pool.sorted().joinToString("%7C")
+                val root = try { get("$path&page=$sourcePage", token) }
+                    catch (cancel: CancellationException) { throw cancel }
+                    catch (_: Exception) { failed++; continue }
+                more = more || root.optInt("total_pages", 1) > sourcePage
+                val rows = root.optJSONArray("results") ?: continue
+                val candidates = (0 until minOf(20, rows.length())).mapNotNull { i ->
+                    val row = rows.optJSONObject(i) ?: return@mapNotNull null
+                    if (row.optInt("id") <= 0 || row.optBoolean("adult") ||
+                        row.optString("media_type", type) != type || !seen.add("$type-${row.optInt("id")}")) null else row
+                }
+                // Production origin is constrained by the official query, not inferred from dialogue.
+                // Movies do not return origin_country, so only annotate unambiguous single-country queries.
+                val results = coroutineScope { candidates.take((40-checked).coerceAtLeast(0)).map { row ->
+                    checked++
+                    async {
+                        try {
+                            val evidence = proof(type, row.getInt("id"), token)
+                            val enriched = safeRow(row)
+                            if (pool.isNotEmpty()) enriched.put("query_origin_country", JSONArray(pool.toList()))
+                            entry(enriched, type, evidence, token)?.let { e ->
+                                val release = TmdbReleaseEvidence.evaluate(type, evidence, day,
+                                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets)
+                                e.copy(availability = release)
+                            }?.takeIf { eligible(spec, it) }
+                        } catch (cancel: CancellationException) { throw cancel }
+                        catch (_: Exception) { null }
+                    }
+                }.awaitAll().filterNotNull() }
+                accepted += results
+                if (accepted.isNotEmpty()) onPreview(TmdbBrowseBatch(select(spec, accepted), page, true))
+            }
+            val pools = TmdbLatestPolicy.pools(spec.page)
+            if (accepted.size >= 20 && pools.all { p -> p.isEmpty() || accepted.count { e -> TmdbLatestPolicy.matches(e, p) } >= 10 }) break
+        }
+        if (accepted.isEmpty() && failed > 0) throw IOException("TMDB_LATEST_UNAVAILABLE")
+        val batch = TmdbBrowseBatch(select(spec, accepted), page, more && page < 50)
+        write(key, JSONObject().put("saved", clock()).put("more", batch.hasMore)
+            .put("entries", JSONArray().apply { accepted.forEach {
+                put(JSONObject().put("type", it.type).put("row", it.raw).put("proof", it.proof))
+            } }))
+        batch
+    }
+
 }

@@ -61,13 +61,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
     suspend fun refresh(page: TmdbBrowsePage, force: Boolean = false) = coroutineScope {
         if (token.isBlank()) return@coroutineScope
         TmdbRailSpec.forPage(page).map { spec -> launch { load(spec, 1, force) } }.joinAll()
-        if (page == TmdbBrowsePage.ANIME) launch {
-            repository.warmAnimeRelations(token)
-            // Newly verified collection membership can reclassify cached candidates without waiting on a page fetch.
-            for (spec in TmdbRailSpec.forPage(page)) if (row(spec).page <= 1) repository.cached(spec, 1, token)?.let { batch ->
-                if (focused == spec.key) pending[spec.key] = batch else publish(spec.key, batch)
-            }
-        }
+
     }
     suspend fun more(spec: TmdbRailSpec) {
         val current = row(spec)
