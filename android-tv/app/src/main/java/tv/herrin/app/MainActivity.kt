@@ -299,14 +299,14 @@ private fun TvHeaderIconButton(
         if (reduced) snap() else tween(120),
         label = "header-icon-focus"
     )
-    val foreground = if (focused) Color(0xFF151515) else Color(0xFFF5F5F5)
+    val foreground = if (focused && !gear) Color(0xFF151515) else Color(0xFFF5F5F5)
     val label = if (gear) "设置" else "搜索"
     Box(modifier.size(if (gear) 35.dp else 33.dp)
         .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
         .semantics { contentDescription = label }
         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
         .clip(shape)
-        .background(if (focused) Color(0xFFF4F4F4)
+        .background(if (focused && gear) Color.White.copy(alpha = 0.16f) else if (focused) Color(0xFFF4F4F4)
             else if (selected) Color(0xFF3A3D43) else Color.Transparent)
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center) {
@@ -322,21 +322,18 @@ private fun TvHeaderIconButton(
                     Offset(d * 0.88f, d * 0.88f),
                     strokeWidth = d * 0.11f, cap = StrokeCap.Round)
             } else {
-                drawCircle(foreground, radius = d * 0.29f, center = centerAt,
-                    style = Stroke(width = d * 0.10f))
-                drawCircle(foreground, radius = d * 0.087f, center = centerAt,
-                    style = Stroke(width = d * 0.075f))
-                for (index in 0 until 8) {
-                    val angle = (index * kotlin.math.PI / 4).toFloat()
-                    val ux = kotlin.math.cos(angle)
-                    val uy = kotlin.math.sin(angle)
-                    drawLine(foreground,
-                        Offset(centerAt.x + ux * d * 0.35f,
-                            centerAt.y + uy * d * 0.35f),
-                        Offset(centerAt.x + ux * d * 0.46f,
-                            centerAt.y + uy * d * 0.46f),
-                        strokeWidth = d * 0.095f, cap = StrokeCap.Round)
+                val outline = androidx.compose.ui.graphics.Path()
+                for (index in 0..160) {
+                    val angle = index * 2.0 * kotlin.math.PI / 160.0
+                    val radius = d * (0.365 + 0.055 * kotlin.math.cos(angle * 8))
+                    val x = centerAt.x + (kotlin.math.cos(angle) * radius).toFloat()
+                    val y = centerAt.y + (kotlin.math.sin(angle) * radius).toFloat()
+                    if (index == 0) outline.moveTo(x,y) else outline.lineTo(x,y)
                 }
+                outline.close()
+                drawPath(outline, foreground, style = Stroke(width = d * 0.075f, join = StrokeJoin.Round))
+                drawCircle(foreground, radius = d * 0.13f, center = centerAt,
+                    style = Stroke(width = d * 0.075f))
             }
         }
     }
@@ -2503,6 +2500,8 @@ private fun Herrin(startup: StartupPresentation) {
             runCatching { requester("screen-first").requestFocus() }
         }
     }
+    var settingsModule by remember { mutableStateOf("影视源") }
+    var personalProtocol by remember { mutableStateOf("WebDAV") }
     var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
     // Latest D-pad press wins: an old animated scroll must never block a newer
     // request. Scroll instantly, then focus after the Lazy item is attached.
@@ -2517,7 +2516,17 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     fun moveCompactSettingsFocus(target: String) {
-        val itemIndex = TvFocusRoutes.compactSettingsItemIndex(
+        val moduleTargets = when (settingsModule) {
+            "影视源" -> setOf("screen-first", "phone-config-main", "tvbox-warehouse-url", "tvbox-warehouse-load", "settings-source-sites")
+            "海报与资料" -> setOf("screen-first", "phone-config-main", "compact-tmdb-split-toggle", "compact-tmdb-token", "compact-tmdb-part-1", "compact-tmdb-part-2", "compact-tmdb-part-3", "compact-tmdb-save", "compact-tmdb-rescan")
+            "直播源" -> setOf("screen-first", "phone-config-main", "tvbox-live-direct-url", "tvbox-live-direct-load")
+            else -> setOf("screen-first", "phone-config-main")
+        }
+        if (target !in moduleTargets) { runCatching { requester("phone-config-main").requestFocus() }; return }
+        val itemIndex = when (settingsModule) {
+            "海报与资料" -> when(target) { "screen-first", "phone-config-main" -> 0; "compact-tmdb-save", "compact-tmdb-rescan" -> 5; else -> 4 }
+            "直播源" -> when(target) { "tvbox-live-direct-url" -> 3; "tvbox-live-direct-load" -> 4; else -> 0 }
+            else -> TvFocusRoutes.compactSettingsItemIndex(
             target,
             sourceStatus = vodImportFeedback.isNotBlank(),
             connectedStatus = metadataToken.isNotBlank(),
@@ -2527,7 +2536,8 @@ private fun Herrin(startup: StartupPresentation) {
                 metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
                 metadataScanFailures == 0 &&
                 providerFilms.orEmpty().none { it.metadataSource == "TMDB" }
-        ) ?: return
+        )
+        } ?: return
         settingsIntent.request(target)
         settingsFocusJob[0]?.cancel()
         fun confirmFocus(): Boolean {
@@ -4117,7 +4127,7 @@ private fun Herrin(startup: StartupPresentation) {
                     // MainActivityKt.Herrin otherwise violates the JVM 64-KiB
                     // per-method bytecode limit when TVBox and player UI grow.
                     fun androidx.compose.foundation.lazy.LazyListScope.renderSettingsItems() {
-                        item { Text(if (settingsTvBoxOnly) "设置 · 内容来源" else "高级设置", fontSize = 32.sp) }
+                        item { Text(if (settingsTvBoxOnly) settingsModule else "高级设置", fontSize = 32.sp) }
                         if (!settingsTvBoxOnly) {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
                         item { Text("目录源管理 · 最多 10 个授权 HTTPS 目录", fontSize = 22.sp) }
@@ -4207,6 +4217,7 @@ private fun Herrin(startup: StartupPresentation) {
                             }
                         } }
                         }
+                        if (!settingsTvBoxOnly || settingsModule == "影视源") {
                         item { Text(if (settingsTvBoxOnly) "影视源" else "TVBox 多仓 / 单仓 / IPTV", fontSize = 22.sp) }
                         if (!settingsTvBoxOnly) {
                             item { Text("支持 urls 多仓、sites/lives 单仓、内嵌直播、M3U 与 TVBox TXT。Java csp_* Spider 可在本次明确授权后尝试加载与解析；JS/Python、网页二次解析及部分受保护插件仍可能不兼容。失效的配置接口可从本机已缓存的有效 JSON 回退。", color = Color(0xFFBDC8D6), lineHeight = 23.sp) }
@@ -4287,8 +4298,9 @@ private fun Herrin(startup: StartupPresentation) {
                             tvBoxLoadEpoch++
                         } }
                         }
-                        if (settingsTvBoxOnly) {
-                            item { Text("智能海报墙 · TMDB",
+                        }
+                        if (settingsTvBoxOnly && settingsModule == "海报与资料") {
+                            item { Text("海报与资料",
                                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
                             item { Text(if (metadataToken.isBlank())
                                 "未启用自动刮削：没有配置 TMDB API Read Access Token，当前显示影视源海报。" +
@@ -4346,9 +4358,6 @@ private fun Herrin(startup: StartupPresentation) {
                                         tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
                                     } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
                                 }
-                                TvButton("扫码输入 Token", Modifier.testTag("tmdb-phone-config")
-                                    .focusRequester(requester("tmdb-phone-config")), reduceMotion,
-                                    onFocus = { focusId = "tmdb-phone-config" }) { lanConfigOpen = true }
                                 TvButton("重新刮削",
                                     modifier = Modifier.testTag("compact-tmdb-rescan")
                                         .focusRequester(requester("compact-tmdb-rescan")),
@@ -4390,11 +4399,11 @@ private fun Herrin(startup: StartupPresentation) {
                                     color = Color(0xFFFFD49D))
                             }
                         }
-                        if (settingsTvBoxOnly) {
-                            item { Text("个人影片资源优先 · NAS / 云盘", fontSize = 20.sp,
+                        if (settingsTvBoxOnly && settingsModule == "个人媒体库") {
+                            item { PersonalProtocolTabs(personalProtocol, reduceMotion) { personalProtocol = it } }
+                            if (personalProtocol == "WebDAV") {
+                            item { Text("WebDAV", fontSize = 20.sp,
                                 fontWeight = FontWeight.SemiBold) }
-                            item { Text("支持用户自己授权的 WebDAV 地址；NAS 可通过 WebDAV 服务共享，云盘需配置有权访问的 WebDAV 网关。SMB、阿里云盘、夸克和 115 原生 API 仍需后续单独接入。",
-                                color = Color(0xFFBDC9D7), lineHeight = 20.sp) }
                             item { OutlinedTextField(nasDavUrlDraft, { nasDavUrlDraft = it.take(2048) },
                                 Modifier.fillMaxWidth().testTag("nas-webdav-url"),
                                 label = { Text("NAS WebDAV 根目录 URL（优先）") }, singleLine = true) }
@@ -4472,21 +4481,13 @@ private fun Herrin(startup: StartupPresentation) {
                             item { Text(personalSourceFeedback.ifBlank { tmdbState.tmdbDiscoveryStatus },
                                 modifier = Modifier.testTag("personal-source-feedback"),
                                 color = Color(0xFFBDD9EF)) }
-                            item { Text("IMDb 评分 · 用户自行导入", fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold) }
-                            item { TvButton("导入本地 IMDb title.ratings.tsv.gz",
-                                modifier = Modifier.testTag("imdb-import"),
-                                reduced = reduceMotion) {
-                                    runCatching {
-                                        imdbImportPicker.launch(arrayOf("application/gzip",
-                                            "application/x-gzip", "application/octet-stream"))
-                                    }.onFailure {
-                                        imdbImportStatus = "电视未提供文件选择器，请使用支持 SAF 的文件管理器"
-                                    }
-                                } }
-                            item { Text(imdbImportStatus, modifier = Modifier.testTag("imdb-import-status"),
-                                color = Color(0xFFCBD5E4), fontSize = 13.sp) }
+                            } else if (personalProtocol == "SMB") {
+                                item { SmbProtocolSettings { personalSourceConfigEpoch++ } }
+                            } else {
+                                item { Text("$personalProtocol 原生接入 · 待接入：尚无正式 API 授权能力。", color = Color(0xFFBDC9D7)) }
+                            }
                         }
+                        if (!settingsTvBoxOnly || settingsModule == "直播源") {
                         item { Text("直播源", fontSize = 22.sp) }
                         item {
                             if (settingsTvBoxOnly) TvSourceInput(
@@ -4550,18 +4551,6 @@ private fun Herrin(startup: StartupPresentation) {
                             item { Text(tvBoxStatus, modifier = Modifier.testTag("tvbox-status"),
                                 color = Color(0xFFCFD7E4), lineHeight = 23.sp) }
                         }
-                        if (settingsTvBoxOnly) {
-                            item { TvButton("返回首页", modifier = Modifier.testTag("settings-home")
-                                .focusRequester(requester("settings-home")), reduced = reduceMotion,
-                                onFocus = { focusId = "settings-home" }) {
-                                category = "首页"; screen = "browse"
-                            } }
-                            item { TvButton("高级工具与诊断", modifier = Modifier.testTag("settings-advanced")
-                                .focusRequester(requester("settings-advanced")), reduced = reduceMotion,
-                                onFocus = { focusId = "settings-advanced" }) {
-                                settingsTvBoxOnly = false
-                                focusId = "screen-first"
-                            } }
                         }
                         if (!settingsTvBoxOnly) {
                         if (tvBoxWarehouses.isNotEmpty()) {
@@ -5272,13 +5261,19 @@ private fun Herrin(startup: StartupPresentation) {
                         }
                     
                     }
+                    Row(Modifier.fillMaxSize()) {
+                    if (screen == "settings" && settingsTvBoxOnly) SettingsModules(settingsModule, reduceMotion) {
+                        settingsModule = it
+                        configInputFocused = false
+                        uiScope.launch { settingsListState.scrollToItem(0) }
+                    }
                     LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize()
                     .background(Color(0xAA080B10))
                     .onPreviewKeyEvent { event ->
                         // An active TV text editor owns its arrow keys. Only the
                         // non-editing focus stops use compact-row navigation.
                         if (!CompactSettingsKeyPolicy.intercept(
-                                onSettings = screen == "settings",
+                                onSettings = false,
                                 compact = settingsTvBoxOnly,
                                 editorFocused = configInputFocused,
                                 keyDown = event.type == KeyEventType.KeyDown,
@@ -5309,6 +5304,7 @@ private fun Herrin(startup: StartupPresentation) {
                     } }
                     if (screen == "settings") renderSettingsItems()
                     else renderDetailItems()
+                    }
                 }
                 }
             }
