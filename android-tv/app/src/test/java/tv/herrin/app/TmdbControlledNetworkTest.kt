@@ -1,6 +1,10 @@
 package tv.herrin.app
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.Dispatcher
@@ -13,6 +17,7 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Actual loopback HTTP delays and connection loss, not a TMDB/TCL timing claim. */
@@ -67,5 +72,34 @@ class TmdbControlledNetworkTest {
             .put("n",10).put("samples",raw)
             .put("preview_p50_ms",percentile(previews,0.5)).put("preview_p95_ms",percentile(previews,0.95))
             .put("list_complete_p50_ms",percentile(finished,0.5)).put("list_complete_p95_ms",percentile(finished,0.95)))
+    }
+
+
+    @Test fun slowDigitalReleaseProofsCannotStarveVisibleHotList(): Unit = runBlocking {
+        val entered = CountDownLatch(2)
+        val release = CountDownLatch(1)
+        val fixture = TmdbBrowseFixture()
+        val repo = TmdbBrowseRepository(ArtworkJsonFetcher { url, token ->
+            if (Regex("/(movie|tv)/[0-9]+").containsMatchIn(url)) {
+                entered.countDown()
+                check(release.await(10, TimeUnit.SECONDS)) { "controlled proof fixture timed out" }
+            }
+            fixture.load(url, token)
+        })
+        val latest = async(Dispatchers.IO) {
+            repo.load(TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.LATEST), 1, "fixture")
+        }
+        try {
+            assertTrue("At least two release proofs must be in flight", entered.await(5, TimeUnit.SECONDS))
+            // Two slow proof calls consume only two of the three global slots.
+            // A first-page list must still complete before the held proofs are released.
+            val hot = withTimeout(4000) {
+                repo.load(TmdbRailSpec(TmdbBrowsePage.HOME, TmdbRailKind.HOT), 1, "fixture")
+            }
+            assertTrue("Visible HOT metadata must not wait for release proofs", hot.entries.isNotEmpty())
+        } finally {
+            release.countDown()
+            latest.cancelAndJoin()
+        }
     }
 }
