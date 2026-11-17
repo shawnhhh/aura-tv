@@ -48,6 +48,30 @@ class LatestReleasePolicyTest {
     private fun entry(id:Int, country:String) = TmdbBrowseEntry(
         Film("tmdb-movie-$id","Original","","电影","2026","",1),"movie",setOf(country),
         TmdbReleaseProof(TmdbAvailability.AVAILABLE,today.minusDays(id.toLong())),1000,1.0,JSONObject(),JSONObject())
+    @Test fun latestAnimeIncludesReleasedMoviesAndAiredSeriesWithoutChangingMediaIdentity() = kotlinx.coroutines.runBlocking {
+        val fixture = TmdbBrowseFixture()
+        val repository = TmdbBrowseRepository(ArtworkJsonFetcher { url, token ->
+            val root = JSONObject(fixture.load(url, token))
+            if (url.contains("/discover/movie")) {
+                val rows = root.getJSONArray("results")
+                root.put("results", JSONArray().apply { for (j in 0 until minOf(2, rows.length())) put(rows.getJSONObject(j)) })
+            }
+            if (Regex("/movie/[0-9]+/release_dates").containsMatchIn(url)) {
+                root.getJSONArray("results").let { regions -> for (j in 0 until regions.length()) {
+                    val region = regions.getJSONObject(j).put("iso_3166_1", "JP")
+                    val dates = region.getJSONArray("release_dates")
+                    for (k in 0 until dates.length()) dates.getJSONObject(k).put("release_date", "2026-11-16")
+                } }
+            }
+            root.toString()
+        })
+        val batch = repository.load(TmdbRailSpec(TmdbBrowsePage.ANIME, TmdbRailKind.LATEST), 1, "fixture")
+        assertTrue(batch.entries.any { it.type == "movie" })
+        assertTrue(batch.entries.any { it.type == "tv" })
+        assertTrue(batch.entries.all { it.availability.state == TmdbAvailability.AVAILABLE })
+        batch.entries.filter { it.type == "movie" }.forEach { assertNull(it.film.tmdbTvId) }
+    }
+
     @Test fun regionBalanceSpillDedupAndDateOrdering() {
         val all=(1..20).map{entry(it,"US")}+(21..40).map{entry(it,"CN")}
         val balanced=TmdbLatestPolicy.allocate(TmdbBrowsePage.MOVIE,all+all)
