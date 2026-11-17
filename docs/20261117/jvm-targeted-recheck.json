@@ -1,0 +1,31 @@
+{
+  "scope": "targeted recheck after real Samba fixture setup; no production source changes",
+  "totals": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "name": "tv.herrin.app.P0NodeRecoveryTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-17T10:19:31",
+      "hostname": "d1ee0d07b894",
+      "time": "0.279"
+    },
+    {
+      "name": "tv.herrin.app.SmbProtocolIntegrationTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-17T10:19:32",
+      "hostname": "d1ee0d07b894",
+      "time": "2.071"
+    }
+  ]
+}

@@ -1,0 +1,1306 @@
+{
+  "scope": "final local full JVM suite before Samba fixture setup, not a real-source or device acceptance",
+  "totals": {
+    "tests": 738,
+    "failures": 6,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "name": "tv.herrin.app.ArtworkMetadataResolverTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.428",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.CatalogProfileCodecTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.014",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.CatalogTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.ConfigPairingSessionTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.007",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.DanmakuTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.197",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.DeviceMediaCapabilitiesTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.01",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.DisplayRefreshTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.005",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.FilmFacetFiltersTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.028",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.FilmMetadataEnrichmentTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.014",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.FongMiPlaybackBackendsTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.05",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.FongMiPlaybackRecoveryTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.016",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.FongMiPlaybackRouterTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.037",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.FongMiSubtitleIntegrationContractTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.009",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.HerrinPlaybackClosureTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.203",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.KernelMediaAdmissionTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.KernelSeekBoundsTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.LanConfigIdentityPolicyTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.119",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.LanSourceAddressTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.004",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.LatestReleasePolicyTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.016",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.LiveChannelDiscoveryTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.008",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.LiveEpgTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.074",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.LivePlaylistTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.052",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M420LiveRemoteAcceptanceTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.029",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M420TvBoxCmsDetailTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.256",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M423DetailsAndQualityTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.01",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M424SeasonEpisodesTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.017",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M424TmdbSeasonTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.016",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M425ShowGroupsTest",
+      "tests": "13",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.048",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M426DeclaredSourceFormatTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M427SpiderHttpSessionHostTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.083",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M434SpiderPlaybackRecoveryTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.006",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M435FastTvBoxImportTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.006",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M437MetadataScrapingTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.2",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M437SourceDetailMergeTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.008",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M438MetadataScrapePolicyTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M439LaunchMotionPolicyTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.0",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M440PosterDiskCacheMaintenanceTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.004",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M442RemoteMotionPolicyTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.0",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M444PosterRequestBudgetTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.01",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M446PosterStripeGateTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.198",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M449CompactSettingsIntentTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.004",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M450ConsumerSourceStatusTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.005",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M451CompactSettingsKeyPolicyTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.0",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M452RemoteHoldSeekTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M453PlayerRemoteFocusPolicyTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M454CmsOneTapPlaybackPolicyTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.007",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M455PlaybackViewportModeTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.003",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M457TmdbConnectivityProbeTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.038",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M464SpiderProxyHealthTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.024",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M467FongMiMediaContractTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.004",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M467ParseJobTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "4.618",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M467SpiderProxyTransportTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.973",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M468ImdbRatingsTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M468PersonalPlaylistTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.007",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M468PersonalQualityFallbackTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M468TmdbFirstRouterTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.046",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M468VerifiedFallbackTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.023",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M468WebDavPersonalSourceTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.196",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M471PersonalMediaProbeTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.053",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M471PlaybackFlowTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.076",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M471TmdbFallbackIndexTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M471TmdbPlaybackRouteStoreTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M472ApprovedSpiderBatchTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.096",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M472ProxyRouteDiagnosticTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.011",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M472TmdbTop250RecoveryTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.06",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M473MyLibraryTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M476BoundedCmsSearchTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.129",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M476PlayableSourceSelectorTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.008",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M476RemoteMediaProbeTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "5.237",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M476SpiderHlsRewriteTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.018",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M477NativeFongMiCodecRouteTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.011",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.M477SpiderVodFallbackTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.MediaLoopbackProxyTest",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.493",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.MediaProxyPolicyTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.005",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.NavMotionGeometryTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0AggregatedDiscoveryTest",
+      "tests": "17",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.32",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0BrowseExperienceTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.034",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0FailureTraceTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0FastSourceSearchTest",
+      "tests": "13",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "29.523",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0GlobalTmdbSearchTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.152",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0HttpSpiderProtocolTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.323",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0MetadataStabilityTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.084",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0NodeRecoveryTest",
+      "tests": "5",
+      "failures": "1",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.203",
+      "failed_cases": [
+        {
+          "name": "coldActivationGetsItsOwnBudgetInsteadOfSearchDeadline",
+          "message": "java.lang.AssertionError: expected:<NO_MATCH> but was:<TIMEOUT>"
+        }
+      ]
+    },
+    {
+      "name": "tv.herrin.app.P0PreferredSourceOrderTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "3.862",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0ResponseRelevanceTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "3.138",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0SelectedPersonalPlaybackTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.431",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0SourceHealthTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.511",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.P0SourceHttpFlowTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.943",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.ParseConfigContractTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.023",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackAcceptanceTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.006",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackCatalogTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.007",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackErrorReportTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.003",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackExperienceTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackFailureHintsTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackFailureTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackFormatRetryTest",
+      "tests": "11",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.003",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackJourneyTraceTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.013",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackSpeedTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlaybackSubtitleSchemaTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.006",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlayerQualityLabelTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.009",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.PlayerStartupHintsTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.ProxyHealthDiagnosticTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.RemoteCatalogTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.007",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SardineSourceDependencyTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.15",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SearchDiscoveryTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SelectedSpiderPlaybackTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.741",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SelectedSpiderSearchStateTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.009",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SmbM2tsHandleTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.007",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SmbPolicyTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.03",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SmbProtocolIntegrationTest",
+      "tests": "6",
+      "failures": "5",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.154",
+      "failed_cases": [
+        {
+          "name": "invalidAuthenticationDoesNotReturnUsableMediaOrLeakItsSecret",
+          "message": "java.lang.AssertionError: expected:<AUTH_REQUIRED> but was:<NETWORK>"
+        },
+        {
+          "name": "realSmb2AndEncryptedSmb3ReadTheOriginalMedia",
+          "message": "java.net.ConnectException: Connection refused"
+        },
+        {
+          "name": "sourceSearchRangeSeekAndLargeFileUseTheActualSmbServer",
+          "message": "java.net.ConnectException: Connection refused"
+        },
+        {
+          "name": "aDroppedSmbReadReconnectsAtTheSameOffsetAndAllHandlesClose",
+          "message": "java.lang.AssertionError: expected:<206> but was:<503>"
+        },
+        {
+          "name": "realEncryptedBdavReadsMatchEveryOriginalTsByteAndUnalignedSeekRanges",
+          "message": "java.lang.AssertionError: expected:<200> but was:<503>"
+        }
+      ]
+    },
+    {
+      "name": "tv.herrin.app.SpiderAuthorizationProtocolTest",
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.066",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderFilmAuthorityTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.03",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderLoopbackProxyTest",
+      "tests": "18",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.277",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderManifestReferenceTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.054",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderProcessRetirementTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderProxyDiagnosticsTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.011",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderRuntimeCompatTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.008",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderSourceSessionTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.008",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.SpiderStartupTraceTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.007",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TmdbBrowseRepositoryTest",
+      "tests": "20",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "2.019",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TmdbControlledNetworkTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "2.208",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TmdbEndpointsTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TmdbTokenEntryTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.003",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvBoxCategoriesTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.0",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvBoxJsonPlaybackTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvBoxLiveSourcesTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.005",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvBoxSpiderBridgeTest",
+      "tests": "24",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.025",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvBoxVodSourcesTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.003",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvBoxWarehousesTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.068",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvBoxWrappedConfigTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.004",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvDiagnosticsTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.006",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.TvFocusRoutesTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.WarehouseHttpEvidenceTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.014",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.WordmarkMotionTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.001",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.XmlTvPayloadTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.13",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.fongmi.parse.ParseJobCompletionDispatchTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.003",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.fongmi.parse.ParseJobDeadlineTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.207",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.fongmi.parse.ParseJobStartupFailureTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.002",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.nativeplayback.NativeFongMiHlsTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.067",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.nativeplayback.NativeFongMiProxyTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.136",
+      "failed_cases": []
+    },
+    {
+      "name": "tv.herrin.app.nativeplayback.NativeFongMiRouteTest",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.107",
+      "failed_cases": []
+    }
+  ]
+}
