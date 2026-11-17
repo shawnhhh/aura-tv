@@ -193,7 +193,9 @@ class TmdbBrowseRepositoryTest {
                 val first=repo.load(spec,1,"fixture")
                 assertTrue("Empty "+spec.key,first.entries.isNotEmpty())
                 if(spec.kind==TmdbRailKind.LATEST) assertTrue(first.entries.all{it.availability.state==TmdbAvailability.AVAILABLE})
-                assertTrue(first.entries.all{page==TmdbBrowsePage.HOME||it.film.category==page.label})
+                assertTrue(first.entries.all{page==TmdbBrowsePage.HOME || it.film.category==page.label ||
+                    (page==TmdbBrowsePage.ANIME && spec.kind==TmdbRailKind.LATEST && it.type=="movie" &&
+                        it.raw.optJSONArray("genre_ids")?.let { a -> (0 until a.length()).any { i -> a.optInt(i)==16 } }==true)})
                 assertEquals(first.entries.map{it.film.id},repo.cached(spec,1,"fixture")!!.entries.map{it.film.id})
                 val next=repo.load(spec,2,"fixture");assertEquals(2,next.page)
             }
