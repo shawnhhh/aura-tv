@@ -56,8 +56,9 @@ class P0CachedHomeHeroTest {
             compose.onNodeWithTag("hero-title-tmdb-movie-11").assertTextEquals("Original 11")
             compose.onNodeWithTag("hero-art-tmdb-movie-11").assertExists()
         }.isSuccess }
+        // Anime includes serialized animated films as well as TV; preserve the TMDB movie identity.
         val expected=listOf("首页" to "tmdb-movie-11", "电影" to "tmdb-movie-11",
-            "剧集" to "tmdb-tv-21", "动漫" to "tmdb-tv-31", "综艺" to "tmdb-tv-41",
+            "剧集" to "tmdb-tv-21", "动漫" to "tmdb-movie-635302", "综艺" to "tmdb-tv-41",
             "纪录片" to "tmdb-movie-51", "Top 250" to "tmdb-movie-61", "电影" to "tmdb-movie-11",
             "首页" to "tmdb-movie-11", "电影" to "tmdb-movie-11", "剧集" to "tmdb-tv-21", "电影" to "tmdb-movie-11")
         val visited = mutableSetOf("首页")
