@@ -113,7 +113,9 @@ class TmdbBrowseLoadingNavigationTest {
         try {
             compose.onNodeWithTag("tmdb-more-movie-hot").performScrollTo().performClick()
             assertTrue("next HTTP page must actually start", entered.await(5, TimeUnit.SECONDS))
-            compose.waitUntil(5000) { !state.row(spec).loading } // HOT no longer waits for per-title proof.
+            // Page 2 is intentionally held at the HTTP fixture. It must remain
+            // loading while the existing first-page posters accept D-pad input.
+            assertTrue("In-flight page must keep its loading state", state.row(spec).loading)
             decodes = imageScope.async {
                 (0 until 16).map { i -> async {
                     cache.load(images.url("/original-$i.png").toString(), allowHttp = true, hero = i == 0)
