@@ -56,7 +56,10 @@ internal class TmdbBrowseRepository(
                 ?.sortedByDescending(File::lastModified)?.drop(if (group == "-proof-") 512 else 64)?.forEach(File::delete)
         } finally { temporary.delete() }
     }
-    private val requestLocks = Array(64) { Mutex() }
+    private class RequestGate(val mutex: Mutex = Mutex(), var users: Int = 0)
+    // Endpoint-specific gates prevent queued proofs from blocking unrelated lists
+    // through a hash collision, while preserving deduplication and bounded cleanup.
+    private val requestLocks = mutableMapOf<String, RequestGate>()
     private val responses = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, Pair<Long, String>>(64, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?) = size > 64
@@ -64,7 +67,9 @@ internal class TmdbBrowseRepository(
     private suspend fun get(path: String, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + path
         val previousResponse = responses[key]
-        return requestLocks[(key.hashCode() and Int.MAX_VALUE) % requestLocks.size].withLock {
+        val gate = synchronized(requestLocks) { requestLocks.getOrPut(key) { RequestGate() }.also { it.users++ } }
+        try {
+        return gate.mutex.withLock {
             responses[key]?.takeIf { (!force || it !== previousResponse) && clock() - it.first in 0..30_000L }?.let { return@withLock JSONObject(it.second) }
             val request: suspend () -> JSONObject = {
                 network.withPermit {
@@ -85,6 +90,12 @@ internal class TmdbBrowseRepository(
             if (Regex("^/(movie|tv)/[0-9]+(?:/|\\?|$)").containsMatchIn(path)) {
                 proofNetwork.withPermit { request() }
             } else request()
+        }
+        } finally {
+            synchronized(requestLocks) {
+                gate.users--
+                if (gate.users == 0) requestLocks.remove(key)
+            }
         }
     }
 

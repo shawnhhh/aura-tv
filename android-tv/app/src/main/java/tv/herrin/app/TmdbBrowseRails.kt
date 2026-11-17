@@ -139,7 +139,8 @@ private fun TmdbBrowsePageRails(
                                 } else false
                             }, reduced, onFocus = { requestedForFocus = null; focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
                     }
-                    if (spec != null && status != null && (status.error || status.unknown > 0)) item(key = "retry") {
+                    if (spec != null && status != null && (status.error || (status.unknown > 0 &&
+                            (spec.page == TmdbBrowsePage.HOME || spec.kind == TmdbRailKind.LATEST)))) item(key = "retry") {
                         TvButton("重试此栏目", Modifier.testTag("tmdb-retry-$key"), reduced = reduced, onFocus = { focusedPoster = null }) {
                             if (!status.loading) scope.launch { state.retry(spec) }
                         }

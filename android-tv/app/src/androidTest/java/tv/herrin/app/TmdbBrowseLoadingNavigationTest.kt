@@ -57,8 +57,13 @@ class TmdbBrowseLoadingNavigationTest {
             assertEquals(2, state.row(spec).entries.size)
             val card = compose.onNodeWithTag("card-tmdb-movie-11")
             card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            card.performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.DirectionRight) }
-            compose.onNodeWithTag("card-tmdb-movie-72").assertIsFocused()
+            card.assertIsFocused()
+            assertTrue("LATEST proof must still be held while HOT accepts input",
+                state.row(TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.LATEST)).loading)
+            // DOMESTIC is now usable before release verification completes. Stay on HOT
+            // for Right; Down is exercised below against the actual ready domestic row.
+            card.performKeyInput { pressKey(Key.DirectionRight) }
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-72").assertIsFocused() }.isSuccess }
             release.countDown()
             compose.waitUntil(5000) { !state.row(spec).loading }
             compose.onNodeWithTag("card-tmdb-movie-72").performKeyInput { pressKey(Key.DirectionDown) }

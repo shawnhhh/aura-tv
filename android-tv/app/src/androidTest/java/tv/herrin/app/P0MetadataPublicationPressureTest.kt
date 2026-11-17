@@ -19,7 +19,10 @@ import org.junit.rules.ExternalResource
 class P0MetadataPublicationPressureTest {
     private val token="SyntheticReadAccessForPressure".repeat(4)
     private val requests=AtomicInteger()
+    private val observedRequests=java.util.concurrent.ConcurrentLinkedQueue<String>()
     private val offline=AtomicBoolean()
+    private val cancelledRequests=AtomicInteger()
+    private var seededPages: Map<String, Long> = emptyMap()
     @get:Rule(order=0) val setup=object:ExternalResource(){
         override fun before(){
             val c=InstrumentationRegistry.getInstrumentation().targetContext
@@ -27,9 +30,13 @@ class P0MetadataPublicationPressureTest {
             java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
             val browseFixture=TmdbBrowseFixture().apply { dense=true }
             seedTmdbBrowseTestCache(c, token, browseFixture)
+            seededPages = java.io.File(c.filesDir, "tmdb-browse-v2").listFiles().orEmpty()
+                .filter { "-page-" in it.name }.associate { it.name to JSONObject(it.readText()).getLong("saved") }
             Preferences(c).tmdbReadToken=token
             MetadataFetchers.overrideForTests=ArtworkJsonFetcher { url,_ ->
                 requests.incrementAndGet()
+                observedRequests.add(url)
+                try {
                 if(offline.get()) throw java.net.UnknownHostException()
                 val uri=URI(url)
                 when {
@@ -53,6 +60,7 @@ class P0MetadataPublicationPressureTest {
                         JSONObject().put("results",array).toString()
                     }
                 }
+                } catch (cancelled: InterruptedException) { cancelledRequests.incrementAndGet(); throw cancelled }
             }
         }
         override fun after(){
@@ -78,7 +86,16 @@ class P0MetadataPublicationPressureTest {
         compose.waitUntil(5000){runCatching{compose.onNodeWithTag("catalog-film-rail").performScrollToIndex(249)}.isSuccess}
         compose.onNodeWithTag("card-tmdb-movie-1250").assertExists()
         assertFalse(compose.activity.isFinishing)
-        assertTrue("Requests must stay bounded, including cancelled/restarted pages",requests.get()<70)
+        val paths = observedRequests.map { URI(it).path }
+        val proof = paths.count { Regex("/3/(movie|tv)/[0-9]+(?:/|$)").containsMatchIn(it) }
+        val duplicates = observedRequests.size - observedRequests.distinct().size
+        val evidence = "total=${requests.get()} list=${paths.count { it.contains("discover/") || it.contains("trending/") }} proof=$proof duplicate=$duplicates"
+        val now = System.currentTimeMillis()
+        val stale = seededPages.count { (name, saved) -> now-saved !in 0 until
+            (if ("-latest-" in name) 3_600_000L else 21_600_000L) }
+        android.util.Log.i("HerrinTmdbRequestBudget", "$evidence cancelled=${cancelledRequests.get()} seeded_pages=${seededPages.size} expired_pages=$stale")
+        android.util.Log.i("HerrinTmdbRequestBudget", "endpoints=" + observedRequests.groupingBy { URI(it).path }.eachCount())
+        assertTrue("Requests must stay bounded, including cancelled/restarted pages: $evidence",requests.get()<70)
     }
     @Test fun malformedDetailAndActivityRecreationRetainCachedHomeDuringNetworkLoss(){
         ready();compose.waitUntil(15000){cachedTmdbBrowseTestFilms(InstrumentationRegistry.getInstrumentation().targetContext, token).size>=100}

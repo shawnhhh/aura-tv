@@ -65,7 +65,7 @@ internal class TmdbBrowseFixture : ArtworkJsonFetcher {
         } else {
             val id = if (type == "movie") { if (16 in genre) 635302 else if (99 in genre) 51 else 11 }
                 else { if (16 in genre) 31 else if (99 in genre) 52 else if (10764 in genre) 41 else 21 }
-            output.put(row(id + if (page > 1) page * 100000 else 0, type, genre, country))
+            output.put(row(id + variant + if (page > 1) page * 100000 else 0, type, genre, country))
         }
         if (dense && !query.contains("with_origin_country")) {
             // Distinct, evidence-backed public metadata for publication-pressure regression.

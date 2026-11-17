@@ -1281,13 +1281,18 @@ private fun Herrin(startup: StartupPresentation) {
     LaunchedEffect(category, metadataToken) {
         TmdbBrowsePage.from(category)?.let { tmdbBrowseState.hydrate(it) }
     }
+    val browseRefreshEpochs = remember(metadataToken) { mutableMapOf<TmdbBrowsePage, Int>() }
     // Fetch only the selected page's independent rails, after cache hydration and first paint.
     LaunchedEffect(category, metadataToken, tmdbConnectivity, startup.networkReady, tmdbProbeEpoch, tmdbState.cacheHydrated) {
         val page = TmdbBrowsePage.from(category) ?: return@LaunchedEffect
         if (!startup.networkReady || !tmdbState.cacheHydrated ||
             tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
         tmdbState.tmdbDiscoveryStatus = "正在更新 TMDB 栏目，已有缓存保持可浏览"
-        tmdbBrowseState.refresh(page, force = true)
+        // Navigation is not a manual refresh: honor the fresh page/proof caches.
+        // Each explicit probe/update epoch can force a page once, not on every return.
+        val force = tmdbProbeEpoch > (browseRefreshEpochs[page] ?: 0)
+        tmdbBrowseState.refresh(page, force = force)
+        browseRefreshEpochs[page] = tmdbProbeEpoch
         tmdbState.tmdbDiscoveryStatus = "TMDB 栏目已更新；播放时优先检索 NAS／云盘"
     }
     LaunchedEffect(category, metadataToken, tmdbConnectivity, tmdbState.tmdbTop250RetryEpoch, startup.networkReady) {
