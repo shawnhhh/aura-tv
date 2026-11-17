@@ -44,13 +44,15 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     // Input callbacks must complete in the same dispatch, even when a test or
     // the system pauses the animation clock. Effects and held OK share one gate.
     val ready=remember { booleanArrayOf(false) }
+    val prepared=remember { booleanArrayOf(false) }
+    fun prepareOnce() { if (!prepared[0]) { prepared[0]=true; visible() } }
     val announced=remember { booleanArrayOf(false) }
     fun revealOnce() {
         if(announced[0])return
         announced[0]=true
         StartupTiming.wordmarkVisible()
         StartupTiming.wordmarkComplete()
-        visible() // Construct the home behind the curtain while one full breath runs.
+        prepareOnce()
     }
     fun completeOnce() {
         if(ready[0])return
@@ -65,7 +67,7 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             completeOnce()
             return@LaunchedEffect
         }
-        visible() // Prepare the home concurrently with the reveal.
+        prepareOnce() // Prepare the home concurrently with the reveal.
         val start = withFrameNanos { it }
         var reportedVisible = false
         var reportedReady = false

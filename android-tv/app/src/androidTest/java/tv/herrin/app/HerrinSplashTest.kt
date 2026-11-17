@@ -57,7 +57,7 @@ class HerrinSplashTest {
         compose.runOnIdle { assertTrue("Normal exit requires a complete breath", completed) }
         compose.onNodeWithContentDescription("HERRIN").assertExists()
     }
-    @Test fun homePreparationRunsOnceAndOnlyAfterCompleteWordmarkReveal() {
+    @Test fun homePreparationRunsOnceConcurrentlyWithWordmarkReveal() {
         compose.mainClock.autoAdvance = false
         var prepared = 0
         var ready = 0
@@ -68,7 +68,7 @@ class HerrinSplashTest {
         }
         compose.mainClock.advanceTimeBy(850)
         compose.runOnIdle {
-            assertEquals("Do not mount the heavy home halfway through the logo animation", 0, prepared)
+            assertEquals("Prepare home while the reveal is running", 1, prepared)
             assertEquals(0, ready)
         }
         compose.mainClock.advanceTimeBy(1_300)
@@ -153,7 +153,7 @@ class HerrinSplashTest {
             }
         }
         val frames=linkedMapOf<Int,Bitmap>()
-        for(t in listOf(0,450,900,1800,2400,3000,4200)) {
+        for(t in listOf(0,450,1125,2250,2400,3600,4800)) {
             compose.runOnIdle { time=t.toFloat() }
             compose.mainClock.advanceTimeByFrame()
             val bitmap=compose.onNodeWithTag("wordmark-probe").captureToImage().asAndroidBitmap()
@@ -168,10 +168,10 @@ class HerrinSplashTest {
         }
         fun pixels(bitmap:Bitmap)=IntArray(bitmap.width*bitmap.height).also{bitmap.getPixels(it,0,bitmap.width,0,0,bitmap.width,bitmap.height)}
         fun red(color:Int)=android.graphics.Color.red(color)
-        val zero=pixels(frames.getValue(0));val full=pixels(frames.getValue(1800))
-        val partial=pixels(frames.getValue(450));val dim=pixels(frames.getValue(3000));val end=pixels(frames.getValue(4200))
+        val zero=pixels(frames.getValue(0));val full=pixels(frames.getValue(3600))
+        val partial=pixels(frames.getValue(450));val dim=pixels(frames.getValue(2400));val end=pixels(frames.getValue(4800))
         assertTrue("No dim wordmark prepaint",zero.all{red(it)==0})
-        val width=frames.getValue(1800).width
+        val width=frames.getValue(3600).width
         fun mean(colors:IntArray,from:Float,to:Float):Double {
             val indices=full.indices.filter{red(full[it])>230 && (it%width)*960f/width in from..to}
             assertTrue(indices.isNotEmpty())
@@ -181,9 +181,9 @@ class HerrinSplashTest {
         assertEquals(0.0,mean(partial,797f,923f),1.0)
         for((from,to) in listOf(37f to 163f,228f to 324f,379f to 496f,543f to 659f,706f to 732f,797f to 923f)) {
             assertTrue("All letters dim together",mean(dim,from,to)/mean(full,from,to) in 0.65..0.8)
-            assertEquals("All letters return to white without moving",mean(full,from,to),mean(end,from,to),1.0)
+            assertEquals("All letters repeat the same breath without moving",mean(dim,from,to),mean(end,from,to),1.0)
         }
-        assertTrue("White light must extend outside the strokes",full.indices.count{red(full[it])==0 && red(dim[it])>10}>300)
+        assertEquals("No background halo",0,full.indices.count{red(full[it])==0 && red(dim[it])>10})
         android.util.Log.i("HerrinWordmarkEvidence","frames=7 letters=6 initial_visible_pixels=0 whole_breath_ms=2400 physical_tcl=0")
     }
     @Test fun normalMotionKeepsBreathingUntilHomeIsReadyAfterTheMinimumCycle() {

@@ -53,15 +53,27 @@ internal class TmdbBrowseRepository(
                 ?.sortedByDescending(File::lastModified)?.drop(if (group == "-proof-") 512 else 64)?.forEach(File::delete)
         } finally { temporary.delete() }
     }
-    private suspend fun get(path: String, token: String): JSONObject = network.withPermit {
-        if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
-        runInterruptible(Dispatchers.IO) {
-            val endpoint = TmdbEndpoints.PRIMARY + path + (if ('?' in path) "&" else "?") + "language=zh-CN"
-            val raw = fetcher.load(endpoint, token) ?: throw IOException("TMDB_EMPTY_RESPONSE")
-            if (raw.length > 1_000_000) throw IOException("TMDB_RESPONSE_LIMIT")
-            val json = JSONObject(raw)
-            if (json.optBoolean("success", true).not()) throw IOException("TMDB_REJECTED")
-            json
+    private val requestLocks = Array(64) { Mutex() }
+    private val responses = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Pair<Long, String>>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?) = size > 64
+        })
+    private suspend fun get(path: String, token: String, force: Boolean = false): JSONObject {
+        val key = prefix(token) + path
+        return requestLocks[(key.hashCode() and Int.MAX_VALUE) % requestLocks.size].withLock {
+            responses[key]?.takeIf { !force && clock() - it.first in 0..30_000L }?.let { return@withLock JSONObject(it.second) }
+            network.withPermit {
+                if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
+                runInterruptible(Dispatchers.IO) {
+                    val endpoint = TmdbEndpoints.PRIMARY + path + (if ('?' in path) "&" else "?") + "language=zh-CN"
+                    val raw = fetcher.load(endpoint, token) ?: throw IOException("TMDB_EMPTY_RESPONSE")
+                    if (raw.length > 1_000_000) throw IOException("TMDB_RESPONSE_LIMIT")
+                    val json = JSONObject(raw)
+                    if (json.optBoolean("success", true).not()) throw IOException("TMDB_REJECTED")
+                    responses[key] = clock() to raw
+                    json
+                }
+            }
         }
     }
     private val rowFields = setOf("id", "title", "name", "original_title", "original_name", "release_date",
@@ -137,7 +149,10 @@ internal class TmdbBrowseRepository(
     /** Learn series identity from reviewed serial-film IDs in the background, never from title words. */
     suspend fun warmAnimeRelations(token: String) = withContext(Dispatchers.IO) { coroutineScope {
         TmdbAnimeIp.serialMovies.keys.map { id -> async {
-            try { proof("movie", id, token) }
+            try {
+                val detail = safeProof(get("/movie/$id?append_to_response=release_dates", token))
+                learn("movie", id, detail, token)
+            }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { /* Unknown stays a movie; next refresh may retry. */ }
         } }.awaitAll()
@@ -146,7 +161,7 @@ internal class TmdbBrowseRepository(
     private suspend fun proof(type: String, id: Int, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + "-proof-$type-$id"
         return proofLocks[(key.hashCode() and Int.MAX_VALUE) % proofLocks.size].withLock {
-            proofMemory[key]?.takeIf { clock() - it.first in 0..86_400_000L }?.let {
+            proofMemory[key]?.takeIf { !force && clock() - it.first in 0..86_400_000L }?.let {
                 return@withLock it.second
             }
             val disk = read(key)
@@ -199,7 +214,7 @@ internal class TmdbBrowseRepository(
             val r = rows.optJSONObject(i) ?: return@mapNotNull null
             entry(r.getJSONObject("row"), r.getString("type"), r.getJSONObject("proof"), token)?.let { e ->
                 if (spec.kind == TmdbRailKind.LATEST) e.copy(availability = TmdbReleaseEvidence.evaluate(e.type, e.proof, today(),
-                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets)) else e
+                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets(spec.page))) else e
             }?.takeIf { eligible(spec, it) }
         }
         return TmdbBrowseBatch(select(spec, items), page, json.optBoolean("more"), json.optInt("unknown"))
@@ -235,15 +250,20 @@ internal class TmdbBrowseRepository(
         val observed = mutableListOf<TmdbBrowseEntry>()
         val seen = hashSetOf<String>()
         suspend fun rows(path: String, fallbackType: String): List<Pair<JSONObject, String>> {
-            val root = get(path + (if ('?' in path) "&" else "?") + "page=$page", token)
+            val root = get(path + (if ('?' in path) "&" else "?") + "page=$page", token, force)
             if (root.optInt("page") != page || !root.has("results")) throw IOException("TMDB_PAGE_MISMATCH")
             more = more || root.optInt("total_pages", 1) > page
             val array = root.getJSONArray("results")
             return (0 until minOf(20, array.length())).mapNotNull { i ->
                 val row = array.optJSONObject(i) ?: return@mapNotNull null
                 val type = row.optString("media_type").takeIf { it in setOf("movie", "tv") } ?: fallbackType
-                if (type !in setOf("movie", "tv") || row.optBoolean("adult") || row.optInt("id") <= 0) null
-                else safeRow(row) to type
+                val released = row.optString(if (type == "movie") "release_date" else "first_air_date")
+                val future = runCatching { java.time.LocalDate.parse(released) > today() }.getOrDefault(false)
+                if (future || type !in setOf("movie", "tv") || row.optBoolean("adult") || row.optInt("id") <= 0) null
+                else safeRow(row).apply {
+                    val country = Regex("with_origin_country=([A-Z]{2})(?:&|$)").find(path)?.groupValues?.get(1)
+                    if (!has("origin_country") && country != null) put("origin_country", JSONArray().put(country))
+                } to type
             }
         }
         suspend fun enrich(candidates: List<Pair<JSONObject, String>>, limit: Int): List<TmdbBrowseEntry> = coroutineScope {
@@ -326,13 +346,13 @@ internal class TmdbBrowseRepository(
             if (sourcePage > 500) break
             for (pool in TmdbLatestPolicy.pools(spec.page)) for (type in spec.types) {
                 val market = if (spec.page == TmdbBrowsePage.DOCUMENTARY) null
-                    else listOf("US", "CN", "HK", "TW", "MO")[offset]
+                    else TmdbLatestPolicy.releaseMarkets(spec.page).sorted().let { it[offset % it.size] }
                 var path = spec.endpoints(type, day).first()
                 if (type == "movie") {
                     path = path.replace("&region=US", market?.let { "&region=$it" }.orEmpty())
                 }
                 if (pool.isNotEmpty()) path += "&with_origin_country=" + pool.sorted().joinToString("%7C")
-                val root = try { get("$path&page=$sourcePage", token) }
+                val root = try { get("$path&page=$sourcePage", token, force) }
                     catch (cancel: CancellationException) { throw cancel }
                     catch (_: Exception) { failed++; continue }
                 more = more || root.optInt("total_pages", 1) > sourcePage
@@ -344,7 +364,7 @@ internal class TmdbBrowseRepository(
                 }
                 // Production origin is constrained by the official query, not inferred from dialogue.
                 // Movies do not return origin_country, so only annotate unambiguous single-country queries.
-                val results = coroutineScope { candidates.take((40-checked).coerceAtLeast(0)).map { row ->
+                val results = coroutineScope { candidates.take(minOf((40-checked).coerceAtLeast(0), 40 / (TmdbLatestPolicy.pools(spec.page).size * spec.types.size))).map { row ->
                     checked++
                     async {
                         try {
@@ -353,7 +373,7 @@ internal class TmdbBrowseRepository(
                             if (pool.isNotEmpty()) enriched.put("query_origin_country", JSONArray(pool.toList()))
                             entry(enriched, type, evidence, token)?.let { e ->
                                 val release = TmdbReleaseEvidence.evaluate(type, evidence, day,
-                                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets)
+                                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets(spec.page))
                                 e.copy(availability = release)
                             }?.takeIf { eligible(spec, it) }
                         } catch (cancel: CancellationException) { throw cancel }

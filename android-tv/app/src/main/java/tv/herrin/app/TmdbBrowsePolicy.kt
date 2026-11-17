@@ -35,7 +35,7 @@ internal data class TmdbRailSpec(val page: TmdbBrowsePage, val kind: TmdbRailKin
             TmdbRailKind.HOT -> listOf("/trending/$type/week", "$discover&sort_by=popularity.desc")
             TmdbRailKind.DOMESTIC -> listOf("$discover&sort_by=popularity.desc")
             TmdbRailKind.LATEST -> listOf(if (type == "movie")
-                "$discover&with_release_type=4%7C5%7C6&region=${region ?: "US"}&release_date.gte=${today.minusYears(1)}&release_date.lte=$today&sort_by=release_date.desc"
+                "$discover&with_release_type=4%7C5%7C6&region=${region ?: "US"}&release_date.gte=${today.minusYears(1)}&release_date.lte=$today&sort_by=primary_release_date.desc"
                 else "$discover&first_air_date.lte=$today&air_date.lte=$today&include_null_first_air_dates=false&sort_by=first_air_date.desc")
             TmdbRailKind.RATED -> listOf("$discover&vote_count.gte=" + minVotes(type) + "&sort_by=vote_average.desc")
         }
@@ -156,7 +156,7 @@ internal object TmdbDomesticAllocator {
 /** Origin is independent of the market in which a movie was released. Never infer it from language. */
 internal object TmdbLatestPolicy {
     val chinese = setOf("CN", "HK", "MO", "TW")
-    val releaseMarkets = chinese + "US"
+    fun releaseMarkets(page: TmdbBrowsePage) = pools(page).flatten().toSet()
     fun pools(page: TmdbBrowsePage): List<Set<String>> = when(page) {
         TmdbBrowsePage.ANIME -> listOf(setOf("JP"), chinese)
         TmdbBrowsePage.VARIETY -> listOf(chinese, setOf("KR"))

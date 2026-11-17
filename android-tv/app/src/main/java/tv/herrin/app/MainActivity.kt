@@ -54,6 +54,7 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -91,10 +92,10 @@ import tv.herrin.app.nativeplayback.FongMiSessionAuthorization
 
 /** Only one branded wordmark fade; no fixed multi-second launch choreography. */
 internal object LaunchMotion {
-    const val WORDMARK_HOLD_MS = 1800L
+    const val WORDMARK_HOLD_MS = 2250L
     const val FADE_MS = 340
     const val BREATH_MS = 2400L
-    const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + BREATH_MS + FADE_MS
+    const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + FADE_MS
 }
 
 /** Elapsed uptime from Activity launch to first interactive home.
@@ -1263,11 +1264,15 @@ private fun Herrin(startup: StartupPresentation) {
             // Restore the bounded local index atomically before cached navigation is enabled.
             tmdbBrowseState.hydrate(TmdbBrowsePage.HOME)
             tmdbState.tmdbBrowseIndex = tmdbBrowseState.allFilms()
+            tmdbState.cacheHydrated=true
             tmdbState.tmdbTop250Films = withContext(Dispatchers.IO) { tmdbDiscovery.cachedTop250(metadataToken) }
         }
         // Empty is a valid offline result only after the bounded local read;
         // before that it cannot signal that the cached homepage is ready.
         tmdbState.cacheHydrated=true
+    }
+    LaunchedEffect(category, metadataToken) {
+        TmdbBrowsePage.from(category)?.let { tmdbBrowseState.hydrate(it) }
     }
     // Fetch only the selected page's independent rails, after cache hydration and first paint.
     LaunchedEffect(category, metadataToken, tmdbConnectivity, startup.networkReady, tmdbProbeEpoch, tmdbState.cacheHydrated) {
@@ -1275,8 +1280,7 @@ private fun Herrin(startup: StartupPresentation) {
         if (!startup.networkReady || !tmdbState.cacheHydrated ||
             tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
         tmdbState.tmdbDiscoveryStatus = "正在更新 TMDB 栏目，已有缓存保持可浏览"
-        tmdbBrowseState.hydrate(page)
-        tmdbBrowseState.refresh(page, force = tmdbProbeEpoch > 0)
+        tmdbBrowseState.refresh(page, force = true)
         tmdbState.tmdbDiscoveryStatus = "TMDB 栏目已更新；播放时优先检索 NAS／云盘"
     }
     LaunchedEffect(category, metadataToken, tmdbConnectivity, tmdbState.tmdbTop250RetryEpoch, startup.networkReady) {
