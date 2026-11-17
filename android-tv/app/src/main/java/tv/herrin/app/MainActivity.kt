@@ -4130,7 +4130,7 @@ private fun Herrin(startup: StartupPresentation) {
                     // MainActivityKt.Herrin otherwise violates the JVM 64-KiB
                     // per-method bytecode limit when TVBox and player UI grow.
                     fun androidx.compose.foundation.lazy.LazyListScope.renderSettingsItems() {
-                        item { Text(if (settingsTvBoxOnly) settingsModule else "高级设置", fontSize = 32.sp) }
+                        item { Text(if (settingsTvBoxOnly) "设置中心" else "高级设置", fontSize = 32.sp) }
                         if (!settingsTvBoxOnly) {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
                         item { Text("目录源管理 · 最多 10 个授权 HTTPS 目录", fontSize = 22.sp) }
@@ -5264,38 +5264,14 @@ private fun Herrin(startup: StartupPresentation) {
                         }
                     
                     }
-                    Row(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxSize().background(Color(0xAA080B10))) {
                     if (screen == "settings" && settingsTvBoxOnly) SettingsModules(settingsModule, reduceMotion) {
                         settingsModule = it
                         configInputFocused = false
                         uiScope.launch { settingsListState.scrollToItem(0) }
                     }
                     LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize()
-                    .background(Color(0xAA080B10))
-                    .onPreviewKeyEvent { event ->
-                        // An active TV text editor owns its arrow keys. Only the
-                        // non-editing focus stops use compact-row navigation.
-                        if (!CompactSettingsKeyPolicy.intercept(
-                                onSettings = false,
-                                compact = settingsTvBoxOnly,
-                                editorFocused = configInputFocused,
-                                keyDown = event.type == KeyEventType.KeyDown,
-                                code = event.nativeKeyEvent.keyCode)) false
-                        else {
-                            val code = event.nativeKeyEvent.keyCode
-                            val target = when (code) {
-                                android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                                    settingsIntent.next(focusId, false, lastMovieSettingsAction, tmdbTokenSplitMode)
-                                android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                                    settingsIntent.next(focusId, true, lastMovieSettingsAction, tmdbTokenSplitMode)
-                                else -> null
-                            }
-                            if (target == null) false else {
-                                moveCompactSettingsFocus(target)
-                                true
-                            }
-                        }
-                    }, state = settingsListState,
+, state = settingsListState,
                     contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
                     verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
                     item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {

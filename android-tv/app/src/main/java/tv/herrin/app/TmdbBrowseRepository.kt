@@ -337,6 +337,7 @@ internal class TmdbBrowseRepository(
         val seen = hashSetOf<String>()
         var more = false
         var checked = 0
+        val proofErrors = java.util.concurrent.atomic.AtomicInteger()
         var failed = 0
         val day = today()
         val previous = if (page > 1) read(prefix(token) + "-page-" + spec.key + "-${page-1}") else null
@@ -344,6 +345,7 @@ internal class TmdbBrowseRepository(
         var nextSource = startPage
         // Up to five source pages per UI page; fixed mapping prevents skipping candidates at pagination.
         // Maximum 40 candidate proofs, three HTTP requests in flight, shared proof cache.
+        val completed = withTimeoutOrNull(15_000L) {
         for (offset in 0 until 5) {
             val sourcePage = startPage + offset
             nextSource = sourcePage + 1
@@ -368,7 +370,7 @@ internal class TmdbBrowseRepository(
                         row.optString("media_type", type) != type || !seen.add("$type-${row.optInt("id")}")) null else row
                 }
                 // Production origin is constrained by the official query, not inferred from dialogue.
-                // Movies do not return origin_country, so only annotate unambiguous single-country queries.
+                // Cache the query constraint separately; never label it as all actual production countries.
                 val results = coroutineScope { candidates.take(minOf((40-checked).coerceAtLeast(0), 40 / (TmdbLatestPolicy.pools(spec.page).size * spec.types.size))).map { row ->
                     checked++
                     async {
@@ -382,16 +384,20 @@ internal class TmdbBrowseRepository(
                                 e.copy(availability = release)
                             }?.takeIf { eligible(spec, it) }
                         } catch (cancel: CancellationException) { throw cancel }
-                        catch (_: Exception) { null }
+                        catch (_: Exception) { proofErrors.incrementAndGet(); null }
                     }
                 }.awaitAll().filterNotNull() }
                 accepted += results
                 if (accepted.isNotEmpty()) onPreview(TmdbBrowseBatch(select(spec, accepted), page, true))
             }
             val pools = TmdbLatestPolicy.pools(spec.page)
+            if (checked >= 40) break
             if (accepted.size >= 20 && pools.all { p -> p.isEmpty() || accepted.count { e -> TmdbLatestPolicy.matches(e, p) } >= 10 }) break
         }
-        if (accepted.isEmpty() && failed > 0) throw IOException("TMDB_LATEST_UNAVAILABLE")
+        true
+        }
+        if (completed == null) { nextSource = (nextSource - 1).coerceAtLeast(startPage); more = true }
+        if (accepted.isEmpty() && (failed > 0 || proofErrors.get() > 0 || completed == null)) throw IOException("TMDB_LATEST_UNAVAILABLE")
         val batch = TmdbBrowseBatch(select(spec, accepted), page, more && page < 50)
         write(key, JSONObject().put("saved", clock()).put("more", batch.hasMore).put("next", nextSource)
             .put("entries", JSONArray().apply { accepted.forEach {

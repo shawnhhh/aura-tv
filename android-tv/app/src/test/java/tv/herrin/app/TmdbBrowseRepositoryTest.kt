@@ -38,6 +38,16 @@ class TmdbBrowseRepositoryTest {
         assertTrue(pending.await().entries.isNotEmpty())
     }
 
+    @Test fun concurrentListRequestsAreDeduplicatedWithoutDetailExpansion(): Unit = runBlocking {
+        val fixture=TmdbBrowseFixture().apply { dense=true }
+        val repo=TmdbBrowseRepository(fixture)
+        val spec=TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT)
+        val batches=List(3) { async { repo.load(spec,1,"fixture") } }.awaitAll()
+        assertTrue(batches.all { it.entries.size==20 })
+        assertEquals(1,fixture.requests.count { it.contains("/trending/all/week") })
+        assertFalse(fixture.requests.any { Regex("/(movie|tv)/[0-9]+").containsMatchIn(it) })
+    }
+
     @Test fun replacementRefreshWaitsForCancelledOwnerAndStillUpdatesFocusedRailCache(): Unit = runBlocking {
         val directory=Files.createTempDirectory("tmdb-replace-refresh").toFile()
         val spec=TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT)
