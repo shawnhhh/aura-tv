@@ -32,7 +32,9 @@ internal data class TmdbRailSpec(val page: TmdbBrowsePage, val kind: TmdbRailKin
         val country = region?.let { "&with_origin_country=$it" }.orEmpty()
         val discover = "/discover/$type?include_adult=false$genre$country"
         return when (kind) {
-            TmdbRailKind.HOT -> listOf("/trending/$type/week", "$discover&sort_by=popularity.desc")
+            TmdbRailKind.HOT -> if (page == TmdbBrowsePage.HOME)
+                listOf("/trending/$type/week", "$discover&sort_by=popularity.desc")
+                else listOf("$discover&sort_by=popularity.desc", "/trending/$type/week")
             TmdbRailKind.DOMESTIC -> listOf("$discover&sort_by=popularity.desc")
             TmdbRailKind.LATEST -> listOf(if (type == "movie")
                 "$discover&with_release_type=4%7C5%7C6&region=${region ?: "US"}&release_date.gte=${today.minusYears(1)}&release_date.lte=$today&sort_by=primary_release_date.desc"
