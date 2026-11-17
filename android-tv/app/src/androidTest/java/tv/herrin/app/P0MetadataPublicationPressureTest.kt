@@ -85,6 +85,10 @@ class P0MetadataPublicationPressureTest {
         compose.onNodeWithTag("nav-电影").performClick()
         compose.onNodeWithTag("tmdb-rail-movie-hot").performScrollToIndex(0)
         val posters=compose.onAllNodes(SemanticsMatcher("source card"){it.config.getOrElse(SemanticsProperties.TestTag){""}.startsWith("card-tmdb-movie-")})
+        // A cached home no longer hydrates the movie rail at startup. Wait for
+        // the first actual movie card after entering the category; do not click
+        // an empty placeholder while the selected rail restores asynchronously.
+        compose.waitUntil(10000) { runCatching { posters.onFirst().assertExists() }.isSuccess }
         val previousSearch=SourceSearchDiagnostics.currentStart()
         posters.onFirst().performClick()
         compose.onNodeWithTag("film-detail-list").assertExists()
