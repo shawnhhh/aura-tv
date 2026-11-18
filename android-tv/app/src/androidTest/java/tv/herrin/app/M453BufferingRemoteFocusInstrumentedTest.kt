@@ -53,6 +53,7 @@ class M453BufferingRemoteFocusInstrumentedTest {
             compose.onNodeWithText("2.0×").assertExists()
             compose.onNodeWithText("0.5×").assertExists()
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("player-menu-popup").assertDoesNotExist() }.isSuccess }
             compose.onNodeWithTag("transport-toggle").assertExists()
             compose.onNodeWithTag("transport-subtitle").performClick()
             compose.onNodeWithText("关闭字幕").performClick()

@@ -441,8 +441,12 @@ private fun AuthorizedPlaybackSession(
             playerRootFocus.requestFocus()
         }
     }
+    var wasExternalPanelOpen by remember { mutableStateOf(false) }
     LaunchedEffect(externalPanelOpen) {
-        if (!externalPanelOpen && !isLive) { controlsVisible = true; controlsInteractionEpoch++; focusControlsEpoch++ }
+        if (!externalPanelOpen && wasExternalPanelOpen && !isLive) {
+            controlsVisible = true; controlsInteractionEpoch++; focusControlsEpoch++
+        }
+        wasExternalPanelOpen = externalPanelOpen
     }
     val latestReportProgress by rememberUpdatedState({ reportProgress() })
     DisposableEffect(if (playback.whole) playback else player, lifecycle) {

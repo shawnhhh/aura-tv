@@ -35,7 +35,7 @@ class MinimalPlayerGeometryTest {
             assertEquals(fast.center.x.toDouble(), slow.center.x.toDouble(), 2.0)
             assertTrue(fast.top < slow.top)
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-            compose.waitUntil(3000) { runCatching { compose.onNodeWithText("2.0×").assertDoesNotExist() }.isSuccess }
+            compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("player-menu-popup").assertDoesNotExist() }.isSuccess }
             compose.onNodeWithTag("transport-subtitle").performClick()
             compose.onNodeWithText("关闭字幕").performClick()
             compose.waitUntil(3000) { runCatching { compose.onNodeWithText("关闭字幕").assertDoesNotExist() }.isSuccess }

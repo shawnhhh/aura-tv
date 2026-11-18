@@ -6,10 +6,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,8 +51,8 @@ internal fun KernelMinimalControls(
                 onHoldSeek(direction, key) else false
         }
     var panel by remember { mutableStateOf<String?>(null) }
-    var visible by remember { mutableStateOf(false) }
-    val jobs = rememberCoroutineScope()
+    val visibility = remember { MutableTransitionState(false) }
+    var closing by remember { mutableStateOf<String?>(null) }
     val audioFocus = remember { FocusRequester() }
     val subtitleFocus = remember { FocusRequester() }
     val menuFocus = remember { FocusRequester() }
@@ -62,22 +61,29 @@ internal fun KernelMinimalControls(
     val userReduced = Preferences(androidx.compose.ui.platform.LocalContext.current).reducedMotion
     val reduced = userReduced || android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()
     fun close() {
-        val previous = panel
-        visible = false
-        jobs.launch {
-            if (!reduced) delay(180)
+        closing = panel
+        visibility.targetState = false
+        onInteraction()
+    }
+    LaunchedEffect(visibility.isIdle, visibility.currentState, closing) {
+        val previous = closing
+        if (previous != null && visibility.isIdle && !visibility.currentState) {
             panel = null
-            onInteraction()
+            closing = null
+            onPanel(false)
             withFrameNanos { }
             runCatching { (when (previous) { "音轨" -> audioFocus; "字幕" -> subtitleFocus; else -> settingsFocus }).requestFocus() }
         }
     }
-    LaunchedEffect(panel) { onPanel(panel != null); visible = panel != null }
-    LaunchedEffect(panel, visible) {
-        if (visible && panel != null) { repeat(2) { withFrameNanos { } }; runCatching { menuFocus.requestFocus() } }
+    LaunchedEffect(panel) {
+        onPanel(panel != null)
+        if (panel != null) {
+            repeat(2) { withFrameNanos { } }
+            if (visibility.targetState && closing == null) runCatching { menuFocus.requestFocus() }
+        }
     }
     DisposableEffect(Unit) { onDispose { onPanel(false) } }
-    fun open(name: String) { panel = name; onInteraction() }
+    fun open(name: String) { closing = null; panel = name; visibility.targetState = true; onPanel(true); onInteraction() }
     fun clock(ms: Long): String {
         val seconds = (ms.coerceAtLeast(0) / 1000)
         return if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
@@ -145,7 +151,8 @@ internal fun KernelMinimalControls(
             offset = if (name == "倍速") speedOffset else IntOffset.Zero,
             onDismissRequest = ::close, properties = PopupProperties(focusable = true)) {
             BackHandler { close() }
-            AnimatedVisibility(visible, enter = slideInHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else it },
+            Box(Modifier.testTag("player-menu-popup")) {
+            AnimatedVisibility(visibility, enter = slideInHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else it },
                 exit = slideOutHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else it }) {
             Surface(color = Color(0xD9111111), tonalElevation = 0.dp) {
                 Column(Modifier.width(if (name == "倍速") 160.dp else panelWidth).heightIn(max = 420.dp).padding(24.dp)) {
@@ -176,6 +183,7 @@ internal fun KernelMinimalControls(
                         }
                     }
                 }
+            }
             }
             }
         }

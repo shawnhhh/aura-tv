@@ -675,13 +675,14 @@ http://example.org/live/channel.m3u8
                     val url=request.requestUrl!!
                     if(url.encodedPath == "/box.json") return MockResponse().setBody(org.json.JSONObject().put("sites",
                         org.json.JSONArray().put(org.json.JSONObject().put("key","a").put("name","CMS A").put("type",1).put("api",server.url("/a")))
-                            .put(org.json.JSONObject().put("key","b").put("name","CMS B").put("type",1).put("api",server.url("/b")))).toString())
-                    if(url.encodedPath !in listOf("/a","/b")) {
+                            .put(org.json.JSONObject().put("key","b").put("name","CMS B").put("type",1).put("api",server.url("/b")))
+                            .put(org.json.JSONObject().put("key","c").put("name","CMS C").put("type",1).put("api",server.url("/c")))).toString())
+                    if(url.encodedPath !in listOf("/a","/b","/c")) {
                         mediaCalls.incrementAndGet();return MockResponse().setResponseCode(503)
                     }
                     val source=url.encodedPath.substringAfter('/')
-                    val row=org.json.JSONObject().put("vod_id","local-$source").put("vod_name","协议测试1（$source）")
-                        .put("type_name","电影").put("vod_year","2024")
+                    val row=org.json.JSONObject().put("vod_id","local-$source").put("vod_name","协议测试1")
+                        .put("type_name","电影").put("vod_year", if (source == "c") "2020" else "2025")
                     if(url.queryParameter("ids") != null) {
                         details.add(source+":"+url.queryParameter("ids"))
                         row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/unavailable-$source.mp4"))
@@ -702,7 +703,7 @@ http://example.org/live/channel.m3u8
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
-            compose.waitUntil(15000){runCatching{compose.onAllNodesWithText("协议测试1（a）").onFirst().assertIsDisplayed()}.isSuccess}
+            compose.waitUntil(15000){runCatching{compose.onAllNodesWithText("协议测试1").onFirst().assertIsDisplayed()}.isSuccess}
             protocolSearch("Protocol 1")
             focus("card-tmdb-movie-9001");key(KeyEvent.KEYCODE_DPAD_CENTER)
             val list=compose.onNodeWithTag("film-detail-list")
@@ -712,12 +713,15 @@ http://example.org/live/channel.m3u8
             for (source in listOf("a", "b")) {
                 val site = TvBoxSite("CMS " + source.uppercase(), false, server.url("/$source").toString(), key = source)
                 compose.onNodeWithTag("source-node-menu").performClick()
-                compose.onNodeWithTag("source-node-" + HerrinDiscoveryNodes.id(root, site, null)).performClick()
+                val nodeTag = "source-node-" + HerrinDiscoveryNodes.id(root, site, null)
+                compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(nodeTag).assertExists() }.isSuccess }
+                compose.onNodeWithTag(nodeTag).performClick()
                 compose.onNodeWithText("线路 1").performClick()
                 compose.waitUntil(10000) { details.count { it == "$source:local-$source" } >= 2 }
             }
             assertTrue(details.all { it == "a:local-a" || it == "b:local-b" })
             assertTrue("Prefetch and explicit selection must remain bounded", details.size <= 8)
+            assertTrue("An unconfirmed year must never be prefetched", details.none { it.startsWith("c:") })
             assertEquals(0, mediaCalls.get())
             compose.onNodeWithTag("source-region").assertIsDisplayed()
             capture("p0-real-cms-protocol-source-groups-before-media")
