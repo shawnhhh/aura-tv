@@ -27,6 +27,9 @@ import android.view.KeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.media3.common.C
@@ -53,6 +56,9 @@ internal fun KernelMinimalControls(
     val jobs = rememberCoroutineScope()
     val audioFocus = remember { FocusRequester() }
     val subtitleFocus = remember { FocusRequester() }
+    val menuFocus = remember { FocusRequester() }
+    val speedOffset = with(LocalDensity.current) { IntOffset(56.dp.roundToPx(), -124.dp.roundToPx()) }
+    val panelWidth = (LocalConfiguration.current.screenWidthDp * .26f).dp
     val userReduced = Preferences(androidx.compose.ui.platform.LocalContext.current).reducedMotion
     val reduced = userReduced || android.os.Build.VERSION.SDK_INT >= 26 && !android.animation.ValueAnimator.areAnimatorsEnabled()
     fun close() {
@@ -67,6 +73,9 @@ internal fun KernelMinimalControls(
         }
     }
     LaunchedEffect(panel) { onPanel(panel != null); visible = panel != null }
+    LaunchedEffect(panel, visible) {
+        if (visible && panel != null) { repeat(2) { withFrameNanos { } }; runCatching { menuFocus.requestFocus() } }
+    }
     DisposableEffect(Unit) { onDispose { onPanel(false) } }
     fun open(name: String) { panel = name; onInteraction() }
     fun clock(ms: Long): String {
@@ -133,22 +142,25 @@ internal fun KernelMinimalControls(
     }
     panel?.let { name ->
         Popup(alignment = if (name == "倍速") Alignment.BottomStart else Alignment.CenterEnd,
+            offset = if (name == "倍速") speedOffset else IntOffset.Zero,
             onDismissRequest = ::close, properties = PopupProperties(focusable = true)) {
             BackHandler { close() }
             AnimatedVisibility(visible, enter = slideInHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else it },
                 exit = slideOutHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else it }) {
             Surface(color = Color(0xD9111111), tonalElevation = 0.dp) {
-                Column(Modifier.width(if (name == "倍速") 160.dp else 300.dp).heightIn(max = 420.dp).padding(24.dp)) {
+                Column(Modifier.width(if (name == "倍速") 160.dp else panelWidth).heightIn(max = 420.dp).padding(24.dp)) {
                     Text(name, color = Color.White, style = MaterialTheme.typography.titleLarge)
                     LazyColumn {
                         when (name) {
                             "倍速" -> items(PlaybackTransport.speeds.reversed()) { speed ->
-                                PlayerTextButton(onClick = { session.manager.setSpeed(speed); close() }) { Text((if (kotlin.math.abs(player.playbackParameters.speed - speed) < 0.01f) "✓ " else "") + "${speed}×") }
+                                PlayerTextButton(onClick = { session.manager.setSpeed(speed); close() },
+                                    modifier = if (kotlin.math.abs(player.playbackParameters.speed - speed) < 0.01f) Modifier.focusRequester(menuFocus) else Modifier) { Text((if (kotlin.math.abs(player.playbackParameters.speed - speed) < 0.01f) "✓ " else "") + "${speed}×") }
                             }
                             "音轨", "字幕" -> {
                                 val type = if (name == "音轨") C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT
                                 if (type == C.TRACK_TYPE_TEXT) item {
-                                    PlayerTextButton(onClick = { session.manager.selectTrack(type, -1, -1); close() }) { Text("关闭字幕") }
+                                    PlayerTextButton(onClick = { session.manager.selectTrack(type, -1, -1); close() },
+                                        modifier = if (PlaybackTransport.options(player, type).none { it.selected }) Modifier.focusRequester(menuFocus) else Modifier) { Text("关闭字幕") }
                                 }
                                 val options = PlaybackTransport.options(player, type)
                                 if (options.isEmpty()) item { Text("暂无可用轨道", color = Color.White) }
@@ -156,7 +168,8 @@ internal fun KernelMinimalControls(
                                     PlayerTextButton(onClick = {
                                         session.manager.selectTrack(type, option.groupIndex, option.trackIndex)
                                         close()
-                                    }) { Text((if (option.selected) "✓ " else "") + option.label) }
+                                    }, modifier = if (option.selected || type == C.TRACK_TYPE_AUDIO && options.none { it.selected } && option == options.first())
+                                        Modifier.focusRequester(menuFocus) else Modifier) { Text((if (option.selected) "✓ " else "") + option.label) }
                                 }
                             }
 

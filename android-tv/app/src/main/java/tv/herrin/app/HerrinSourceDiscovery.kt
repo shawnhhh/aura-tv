@@ -180,8 +180,12 @@ internal class HerrinSourceDiscovery {
                 prefetch(node)
             }
             val personal = unique.filter { it.type == HerrinSourceType.NAS }
-            personal.forEach { run(it) }
-            unique.firstOrNull { it.id == preferred && it !in personal }?.let { run(it) }
+            // Start priority requests first, without making every other node
+            // wait for a slow preferred provider's entire timeout budget.
+            personal.forEach { node -> launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { run(node) } }
+            unique.firstOrNull { it.id == preferred && it !in personal }?.let { node ->
+                launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { run(node) }
+            }
             unique.filter { it !in personal && it.id != preferred }.forEach { node -> launch { run(node) } }
             if (expand != null) launch {
                 val failures = expand { additions ->
