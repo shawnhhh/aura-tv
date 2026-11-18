@@ -27,6 +27,7 @@ internal class PersonalLibraryApi(context: Context) {
                 try { runBlocking { PersonalRemoteFiles.list(candidate, folder) } }
                 catch(error: Exception) { return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
                 val saved = library.connections.save(input)
+                library.connections.status(saved.id, "connected")
                 return JSONObject().put("ok", true).put("id", saved.id).put("path", folder)
             }
             "/personal/delete" -> {
@@ -44,10 +45,11 @@ internal class PersonalLibraryApi(context: Context) {
                 val raw = input.optString("path")
                 try {
                     val files = runBlocking { PersonalRemoteFiles.list(c, raw) }
+                    library.connections.status(id, "connected")
                     return JSONObject().put("ok", true).put("files", JSONArray().apply {
                         files.filter { it.directory }.forEach { put(JSONObject().put("path", it.path).put("name", it.name)) }
                     }).put("result", "连接成功")
-                } catch(error: Exception) { return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
+                } catch(error: Exception) { library.connections.status(id, "failed"); return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
             }
             "/personal/folder" -> {
                 requireNotNull(library.connections.get(input.getString("connection")))
@@ -70,7 +72,7 @@ internal class PersonalLibraryApi(context: Context) {
             "/personal" -> Unit
             else -> error("UNKNOWN_PERSONAL_OPERATION")
         }
-        return JSONObject().put("ok", true).put("connections", JSONArray().apply { library.connections.list().forEach { put(it.publicJson()) } })
+        return JSONObject().put("ok", true).put("connections", library.connections.publicList())
             .put("folders", JSONArray().apply { library.index.folders().forEach { f -> put(JSONObject().put("id", f.id).put("connection", f.connection).put("path", f.path).put("type", f.type).put("enabled", f.enabled)) } })
             .put("media", library.index.media()).put("progress", PersonalLibrary.progress)
     }

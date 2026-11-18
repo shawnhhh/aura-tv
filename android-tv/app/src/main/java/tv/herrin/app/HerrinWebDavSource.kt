@@ -169,7 +169,7 @@ internal class HerrinWebDavSource(
             }.build()
         return readSourceResponse(client,request) { response ->
             if (response.code != 207) throw SourceHttpFailure(response.code,SourceHealthIndex.retryAfter(response.header("Retry-After"),System.currentTimeMillis()))
-            val body = response.body ?: return@readSourceResponse emptyList()
+            val body = checkNotNull(response.body) { "DAV_EMPTY_RESPONSE" }
             val input = body.byteStream()
             val buffer = ByteArray(8192)
             val output = java.io.ByteArrayOutputStream()
@@ -185,7 +185,7 @@ internal class HerrinWebDavSource(
             // as desktop JVM without silently treating valid DAV as empty.
             val xmlText = output.toString(Charsets.UTF_8.name())
             if (Regex("""<!\s*(?:DOCTYPE|ENTITY)\b""", RegexOption.IGNORE_CASE)
-                    .containsMatchIn(xmlText)) return@readSourceResponse emptyList()
+                    .containsMatchIn(xmlText)) error("DAV_UNSAFE_XML")
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
             // Some Android API levels throw ParserConfigurationException for
@@ -204,6 +204,7 @@ internal class HerrinWebDavSource(
             factory.setExpandEntityReferences(false)
             val document = factory.newDocumentBuilder()
                 .parse(InputSource(StringReader(xmlText)))
+            check(document.documentElement.localName == "multistatus" && document.documentElement.namespaceURI == "DAV:") { "DAV_INVALID_RESPONSE" }
             val results = document.getElementsByTagNameNS("DAV:", "response")
             check(results.length <= 250) { "DAV_DIRECTORY_LIMIT" }
             (0 until results.length).mapNotNull { index ->

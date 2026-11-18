@@ -51,10 +51,18 @@ internal class PersonalConnections(private val context: Context) {
         check(prefs.edit().putString("personal_connection_ids", JSONArray((ids() + id).distinct()).toString()).commit())
         value
     }
+    fun status(id: String, status: String) {
+        require(status in setOf("connected", "failed", "unknown"))
+        check(prefs.edit().putString("personal_status_$id", status).commit())
+    }
+    fun publicList() = JSONArray().apply { list().forEach { c ->
+        put(c.publicJson().put("status", prefs.getString("personal_status_${c.id}", "unknown")))
+    } }
     fun delete(id: String) = synchronized(lock) {
         require(ids().contains(id))
         check(prefs.edit().putString("personal_connection_ids", JSONArray(ids().filterNot { it == id }).toString()).commit())
         HerrinPersonalCredentialStore(context, "config-$id").clear()
+        prefs.edit().remove("personal_status_$id").commit()
     }
     /** Idempotent migration: originals stay intact until explicit user edits/removal. */
     fun migrate(index: PersonalMediaIndex) = synchronized(lock) {

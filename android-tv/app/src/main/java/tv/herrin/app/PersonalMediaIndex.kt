@@ -32,6 +32,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         val values = ContentValues().apply { put("id", id); put("connection", connection); put("path", path); put("type", type); put("enabled", if(enabled) 1 else 0) }
         if(old == null) writableDatabase.insertOrThrow("folders", null, values)
         else writableDatabase.update("folders", values, "id=?", arrayOf(id))
+        writableDatabase.execSQL("UPDATE media SET type=CASE WHEN ?='auto' THEN CASE WHEN episode IS NULL THEN 'movie' ELSE 'tv' END ELSE ? END WHERE folder=? AND manual=0", arrayOf(type, type, id))
         return id
     }
     fun removeFolder(id: String) {
@@ -58,9 +59,9 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
             put("title", parsed.title); put("year", parsed.year); put("season", parsed.season); put("episode", parsed.episode)
             put("scanned", scan); put("status", "available")
         }
-        if(find(id)?.optInt("manual") == 1) {
+        if(rows("SELECT manual FROM media WHERE id=?", arrayOf(id)).firstOrNull()?.optInt("manual") == 1) {
             values.remove("title"); values.remove("year"); values.remove("type")
-        }
+        } else { values.putNull("tmdb"); values.put("confidence", 0); values.putNull("synopsis"); values.putNull("poster") }
         if(writableDatabase.update("media", values, "id=?", arrayOf(id)) == 0) writableDatabase.insertOrThrow("media", null, values)
     }
     fun finish(id: String, scan: Long) {

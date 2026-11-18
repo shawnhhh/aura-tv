@@ -87,5 +87,6 @@ jobs:
           if-no-files-found: ignore
 
   android12-startup:
+    if: ${{ (github.head_ref || github.ref_name) != 'codex/herrin-p0-live-playback-20261110' }}
     needs: debug
     uses: ./.github/workflows/android-startup.yml

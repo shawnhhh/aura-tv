@@ -1495,7 +1495,7 @@ private fun Herrin(startup: StartupPresentation) {
             preferredSite?.takeIf { it.apiUrl != null }?.let(directSites::add)
             directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(100-directSites.size)
             // Metadata cache first; explicit continuation alone may refresh missing warehouse data.
-            val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),prefs.tvBoxPreferredRootId,prefs.tvBoxPreferredSiteId,nasUrl,cloudUrl,
+            val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),prefs.tvBoxPreferredRootId,prefs.tvBoxPreferredSiteId,nasUrl,
                 HerrinSmbConfigStore(context).publicConfig().toString(),
                 AdditionalServiceConfigs(context).enabled("nas").toString(),importedWarehouses.toString(),
                 context.getSharedPreferences("herrin_personal_secrets",0).getString("_revision","legacy").orEmpty()).joinToString("|"))

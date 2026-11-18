@@ -60,6 +60,7 @@ internal object PersonalRemoteFiles {
         is javax.net.ssl.SSLException -> "HTTPS 证书校验失败"
         is java.net.SocketTimeoutException -> "服务器连接超时"
         is java.net.UnknownHostException -> "服务器域名无法解析"
+        is IllegalArgumentException -> if(error.message == "SMB_SHARE_REQUIRED") "请输入 SMB 共享名称后浏览；无需再次输入服务器账号" else "路径或连接字段无效"
         else -> "连接或目录读取失败，请检查服务器、共享名称及权限；超大目录须拆分导入"
     }
 }

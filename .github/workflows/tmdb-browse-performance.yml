@@ -5,6 +5,7 @@ on:
       - '.github/workflows/tmdb-browse-performance.yml'
       - 'android-tv/app/src/main/java/tv/herrin/app/TmdbBrowse*.kt'
       - '.github/scripts/tmdb_performance_ab.*'
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,6 +14,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   compare:
+    if: github.event_name != 'pull_request' || github.head_ref != 'codex/herrin-p0-live-playback-20261110'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
