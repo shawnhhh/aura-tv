@@ -22,6 +22,7 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
     var input by remember(tab) { mutableStateOf(JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else "443")) }
     var selected by remember { mutableStateOf("") }
     var path by remember { mutableStateOf("") }
+    var browsePage by remember { mutableStateOf(0) }
     var browser by remember { mutableStateOf(JSONObject()) }
     var kind by remember { mutableStateOf("auto") }
     var confirm by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -32,10 +33,12 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
     var matches by remember { mutableStateOf(JSONObject()) }
     var busy by remember { mutableStateOf(false) }
     fun execute(route: String, value: JSONObject = JSONObject(), browse: Boolean = false) {
+        if(busy) return
+        busy = true
+        val requestedPage = browsePage
         scope.launch {
-            busy = true
             try {
-                val result = withContext(Dispatchers.IO) { api.handle(route, value) }
+                val result = withContext(Dispatchers.IO) { api.handle(route, if(browse) JSONObject(value.toString()).put("offset", requestedPage * 100) else value) }
                 status = result.optString("error", result.optString("result", "已保存"))
                 if(result.optBoolean("ok", true)) {
                     if(browse) browser = result
@@ -61,10 +64,10 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
         if(connections != null) for(i in 0 until connections.length()) {
             val c = connections.getJSONObject(i)
             if((c.getString("protocol") == "smb") != (tab == "SMB")) continue
-            Text(c.getString("name") + if(c.optBoolean("enabled")) " · 启用" else " · 停用")
+            Text(c.getString("name") + (if(c.optBoolean("enabled")) " · 启用" else " · 停用") + " · " + c.optString("status", "unknown"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton("编辑") { input = JSONObject(c.toString()); selected = c.getString("id") }
-                TvButton("浏览目录") { selected = c.getString("id"); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+                TvButton("浏览目录") { selected = c.getString("id"); browsePage = 0; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
                 TvButton("启用/停用") { execute("/personal/toggle", JSONObject().put("id", c.getString("id"))) }
                 TvButton("删除") { confirm = "/personal/delete" to c.getString("id") }
             }
@@ -85,11 +88,15 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
         TvButton(if(busy) "处理中…" else "确认添加 / 保存并验证") { if(!busy) execute("/personal/save", JSONObject(input.toString()).put("path", path)) }
         if(selected.isNotEmpty()) {
             TvButton("测试 / 浏览当前目录") { execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
-            TvButton("返回上级") { path = path.substringBeforeLast('/', ""); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+            TvButton("返回上级") { browsePage = 0; path = path.substringBeforeLast('/', ""); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
             val files = browser.optJSONArray("files")
             if(files != null) for(i in 0 until minOf(100, files.length())) {
                 val f = files.getJSONObject(i)
-                TvButton(f.getString("name")) { path = f.getString("path"); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+                TvButton(f.getString("name")) { browsePage = 0; path = f.getString("path"); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+            }
+            Row {
+                TvButton("目录上一页") { browsePage = (browsePage - 1).coerceAtLeast(0); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+                TvButton("目录下一页") { if((browsePage + 1) * 100 < browser.optInt("total")) { browsePage++; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) } }
             }
             Text("媒体类型：$kind")
             Row { listOf("auto" to "自动", "movie" to "电影", "tv" to "剧集", "anime" to "动漫", "video" to "其他").forEach { (key, label) -> TvButton(label) { kind = key } } }
@@ -136,7 +143,7 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
             if(results != null) for(i in 0 until results.length()) {
                 val m = results.getJSONObject(i)
                 TvButton(m.getString("title") + " · " + m.getString("year")) {
-                    execute("/personal/match", JSONObject().put("id", matchId).put("tmdb", m.getInt("tmdb")).put("type", m.getString("type")).put("title", m.getString("title")))
+                    execute("/personal/match", JSONObject().put("id", matchId).put("tmdb", m.getInt("tmdb")).put("type", m.getString("type")).put("title", m.getString("title")).put("year", m.optString("year")).put("poster", m.optString("poster")).put("synopsis", m.optString("synopsis")))
                     matchId = ""
                 }
             }

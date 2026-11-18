@@ -92,14 +92,14 @@ async function refreshTmdbStatus(){const r=await call('/status');document.queryS
 
 
 
-let personalConnection='', personalPage=0;
+let personalConnection='', personalPage=0, personalDirectoryPage=0;
 function actionButton(parent,label,action){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await action();}catch(e){status.textContent=e.message;}finally{b.disabled=false;}};parent.append(b);}
 async function personalCall(path,data={}){const r=await call('/personal'+path,data);if(r.ok===false)throw Error(r.error||'操作失败');return r;}
 async function refreshPersonal(){
  const r=await personalCall('',{offset:personalPage*100,category:document.querySelector('#personal-category').value});document.querySelector('#personal-migration-warning').textContent=r.migrationWarning?'部分旧配置无效，原配置已保留；请手动添加对应连接。':'';const list=document.querySelector('#personal-connections');list.replaceChildren();
- r.connections.forEach(c=>{const row=document.createElement('p');row.textContent=c.name+' · '+c.protocol+' · '+(c.enabled?'启用':'停用');
+ r.connections.forEach(c=>{const row=document.createElement('p');row.textContent=c.name+' · '+c.protocol+' · '+(c.status||'unknown')+' · '+(c.enabled?'启用':'停用');
  actionButton(row,'编辑',()=>{const f=document.querySelector('#personal-edit');f.reset();for(const key of ['id','name','protocol','host','port','username','domain'])f.elements[key].value=c[key]||'';f.elements.encryption.checked=c.encryption;});
- actionButton(row,'测试 / 浏览',async()=>{personalConnection=c.id;document.querySelector('#personal-browser').hidden=false;await browsePersonal();});
+ actionButton(row,'测试 / 浏览',async()=>{personalConnection=c.id;personalDirectoryPage=0;document.querySelector('#personal-browser').hidden=false;await browsePersonal();});
  actionButton(row,c.enabled?'停用':'启用',async()=>{await personalCall('/toggle',{id:c.id});await refreshPersonal();});
  actionButton(row,'删除',async()=>{if(confirm('删除此连接及本地目录索引？不会删除服务器文件。')){await personalCall('/delete',{id:c.id,confirmed:true});await refreshPersonal();}});list.append(row);});
  const folders=document.querySelector('#personal-folders');folders.replaceChildren();r.folders.forEach(f=>{const row=document.createElement('p');row.textContent=f.path+' · '+f.type+' · '+f.state+' · '+(f.enabled?'启用':'停用');
@@ -110,17 +110,20 @@ async function refreshPersonal(){
  document.querySelector('#personal-progress').textContent=r.progress;
  const media=document.querySelector('#personal-media');media.replaceChildren();r.media.forEach(m=>{const row=document.createElement('p');row.textContent=(m.tmdb?'已匹配':'未识别')+' · '+m.type+' · '+m.name;actionButton(row,'手动匹配',()=>{document.querySelector('#personal-match [name=id]').value=m.id;document.querySelector('#personal-match [name=query]').value=m.title;});media.append(row);});
 }
-async function browsePersonal(){const path=document.querySelector('#personal-path').value;const r=await personalCall('/browse',{id:personalConnection,path});const list=document.querySelector('#personal-directories');list.replaceChildren();r.files.forEach(f=>actionButton(list,f.name,async()=>{document.querySelector('#personal-path').value=f.path;await browsePersonal();}));status.textContent=r.result;}
+async function browsePersonal(){const path=document.querySelector('#personal-path').value;const r=await personalCall('/browse',{id:personalConnection,path,offset:personalDirectoryPage*100});const list=document.querySelector('#personal-directories');list.replaceChildren();r.files.forEach(f=>actionButton(list,f.name,async()=>{document.querySelector('#personal-path').value=f.path;personalDirectoryPage=0;await browsePersonal();}));document.querySelector('#personal-directory-previous').disabled=personalDirectoryPage===0;document.querySelector('#personal-directory-next').disabled=(personalDirectoryPage+1)*100>=(r.total||0);status.textContent=r.result;}
 document.querySelector('#personal-edit [name=protocol]').onchange=e=>{document.querySelector('#personal-edit [name=port]').value={https:443,http:80,smb:445}[e.target.value];};
 document.querySelector('#personal-edit').onsubmit=async e=>{e.preventDefault();const f=e.target;const b=f.querySelector('button');b.disabled=true;try{const v=Object.fromEntries(new FormData(f));v.encryption=f.elements.encryption.checked;const r=await personalCall('/save',v);personalConnection=r.id;f.elements.password.value='';document.querySelector('#personal-browser').hidden=false;document.querySelector('#personal-path').value=r.path;await refreshPersonal();await browsePersonal();}catch(error){status.textContent=error.message;}finally{b.disabled=false;}};
 document.querySelector('#personal-new').onclick=()=>document.querySelector('#personal-edit').reset();
 document.querySelector('#personal-browse').onclick=()=>browsePersonal().catch(e=>status.textContent=e.message);
-document.querySelector('#personal-parent').onclick=()=>{const f=document.querySelector('#personal-path');f.value=f.value.replace(/\/?[^/]+\/?$/,'');browsePersonal().catch(e=>status.textContent=e.message);};
+document.querySelector('#personal-parent').onclick=()=>{personalDirectoryPage=0;const f=document.querySelector('#personal-path');f.value=f.value.replace(/\/?[^/]+\/?$/,'');browsePersonal().catch(e=>status.textContent=e.message);};
 document.querySelector('#personal-import').onclick=async()=>{try{await personalCall('/folder',{connection:personalConnection,path:document.querySelector('#personal-path').value,type:document.querySelector('#personal-type').value});await refreshPersonal();}catch(e){status.textContent=e.message;}};
 document.querySelector('#personal-cancel').onclick=()=>personalCall('/cancel').catch(e=>status.textContent=e.message);
-document.querySelector('#personal-match').onsubmit=async e=>{e.preventDefault();try{const f=e.target;const r=await personalCall('/search',{query:f.elements.query.value});const list=document.querySelector('#personal-matches');list.replaceChildren();r.matches.forEach(m=>actionButton(list,m.title+' · '+m.year,async()=>{await personalCall('/match',{id:f.elements.id.value,tmdb:m.tmdb,type:m.type,title:m.title});await refreshPersonal();}));}catch(error){status.textContent=error.message;}};
+document.querySelector('#personal-match').onsubmit=async e=>{e.preventDefault();try{const f=e.target;const r=await personalCall('/search',{query:f.elements.query.value});const list=document.querySelector('#personal-matches');list.replaceChildren();r.matches.forEach(m=>actionButton(list,m.title+' · '+m.year,async()=>{await personalCall('/match',{id:f.elements.id.value,tmdb:m.tmdb,type:m.type,title:m.title,year:m.year,poster:m.poster||'',synopsis:m.synopsis||''});await refreshPersonal();}));}catch(error){status.textContent=error.message;}};
 setInterval(()=>{if(session&&module==='nas'&&Date.now()-lastActivity<60000)refreshPersonal().catch(()=>{});},3000);
 
 document.querySelector('#personal-previous').onclick=()=>{personalPage=Math.max(0,personalPage-1);refreshPersonal().catch(e=>status.textContent=e.message);};
 document.querySelector('#personal-next').onclick=()=>{personalPage++;refreshPersonal().catch(e=>status.textContent=e.message);};
 document.querySelector('#personal-category').onchange=()=>{personalPage=0;refreshPersonal().catch(e=>status.textContent=e.message);};
+
+document.querySelector('#personal-directory-previous').onclick=()=>{personalDirectoryPage=Math.max(0,personalDirectoryPage-1);browsePersonal().catch(e=>status.textContent=e.message);};
+document.querySelector('#personal-directory-next').onclick=()=>{personalDirectoryPage++;browsePersonal().catch(e=>status.textContent=e.message);};

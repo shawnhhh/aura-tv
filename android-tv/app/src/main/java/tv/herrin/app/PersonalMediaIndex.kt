@@ -110,8 +110,17 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
             shared ?: PersonalMediaIndex(context).also { shared = it }
         }
     }
-    fun correct(id: String, tmdb: Int, type: String, title: String) {
+    fun correct(id: String, tmdb: Int, type: String, title: String, year: Int? = null,
+        poster: String = "", synopsis: String = "") {
         require(tmdb > 0 && type in setOf("movie", "tv") && title.length in 1..256)
-        writableDatabase.execSQL("UPDATE media SET tmdb=?,type=?,title=?,manual=1,confidence=1 WHERE id=?", arrayOf(tmdb, type, title, id))
+        require(year == null || year in 1800..2200)
+        require(poster.isEmpty() || Regex("^https://image\\.tmdb\\.org/t/p/(?:w500|original)/[A-Za-z0-9_.-]{1,140}\\.(?:jpg|jpeg|png|webp)$").matches(poster))
+        val values = ContentValues().apply {
+            put("tmdb", tmdb); put("type", type); put("title", title); put("manual", 1); put("confidence", 1)
+            if(year != null) put("year", year)
+            if(poster.isEmpty()) putNull("poster") else put("poster", poster)
+            put("synopsis", synopsis.take(2000))
+        }
+        writableDatabase.update("media", values, "id=?", arrayOf(id))
     }
 }

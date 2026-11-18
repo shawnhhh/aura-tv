@@ -48,9 +48,11 @@ internal class PersonalLibraryApi(context: Context) {
                 try {
                     val files = runBlocking { PersonalRemoteFiles.list(c, raw) }
                     library.connections.status(id, "connected")
+                    val directories = files.filter { it.directory }.sortedBy { it.path }
+                    val offset = input.optInt("offset").coerceIn(0, 1000000)
                     return JSONObject().put("ok", true).put("files", JSONArray().apply {
-                        files.filter { it.directory }.forEach { put(JSONObject().put("path", it.path).put("name", it.name)) }
-                    }).put("result", "连接成功")
+                        directories.drop(offset).take(100).forEach { put(JSONObject().put("path", it.path).put("name", it.name)) }
+                    }).put("total", directories.size).put("result", "连接成功")
                 } catch(error: Exception) { library.connections.status(id, "failed"); return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
             }
             "/personal/folder" -> {
@@ -67,11 +69,11 @@ internal class PersonalLibraryApi(context: Context) {
                 val matches = runBlocking { discovery.search(input.getString("query").take(200), prefs.tmdbReadToken) }
                 return JSONObject().put("ok", true).put("matches", JSONArray().apply {
                     matches.films.forEach { film -> discovery.identity(film)?.let { (type, id) ->
-                        put(JSONObject().put("tmdb", id).put("type", type).put("title", film.title).put("year", film.year))
+                        put(JSONObject().put("tmdb", id).put("type", type).put("title", film.title).put("year", film.year).put("poster", film.artworkUrl).put("synopsis", film.synopsis))
                     } }
                 })
             }
-            "/personal/match" -> library.index.correct(id, input.getInt("tmdb"), input.getString("type"), input.getString("title"))
+            "/personal/match" -> library.index.correct(id, input.getInt("tmdb"), input.getString("type"), input.getString("title"), input.optString("year").toIntOrNull(), input.optString("poster"), input.optString("synopsis"))
             "/personal" -> Unit
             else -> error("UNKNOWN_PERSONAL_OPERATION")
         }

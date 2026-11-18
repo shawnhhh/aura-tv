@@ -126,12 +126,7 @@ internal class PersonalLibrary(context: Context) {
                 val result = try {
                     val expected = HerrinFilmIdentity(1, if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie",
                         listOf(title), row.optInt("year").takeIf { it > 0 })
-                    val matches = discovery.search(title, token).films.filter { f ->
-                        val identity = discovery.identity(f) ?: return@filter false
-                        HerrinFilmIdentityMatch.matches(expected, HerrinSourceMovie("tmdb", HerrinSourceType.NAS, f, identity.first,
-                            titleAliases = listOfNotNull(f.originalDisplay?.title)))
-                    }
-                    matches.singleOrNull()
+                    PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)
                 } catch(cancel: CancellationException) { throw cancel }
                 catch(_: Exception) { null }
                 cache[key] = result
