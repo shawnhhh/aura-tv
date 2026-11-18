@@ -38,6 +38,7 @@ internal class PersonalLibraryApi(context: Context) {
                 library.connections.delete(id)
             }
             "/personal/toggle" -> {
+                library.cancelAndWait()
                 val old = requireNotNull(library.connections.get(id))
                 library.connections.save(old.publicJson().put("password", old.password).put("enabled", !old.enabled))
             }

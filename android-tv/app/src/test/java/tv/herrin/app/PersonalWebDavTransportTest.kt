@@ -10,6 +10,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PersonalWebDavTransportTest {
+    @Test fun optionalUsernameStillSendsAnExplicitlyConfiguredPassword() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); server.enqueue(MockResponse().setResponseCode(207))
+            val source = HerrinWebDavSource(HerrinWebDavAccount("Fixture", server.url("/dav/").toString(), password = "fixture-secret"))
+            assertTrue(source.testConnection())
+            assertEquals(okhttp3.Credentials.basic("", "fixture-secret"), server.takeRequest().getHeader("Authorization"))
+        }
+    }
     @Test fun httpAndHttpsPropfindKeepMetadataAndRangeAuthenticationAtTheConfiguredOrigin() = runBlocking {
         for(tls in listOf(false, true)) MockWebServer().use { server ->
             val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()

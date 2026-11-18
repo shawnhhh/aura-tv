@@ -69,7 +69,7 @@ internal class PersonalConnections(private val context: Context) {
         if (prefs.getBoolean("personal_migrated_v1", false)) return@synchronized
         fun add(key: String, name: String, url: String, user: String, password: String, domain: String = "", encryption: Boolean = false, enabled: Boolean = true) {
             if (url.isBlank() || prefs.contains("personal_migration_$key")) return
-            val u = URI(url); val protocol = u.scheme
+            val u = URI(url); val protocol = u.scheme.lowercase(java.util.Locale.ROOT)
             val c = save(JSONObject().put("name", name).put("protocol", protocol).put("host", u.host)
                 .put("port", if (u.port > 0) u.port else if (protocol == "https") 443 else if (protocol == "http") 80 else 445)
                 .put("username", user).put("password", password).put("domain", domain).put("encryption", encryption).put("enabled", enabled))

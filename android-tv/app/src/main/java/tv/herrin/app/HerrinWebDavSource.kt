@@ -64,7 +64,7 @@ internal class HerrinWebDavSource(
             val xml = "<d:propfind xmlns:d=\"DAV:\"><d:prop><d:resourcetype/></d:prop></d:propfind>"
             val request = Request.Builder().url(root.toString()).header("Depth", "0")
                 .method("PROPFIND", xml.toRequestBody("application/xml".toMediaType()))
-                .apply { if (account.username.isNotBlank()) header("Authorization", Credentials.basic(account.username, account.password)) }
+                .apply { if ((account.username.isNotEmpty() || account.password.isNotEmpty())) header("Authorization", Credentials.basic(account.username, account.password)) }
                 .build()
             client.newCall(request).execute().use { it.code == 207 }
         }
@@ -140,7 +140,7 @@ internal class HerrinWebDavSource(
         if (!sameOriginUnderRoot(line.uri)) return PlaybackResult.Unavailable("媒体路径超出授权目录")
         return PlaybackResult.Ready(PlaybackMedia(
             uri = line.uri,
-            headers = if (account.username.isBlank()) emptyMap() else
+            headers = if ((account.username.isEmpty() && account.password.isEmpty())) emptyMap() else
                 mapOf("Authorization" to Credentials.basic(account.username, account.password)),
             allowHttpRedirects = false
         ))
@@ -149,8 +149,7 @@ internal class HerrinWebDavSource(
     private fun sameOriginUnderRoot(url: String): Boolean = runCatching {
         val target = URI(url).normalize()
         val origin = root.normalize()
-        target.scheme.equals(origin.scheme, true) &&
-            target.host.equals(origin.host, true) && target.port == origin.port &&
+        PersonalStoragePolicy.sameOrigin(target, origin) &&
             target.rawUserInfo == null && target.fragment == null &&
             target.path.orEmpty().split('/').none { it == "." || it == ".." || it.contains('\\') } &&
             (target.path.orEmpty() + if (url.endsWith('/')) "/" else "")
@@ -165,7 +164,7 @@ internal class HerrinWebDavSource(
             .method("PROPFIND", xml.toRequestBody("application/xml".toMediaType()))
             .header("Depth", "1")
             .apply {
-                if (account.username.isNotBlank())
+                if ((account.username.isNotEmpty() || account.password.isNotEmpty()))
                     header("Authorization", Credentials.basic(account.username, account.password))
             }.build()
         return readSourceResponse(client,request) { response ->

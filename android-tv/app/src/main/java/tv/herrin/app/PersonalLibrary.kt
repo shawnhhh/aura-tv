@@ -60,7 +60,7 @@ internal class PersonalLibrary(context: Context) {
             val account = HerrinSmbAccount(c.address(folder.path), c.username, c.password, c.domain, c.encryption)
             PlaybackResult.Ready(streams.media(account, path.substringAfter('/').replace('/', '\\')).copy(displayTitle = row.getString("name")))
         }.getOrElse { PlaybackResult.Unavailable("SMB 文件不可读") }
-        else PlaybackResult.Ready(PlaybackMedia(c.address(path), headers = if(c.username.isBlank()) emptyMap() else
+        else PlaybackResult.Ready(PlaybackMedia(c.address(path), headers = if(c.username.isEmpty() && c.password.isEmpty()) emptyMap() else
             mapOf("Authorization" to okhttp3.Credentials.basic(c.username, c.password)), allowHttpRedirects = false, displayTitle = row.getString("name")))
     }
     fun refresh(folderId: String) = synchronized(scanLock) {
