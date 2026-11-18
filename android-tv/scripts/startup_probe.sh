@@ -35,7 +35,7 @@ adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/home.xml"
 python3 - "$evidence/home.xml" <<'PY'
 import pathlib,sys
 text=pathlib.Path(sys.argv[1]).read_text()
-assert 'HERRIN' in text and '影片详情' in text, 'Interactive offline home was not reached'
+assert 'HERRIN' in text and 'text="详情"' in text and 'text="播放"' in text, 'Interactive offline home was not reached'
 PY
 if [[ "$tracing" == 1 ]]; then adb shell atrace --async_stop -z > "$evidence/startup.atrace"; fi
 adb shell input keyevent KEYCODE_HOME
@@ -112,7 +112,7 @@ root=Path(sys.argv[1])
 frames=list((root/'visual-frames').glob('frame-*.png'))
 assert len(frames)>=24, 'Startup visual evidence must contain at least six seconds at four samples/sec'
 text=(root/'visual-home.xml').read_text()
-assert 'HERRIN' in text and '影片详情' in text, 'Visual startup did not finish on the interactive home'
+assert 'HERRIN' in text and 'text="详情"' in text and 'text="播放"' in text, 'Visual startup did not finish on the interactive home'
 record={'sampled_frames':len(frames),'samples_per_second':4,'recording_limit_seconds':12,
         'interactive_home_after_recording':True,'performance_source':False,'physical_TCL':False}
 (root/'visual-evidence.json').write_text(json.dumps(record,indent=2))

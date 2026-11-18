@@ -29,7 +29,7 @@ if ! grep -q 'HERRIN' "$evidence/home.xml"; then
     echo "FAIL: HERRIN not visible in emulator UI hierarchy"
     exit 1
 fi
-if ! grep -q '影片详情' "$evidence/home.xml"; then
+if ! grep -q 'text="详情"' "$evidence/home.xml" || ! grep -q 'text="播放"' "$evidence/home.xml"; then
     echo "FAIL: expected home detail action absent from emulator UI hierarchy"
     exit 1
 fi
