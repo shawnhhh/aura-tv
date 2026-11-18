@@ -44,6 +44,7 @@ fs.mkdirSync(evidence,{recursive:true});
  await f.locator('[name=port]').fill('8080');await f.locator('[name=username]').fill('test');await f.locator('[name=password]').fill('mock-only-password');
  await f.locator('button').first().click();await page.locator('#personal-browser').waitFor({state:'visible'});
  assert.strictEqual(await f.locator('[name=password]').inputValue(),'');
+ assert.strictEqual(await f.locator('[name=id]').inputValue(),'fixture-connection','save keeps the UUID for subsequent edits');
  assert(requests.some(r=>r.path==='/personal/save'&&r.body.protocol==='http'&&r.body.port==='8080'));
  await page.locator('#personal-new').click();await f.locator('[name=name]').fill('My SMB');await f.locator('[name=protocol]').selectOption('smb');
  assert.strictEqual(await f.locator('[name=port]').inputValue(),'445');

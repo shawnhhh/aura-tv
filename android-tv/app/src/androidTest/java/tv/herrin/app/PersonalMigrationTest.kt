@@ -40,9 +40,11 @@ class PersonalMigrationTest {
             val smb = store.list().single { it.protocol == "smb" }
             assertEquals("fixture", smb.username); assertEquals("fixture-secret", smb.password)
             assertEquals("realm", smb.domain); assertTrue(smb.encryption)
+            assertEquals("Movies/films", smb.rootPath)
             assertEquals("Movies/films", index.folders(smb.id).single().path)
             val dav = store.list().single { it.host == "nas.invalid" && it.protocol == "https" }
             assertEquals("dav-user", dav.username); assertEquals("dav-secret", dav.password)
+            assertEquals("dav", dav.rootPath)
             assertEquals("dav", index.folders(dav.id).single().path)
             assertFalse(store.list().single { it.name == "Disabled DAV" }.enabled)
             store.migrate(index)

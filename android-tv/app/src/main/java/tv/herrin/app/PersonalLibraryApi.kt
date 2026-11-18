@@ -21,15 +21,17 @@ internal class PersonalLibraryApi(context: Context) {
                 PersonalStoragePolicy.endpoint(protocol, host, port)
                 val same = old?.takeIf { it.protocol == protocol && it.host.equals(host, true) && it.port == port && it.username == input.optString("username") && it.domain == input.optString("domain") }
                 val candidate = PersonalConnections.Connection(id, input.getString("name"), protocol, host, port,
-                    input.optString("username"), input.optString("password").ifBlank { same?.password.orEmpty() },
+                    input.optString("username"), input.optString("password").ifEmpty { same?.password.orEmpty() },
                     input.optString("domain"), input.optBoolean("encryption"), input.optBoolean("enabled", true))
                 val folder = PersonalStoragePolicy.path(input.optString("path"))
-                try { runBlocking { PersonalRemoteFiles.list(candidate, folder) } }
+                val available = try { runBlocking { PersonalRemoteFiles.list(candidate, folder) } }
                 catch(error: Exception) { return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
                 library.cancelAndWait()
                 val saved = library.connections.save(input)
                 library.connections.status(saved.id, "connected")
-                return JSONObject().put("ok", true).put("id", saved.id).put("path", folder)
+                val directories = available.filter { it.directory }.sortedBy { it.path }
+                return JSONObject().put("ok", true).put("id", saved.id).put("path", folder).put("total", directories.size)
+                    .put("files", JSONArray().apply { directories.take(100).forEach { put(JSONObject().put("name", it.name).put("path", it.path)) } })
             }
             "/personal/delete" -> {
                 require(input.optBoolean("confirmed"))
@@ -44,7 +46,7 @@ internal class PersonalLibraryApi(context: Context) {
             }
             "/personal/browse", "/personal/test" -> {
                 val c = requireNotNull(library.connections.get(id))
-                val raw = input.optString("path")
+                val raw = if(input.has("path")) input.getString("path") else c.rootPath
                 try {
                     val files = runBlocking { PersonalRemoteFiles.list(c, raw) }
                     library.connections.status(id, "connected")
@@ -58,6 +60,9 @@ internal class PersonalLibraryApi(context: Context) {
             "/personal/folder" -> {
                 requireNotNull(library.connections.get(input.getString("connection")))
                 library.cancelAndWait()
+                val c = requireNotNull(library.connections.get(input.getString("connection")))
+                if(c.protocol == "smb" && input.getString("path").isBlank())
+                    return JSONObject().put("ok", false).put("error", "请输入 SMB 共享名称后导入媒体目录")
                 val folder = library.index.folder(input.getString("connection"), input.getString("path"), input.getString("type"), input.optBoolean("enabled", true))
                 if(input.optBoolean("scan", true)) library.refresh(folder)
             }

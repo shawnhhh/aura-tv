@@ -78,12 +78,14 @@ internal class PersonalLibrary(context: Context) {
                 val queue = ArrayDeque<Pair<String, Int>>()
                 val visited = HashSet<String>()
                 queue.add(f.path to 0)
+                progress = "正在读取媒体目录…"
+                PersonalRemoteFiles.Session(c, f.path).use { remote ->
                 while(queue.isNotEmpty()) {
                     ensureActive()
                     val (path, depth) = queue.removeFirst()
                     if(!visited.add(path)) continue
                     check(visited.size <= 10000) { "DIRECTORY_LIMIT" }
-                    for(file in PersonalRemoteFiles.list(c, path)) {
+                    for(file in remote.list(path)) {
                         ensureActive()
                         require(PersonalStoragePolicy.contains(f.path, file.path))
                         if(file.directory) {
@@ -95,6 +97,7 @@ internal class PersonalLibrary(context: Context) {
                             progress = "已扫描 $count 个视频 · ${visited.size} 个目录"
                         }
                     }
+                }
                 }
                 index.finish(f.id, stamp)
                 publishIndexChange()

@@ -43,7 +43,10 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
                 if(result.optBoolean("ok", true)) {
                     if(browse) browser = result
                     if(route == "/personal/search") matches = result
-                    if(route == "/personal/save") { selected = result.getString("id"); path = result.getString("path"); input.remove("password") }
+                    if(route == "/personal/save") {
+                        selected = result.getString("id"); path = result.getString("path"); browsePage = 0; browser = result
+                        input = JSONObject(input.toString()).put("id", selected).also { it.remove("password") }
+                    }
                     data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
                     onChanged()
                 }
@@ -66,7 +69,7 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
             if((c.getString("protocol") == "smb") != (tab == "SMB")) continue
             Text(c.getString("name") + (if(c.optBoolean("enabled")) " · 启用" else " · 停用") + " · " + c.optString("status", "unknown"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton("编辑") { input = JSONObject(c.toString()); selected = c.getString("id") }
+                TvButton("编辑") { input = JSONObject(c.toString()); selected = c.getString("id"); path = c.optString("path"); browsePage = 0; browser = JSONObject() }
                 TvButton("浏览目录") { selected = c.getString("id"); browsePage = 0; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
                 TvButton("启用/停用") { execute("/personal/toggle", JSONObject().put("id", c.getString("id"))) }
                 TvButton("删除") { confirm = "/personal/delete" to c.getString("id") }

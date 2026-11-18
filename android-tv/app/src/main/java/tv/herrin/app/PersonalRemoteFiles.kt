@@ -4,41 +4,57 @@ import com.hierynomus.msdtyp.AccessMask
 import com.hierynomus.msfscc.FileAttributes
 import com.hierynomus.mssmb2.*
 import kotlinx.coroutines.*
+import okhttp3.ConnectionPool
+import okhttp3.OkHttpClient
+import java.io.Closeable
 import java.net.URI
 import java.util.EnumSet
+import java.util.concurrent.TimeUnit
 
 internal data class PersonalRemoteFile(val path: String, val directory: Boolean, val size: Long, val modified: String) {
     val name get() = path.substringAfterLast('/')
 }
 
-/** Read-only, bounded operations. A truncated directory is an error, never a successful empty scan. */
+/** Read-only bounded operations; a scan owns one reusable transport and releases it on every exit. */
 internal object PersonalRemoteFiles {
-    suspend fun list(c: PersonalConnections.Connection, path: String): List<PersonalRemoteFile> = withContext(Dispatchers.IO) {
-        val clean = PersonalStoragePolicy.path(path)
-        if (c.protocol != "smb") {
-            val source = HerrinWebDavSource(HerrinWebDavAccount(c.name, c.endpoint, c.username, c.password))
-            source.list(c.address(clean).trimEnd('/') + "/").map { e ->
-                PersonalRemoteFile(PersonalStoragePolicy.path(URI(e.address).path), e.isCollection, e.size, e.modified)
-            }.filter { it.path != clean }
-        } else {
-            require(clean.isNotEmpty()) { "SMB_SHARE_REQUIRED" }
+    class Session(private val c: PersonalConnections.Connection, root: String) : Closeable {
+        private val base = PersonalStoragePolicy.path(root)
+        private val client = if(c.protocol == "smb") null else OkHttpClient.Builder()
+            .followRedirects(false).followSslRedirects(false)
+            .connectionPool(ConnectionPool(1, 30, TimeUnit.SECONDS))
+            .connectTimeout(3, TimeUnit.SECONDS).readTimeout(4, TimeUnit.SECONDS)
+            .callTimeout(6, TimeUnit.SECONDS).build()
+        private val dav = client?.let { HerrinWebDavSource(HerrinWebDavAccount(c.name, c.endpoint, c.username, c.password), it) }
+        private val smb = if(c.protocol == "smb") {
+            require(base.isNotEmpty()) { "SMB_SHARE_REQUIRED" }
+            SmbAccess(HerrinSmbAccount(c.address(base), c.username, c.password, c.domain, c.encryption))
+        } else null
+
+        suspend fun list(path: String): List<PersonalRemoteFile> = withContext(Dispatchers.IO) {
+            val clean = PersonalStoragePolicy.path(path)
+            require(PersonalStoragePolicy.contains(base, clean))
             val job = currentCoroutineContext()
-            runInterruptible {
-                val account = HerrinSmbAccount(c.address(clean), c.username, c.password, c.domain, c.encryption)
-                SmbAccess(account).use { access ->
-                    val location = account.location
-                    access.share().openDirectory(location.root,
+            try {
+                val source = dav
+                if(source != null) {
+                    source.list(c.address(clean).trimEnd('/') + "/").map { e ->
+                        PersonalRemoteFile(PersonalStoragePolicy.path(URI(e.address).path), e.isCollection, e.size, e.modified)
+                    }.filter { it.path != clean }
+                } else runInterruptible {
+                    val location = SmbLocation.parse(c.address(clean))
+                    require(clean.substringBefore('/') == base.substringBefore('/'))
+                    requireNotNull(smb).share().openDirectory(location.root,
                         EnumSet.of(AccessMask.FILE_LIST_DIRECTORY, AccessMask.FILE_READ_ATTRIBUTES),
                         EnumSet.of(FileAttributes.FILE_ATTRIBUTE_DIRECTORY), SMB2ShareAccess.ALL,
                         SMB2CreateDisposition.FILE_OPEN, EnumSet.of(SMB2CreateOptions.FILE_DIRECTORY_FILE)).use { dir ->
                         val rows = ArrayList<PersonalRemoteFile>()
                         val iterator = dir.iterator()
-                        while (iterator.hasNext()) {
+                        while(iterator.hasNext()) {
                             job.ensureActive()
                             val row = iterator.next()
-                            if (row.fileName in setOf(".", "..")) continue
+                            if(row.fileName in setOf(".", "..")) continue
                             check(rows.size < 10000) { "SMB_DIRECTORY_LIMIT" }
-                            if (row.fileAttributes and FileAttributes.FILE_ATTRIBUTE_REPARSE_POINT.value != 0L) continue
+                            if(row.fileAttributes and FileAttributes.FILE_ATTRIBUTE_REPARSE_POINT.value != 0L) continue
                             val child = location.child(location.root, row.fileName)
                             rows += PersonalRemoteFile(location.share + "/" + child.replace('\\', '/'),
                                 row.fileAttributes and FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value != 0L,
@@ -47,9 +63,17 @@ internal object PersonalRemoteFiles {
                         rows
                     }
                 }
-            }
+            } catch(error: Exception) { job.ensureActive(); throw error }
+        }
+        override fun close() {
+            smb?.close()
+            client?.dispatcher?.cancelAll()
+            client?.connectionPool?.evictAll()
+            client?.dispatcher?.executorService?.shutdown()
         }
     }
+    suspend fun list(c: PersonalConnections.Connection, path: String): List<PersonalRemoteFile> =
+        Session(c, path).use { it.list(path) }
     fun message(error: Exception): String = when (error) {
         is SourceHttpFailure -> when (error.code) {
             401, 403 -> "WebDAV 认证或目录权限失败"
