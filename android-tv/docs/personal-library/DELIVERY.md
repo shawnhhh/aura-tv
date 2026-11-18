@@ -6,7 +6,7 @@ Branch: `codex/herrin-p0-live-playback-20261110`; existing PR #85 remains Draft.
 
 - Removed independent CLOUD routing, native-cloud placeholder tabs, bridge forms and `/cloud`/`cloud/test`. One-time retired cloud preference, encrypted payload and AndroidKeyStore alias cleanup preserves NAS/SMB secrets. TVBox/CatVod/Spider authorization is retained.
 - UUID server connections, independently encrypted server/account records, manual HTTP/HTTPS/SMB form fields, default ports 443/80/445, optional domain/SMB3 encryption. Authority/account changes cannot inherit the previous password. Candidate validation precedes edits. Multiple folders reuse the same connection credentials.
-- Legacy primary DAV, primary SMB and additional DAV settings migrate without deleting originals; disabled additional connections remain disabled.
+- Legacy primary DAV, primary SMB and additional DAV settings migrate without deleting originals; their pending first index runs serially in the background on startup and notifies playback lookup after import; disabled additional connections remain disabled.
 - Folder import/type/enable controls, confirmed removal, parent/child overlap rejection, explicit refresh and cancellation. Deleting configuration never issues remote file deletion.
 - SQLite file identity, relative path, name, size (64 bit), modification marker, extension, category, parsed title/year/season/episode, TMDB identity/confidence, manual override, availability and scan timestamp. No passwords, headers or signed playback URLs in this database.
 - Explicit serial scanner, incremental unchanged-file writes, persistent partial progress, bounded directory traversal. Only a fully successful directory scan marks missing files; failure, cancellation or limits retain old index/history. Restart/refresh re-enumerates and reuses persisted files; it does not persist a network traversal cursor.
@@ -38,7 +38,7 @@ This is an incremental implementation, not full acceptance of all requested stag
 
 ## Changed files
 
-New production modules: `PersonalStoragePolicy.kt`, `PersonalConnections.kt`, `PersonalMediaIndex.kt`, `PersonalRemoteFiles.kt`, `PersonalLibrary.kt`, `PersonalLibraryApi.kt`, `PersonalLibrarySettings.kt`.
-New tests: `PersonalStoragePolicyTest.kt`, `PersonalWebDavTransportTest.kt`, `PersonalMediaIndexTest.kt`, `PersonalConnectionsTest.kt`.
+New production modules: `PersonalStoragePolicy.kt`, `PersonalConnections.kt`, `PersonalMediaIndex.kt`, `PersonalRemoteFiles.kt`, `PersonalLibrary.kt`, `PersonalLibraryApi.kt`, `PersonalLibrarySettings.kt`, `PersonalLibraryStartupImport.kt`.
+New tests: `PersonalStoragePolicyTest.kt`, `PersonalWebDavTransportTest.kt`, `PersonalMediaIndexTest.kt`, `PersonalConnectionsTest.kt`, `PersonalLibraryImportTest.kt`.
 Updated existing settings, preferences/vault, router/discovery, DAV source, playlist labels, LAN server, personal MainActivity integration, phone assets/browser regression and affected routing/TV tests. Updated existing CI callers to serialize P0 jobs and bind new diagnostic APK to source SHA plus SHA-256.
 No entire source files deleted; independent cloud implementation removed from shared files. Root GitHub Pages assets unchanged.

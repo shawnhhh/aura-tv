@@ -142,6 +142,11 @@ internal class PersonalLibrary(context: Context) {
         private val scanLock = Any()
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
         @Volatile private var active: Job? = null
+        suspend fun awaitCurrentScan(): Boolean {
+            val job = active ?: return true
+            job.join()
+            return !job.isCancelled
+        }
         @Volatile var progress: String = "尚未扫描"
             private set
     }

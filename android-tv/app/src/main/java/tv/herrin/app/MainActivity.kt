@@ -570,6 +570,7 @@ private fun Herrin(startup: StartupPresentation) {
     var personalSourceConfigEpoch by remember { zeroIntState() }
     val smbSessions=remember(context,personalSourceConfigEpoch){HerrinSmbSessions()}
     DisposableEffect(smbSessions){onDispose{smbSessions.close()}}
+    PersonalLibraryStartupImport { personalSourceConfigEpoch++ }
 
     val tmdbState=remember { TmdbScreenState() }
     SourceSearchLifecycle(tmdbState)
