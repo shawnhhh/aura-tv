@@ -58,10 +58,10 @@ internal class PersonalLibrary(context: Context) {
         if(!c.enabled || folder == null || !PersonalStoragePolicy.contains(folder.path, path)) return PlaybackResult.Unavailable("连接或媒体目录已停用")
         return if(c.protocol == "smb") runCatching {
             val account = HerrinSmbAccount(c.address(folder.path), c.username, c.password, c.domain, c.encryption)
-            PlaybackResult.Ready(streams.media(account, path.substringAfter('/').replace('/', '\\')))
+            PlaybackResult.Ready(streams.media(account, path.substringAfter('/').replace('/', '\\')).copy(displayTitle = row.getString("name")))
         }.getOrElse { PlaybackResult.Unavailable("SMB 文件不可读") }
         else PlaybackResult.Ready(PlaybackMedia(c.address(path), headers = if(c.username.isBlank()) emptyMap() else
-            mapOf("Authorization" to okhttp3.Credentials.basic(c.username, c.password)), allowHttpRedirects = false))
+            mapOf("Authorization" to okhttp3.Credentials.basic(c.username, c.password)), allowHttpRedirects = false, displayTitle = row.getString("name")))
     }
     fun refresh(folderId: String) = synchronized(scanLock) {
         check(active == null || active?.isCompleted == true) { "SCAN_BUSY" }

@@ -14,7 +14,7 @@ permissions:
   contents: read
 concurrency:
   group: p0-playback-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' || github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110' || github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' || github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' }}
 jobs:
   debug:
     uses: ./.github/workflows/android-debug.yml
