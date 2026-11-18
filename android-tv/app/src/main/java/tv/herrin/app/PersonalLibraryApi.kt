@@ -16,7 +16,7 @@ internal class PersonalLibraryApi(context: Context) {
                 // Validate candidate before committing; a failed edit preserves the existing connection.
                 val protocol = input.getString("protocol")
                 val old = id.takeIf { it.isNotBlank() }?.let { library.connections.get(it) }
-                val host = input.getString("host").trim()
+                val host = PersonalStoragePolicy.host(input.getString("host"))
                 val port = input.getInt("port")
                 PersonalStoragePolicy.endpoint(protocol, host, port)
                 val same = old?.takeIf { it.protocol == protocol && it.host.equals(host, true) && it.port == port && it.username == input.optString("username") && it.domain == input.optString("domain") }

@@ -9,11 +9,16 @@ internal object PersonalStoragePolicy {
     private val yearPattern = Regex("(?<!\\d)(?:19|20)\\d{2}(?!\\d)")
     val mediaTypes = setOf("auto", "movie", "tv", "anime", "video")
     val extensions = setOf("mkv", "mp4", "ts", "m2ts", "mov", "m4v", "webm", "avi")
+    fun host(raw: String): String {
+        val value = raw.trim().removeSurrounding("[", "]")
+        require(value.isNotBlank() && value.length <= 253 && value.none { it.isWhitespace() || it in "/\\@?#" })
+        return if(':' in value) value.lowercase() else java.net.IDN.toASCII(value, java.net.IDN.USE_STD3_ASCII_RULES).lowercase()
+    }
     fun endpoint(protocol: String, host: String, port: Int): String {
         require(protocol in setOf("https", "http", "smb"))
         require(host.isNotBlank() && host.length <= 253 && host.none { it.isWhitespace() || it in "/\\@?#" })
         require(port in 1..65535)
-        return URI(protocol, null, host, port, "/", null, null).toASCIIString()
+        return URI(protocol, null, PersonalStoragePolicy.host(host), port, "/", null, null).toASCIIString()
     }
     fun sameOrigin(a: URI, b: URI): Boolean {
         fun port(u: URI) = if(u.port >= 0) u.port else when(u.scheme?.lowercase()) { "https" -> 443; "http" -> 80; else -> -1 }

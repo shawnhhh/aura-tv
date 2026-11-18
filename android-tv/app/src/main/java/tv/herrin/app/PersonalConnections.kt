@@ -13,7 +13,7 @@ internal class PersonalConnections(private val context: Context) {
         val port: Int, val username: String, val password: String, val domain: String,
         val encryption: Boolean, val enabled: Boolean) {
         val endpoint get() = PersonalStoragePolicy.endpoint(protocol, host, port)
-        fun address(path: String) = URI(protocol, null, host, port, "/" + PersonalStoragePolicy.path(path), null, null).toASCIIString()
+        fun address(path: String) = URI(protocol, null, PersonalStoragePolicy.host(host), port, "/" + PersonalStoragePolicy.path(path), null, null).toASCIIString()
         override fun toString() = "Personal storage ($id)"
         fun publicJson() = JSONObject().put("id", id).put("name", name).put("protocol", protocol)
             .put("host", host).put("port", port).put("username", username).put("domain", domain)
@@ -35,7 +35,7 @@ internal class PersonalConnections(private val context: Context) {
         val id = old?.id ?: UUID.randomUUID().toString()
         require(old != null || ids().size < 32)
         val protocol = input.getString("protocol")
-        val host = input.getString("host").trim()
+        val host = PersonalStoragePolicy.host(input.getString("host"))
         val port = input.optInt("port", if (protocol == "https") 443 else if (protocol == "http") 80 else 445)
         PersonalStoragePolicy.endpoint(protocol, host, port)
         val name = input.getString("name").trim()

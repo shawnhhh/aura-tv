@@ -5,6 +5,7 @@ import org.junit.Test
 
 class PersonalStoragePolicyTest {
     @Test fun manualHttpHttpsAndSmbAuthoritiesHaveExplicitPortsAndNoCredentials() {
+        assertEquals("https://xn--bcher-kva.example:443/", PersonalStoragePolicy.endpoint("https", "bücher.example", 443))
         assertEquals("https://nas.example:443/", PersonalStoragePolicy.endpoint("https", "nas.example", 443))
         assertEquals("http://192.168.1.20:8080/", PersonalStoragePolicy.endpoint("http", "192.168.1.20", 8080))
         assertEquals("smb://nas.example:445/", PersonalStoragePolicy.endpoint("smb", "nas.example", 445))
