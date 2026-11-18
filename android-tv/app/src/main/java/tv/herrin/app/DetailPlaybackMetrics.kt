@@ -21,6 +21,6 @@ internal class DetailPlaybackTimeline(private val clock: () -> Long, private val
 
 internal object DetailPlaybackMetrics {
     val timeline = DetailPlaybackTimeline(android.os.SystemClock::elapsedRealtime) { code, ms ->
-        HerrinPlaybackDiagnosticJournal.record("LOOKUP", code, "MS=${ms.coerceAtMost(99999)}")
+        HerrinPlaybackDiagnosticJournal.record("LOOKUP", code, "MS=${ms}")
     }
 }

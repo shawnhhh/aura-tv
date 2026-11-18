@@ -85,7 +85,8 @@ fun AuthorizedPlaybackPanel(
     /** Instrumentation-only diagnostics; never shown in the consumer player. */
     testDiagnostics: Boolean = false,
     /** Budget belongs to the selected episode/line, including refreshed media URLs. */
-    recoverySession: FongMiPlaybackRecovery.Session = remember(media) { FongMiPlaybackRecovery.Session() }
+    recoverySession: FongMiPlaybackRecovery.Session = remember(media) { FongMiPlaybackRecovery.Session() },
+    externalPanelOpen: Boolean = false
 ) {
     // A media replacement owns a fresh composition, including callbacks,
     // effects, focus nodes and native surfaces. No outgoing resource can be
@@ -94,7 +95,7 @@ fun AuthorizedPlaybackPanel(
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
             onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onSourceExhausted, onBack,
-            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode)
+            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode, externalPanelOpen)
     }
 }
 
@@ -118,7 +119,8 @@ private fun AuthorizedPlaybackSession(
     testDiagnostics: Boolean,
     recoverySession: FongMiPlaybackRecovery.Session,
     onNextEpisode: (() -> Unit)?,
-    onPreviousEpisode: (() -> Unit)?
+    onPreviousEpisode: (() -> Unit)?,
+    externalPanelOpen: Boolean
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -127,6 +129,7 @@ private fun AuthorizedPlaybackSession(
     var errorMessage by remember(media) { mutableStateOf<String?>(null) }
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
     var uiEpoch by remember(media) { mutableIntStateOf(0) }
+    var frameSinceSelection by remember(media) { mutableStateOf(false) }
     var activeVariant by remember(media) { mutableIntStateOf(0) }
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
@@ -154,8 +157,8 @@ private fun AuthorizedPlaybackSession(
     val remoteHoldSeek = remember(media) { RemoteHoldSeek() }
     var seekAcceleration by remember(media) { mutableIntStateOf(1) }
     fun resetHoldSeek() { remoteHoldSeek.reset(); seekAcceleration = 1 }
-    LaunchedEffect(kernelPanelOpen, playbackState) {
-        if (kernelPanelOpen || playbackState == Player.STATE_ENDED) resetHoldSeek()
+    LaunchedEffect(kernelPanelOpen, externalPanelOpen, playbackState) {
+        if (kernelPanelOpen || externalPanelOpen || playbackState == Player.STATE_ENDED) resetHoldSeek()
     }
     // Keep updates within one media session, while retaining the old session's
     // callbacks until its DisposableEffect has persisted and released its player.
@@ -196,7 +199,7 @@ private fun AuthorizedPlaybackSession(
                     uiEpoch++
                 }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
-                override fun onRenderedFirstFrame() { DetailPlaybackMetrics.timeline.firstFrame(); uiEpoch++ }
+                override fun onRenderedFirstFrame() { frameSinceSelection = true; DetailPlaybackMetrics.timeline.firstFrame(); uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
@@ -417,11 +420,11 @@ private fun AuthorizedPlaybackSession(
             PlayerRemoteFocusPolicy.Destination.NONE -> Unit
         }
     }
-    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification, kernelPanelOpen, kernelRemoteHeld) {
+    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification, kernelPanelOpen, kernelRemoteHeld, externalPanelOpen) {
         // A focused button must not pin the overlay forever. Any remote key restarts
         // this timer; while paused the controls remain available for resuming.
         if (!isLive && controlsVisible && player.isPlaying &&
-            playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && !kernelRemoteHeld && errorMessage == null) {
+            playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && !externalPanelOpen && !kernelRemoteHeld && errorMessage == null) {
             // Compact controls clear quickly so they do not obstruct film.
             // An explicitly expanded TV settings sheet gets more time.
             delay(if (testDiagnostics && advancedControlsVisible) 8_000 else 4_000)
@@ -429,6 +432,9 @@ private fun AuthorizedPlaybackSession(
             if (!testDiagnostics) advancedControlsVisible = false
             playerRootFocus.requestFocus()
         }
+    }
+    LaunchedEffect(externalPanelOpen) {
+        if (!externalPanelOpen && !isLive) { controlsVisible = true; controlsInteractionEpoch++; focusControlsEpoch++ }
     }
     val latestReportProgress by rememberUpdatedState({ reportProgress() })
     DisposableEffect(if (playback.whole) playback else player, lifecycle) {
@@ -732,7 +738,7 @@ private fun AuthorizedPlaybackSession(
             playback, media.kernelPlayback?.title ?: media.displayTitle, shownPosition, shownDuration,
             initialControl, moreControl, { onBack() }, ::applyRemoteSeek,
             { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() }, onLineSelection, onEpisodeSelection,
-            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, seekAcceleration = seekAcceleration)
+            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, seekAcceleration = seekAcceleration, specsReady = if (playback.whole) kernelFirstFrame else frameSinceSelection)
         if (testDiagnostics && !playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(

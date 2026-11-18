@@ -43,7 +43,7 @@ object PlaybackTransport {
                         val language = format.language?.takeUnless { it == "und" || it.isBlank() }
                         Option(groupIndex, trackIndex,
                             format.label?.takeIf { it.isNotBlank() }
-                                ?: language ?: "音轨 " + (trackIndex + 1),
+                                ?: language ?: (if (trackType == C.TRACK_TYPE_TEXT) "字幕 " else "音轨 ") + (trackIndex + 1),
                             group.isTrackSelected(trackIndex))
                     }
                 }

@@ -80,4 +80,22 @@ class DiscoveryLayoutPrefetchTest {
         assertFalse(job.isCompleted)
         release.complete(Unit); job.join()
     }
+
+    @Test fun cmsDetailsRemainAvailableWhileSpiderLaneIsPaused() = runBlocking {
+        val service = HerrinSourceDiscovery().apply { spiderPaused = true }
+        val cmsReady = CompletableDeferred<Unit>()
+        var spiderCalls = 0
+        val cms = HerrinSourceDiscovery.Node("cms", "CMS", HerrinSourceType.TVBOX_CMS,
+            { listOf(offer("a")) }, { detail(it, 1) })
+        val spider = HerrinSourceDiscovery.Node("spider", "Spider", HerrinSourceType.TVBOX_SPIDER,
+            { spiderCalls++; emptyList() }, { null })
+        val job = launch { service.search("r", listOf(cms, spider), null, Mutex()) {
+            if (it.routes.isNotEmpty()) cmsReady.complete(Unit)
+        } }
+        withTimeout(1000) { cmsReady.await() }
+        assertEquals(0, spiderCalls)
+        service.spiderPaused = false
+        withTimeout(1000) { job.join() }
+        assertEquals(1, spiderCalls)
+    }
 }

@@ -12,7 +12,7 @@ internal object HerrinPlaybackDiagnosticJournal {
     private val events = ArrayDeque<String>(256)
     private val stageCodes = setOf("LOOKUP", "SOURCE", "SPIDER", "PROXY", "MEDIA3", "RECOVERY", "CONFIG")
     private val eventCode = Regex("[A-Z][A-Z0-9_]{1,63}")
-    private val detailCode = Regex("[A-Z][A-Z0-9_]{1,31}(?:=[0-9]{1,5})?")
+    private val detailCode = Regex("[A-Z][A-Z0-9_]{1,31}(?:=[0-9]{1,12})?")
     @Synchronized fun record(stage: String, event: String, detail: String = "", session: String? = PlaybackDiagnosticSession.id()) {
         if (stage !in stageCodes || !eventCode.matches(event)) return
         val safe = detail.takeIf { it.isNotBlank() && detailCode.matches(it) }

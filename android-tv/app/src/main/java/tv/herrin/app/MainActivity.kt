@@ -1363,6 +1363,13 @@ private fun Herrin(startup: StartupPresentation) {
             return@LaunchedEffect
         }
         val detailed = loaded.film
+        val requestedOriginalLine = tmdbState.discoveryLine
+        if (requestedOriginalLine != null && detailed.playbackEpisodes.none { ep -> ep.lines.any { it.id == requestedOriginalLine } }) {
+            tmdbState.discoveryLine = null
+            tmdbState.sourceDiscoveries[filmId]?.spiderPaused = false
+            tmdbState.tmdbSourceStatus = "该线路已变化，请重新选择片源"
+            return@LaunchedEffect
+        }
         val recovering = tmdbState.discoveryRecovery?.takeIf { it.film == filmId }
         val sameEpisode = recovering?.let { request -> detailed.playbackEpisodes.asSequence().flatMap { ep ->
             ep.lines.asSequence().filter { request.coordinate.accepts(ep, it) }.map { ep.number to it.id }
@@ -1414,7 +1421,7 @@ private fun Herrin(startup: StartupPresentation) {
             tmdbState.automaticResume = HerrinAutomaticPlayback.Resume(filmId, episode, line, recovering.position)
             tmdbState.discoveryRecovery = null
         }
-        tmdbState.sourceDiscoveries[filmId]?.spiderPaused = false
+        tmdbState.sourceDiscoveries[filmId]?.spiderPaused = screen == "play-intent"
         HerrinPlaybackDiagnosticJournal.record("SOURCE", "DISCOVERY_DETAIL_READY", "EPISODES=${detailed.playbackEpisodes.size}")
     }
     // A TMDB detail starts a REAL per-title resource lookup. This never uses
@@ -2668,6 +2675,7 @@ private fun Herrin(startup: StartupPresentation) {
     }
     OneTapDeadline(screen, film.id) { screen = "detail" }
     fun details(f: Film) {
+        tmdbState.directPlayFilm = null
         DetailPlaybackMetrics.timeline.enter()
         if (screen == "browse") tmdbBrowseReturn = null
         tmdbState.resumeSourceFilm = null
@@ -2742,6 +2750,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.discoveryRecovery = null
         tmdbState.rejectedDiscoveryHits.clear()
         openMovie(item)
+        tmdbState.directPlayFilm = item.id
         pendingHistoryFilm = item.id
         tmdbState.resumeSourceFilm = item.id
         screen = "play-intent"
@@ -2758,6 +2767,7 @@ private fun Herrin(startup: StartupPresentation) {
         line = entry.preferredLine(detailSeasonLines[seasonNumber]).id
     }
     fun playSeasonEpisode(entry: SeasonEpisode, preferredLineId: String? = detailSeasonLines[entry.season]) {
+        DetailPlaybackMetrics.timeline.click()
         val chosen = entry.preferredLine(preferredLineId)
         val request = SeasonPlayback.target(film, entry, chosen)
         detailSelectedSeason = entry.season
@@ -2783,6 +2793,7 @@ private fun Herrin(startup: StartupPresentation) {
         // Line selection does not initiate playback.
     }
     fun playGroupSource(option: GroupPlaybackRef) {
+        DetailPlaybackMetrics.timeline.click()
         val request = option.request()
         // The player and every licensed CMS / Spider resolver read the selected
         // original source Film. A group key is NEVER a playable Film ID.
@@ -3541,7 +3552,7 @@ private fun Herrin(startup: StartupPresentation) {
                             onFocus = { item, tag -> filmId = item.id; heroSelections[category] = item.id; focusId = tag },
                             onOpen = { item, tag ->
                                 val browseOrigin = PlaybackReturnContext("browse", category, tag, item.id)
-                                val recent = independentPage == TmdbBrowsePage.HOME && recentIndexFilms.any { it.id == item.id }
+                                val recent = independentPage == TmdbBrowsePage.HOME && tag == "card-${item.id}" && railFilms.any { it.id == item.id }
                                 if (recent) playIntent(item) else openMovie(item)
                                 tmdbBrowseReturn = browseOrigin
                                 tmdbState.resumeSourceFilm = item.id.takeIf { recent }
@@ -3826,7 +3837,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 }
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
                                 onFocus = { filmId = item.id; heroSelections[category] = item.id; focusId = "card-${displayKey(item)}" }, onClick = {
-                                    val recent = !isSearch && sourceConfigured && category in setOf("首页", "我的") && recentIndexFilms.any { it.id == item.id }
+                                    val recent = !isSearch && category in setOf("首页", "我的") && (recentIndexFilms + myRecent).any { it.id == item.id }
                                     if (recent) playIntent(item) else openMovie(item)
                                     tmdbState.resumeSourceFilm = item.id.takeIf { recent }
                                 },
@@ -4092,6 +4103,7 @@ private fun Herrin(startup: StartupPresentation) {
                         startPositionMs = tmdbState.automaticResume?.takeIf { it.film == film.id &&
                             it.episode == historyEpisode && it.line == historyLine }?.position
                             ?: previous?.positionMs ?: 0L,
+                        externalPanelOpen = playbackPicker != null,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.category != "电影" && film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "episodes" }) else null,
                         onRefreshSource = if (spiderActive || cmsJsonParser != null || cmsBrowserParser != null) ({ playerRetryEpoch++ }) else null,
@@ -4131,6 +4143,14 @@ private fun Herrin(startup: StartupPresentation) {
                         (!spiderActive && !cmsWaiting && !cmsParseWaiting && !personalWaiting))
                     val offlineDemonstration = !sourceConfigured && !spiderActive &&
                         film.playbackEpisodes.isEmpty()
+                    OneTapFailureFallback(tmdbState.directPlayFilm == film.id && playbackUnavailable,
+                        "$filmId|$episode|$line|$playerRetryEpoch") {
+                        val reason = (parsedCms as? PlaybackResult.Unavailable)?.reason
+                            ?: (currentSpiderResult as? PlaybackResult.Unavailable)?.reason
+                            ?: (licensed as? PlaybackResult.Unavailable)?.reason.orEmpty()
+                        if (!recoverPlayback(HerrinAutomaticPlayback.resolutionFailure(reason),
+                                tmdbState.automaticResume?.position ?: previous?.positionMs ?: 0L)) screen = "detail"
+                    }
                     PlayerStartupSurface(
                         loading = !playbackUnavailable,
                         offlineDemonstration = offlineDemonstration,
@@ -5131,6 +5151,7 @@ private fun Herrin(startup: StartupPresentation) {
                                                 }, reduced = reduceMotion,
                                                 selected = episode == n) {
                                                 episode = n
+                                                DetailPlaybackMetrics.timeline.click()
                                                 screen = "player"
                                             }
                                         }
@@ -5150,6 +5171,7 @@ private fun Herrin(startup: StartupPresentation) {
                                                         }
                                                     },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
+                                                DetailPlaybackMetrics.timeline.click()
                                                 episode = entry.number
                                                 line = entry.lines.firstOrNull { it.id == line }?.id
                                                     ?: entry.lines.firstOrNull()?.id ?: line
@@ -5371,7 +5393,7 @@ internal fun SeasonBrowser(
         }
         Text("第${active.number}季 · ${active.episodes.size} 集可选",
             color = Color(0xFFCAD7E6), fontSize = 16.sp)
-        LazyRow(Modifier.testTag("season-cards"), state = rowState,
+        LazyRow(Modifier.testTag("season-cards").drawWithContent { drawContent(); DetailPlaybackMetrics.timeline.episodesDrawn() }, state = rowState,
             contentPadding = PaddingValues(horizontal = 9.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             itemsIndexed(active.episodes,

@@ -25,3 +25,9 @@ internal fun OneTapLoading(onBack: () -> Unit) {
         CircularProgressIndicator()
     }
 }
+
+@Composable
+internal fun OneTapFailureFallback(failed: Boolean, attempt: String, onFailure: () -> Unit) {
+    val failure by rememberUpdatedState(onFailure)
+    LaunchedEffect(failed, attempt) { if (failed) failure() }
+}

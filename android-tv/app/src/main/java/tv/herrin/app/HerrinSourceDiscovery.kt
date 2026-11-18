@@ -50,12 +50,12 @@ internal class HerrinSourceDiscovery {
     private val version = java.util.concurrent.atomic.AtomicLong()
     private val runs = Mutex()
     private val mutations = Mutex()
-    private var snapshot = Snapshot("", 0)
+    @Volatile private var snapshot = Snapshot("", 0)
 
     /** Retain each provider's actual episode/line layout without caching media authorization.
      * Selecting it again always reacquires details through that provider's callback. */
-    suspend fun retainEpisodes(revision: String, key: String, detailed: Film): Snapshot? = mutations.withLock {
-        if(snapshot.revision != revision) return@withLock null
+    suspend fun retainEpisodes(revision: String, key: String, detailed: Film, ticket: Long? = null): Snapshot? = mutations.withLock {
+        if(snapshot.revision != revision || ticket != null && version.get() != ticket) return@withLock null
         val hit=snapshot.hits.firstOrNull{it.key==key} ?:return@withLock null
         val expected=hit.movie.film
         require(expected.cmsVodId == detailed.cmsVodId && expected.spiderVodId == detailed.spiderVodId)
@@ -83,7 +83,8 @@ internal class HerrinSourceDiscovery {
         else snapshot = snapshot.copy(nodes = unique.size,
             outcomes = snapshot.outcomes.filter { it.key in known && it.value != Outcome.SEARCHING },
             hits = snapshot.hits.filter { it.node.id in known },
-            routes = snapshot.routes.filter { it.nodeId in known })
+            routes = snapshot.routes.filter { it.nodeId in known },
+            detailed = snapshot.detailed.intersect(snapshot.hits.filter { it.node.id in known }.map { it.key }.toSet()))
         snapshot = snapshot.copy(expanding = expand != null, warehouseFailures = 0)
         publish(snapshot)
         val cmsSlots = Semaphore(4)
@@ -99,7 +100,7 @@ internal class HerrinSourceDiscovery {
         }
         coroutineScope {
             val owner = this
-            val queued = hashSetOf<String>()
+            val queued = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
             fun prefetch(node: Node) {
                 snapshot.hits.filter { it.node.id == node.id && it.relevance == SourceRelevance.CONFIRMED &&
                     it.key !in snapshot.detailed }.forEach { hit ->
@@ -109,7 +110,8 @@ internal class HerrinSourceDiscovery {
                             val started = System.nanoTime()
                             try {
                                 val detail = withTimeoutOrNull(node.timeoutMs) { node.details(hit.movie) }
-                                if (detail != null) retainEpisodes(revision, hit.key, detail.film)?.let { ready ->
+                                coroutineContext.ensureActive()
+                                if (detail != null) retainEpisodes(revision, hit.key, detail.film, ticket)?.let { ready ->
                                     mutations.withLock {
                                         if (snapshot.revision == revision && version.get() == ticket) publish(snapshot)
                                     }

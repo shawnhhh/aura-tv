@@ -13,6 +13,7 @@ internal class TmdbScreenState {
     val discoveredSources = mutableStateMapOf<String, HerrinSourceDiscovery.Snapshot>()
     val discoverySpiderLock = kotlinx.coroutines.sync.Mutex()
     var discoverySelection by mutableStateOf<Pair<String, String>?>(null)
+    var directPlayFilm: String? = null
     var discoveryRecovery: HerrinAutomaticPlayback.Search? = null
     val rejectedDiscoveryHits = mutableSetOf<String>()
     var selectedDiscoveryHit: String? = null

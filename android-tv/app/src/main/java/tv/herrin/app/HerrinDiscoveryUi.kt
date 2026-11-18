@@ -46,7 +46,7 @@ internal fun LazyListScope.herrinDiscoveryItems(snapshot: HerrinSourceDiscovery.
             }
             val routes = snapshot.routes.filter { it.nodeId == current }
             LazyRow(modifier = Modifier.drawWithContent { drawContent(); if (routes.isNotEmpty()) DetailPlaybackMetrics.timeline.linesDrawn() }, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(routes.withIndex().toList(), key = { it.value.hitKey + ":" + it.value.lineId }) { indexed ->
+                items(routes.withIndex().toList(), key = { "${it.value.hitKey.length}:${it.value.hitKey}|${it.value.lineId.length}:${it.value.lineId}" }) { indexed ->
                     val route = indexed.value
                     val hit = snapshot.hits.firstOrNull { it.key == route.hitKey }
                     if (hit != null) TvButton("线路 ${indexed.index + 1}",

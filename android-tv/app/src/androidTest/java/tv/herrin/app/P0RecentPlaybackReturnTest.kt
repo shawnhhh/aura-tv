@@ -19,6 +19,7 @@ class P0RecentPlaybackReturnTest {
         override fun before() {
             val inst=InstrumentationRegistry.getInstrumentation()
             val c=inst.targetContext
+            HerrinPlaybackDiagnosticJournal.clear()
             c.getSharedPreferences("herrin",0).edit().clear().commit()
             c.getSharedPreferences("herrin-watch-history",0).edit().clear().commit()
             java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
@@ -64,6 +65,8 @@ class P0RecentPlaybackReturnTest {
         compose.onNodeWithTag(card).performClick()
         compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("player-root-focus").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithTag("film-detail-list").assertDoesNotExist()
+        compose.waitUntil(30000) { HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_FIRST_FRAME") }
+        assertTrue(HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_MEDIA_READY"))
         assertTrue("Current NAS must be searched/probed rather than replaying the retired URL",server.requestCount>=2)
         val inst=InstrumentationRegistry.getInstrumentation()
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
