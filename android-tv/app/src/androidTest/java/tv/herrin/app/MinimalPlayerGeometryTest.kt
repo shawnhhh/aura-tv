@@ -56,4 +56,35 @@ class MinimalPlayerGeometryTest {
         compose.onNodeWithTag("playback-select-episode-7").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(7 to "s1", selected) }
     }
+
+    @Test fun openSubtitlePanelKeepsVideoRunningAndTransportHidesAfterClosing() {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        val bytes = inst.context.assets.open("playback-diagnostics/baseline-72.mp4").use { it.readBytes() }
+        MockWebServer().use { server ->
+            server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest) = MockResponse()
+                    .setHeader("Content-Type", "video/mp4").setBody(okio.Buffer().write(bytes))
+            }
+            server.start()
+            val media = PlaybackMedia(server.url("/baseline.mp4").toString(), displayTitle = "Original controlled fixture")
+            val player = java.util.concurrent.atomic.AtomicReference<androidx.media3.exoplayer.ExoPlayer>()
+            compose.setContent { AuthorizedPlaybackPanel(media, onPlayer = { player.set(it) }, onBack = {}) }
+            var frames = 0
+            compose.waitUntil(15000) {
+                compose.runOnIdle { frames = player.get()?.videoDecoderCounters?.renderedOutputBufferCount ?: 0 }
+                frames > 0
+            }
+            inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+            compose.onNodeWithTag("transport-subtitle").performClick()
+            val before = frames
+            val opened = android.os.SystemClock.elapsedRealtime()
+            compose.waitUntil(8000) { android.os.SystemClock.elapsedRealtime() - opened >= 5000 }
+            compose.onNodeWithText("关闭字幕").assertIsDisplayed()
+            compose.runOnIdle { assertTrue((player.get().videoDecoderCounters?.renderedOutputBufferCount ?: 0) > before) }
+            compose.onNodeWithText("关闭字幕").performClick()
+            compose.waitUntil(8000) { runCatching { compose.onNodeWithTag("transport-toggle").assertDoesNotExist() }.isSuccess }
+            inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+            compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess }
+        }
+    }
 }

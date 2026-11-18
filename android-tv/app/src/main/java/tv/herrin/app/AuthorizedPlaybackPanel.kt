@@ -421,11 +421,11 @@ private fun AuthorizedPlaybackSession(
             PlayerRemoteFocusPolicy.Destination.NONE -> Unit
         }
     }
-    LaunchedEffect(player, controlsVisible, playbackState, controlsInteractionEpoch, uiEpoch, showVerification, kernelPanelOpen, kernelRemoteHeld, externalPanelOpen) {
+    LaunchedEffect(player, controlsVisible, player.playbackState, controlsInteractionEpoch, player.isPlaying, errorMessage, showVerification, kernelPanelOpen, kernelRemoteHeld, externalPanelOpen) {
         // A focused button must not pin the overlay forever. Any remote key restarts
         // this timer; while paused the controls remain available for resuming.
         if (!isLive && controlsVisible && player.isPlaying &&
-            playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && !externalPanelOpen && !kernelRemoteHeld && errorMessage == null) {
+            player.playbackState == Player.STATE_READY && !showVerification && !kernelPanelOpen && !externalPanelOpen && !kernelRemoteHeld && errorMessage == null) {
             // Compact controls clear quickly so they do not obstruct film.
             // An explicitly expanded TV settings sheet gets more time.
             delay(if (testDiagnostics && advancedControlsVisible) 8_000 else 4_000)

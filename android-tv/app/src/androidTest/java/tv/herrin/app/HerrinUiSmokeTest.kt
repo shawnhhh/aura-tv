@@ -625,7 +625,9 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithText("第 6 集").assertExists()
         compose.onNodeWithText("集数").assertIsDisplayed()
         capture("detail")
-        compose.onNodeWithTag("detail-play-cta").performScrollTo().performClick()
+        compose.onNodeWithTag("detail-play-cta").performScrollTo()
+        focus("detail-play-cta")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("播放演示").assertExists()
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithText("集数").assertExists()
@@ -715,6 +717,7 @@ http://example.org/live/channel.m3u8
                 compose.waitUntil(10000) { details.count { it == "$source:local-$source" } >= 2 }
             }
             assertTrue(details.all { it == "a:local-a" || it == "b:local-b" })
+            assertTrue("Prefetch and explicit selection must remain bounded", details.size <= 8)
             assertEquals(0, mediaCalls.get())
             compose.onNodeWithTag("source-region").assertIsDisplayed()
             capture("p0-real-cms-protocol-source-groups-before-media")
