@@ -42,7 +42,7 @@ class PersonalLibraryImportTest {
                 api.handle("/personal/folder", JSONObject().put("connection", connection).put("path", "media").put("type", "movie"))
                 val folder = library.index.folders(connection).single()
                 suspend fun awaitState(state: String) {
-                    withTimeout(10000) { while(library.index.folders(connection).single().state != state) delay(25) }
+                    withTimeout(10000) { while(library.index.folders(connection).single { it.id == folder.id }.state != state) delay(25) }
                     library.cancelAndWait()
                 }
                 awaitState("complete")
@@ -66,10 +66,15 @@ class PersonalLibraryImportTest {
                     assertFalse(media.uri.contains("fixture-secret")); assertFalse(media.allowHttpRedirects)
                     assertTrue(HerrinPersonalMediaProbe().canRead(media))
                 }
+                assertEquals(2, library.index.folders(connection).size)
+                val otherFolder = library.index.folders(connection).single { it.path == "Other" }
                 offline.set(true); library.refresh(folder.id); awaitState("offline")
                 assertEquals(2, library.index.media(folder.id).length())
+                assertEquals(1, library.index.media(otherFolder.id).length())
                 offline.set(false); version.set(2); library.refresh(folder.id); awaitState("complete")
                 assertEquals(1, library.index.media(folder.id).length())
+                assertEquals(1, library.index.media(otherFolder.id).length())
+                assertEquals(123, library.index.media(otherFolder.id).getJSONObject(0).getInt("tmdb"))
                 assertFalse(library.index.media(folder.id).toString().contains("fixture-secret"))
             } finally {
                 library.cancelAndWait()
