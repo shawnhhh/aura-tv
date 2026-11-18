@@ -4950,6 +4950,11 @@ private fun Herrin(startup: StartupPresentation) {
                                         tmdbState.discoverySelectionEpoch++
                                     }, pause = { tmdbState.sourceSearchJob?.cancel() }, resume = {
                                         tmdbState.discoverySelection = null
+                                        if (!discovery.hasRemaining && discovery.routes.isEmpty()) {
+                                            tmdbState.sourceDiscoveries.remove(film.id)
+                                            tmdbState.discoveredSources.remove(film.id)
+                                            tmdbState.autoLayoutSelected.remove(film.id + discovery.revision)
+                                        }
                                         tmdbState.tmdbExtendedRequest = film.id
                                         tmdbState.tmdbLookupEpoch++
                                     }, selectedNode = tmdbState.selectedDiscoveryNode[film.id],
@@ -4996,34 +5001,7 @@ private fun Herrin(startup: StartupPresentation) {
                             } }
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                if (HerrinPlaybackEntry.unavailableTmdb(film)) {
-                                    Text("正在检索或尚未找到真实片源",
-                                        modifier = Modifier.testTag("tmdb-playback-unavailable"),
-                                        color = Color(0xFFD9B78A), fontSize = 14.sp)
-                                    TvButton(if(tmdbState.discoveredSources[film.id]?.hasRemaining == true)"继续搜索剩余节点" else "重新检索片源",
-                                        modifier = Modifier.testTag("tmdb-source-retry"),
-                                        reduced = reduceMotion) {
-                                        val continuing=tmdbState.discoveredSources[film.id]?.hasRemaining == true
-                                        tmdbState.tmdbExtendedRequest=film.id.takeIf{continuing}
-                                        if(!continuing) {
-                                            tmdbState.sourceDiscoveries.remove(film.id)
-                                            tmdbState.discoveredSources.remove(film.id)
-                                            tmdbState.tmdbSearchPlans.reset(film.id)
-                                            tmdbState.tmdbSpiderBatchOffsets.remove(film.id)
-                                            tmdbState.tmdbSpiderBatchCompleted.remove(film.id)
-                                        }
-                                        tmdbState.tmdbFallbackIndex.reset(film.id)
-                                        tmdbState.tmdbPlaybackRoutes.forget(film.id)
-                                        tmdbState.tmdbResolved[film.id]?.let { current ->
-                                            tmdbState.tmdbResolved[film.id] = current.copy(
-                                                playbackEpisodes = emptyList(),
-                                                cmsVodId = null, spiderVodId = null)
-                                        }
-                                        tmdbState.tmdbPersonalPlayback.remove(film.id)
-                                        tmdbState.tmdbSourceStatus = "正在重新检索 SMB／WebDAV／TVBox…"
-                                        tmdbState.tmdbLookupEpoch++
-                                    }
-                                } else if (providerFilms == null || film.id.startsWith("tmdb-")) TvButton(DetailPlayLabel.text(
+                                if (!HerrinPlaybackEntry.unavailableTmdb(film) && (providerFilms == null || film.id.startsWith("tmdb-"))) TvButton(DetailPlayLabel.text(
                                     season = groupResume?.first?.season ?: seasonResume?.entry?.season ?: detailSeason?.number,
                                     episode = groupResume?.first?.number ?: seasonResume?.entry?.number ?:
                                         (detailSeasonSource ?: detailSeasonEntries.firstOrNull())?.number,
