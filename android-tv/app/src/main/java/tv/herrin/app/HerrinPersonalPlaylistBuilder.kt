@@ -14,17 +14,27 @@ internal object HerrinPersonalPlaylistBuilder {
     fun create(
         options: List<HerrinSourceMovie>,
         resolve: (HerrinSourceMovie) -> PlaybackResult
-    ): HerrinPersonalPlaylist {
+    ): HerrinPersonalPlaylist = build(options, resolve, stable = false)
+
+    /** Discovery caches must identify the real file, independently of sorting or signed URLs. */
+    fun createStable(options: List<HerrinSourceMovie>, resolve: (HerrinSourceMovie) -> PlaybackResult): HerrinPersonalPlaylist =
+        build(options, resolve, stable = true)
+
+    private fun build(options: List<HerrinSourceMovie>, resolve: (HerrinSourceMovie) -> PlaybackResult,
+        stable: Boolean): HerrinPersonalPlaylist {
         val valid = options.take(160).mapNotNull { item ->
             val playable = resolve(item) as? PlaybackResult.Ready ?: return@mapNotNull null
             item to playable.media
-        }.distinctBy { it.second.uri }.take(150)
+        }.distinctBy { if (stable) "${it.first.sourceId.length}:${it.first.sourceId}|${it.first.film.id}" else it.second.uri }.take(150)
         if (valid.isEmpty()) return HerrinPersonalPlaylist(emptyList(), emptyMap())
         val tv = valid.first().first.mediaType == "tv"
         val groups = if (tv) valid.groupBy {
-            (it.first.season ?: 1) to (it.first.episode ?: 1)
-        }.toSortedMap(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
-        else mapOf((1 to 1) to valid)
+            val season = it.first.season ?: if (stable) 0 else 1
+            val number = it.first.episode ?: if (stable) 0 else 1
+            Triple(season, number, if (stable && (season == 0 || number == 0))
+                it.first.sourceId + ":" + it.first.film.id else "")
+        }.toSortedMap(compareBy<Triple<Int, Int, String>> { it.first }.thenBy { it.second }.thenBy { it.third })
+        else mapOf(Triple(1, 1, "") to valid)
         val urls = linkedMapOf<String, PlaybackMedia>()
         // Alternate video files are safe for automatic retry only when they
         // belong to the same authorized source and exact HTTP origin/headers.
@@ -40,7 +50,9 @@ internal object HerrinPersonalPlaylistBuilder {
         val episodes = groups.entries.take(150).map { (coordinate, entries) ->
             val ordinal = ++count
             val lines = entries.take(12).mapIndexed { index, (offer, media) ->
-                val id = "personal-$ordinal-$index"
+                val id = if (stable) "personal-file-" + SourceHealthIndex.digest(
+                    "${offer.sourceId.length}:${offer.sourceId}|${offer.film.id}").take(32)
+                    else "personal-$ordinal-$index"
                 val fallbacks = entries.filter { other ->
                     other.first.sourceId == offer.sourceId &&
                         other.second.headers == media.headers &&
@@ -61,7 +73,10 @@ internal object HerrinPersonalPlaylistBuilder {
                         " · " + quality + hdr, media.uri)
             }
             PlaybackEpisode(ordinal,
-                if (tv) "S" + coordinate.first + "E" + coordinate.second else "正片",
+                if (!tv) "正片" else if (coordinate.first > 0 && coordinate.second > 0)
+                    "S" + coordinate.first + "E" + coordinate.second
+                else if (coordinate.second > 0) "第${coordinate.second}集"
+                else entries.first().first.film.subtitle.ifBlank { entries.first().first.film.title },
                 lines)
         }
         return HerrinPersonalPlaylist(episodes, urls)

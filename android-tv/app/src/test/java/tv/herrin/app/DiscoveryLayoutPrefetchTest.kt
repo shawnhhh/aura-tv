@@ -117,4 +117,47 @@ class DiscoveryLayoutPrefetchTest {
         assertEquals(1, searches)
         assertEquals(2, snapshot.routes.size)
     }
+
+    @Test fun firstSpiderLayoutDoesNotQueueBehindEveryRemainingSearch() = runBlocking {
+        val release = CompletableDeferred<Unit>()
+        val ready = CompletableDeferred<Unit>()
+        val fast = HerrinSourceDiscovery.Node("first", "Spider", HerrinSourceType.TVBOX_SPIDER,
+            { delay(10); listOf(offer("a")) }, { detail(it, 1) })
+        val slow = HerrinSourceDiscovery.Node("slow", "Spider", HerrinSourceType.TVBOX_SPIDER,
+            { release.await(); emptyList() }, { null })
+        val job = launch { HerrinSourceDiscovery().search("r", listOf(fast, slow), null, Mutex()) {
+            if (it.routes.isNotEmpty()) ready.complete(Unit)
+        } }
+        withTimeout(1000) { ready.await() }
+        assertFalse(job.isCompleted)
+        release.complete(Unit); job.join()
+    }
+
+    @Test fun manyVersionsOnOneCmsCannotStarveAnotherNodesFirstLayout() = runBlocking {
+        val release = CompletableDeferred<Unit>()
+        val ready = CompletableDeferred<Unit>()
+        val many = HerrinSourceDiscovery.Node("many", "CMS", HerrinSourceType.TVBOX_CMS,
+            { (1..20).map { offer("a$it") } }, { release.await(); detail(it, 1) })
+        val fast = HerrinSourceDiscovery.Node("fast", "CMS", HerrinSourceType.TVBOX_CMS,
+            { delay(10); listOf(offer("b")) }, { detail(it, 1) })
+        val job = launch { HerrinSourceDiscovery().search("r", listOf(many, fast), null, Mutex()) {
+            if (it.routes.any { it.nodeId == "fast" }) ready.complete(Unit)
+        } }
+        withTimeout(1000) { ready.await() }
+        assertFalse(job.isCompleted)
+        release.complete(Unit); job.join()
+    }
+
+    @Test fun bundledPersonalPlaylistIsNotRepeatedForEveryMatchedFile() = runBlocking {
+        var loads = 0
+        val node = HerrinSourceDiscovery.Node("personal", "NAS", HerrinSourceType.NAS,
+            { listOf(offer("a"), offer("b")) }, { loads++; detail(it, 1) }, bundledPersonalLayout = true)
+        val service = HerrinSourceDiscovery()
+        var snapshot = HerrinSourceDiscovery.Snapshot("", 0)
+        service.search("r", listOf(node), null, Mutex()) { snapshot = it }
+        service.search("r", listOf(node), null, Mutex()) { snapshot = it }
+        assertEquals(2, snapshot.hits.size)
+        assertEquals(2, snapshot.routes.size)
+        assertEquals(1, loads)
+    }
 }

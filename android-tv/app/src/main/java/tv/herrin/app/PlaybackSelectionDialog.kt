@@ -35,7 +35,7 @@ internal fun PlaybackSelectionDialog(
     val current = layout?.sections?.firstOrNull { section -> section.episodes.any {
         it.source.number == episode && it.lines.any { option -> option.id == line }
     } }
-    var season by remember(film.id) { mutableStateOf(current?.number ?: layout?.sections?.firstOrNull()?.number) }
+    var season by remember(film.id) { mutableStateOf(current?.number) }
     var showLines by remember(linesOnly) { mutableStateOf(linesOnly) }
     val selectedFocus = remember(film.id, season, showLines) { FocusRequester() }
     val listState = rememberLazyListState()

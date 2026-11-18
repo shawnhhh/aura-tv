@@ -11,10 +11,10 @@ import kotlinx.coroutines.delay
 
 /** Only an explicit play intent mounts this effect. Focused posters never discover media. */
 @Composable
-internal fun OneTapDeadline(screen: String, film: String, onTimeout: () -> Unit) {
+internal fun OneTapDeadline(screen: String, film: String, foreground: Boolean, onTimeout: () -> Unit) {
     val timeout by rememberUpdatedState(onTimeout)
-    LaunchedEffect(screen, film) {
-        if (screen == "play-intent") { delay(20_000); timeout() }
+    LaunchedEffect(screen, film, foreground) {
+        if (screen == "play-intent" && foreground) { delay(20_000); timeout() }
     }
 }
 

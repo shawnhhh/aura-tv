@@ -2650,7 +2650,8 @@ private fun Herrin(startup: StartupPresentation) {
     }
     var tmdbBrowseReturn by remember { mutableStateOf<PlaybackReturnContext?>(null) }
     var pendingHistoryFilm by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(screen, pendingHistoryFilm, film.id, film.playbackEpisodes, catalogScope) {
+    LaunchedEffect(screen, pendingHistoryFilm, film.id, film.playbackEpisodes, catalogScope, tmdbState.sourceForeground) {
+        if (screen == "play-intent" && !tmdbState.sourceForeground) return@LaunchedEffect
         if (screen !in setOf("detail", "play-intent")) {
             pendingHistoryFilm = null
             tmdbState.resumeSourceFilm = null
@@ -2658,7 +2659,8 @@ private fun Herrin(startup: StartupPresentation) {
         }
         if (pendingHistoryFilm != film.id || film.playbackEpisodes.isEmpty()) return@LaunchedEffect
         val saved = if (tmdbState.automaticResume?.film == film.id) null else
-            withContext(Dispatchers.IO) { watchHistory.resolveIndexed(film, catalogScope) }
+            withContext(Dispatchers.IO) { watchHistory.resolveIndexed(film, catalogScope,
+                personalFileRoutes = tmdbState.tmdbPersonalPlayback[film.id]?.isNotEmpty() == true) }
         if (saved != null) {
             episode = saved.first.episode; line = saved.first.line
             seasonLayout?.sections?.firstOrNull { section -> section.episodes.any { it.source.number == episode } }?.let {
@@ -2674,7 +2676,7 @@ private fun Herrin(startup: StartupPresentation) {
             screen = "player"
         }
     }
-    OneTapDeadline(screen, film.id) { screen = "detail" }
+    OneTapDeadline(screen, film.id, tmdbState.sourceForeground) { screen = "detail" }
     fun details(f: Film) {
         tmdbState.directPlayFilm = null
         DetailPlaybackMetrics.timeline.enter()
@@ -5003,10 +5005,15 @@ private fun Herrin(startup: StartupPresentation) {
                         } else {
                             item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 if (!HerrinPlaybackEntry.unavailableTmdb(film) && (providerFilms == null || film.id.startsWith("tmdb-"))) TvButton(DetailPlayLabel.text(
-                                    season = groupResume?.first?.season ?: seasonResume?.entry?.season ?: detailSeason?.number,
+                                    season = groupResume?.first?.season ?: seasonResume?.entry?.season ?: detailSeason?.number ?:
+                                        SeasonEpisodes.explicitEpisode(currentEpisode?.title.orEmpty())?.first ?:
+                                        SeasonEpisodes.explicitSeason(currentLines.firstOrNull { it.id == line }?.title.orEmpty()),
                                     episode = groupResume?.first?.number ?: seasonResume?.entry?.number ?:
-                                        (detailSeasonSource ?: detailSeasonEntries.firstOrNull())?.number,
-                                    positionMs = groupResume?.second?.positionMs ?: seasonResume?.position?.positionMs ?: resume?.positionMs
+                                        (detailSeasonSource ?: detailSeasonEntries.firstOrNull())?.number ?:
+                                        SeasonEpisodes.explicitEpisode(currentEpisode?.title.orEmpty())?.second ?:
+                                        SeasonEpisodes.explicitNumber(currentEpisode?.title.orEmpty()),
+                                    positionMs = groupResume?.second?.positionMs ?: seasonResume?.position?.positionMs ?: resume?.positionMs ?:
+                                        tmdbState.automaticResume?.takeIf { it.film == film.id && it.episode == episode && it.line == line }?.position
                                 ), modifier = Modifier.testTag("detail-play-cta"), selected = true, reduced = reduceMotion) {
                                     DetailPlaybackMetrics.timeline.click()
                                     if (showGroup != null && groupResume != null)

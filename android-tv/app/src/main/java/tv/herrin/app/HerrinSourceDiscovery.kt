@@ -22,7 +22,9 @@ internal class HerrinSourceDiscovery {
         val site: TvBoxSite? = null,
         val config: TvBoxConfig.Single? = null,
         val timeoutMs: Long = 12_000L,
-        val identity: HerrinFilmIdentity? = null
+        val identity: HerrinFilmIdentity? = null,
+        /** Personal adapter already returns the entire matched file playlist. */
+        val bundledPersonalLayout: Boolean = false
     )
     data class EpisodeLayout(val number: Int, val title: String, val lines: List<Pair<String,String>>)
     data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie,
@@ -101,36 +103,40 @@ internal class HerrinSourceDiscovery {
         coroutineScope {
             val owner = this
             val queued = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+            val perNodeDetails = java.util.concurrent.ConcurrentHashMap<String, Semaphore>()
+            suspend fun load(node: Node, hit: Hit) {
+                val started = System.nanoTime()
+                try {
+                    val detail = withTimeoutOrNull(node.timeoutMs) { node.details(hit.movie) }
+                    coroutineContext.ensureActive()
+                    if (detail != null) retainEpisodes(revision, hit.key, detail.film, ticket)?.let {
+                        mutations.withLock {
+                            if (snapshot.revision == revision && version.get() == ticket) publish(snapshot)
+                        }
+                        HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
+                            "MS=${(System.nanoTime()-started)/1_000_000}")
+                    }
+                    mutations.withLock {
+                        if (snapshot.revision == revision && version.get() == ticket) {
+                            snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key)
+                            publish(snapshot)
+                        }
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* Preserve hit and allow safe continuation. */ }
+            }
             fun prefetch(node: Node) {
-                snapshot.hits.filter { it.node.id == node.id && it.relevance == SourceRelevance.CONFIRMED &&
-                    it.key !in snapshot.detailed }.forEach { hit ->
+                val matches = snapshot.hits.filter { it.node.id == node.id && it.relevance == SourceRelevance.CONFIRMED }
+                val candidates = if (node.bundledPersonalLayout) matches.take(1) else matches
+                candidates.filter { it.key !in snapshot.detailed }.forEach { hit ->
                     if (!queued.add(hit.key)) return@forEach
                     owner.launch {
-                        suspend fun load() {
-                            val started = System.nanoTime()
-                            try {
-                                val detail = withTimeoutOrNull(node.timeoutMs) { node.details(hit.movie) }
-                                coroutineContext.ensureActive()
-                                if (detail != null) retainEpisodes(revision, hit.key, detail.film, ticket)?.let { ready ->
-                                    mutations.withLock {
-                                        if (snapshot.revision == revision && version.get() == ticket) publish(snapshot)
-                                    }
-                                    HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
-                                        "MS=${(System.nanoTime()-started)/1_000_000}")
-                                }
-                                // Failed/empty details terminate this run, but remain retryable
-                                // on explicit selection. Cancellation never marks completion.
-                                mutations.withLock {
-                                    if (snapshot.revision == revision && version.get() == ticket) {
-                                        snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key)
-                                        publish(snapshot)
-                                    }
-                                }
-                            } catch (cancelled: CancellationException) { throw cancelled }
-                            catch (_: Exception) { /* Preserve hit and allow safe continuation. */ }
+                        // A node with many versions cannot fill the entire global
+                        // queue ahead of every other provider's first candidate.
+                        perNodeDetails.getOrPut(node.id) { Semaphore(1) }.withPermit {
+                            if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation { load(node, hit) }
+                            else detailSlots.withPermit { load(node, hit) }
                         }
-                        if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation { load() }
-                        else detailSlots.withPermit { load() }
                     }
                 }
             }
@@ -175,8 +181,15 @@ internal class HerrinSourceDiscovery {
                             else -> SourceSearchOutcome.ERROR
                         }, (System.nanoTime() - started) / 1_000_000, completed = snapshot.checked, total = snapshot.nodes, nodeComplete = true))
                 }
-                if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation { execute() }
-                else cmsSlots.withPermit { execute() }
+                if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation {
+                    execute()
+                    // Reuse this still-authorized session for the first matching
+                    // layout before queued searches can replace it. Never resolve media.
+                    if (!spiderPaused) snapshot.hits.firstOrNull { it.node.id == node.id &&
+                        it.relevance == SourceRelevance.CONFIRMED && it.key !in snapshot.detailed }?.let { hit ->
+                        if (queued.add(hit.key)) load(node, hit)
+                    }
+                } else cmsSlots.withPermit { execute() }
                 prefetch(node)
             }
             val personal = unique.filter { it.type == HerrinSourceType.NAS }
