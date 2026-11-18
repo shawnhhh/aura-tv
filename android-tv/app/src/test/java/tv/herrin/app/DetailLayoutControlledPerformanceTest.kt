@@ -2,12 +2,13 @@ package tv.herrin.app
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.junit.Assert.*
 import org.junit.Test
 
 /** Reproducible scheduler comparison; these numbers are fixture latency, never TCL or real-provider speed. */
 class DetailLayoutControlledPerformanceTest {
-    @Test fun compareWaitForAllBaselineWithIncrementalLayoutPublication() = runBlocking {
+    @Test fun compareFrozenBaselineWithIncrementalLayoutPublication() = runBlocking {
         val baseline = mutableListOf<Long>()
         val candidate = mutableListOf<Long>()
         repeat(5) {
@@ -15,11 +16,22 @@ class DetailLayoutControlledPerformanceTest {
                 Film("fixture", "Fixture", "", "电影", "2026", "", R.drawable.photofilm_orbit, cmsVodId = "one"), "movie")
             val detailed = HerrinSourceDiscovery.Detail(movie.film.copy(playbackEpisodes = listOf(
                 PlaybackEpisode(1, "正片", listOf(PlaybackLine("one", "abc", "https://example.invalid/media"))))))
-            // Baseline UI required a user selection after discovery: zero simulated
-            // human delay here, making this a conservative scheduling-only comparison.
+            // Run the actual frozen baseline. Its preferred search completes
+            // before fallback dispatch. UI selection is immediate (zero human delay).
+            val oldReady = CompletableDeferred<BaselineSourceDiscoveryF8.Hit>()
+            val oldLock = Mutex()
+            val oldFast = BaselineSourceDiscoveryF8.Node("fast", "Fixture", HerrinSourceType.TVBOX_CMS,
+                { delay(20); listOf(movie) }, { delay(20); BaselineSourceDiscoveryF8.Detail(detailed.film) })
+            val oldSlow = BaselineSourceDiscoveryF8.Node("slow", "Fixture", HerrinSourceType.TVBOX_CMS,
+                { delay(200); emptyList() }, { null })
             val before = System.nanoTime()
-            coroutineScope { launch { delay(20) }; launch { delay(200) } }
-            delay(20)
+            val oldJob = launch { BaselineSourceDiscoveryF8().search("r", listOf(oldFast, oldSlow), "slow", oldLock) {
+                it.hits.firstOrNull()?.let { hit -> oldReady.complete(hit) }
+            } }
+            val oldHit = withTimeout(2000) { oldReady.await() }
+            oldJob.cancelAndJoin()
+            val oldDetail = oldLock.withLock { oldHit.node.details(oldHit.movie) }
+            assertTrue(oldDetail?.film?.playbackEpisodes?.isNotEmpty() == true)
             baseline += (System.nanoTime() - before) / 1_000_000
             val start = System.nanoTime()
             var first: Long? = null
@@ -27,7 +39,7 @@ class DetailLayoutControlledPerformanceTest {
                 { delay(20); listOf(movie) }, { delay(20); detailed })
             val slow = HerrinSourceDiscovery.Node("slow", "Fixture", HerrinSourceType.TVBOX_CMS,
                 { delay(200); emptyList() }, { null })
-            HerrinSourceDiscovery().search("r", listOf(fast, slow), null, Mutex()) {
+            HerrinSourceDiscovery().search("r", listOf(fast, slow), "slow", Mutex()) {
                 if (first == null && it.routes.isNotEmpty()) first = (System.nanoTime() - start) / 1_000_000
             }
             assertNotNull(first)

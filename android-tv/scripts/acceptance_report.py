@@ -67,12 +67,12 @@ for path in (root/'app/build/test-results/testDebugUnitTest').rglob('TEST-*.xml'
                 if len(baseline)==len(candidate)==5:
                     layout_samples.append({'baseline_ms':baseline,'candidate_ms':candidate})
 if layout_samples:
-    record={'source_commit':sha,'scope':'controlled_scheduler_fixture_not_real_provider_or_TCL',
+    record={'source_commit':sha,'baseline_commit':'f8e8d76c37ec1a56696262b08c9acb0cba2b327f','scope':'controlled_scheduler_fixture_not_real_provider_or_TCL',
             'human_delay_ms':0,'samples':layout_samples}
     (out/'detail-layout-performance.json').write_text(json.dumps(record,indent=2))
     print('HERRIN_DETAIL_LAYOUT_PERFORMANCE='+json.dumps(record))
     lines += ['', '## 详情线路受控调度对比', '',
-              '旧调度模型为全部节点搜索完成后选择详情；不包含人工等待。当前模型增量预取。此处不是实机或真实影视点性能。',
+              '基线直接执行冻结的 f8e8d76c 调度器，首选慢节点和快速候选使用相同受控延迟，首个命中后立即模拟选择详情，人工等待为0。候选使用增量预取。此处不是实机或真实影视点性能。',
               json.dumps(record,ensure_ascii=False)]
 controlled=[]
 for path in (root / 'app/build/test-results/testDebugUnitTest').rglob('TEST-*.xml'):
