@@ -53,6 +53,14 @@ class PersonalLibraryImportTest {
                     val offers = source.search(HerrinFilmIdentity(123, "movie", listOf("Example"), 2024))
                     assertEquals(2, offers.size)
                     assertEquals(setOf(1080, 2160), offers.map { it.resolutionClaim }.toSet())
+                    val otherId = library.index.folder(requireNotNull(connection), "Other", "video")
+                    val other = library.index.folders(connection).first { it.id == otherId }
+                    library.index.record(other, PersonalRemoteFile("Other/Example.2024.mp4", false, 10L, "v1"), 1L)
+                    library.index.finish(otherId, 1L)
+                    assertEquals(2, source.search(HerrinFilmIdentity(123, "movie", listOf("Example"), 2024)).size)
+                    val rawId = library.index.media(otherId).getJSONObject(0).getString("id")
+                    library.index.correct(rawId, 123, "movie", "Example", 2024)
+                    assertEquals(3, source.search(HerrinFilmIdentity(123, "movie", listOf("Example"), 2024)).size)
                     val media = (source.playback(offers.first()) as PlaybackResult.Ready).media
                     assertTrue(media.uri.startsWith(server.url("/media/").toString()))
                     assertFalse(media.uri.contains("fixture-secret")); assertFalse(media.allowHttpRedirects)

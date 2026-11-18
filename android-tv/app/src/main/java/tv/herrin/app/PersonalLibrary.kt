@@ -23,7 +23,7 @@ internal class PersonalLibrary(context: Context) {
             override suspend fun search(identity: HerrinFilmIdentity): List<HerrinSourceMovie> = withContext(Dispatchers.IO) {
                 val enabled = index.folders(c.id).filter { it.enabled }.map { it.id }.toSet()
                 index.candidates(c.id, identity).mapNotNull { row ->
-                    if(row.getString("folder") !in enabled) return@mapNotNull null
+                    if(row.getString("folder") !in enabled || (row.getString("type") == "video" && row.optInt("tmdb") <= 0)) return@mapNotNull null
                     val offer = offer(c, row, id)
                     if(row.optInt("tmdb") > 0) offer.takeIf { row.optInt("tmdb") == identity.tmdbId && offer.mediaType == identity.mediaType }?.let {
                         it.copy(film = it.film.copy(title = identity.names.first(), year = identity.year?.toString().orEmpty()))
@@ -116,6 +116,7 @@ internal class PersonalLibrary(context: Context) {
         }
     }
     private suspend fun scrape(folder: PersonalMediaIndex.Folder) {
+        if(folder.type == "video") return // Explicit "other videos" remain raw unless the user matches them.
         val token = Preferences(app).tmdbReadToken
         if(token.isBlank()) return
         val discovery = HerrinTmdbDiscovery(cacheDir = app.cacheDir)
