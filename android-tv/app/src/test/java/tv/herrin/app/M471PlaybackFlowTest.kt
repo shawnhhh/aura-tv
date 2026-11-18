@@ -339,4 +339,42 @@ class M471PlaybackFlowTest {
         assertNull(next.mime) // HLS cannot leak onto an MP4 backup.
         assertNull(retry.next(2004, 404))
     }
+    @Test fun oneNasAuthenticationFailureDoesNotBlockAnotherConfiguredNas() = runBlocking {
+        val calls = mutableListOf<String>()
+        val first = offer("first-4k", "first", HerrinSourceType.NAS, 2160)
+        val second = offer("second-hd", "second", HerrinSourceType.NAS, 1080)
+        val visited = mutableListOf<String>()
+        val result = HerrinVerifiedSourceResolver(listOf(
+            source("first", HerrinSourceType.NAS, first, calls),
+            source("second", HerrinSourceType.NAS, second, calls)
+        )).find(identity,
+            personalPlayback = { candidate -> PlaybackResult.Ready(PlaybackMedia("https://${candidate.sourceId}.example/${candidate.film.id}.mp4",
+                headers = mapOf("Authorization" to "fixture-${candidate.sourceId}"))) },
+            verifyPersonal = { media ->
+                visited += media.uri
+                if(media.uri.contains("first.example")) throw SourceHttpFailure(401)
+                assertEquals("fixture-second", media.headers["Authorization"])
+                true
+            }, remoteDetails = { error("A valid personal NAS must win") })
+        assertEquals(2, visited.size)
+        assertEquals(listOf("first", "second"), calls)
+        assertEquals(listOf(second), result.lookup.options)
+        assertEquals(HerrinSourceTier.PERSONAL, result.lookup.selectedTier)
+    }
+    @Test fun aForbiddenFileDoesNotSuppressAnotherReadableVersionOnTheSameNas() = runBlocking {
+        val first = offer("denied", "nas", HerrinSourceType.NAS, 2160)
+        val second = offer("readable", "nas", HerrinSourceType.NAS, 1080)
+        val adapter = object : HerrinFilmSource {
+            override val id = "nas"
+            override val type = HerrinSourceType.NAS
+            override suspend fun search(identity: HerrinFilmIdentity) = listOf(first, second)
+        }
+        val result = HerrinVerifiedSourceResolver(listOf(adapter)).find(identity,
+            personalPlayback = { playable("https://nas.example/${it.film.id}.mp4") },
+            verifyPersonal = { if(it.uri.contains("denied")) throw SourceHttpFailure(403) else true },
+            remoteDetails = { error("The readable version must win") })
+        assertEquals(listOf(second), result.lookup.options)
+        assertEquals(1, result.personalPlaylist!!.mediaByLine.size)
+    }
+
 }
