@@ -125,8 +125,14 @@ class EmptySpiderHomeSelectionTest {
     @Test fun advancedPreviewRetainsEmptyInitializedSource() {
         importOriginalFixture()
         compose.activityRule.openDiagnostics()
-        compose.waitUntil(12_000) { runCatching { compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-spider-0"))
+        // A new diagnostic Activity restores the imported preview asynchronously.
+        // The curtain disappearing alone does not prove that its lazy items exist.
+        // Keep the same readiness budget and all original authority/selection checks.
+        compose.waitUntil(12_000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-spider-0"))
+            compose.onNodeWithTag("tvbox-spider-0").assertIsDisplayed()
+        }.isSuccess }
         activate("tvbox-spider-0")
         assertSelectedEmptySource(advanced = true)
         activate("search")
