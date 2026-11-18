@@ -38,9 +38,9 @@ import androidx.media3.common.C
 @Composable
 internal fun KernelMinimalControls(
     session: HerrinPlayerSession, title: String, position: Long, duration: Long,
-    initialFocus: FocusRequester, settingsFocus: FocusRequester,
+    initialFocus: FocusRequester, speedFocus: FocusRequester,
     onBack: () -> Unit, onSeek: (Long) -> Unit, onInteraction: () -> Unit,
-    onPanel: (Boolean) -> Unit, onLines: (() -> Unit)?, onEpisodes: (() -> Unit)?,
+    onPanel: (Boolean) -> Unit, onEpisodes: (() -> Unit)?,
     onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit, seekAcceleration: Int, specsReady: Boolean
 ) {
     val player = session.player
@@ -72,7 +72,7 @@ internal fun KernelMinimalControls(
             closing = null
             onPanel(false)
             withFrameNanos { }
-            runCatching { (when (previous) { "音轨" -> audioFocus; "字幕" -> subtitleFocus; else -> settingsFocus }).requestFocus() }
+            runCatching { (when (previous) { "音轨" -> audioFocus; "字幕" -> subtitleFocus; else -> speedFocus }).requestFocus() }
         }
     }
     LaunchedEffect(panel) {
@@ -125,7 +125,7 @@ internal fun KernelMinimalControls(
                     onEpisodes?.let { action ->
                         PlayerTextButton(onClick = { onInteraction(); action() }, modifier = Modifier.semantics { contentDescription = "选集" }.testTag("transport-episodes")) { Text("▦", color = Color.White) }
                     }
-                    PlayerTextButton(onClick = { open("倍速") }, modifier = Modifier.focusRequester(settingsFocus).testTag("transport-speed")) {
+                    PlayerTextButton(onClick = { open("倍速") }, modifier = Modifier.focusRequester(speedFocus).testTag("transport-speed")) {
                         Text("${player.playbackParameters.speed}×", color = Color.White)
                     }
                 }
@@ -134,7 +134,7 @@ internal fun KernelMinimalControls(
                 PlayerTextButton(onClick = {
                     if (player.playWhenReady) session.pause() else session.play()
                     onInteraction()
-                }, modifier = Modifier.focusRequester(initialFocus).focusProperties { up = settingsFocus }.testTag(if (session.whole) "kernel-toggle" else "transport-toggle")) {
+                }, modifier = Modifier.focusRequester(initialFocus).focusProperties { up = speedFocus }.testTag(if (session.whole) "kernel-toggle" else "transport-toggle")) {
                     Text(if (player.playWhenReady) "Ⅱ" else "▷", color = Color.White)
                 }
                 PlayerTextButton(onClick = { onSeek(10_000) }, modifier = Modifier.testTag("transport-forward").seekButton(1)) { Text("10 ↷", color = Color.White) }

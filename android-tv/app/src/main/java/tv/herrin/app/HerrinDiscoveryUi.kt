@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 /** Route identity includes the original VOD and line; labels never act as keys. */
 internal fun LazyListScope.herrinDiscoveryItems(snapshot: HerrinSourceDiscovery.Snapshot,
     running: Boolean, reduced: Boolean, select: (HerrinSourceDiscovery.Hit, String?) -> Unit,
-    pause: () -> Unit, resume: () -> Unit, selectedNode: String?, onNode: (String) -> Unit,
+    resume: () -> Unit, selectedNode: String?, onNode: (String) -> Unit,
     firstLineFocus: FocusRequester) {
     item(key = "source-region") {
         val groups = snapshot.hits.filter { it.relevance == SourceRelevance.CONFIRMED }.groupBy { it.node.id }

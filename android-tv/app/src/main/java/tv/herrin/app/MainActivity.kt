@@ -2697,13 +2697,13 @@ private fun Herrin(startup: StartupPresentation) {
     var tmdbBrowseReturn by remember { mutableStateOf<PlaybackReturnContext?>(null) }
     var pendingHistoryFilm by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(screen, pendingHistoryFilm, film.id, film.playbackEpisodes, catalogScope, tmdbState.sourceForeground, tmdbState.sourceSelectionReady(film.id)) {
-        if (!tmdbState.sourceSelectionReady(film.id)) return@LaunchedEffect
-        if (screen == "play-intent" && !tmdbState.sourceForeground) return@LaunchedEffect
         if (screen !in setOf("detail", "play-intent")) {
             pendingHistoryFilm = null
             tmdbState.resumeSourceFilm = null
             return@LaunchedEffect
         }
+        if (!tmdbState.sourceSelectionReady(film.id)) return@LaunchedEffect
+        if (screen == "play-intent" && !tmdbState.sourceForeground) return@LaunchedEffect
         if (pendingHistoryFilm != film.id || film.playbackEpisodes.isEmpty()) return@LaunchedEffect
         val saved = if (tmdbState.automaticResume?.film == film.id) null else
             withContext(Dispatchers.IO) { watchHistory.resolveIndexed(film, catalogScope,
@@ -5008,7 +5008,7 @@ private fun Herrin(startup: StartupPresentation) {
                                         tmdbState.discoveryLine = selectedLine
                                         tmdbState.discoverySelection = film.id to hit.key
                                         tmdbState.discoverySelectionEpoch++
-                                    }, pause = { tmdbState.sourceSearchJob?.cancel() }, resume = {
+                                    }, resume = {
                                         tmdbState.discoverySelection = null
                                         val node = tmdbState.selectedDiscoveryNode[film.id]
                                         if (node != null) uiScope.launch {

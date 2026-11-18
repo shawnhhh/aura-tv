@@ -36,9 +36,9 @@ internal class HerrinSourceDiscovery {
         val expanding: Boolean = false, val warehouseFailures: Int = 0,
         val routes: List<Route> = emptyList(),
         val detailed: Set<String> = emptySet()) {
-        val readyRoutes: List<Route> get() {
+        val readyRoutes: List<Route> by lazy(LazyThreadSafetyMode.PUBLICATION) {
             val ids = hits.associate { hit -> hit.key to hit.episodes.flatMap { it.lines }.map { it.first }.toSet() }
-            return routes.filter { it.lineId in ids[it.hitKey].orEmpty() }
+            routes.filter { it.lineId in ids[it.hitKey].orEmpty() }
         }
         val confirmed get() = hits.count { it.relevance == SourceRelevance.CONFIRMED }
         val possible get() = hits.count { it.relevance == SourceRelevance.POSSIBLE }
