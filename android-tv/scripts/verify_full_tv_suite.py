@@ -36,6 +36,8 @@ REQUIRED_CLASSES = (
     "M445FrameBaselineTest",
     "M449SettingsNoIdleBurstTest",
     "M453BufferingRemoteFocusInstrumentedTest",
+    "MinimalPlayerGeometryTest",
+    "PlaybackHistoryTest",
     "M454CmsOneTapRecoveryInstrumentedTest",
     "M456NativeFullscreenPlayerTest",
     "P0PlayerDeadlineTest",
