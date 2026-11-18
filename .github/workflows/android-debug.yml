@@ -15,7 +15,7 @@ concurrency:
 jobs:
   debug:
     # P0 pushes use the serial caller, including when its PR becomes mergeable.
-    if: github.event_name != 'pull_request' || (github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102' && github.head_ref != 'codex/herrin-responsive-config-20261106' && github.head_ref != 'codex/herrin-startup-source-health-20261107')
+    if: github.event_name != 'pull_request' || (github.head_ref != 'codex/herrin-p0-live-playback-20261110' && github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102' && github.head_ref != 'codex/herrin-responsive-config-20261106' && github.head_ref != 'codex/herrin-startup-source-health-20261107')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -63,6 +63,18 @@ jobs:
         with:
           name: HERRIN-debug-apk
           path: android-tv/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Bind personal-library diagnostic APK to source commit
+        if: ${{ (github.head_ref || github.ref_name) == 'codex/herrin-p0-live-playback-20261110' }}
+        run: |
+          git rev-parse HEAD > app/build/outputs/apk/debug/SOURCE_COMMIT.txt
+          sha256sum app/build/outputs/apk/debug/*.apk > app/build/outputs/apk/debug/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: ${{ (github.head_ref || github.ref_name) == 'codex/herrin-p0-live-playback-20261110' }}
+        with:
+          name: HERRIN-personal-library-debug-diagnostic
+          path: android-tv/app/build/outputs/apk/debug/
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v4

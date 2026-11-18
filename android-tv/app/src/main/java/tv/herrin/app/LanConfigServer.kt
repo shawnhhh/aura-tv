@@ -81,6 +81,11 @@ internal class LanConfigServer(
                 if (session.uri != "/entries") applied(module)
                 return response(Response.Status.OK, JSONObject().put("entries", extra.publicList(module)).toString())
             }
+            if (session.uri == "/personal" || session.uri.startsWith("/personal/")) {
+                val result = PersonalLibraryApi(context).handle(session.uri, input)
+                if (session.uri != "/personal") applied("nas")
+                return response(Response.Status.OK, result.toString())
+            }
             val output = when (session.uri) {
                 "/catalogs" -> JSONObject().put("entries", org.json.JSONArray(CatalogProfileCodec.encode(CatalogProfiles(context).list())))
                     .put("active", CatalogProfiles(context).activeId() ?: "")
@@ -128,20 +133,6 @@ internal class LanConfigServer(
                     }catch(error:Exception){SmbFailure.message(error)}
                     JSONObject().put("result",result)
                 }
-                "/cloud/test" -> {
-                    val login=HerrinPersonalCredentialStore(context,"cloud").load()
-                    val connected=kotlinx.coroutines.runBlocking {
-                        HerrinWebDavSource(HerrinWebDavAccount("云盘",prefs.cloudWebDavUrl,login.first,login.second)).testConnection()
-                    }
-                    JSONObject().put("result",if(connected)"WebDAV 已连接" else "连接失败")
-                }
-                "/cloud" -> {
-                    val url=address(input.getString("url"))
-                    if(url.isNotBlank())HerrinWebDavSource(HerrinWebDavAccount("云盘",url))
-                    require(HerrinPersonalCredentialStore(context,"cloud").save(input.getString("username"),input.getString("password")))
-                    prefs.cloudWebDavUrl=url
-                    applied("nas");JSONObject().put("ok",true)
-                }
                 "/end" -> {
                     if (!endingResponse.compareAndSet(false, true))
                         return response(Response.Status.FORBIDDEN, "{}")
@@ -152,7 +143,7 @@ internal class LanConfigServer(
                     .put("tokenConfigured", prefs.tmdbReadToken.isNotBlank())
                     .put("tvbox", prefs.tvBoxWarehouseUrl).put("m3u", prefs.livePlaylistUrl)
                     .put("epg", prefs.liveEpgUrl).put("nas", prefs.nasWebDavUrl)
-                    .put("cloud",prefs.cloudWebDavUrl).put("smb",HerrinSmbConfigStore(context).publicConfig()).put("nasProtocol", "WebDAV")
+                    .put("smb",HerrinSmbConfigStore(context).publicConfig()).put("nasProtocol", "WebDAV")
                 "/tmdb/test" -> JSONObject().put("result", TmdbConnectivityProbe.checkDetailed(prefs.tmdbReadToken).text)
                 "/tmdb" -> {
                     val token = input.getString("token").trim()
@@ -184,7 +175,7 @@ internal class LanConfigServer(
                     applied("live"); JSONObject().put("ok", true)
                 }
                 "/nas" -> {
-                    val url = address(input.getString("url"))
+                    val url = input.getString("url").trim()
                     if (url.isNotBlank()) HerrinWebDavSource(HerrinWebDavAccount("NAS", url))
                     require(HerrinPersonalCredentialStore(context, "nas").save(input.getString("username"), input.getString("password")))
                     prefs.nasWebDavUrl = url

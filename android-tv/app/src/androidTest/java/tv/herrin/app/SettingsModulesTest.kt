@@ -13,7 +13,7 @@ import org.junit.Test
 @OptIn(ExperimentalTestApi::class)
 class SettingsModulesTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun fourModulesAndFiveProtocolsRemainNativeRemoteTargets() {
+    @Test fun fourModulesAndTwoProtocolsRemainNativeRemoteTargets() {
         var module by mutableStateOf("影视源")
         var protocol by mutableStateOf("WebDAV")
         compose.setContent { MaterialTheme { Row {
@@ -25,8 +25,11 @@ class SettingsModulesTest {
         }
         compose.onNodeWithTag("settings-module-个人媒体库").performClick()
         compose.runOnIdle { assertEquals("个人媒体库",module) }
-        val tops = listOf("WebDAV","SMB","百度网盘","阿里云盘","夸克网盘").map {
+        val tops = listOf("WebDAV","SMB").map {
             compose.onNodeWithTag("personal-protocol-$it").assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
+        }
+        listOf("百度网盘", "阿里云盘", "夸克网盘").forEach {
+            compose.onNodeWithTag("personal-protocol-$it").assertDoesNotExist()
         }
         assertEquals(1,tops.distinct().size)
         compose.onNodeWithTag("personal-protocol-WebDAV").performSemanticsAction(

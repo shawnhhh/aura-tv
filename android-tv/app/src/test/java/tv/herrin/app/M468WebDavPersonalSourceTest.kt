@@ -129,12 +129,11 @@ class M468WebDavPersonalSourceTest {
         }
     }
 
-    @Test fun webdavRequiresExplicitInsecureHttpApproval() {
+    @Test fun manuallyConfiguredHttpWebdavIsAcceptedWithoutExtraApproval() {
         MockWebServer().use { server ->
             server.start()
-            assertThrows(IllegalArgumentException::class.java) {
-                HerrinWebDavSource(HerrinWebDavAccount("My NAS", server.url("/dav/").toString()))
-            }
+            val source = HerrinWebDavSource(HerrinWebDavAccount("My NAS", server.url("/dav/").toString()))
+            assertEquals(HerrinSourceType.NAS, source.type)
         }
     }
 }

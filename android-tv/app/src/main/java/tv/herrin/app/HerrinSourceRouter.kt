@@ -14,7 +14,7 @@ import java.util.Locale
  * The UI must never infer a video URL or playable episode from TMDB metadata.
  */
 internal enum class HerrinSourceTier { PERSONAL, TVBOX }
-internal enum class HerrinSourceType { NAS, CLOUD, TVBOX_CMS, TVBOX_SPIDER }
+internal enum class HerrinSourceType { NAS, TVBOX_CMS, TVBOX_SPIDER }
 
 internal data class HerrinFilmIdentity(
     val tmdbId: Int,
@@ -43,7 +43,7 @@ internal data class HerrinSourceMovie(
     val hdrClaim: Boolean = false
 ) {
     val tier: HerrinSourceTier get() =
-        if (sourceType in setOf(HerrinSourceType.NAS, HerrinSourceType.CLOUD))
+        if (sourceType in setOf(HerrinSourceType.NAS))
             HerrinSourceTier.PERSONAL else HerrinSourceTier.TVBOX
 }
 
@@ -67,8 +67,8 @@ internal data class HerrinFilmLookupResult(
 )
 
 /**
- * Strict source priority: NAS -> cloud WebDAV -> TVBox CMS/approved Spider.
- * A cloud "4K" filename cannot outrank a verified NAS 1080p resource.
+ * Strict priority: SMB/WebDAV personal storage -> preferred TVBox -> other approved sources.
+ * Filename quality claims never establish successful decoding.
  * Within a source tier, quality labels only break ties between matches.
  */
 internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, private val preferredSourceId: String? = null,
@@ -76,7 +76,7 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
     init { require(validationBudgetMs in 1..17_000L) }
     /**
      * Verify actual resource usability before accepting a priority tier.
-     * If every matched NAS/cloud offer is unusable, continue to TVBox.
+     * If every matched SMB/WebDAV offer is unusable, continue to TVBox.
      * For TVBox a verifier can try multiple candidates' details/episode lists.
      */
     suspend fun find(
@@ -93,7 +93,6 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
             it.type in listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER) }
         val sourceStages = listOf(
             sources.filter { it.type == HerrinSourceType.NAS },
-            sources.filter { it.type == HerrinSourceType.CLOUD },
             listOfNotNull(preferred),
             sources.filter { it.type in listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER) && it !== preferred }
         )
@@ -169,7 +168,6 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
             it.type in listOf(HerrinSourceType.TVBOX_CMS, HerrinSourceType.TVBOX_SPIDER) }
         val stages = listOf(
             sources.filter { it.type == HerrinSourceType.NAS },
-            sources.filter { it.type == HerrinSourceType.CLOUD },
             listOfNotNull(preferred),
             sources.filter { it.type == HerrinSourceType.TVBOX_CMS && it !== preferred },
             sources.filter { it.type == HerrinSourceType.TVBOX_SPIDER && it !== preferred })
@@ -225,7 +223,7 @@ internal class HerrinFilmRouter(private val sources: List<HerrinFilmSource>, pri
             val providers = stage.distinctBy { it.id }.filter { isPreferred || health?.eligible(it.id) != false }
                 .let { if (isPreferred) it else it.sortedByDescending { source -> health?.rank(source.id) ?: 0 } }.take(100)
             val type = providers.firstOrNull()?.type ?: continue
-            val tier = if (type in listOf(HerrinSourceType.NAS, HerrinSourceType.CLOUD)) HerrinSourceTier.PERSONAL else HerrinSourceTier.TVBOX
+            val tier = if (type in listOf(HerrinSourceType.NAS)) HerrinSourceTier.PERSONAL else HerrinSourceTier.TVBOX
             val accepted = if (type == HerrinSourceType.TVBOX_CMS && !isPreferred) coroutineScope {
                 val channel = kotlinx.coroutines.channels.Channel<Found>(4)
                 val gate = kotlinx.coroutines.sync.Semaphore(4)

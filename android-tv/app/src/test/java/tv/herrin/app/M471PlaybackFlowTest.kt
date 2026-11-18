@@ -28,36 +28,36 @@ class M471PlaybackFlowTest {
 
     private fun playable(url: String) = PlaybackResult.Ready(PlaybackMedia(url))
 
-    @Test fun verifiedNas1080OutranksCloud4kAndNeverQueriesTvbox() = runBlocking {
+    @Test fun bothPersonalConnectionsSharePriorityAndNeverQueryTvbox() = runBlocking {
         val calls = mutableListOf<String>()
         val nas = offer("nas-1080", "nas", HerrinSourceType.NAS, 1080)
-        val cloud = offer("cloud-4k", "cloud", HerrinSourceType.CLOUD, 2160)
+        val cloud = offer("cloud-4k", "cloud", HerrinSourceType.NAS, 2160)
         val cms = offer("cms-4k", "cms", HerrinSourceType.TVBOX_CMS, 2160)
         val resolver = HerrinVerifiedSourceResolver(listOf(
-            source("cloud", HerrinSourceType.CLOUD, cloud, calls),
+            source("cloud", HerrinSourceType.NAS, cloud, calls),
             source("cms", HerrinSourceType.TVBOX_CMS, cms, calls),
             source("nas", HerrinSourceType.NAS, nas, calls)))
         val result = resolver.find(identity,
             personalPlayback = { playable("https://authorized.example/" + it.film.id + ".mp4") },
             remoteDetails = { error("NAS was verified; should never open TVBox detail") })
-        assertEquals(listOf("nas"), calls)
-        assertEquals(nas, result.lookup.options.single())
+        assertEquals(listOf("cloud", "nas"), calls)
+        assertEquals(listOf(cloud, nas), result.lookup.options)
         assertEquals(HerrinSourceTier.PERSONAL, result.lookup.selectedTier)
         assertEquals("https://authorized.example/nas-1080.mp4",
-            result.personalPlaylist!!.mediaByLine.values.single().uri)
+            result.personalPlaylist!!.mediaByLine.values.last().uri)
     }
 
     @Test fun unavailableNasContinuesToCloudWithoutQueryingTvbox() = runBlocking {
         val calls = mutableListOf<String>()
         val nas = offer("nas", "nas", HerrinSourceType.NAS, 2160)
-        val cloud = offer("cloud", "cloud", HerrinSourceType.CLOUD, 1080)
+        val cloud = offer("cloud", "cloud", HerrinSourceType.NAS, 1080)
         val cms = offer("cms", "cms", HerrinSourceType.TVBOX_CMS, 2160)
         val result = HerrinVerifiedSourceResolver(listOf(
             source("nas", HerrinSourceType.NAS, nas, calls),
-            source("cloud", HerrinSourceType.CLOUD, cloud, calls),
+            source("cloud", HerrinSourceType.NAS, cloud, calls),
             source("cms", HerrinSourceType.TVBOX_CMS, cms, calls)))
             .find(identity,
-                personalPlayback = { if (it.sourceType == HerrinSourceType.NAS)
+                personalPlayback = { if (it.sourceId == "nas")
                     PlaybackResult.Unavailable("unreachable") else playable("https://cloud.example/" + it.film.id + ".m3u8") },
                 remoteDetails = { error("Cloud should short circuit TVBox") })
         assertEquals(listOf("nas", "cloud"), calls)
@@ -68,17 +68,17 @@ class M471PlaybackFlowTest {
     @Test fun bothPersonalSourcesFailThenRealCmsEpisodesAreRequired() = runBlocking {
         val calls = mutableListOf<String>()
         val nas = offer("nas", "nas", HerrinSourceType.NAS, 2160)
-        val cloud = offer("cloud", "cloud", HerrinSourceType.CLOUD, 2160)
+        val cloud = offer("cloud", "cloud", HerrinSourceType.NAS, 2160)
         val cms = offer("cms", "cms", HerrinSourceType.TVBOX_CMS, 1080)
         val film = cms.film.copy(playbackEpisodes = listOf(
             PlaybackEpisode(3, "S01E03", listOf(
                 PlaybackLine("cms-real", "1080p", "https://authorized.example/03.m3u8")))))
         val result = HerrinVerifiedSourceResolver(listOf(
             source("cms", HerrinSourceType.TVBOX_CMS, cms, calls),
-            source("cloud", HerrinSourceType.CLOUD, cloud, calls),
+            source("cloud", HerrinSourceType.NAS, cloud, calls),
             source("nas", HerrinSourceType.NAS, nas, calls)))
             .find(identity, { PlaybackResult.Unavailable("not authorized") }) { film }
-        assertEquals(listOf("nas", "cloud", "cms"), calls)
+        assertEquals(listOf("cloud", "nas", "cms"), calls)
         assertEquals(HerrinSourceTier.TVBOX, result.lookup.selectedTier)
         assertEquals(3 to "cms-real", HerrinPlaybackEntry.firstPlayable(result.sourceDetails))
         assertNull(result.personalPlaylist)
@@ -109,10 +109,10 @@ class M471PlaybackFlowTest {
     @Test fun allDeadNasOffersDoNotPreventCloudFallback() = runBlocking {
         val calls = mutableListOf<String>()
         val nas = offer("nas-dead", "nas", HerrinSourceType.NAS, 2160)
-        val cloud = offer("cloud-ok", "cloud", HerrinSourceType.CLOUD, 1080)
+        val cloud = offer("cloud-ok", "cloud", HerrinSourceType.NAS, 1080)
         val result = HerrinVerifiedSourceResolver(listOf(
             source("nas", HerrinSourceType.NAS, nas, calls),
-            source("cloud", HerrinSourceType.CLOUD, cloud, calls)
+            source("cloud", HerrinSourceType.NAS, cloud, calls)
         )).find(identity,
             personalPlayback = { playable("https://source.example/" + it.film.id + ".mkv") },
             verifyPersonal = { it.uri.contains("cloud-ok") },
@@ -177,7 +177,7 @@ class M471PlaybackFlowTest {
     @Test fun eightDeadFileProbeBudgetFallsBackToCloud() = runBlocking {
         val calls = mutableListOf<String>()
         val dead = (1..13).map { offer("dead-$it", "nas", HerrinSourceType.NAS, 2160) }
-        val cloud = offer("ready-cloud", "cloud", HerrinSourceType.CLOUD, 720)
+        val cloud = offer("ready-cloud", "cloud", HerrinSourceType.NAS, 720)
         val adapters = listOf(
             object : HerrinFilmSource {
                 override val id = "nas"
@@ -185,7 +185,7 @@ class M471PlaybackFlowTest {
                 override suspend fun search(identity: HerrinFilmIdentity) =
                     dead.also { calls += "nas" }
             },
-            source("cloud", HerrinSourceType.CLOUD, cloud, calls)
+            source("cloud", HerrinSourceType.NAS, cloud, calls)
         )
         var failedProbeCount = 0
         val result = HerrinVerifiedSourceResolver(adapters).find(
@@ -198,9 +198,9 @@ class M471PlaybackFlowTest {
                 } else true
             },
             remoteDetails = { null })
-        assertEquals(8, failedProbeCount)
+        assertEquals(1, failedProbeCount)
         assertEquals(listOf("nas", "cloud"), calls)
-        assertEquals("ready-cloud", result.lookup.options.single().film.id)
+        assertEquals("ready-cloud", result.lookup.options.first().film.id)
     }
 
     @Test fun tvboxSourceWithEpisodesButBrokenProxyIsExcludedForNextNode() = runBlocking {

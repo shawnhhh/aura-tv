@@ -7,6 +7,12 @@ class Preferences(context: Context) : FavoritesStore {
     @Volatile private var tokenCache: String? = null
     private val tokenVault = HerrinPersonalCredentialStore(context, "tmdb")
     private val prefs = context.getSharedPreferences("herrin", Context.MODE_PRIVATE)
+    init {
+        if (!prefs.getBoolean("cloud_removed_v1", false)) {
+            HerrinPersonalCredentialStore(context, "cloud").clear()
+            check(prefs.edit().remove("cloud_webdav_url").remove("cloud_allow_http").putBoolean("cloud_removed_v1", true).commit())
+        }
+    }
     // Retain the old offline-demo key and its contents; all remote favorites are
     // scoped to the canonical endpoint to avoid collisions between source IDs.
     private fun favoriteKey(scope: String): String {
@@ -90,15 +96,9 @@ class Preferences(context: Context) : FavoritesStore {
     var nasWebDavUrl: String
         get() = prefs.getString("nas_webdav_url", "") ?: ""
         set(value) { prefs.edit().putString("nas_webdav_url", value.trim()).apply() }
-    var cloudWebDavUrl: String
-        get() = prefs.getString("cloud_webdav_url", "") ?: ""
-        set(value) { prefs.edit().putString("cloud_webdav_url", value.trim()).apply() }
     var nasAllowHttp: Boolean
         get() = prefs.getBoolean("nas_allow_http", false)
         set(value) { prefs.edit().putBoolean("nas_allow_http", value).apply() }
-    var cloudAllowHttp: Boolean
-        get() = prefs.getBoolean("cloud_allow_http", false)
-        set(value) { prefs.edit().putBoolean("cloud_allow_http", value).apply() }
     internal fun acceptPersistedToken(value: String) { tokenCache = value }
     fun invalidateTokenCache() { tokenCache = null }
     /** Optional personal TMDB API Read Access Token; empty disables metadata calls. */

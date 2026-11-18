@@ -27,7 +27,7 @@ internal fun SettingsModules(selected: String, reduced: Boolean, select: (String
 @Composable
 internal fun PersonalProtocolTabs(selected: String, reduced: Boolean, select: (String) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("WebDAV", "SMB", "百度网盘", "阿里云盘", "夸克网盘").forEach { label ->
+        listOf("WebDAV", "SMB").forEach { label ->
             TvButton(label, Modifier.testTag("personal-protocol-$label"), reduced,
                 selected = selected == label) { select(label) }
         }

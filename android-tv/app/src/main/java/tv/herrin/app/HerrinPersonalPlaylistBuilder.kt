@@ -57,7 +57,7 @@ internal object HerrinPersonalPlaylistBuilder {
                     ?: "原画"
                 val hdr = if (offer.hdrClaim) " HDR（源标称）" else ""
                 PlaybackLine(id,
-                    (if (offer.sourceType == HerrinSourceType.NAS) "NAS" else "云盘") +
+                    "个人媒体" +
                         " · " + quality + hdr, media.uri)
             }
             PlaybackEpisode(ordinal,

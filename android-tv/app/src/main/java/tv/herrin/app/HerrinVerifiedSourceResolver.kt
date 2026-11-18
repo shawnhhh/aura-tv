@@ -26,7 +26,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
         val firstBySource = ranked.distinctBy { it.sourceId }
         val firstItems = firstBySource.toHashSet()
         return (firstBySource + ranked.filterNot { it in firstItems })
-            .take(budget.coerceIn(1, 16))
+            .take(budget.coerceIn(1, 80))
     }
 
     suspend fun find(
@@ -50,7 +50,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
             if (ranked.firstOrNull()?.tier == HerrinSourceTier.PERSONAL) {
                 // Use exactly the same source-specific permission check as
                 // actual playback. Never accept an unauthorized WebDAV file.
-                val prepared = ranked.take(80).mapNotNull { candidate ->
+                val prepared = fairRemoteCandidates(ranked, 80).mapNotNull { candidate ->
                     val result = try { personalPlayback(candidate) }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch (_: Exception) { null }

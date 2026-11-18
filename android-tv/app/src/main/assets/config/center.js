@@ -24,7 +24,7 @@ document.querySelector('#pair').onclick=async()=>{
  try{while(!session){const r=await call('/pair',{pairing});session=r.session;if(!session){status.textContent='请在电视确认此配对';await new Promise(r=>setTimeout(r,1500));}}
  pairing='';document.querySelector('#trust').hidden=true;document.querySelector('#manager').hidden=false;
  const r=await call('/status');document.querySelector('#endpoint').textContent=r.endpoint+' · '+(r.tokenConfigured?'已配置':'未配置');
- document.querySelector('#sources [name=url]').value=r.tvbox;document.querySelector('#live [name=m3u]').value=r.m3u;document.querySelector('#live [name=epg]').value=r.epg;document.querySelector('#nas [name=url]').value=r.nas;document.querySelector('#cloud [name=url]').value=r.cloud||'';document.querySelector('#smb [name=url]').value=r.smb?.url||'';document.querySelector('#smb [name=encryption]').checked=!!r.smb?.encryption;
+ document.querySelector('#sources [name=url]').value=r.tvbox;document.querySelector('#live [name=m3u]').value=r.m3u;document.querySelector('#live [name=epg]').value=r.epg;
  status.textContent='已配对，各模块共用会话；最长 30 分钟，退出电视配置页立即结束';
  }catch(e){status.textContent=e.message;}finally{polling=false;}
 };
@@ -51,8 +51,8 @@ async function watchSource(importId){
 }
 let module='tmdb';
 async function refreshEntries(){
- document.querySelector('#cloud').hidden=module!=='nas';document.querySelector('#smb').hidden=module!=='nas';
- const additional=document.querySelector('#additional');additional.hidden=module==='tmdb';document.querySelector('#catalog-manager').hidden=module!=='sources';if(additional.hidden)return;
+
+ const additional=document.querySelector('#additional');additional.hidden=module==='tmdb'||module==='nas';if(module==='nas'){await refreshPersonal();}document.querySelector('#catalog-manager').hidden=module!=='sources';if(additional.hidden)return;
  document.querySelector('#entry-edit').hidden=false;
  document.querySelector('#extra-epg').hidden=module!=='live';document.querySelector('#extra-login').hidden=module!=='nas';document.querySelector('#batch').hidden=module!=='sources';await refreshCatalogs();
  const r=await call('/entries',{module});const list=document.querySelector('#entries');list.replaceChildren();
@@ -63,8 +63,8 @@ async function refreshEntries(){
  button('删除',async()=>{await call('/entries/delete',{module,id:entry.id});await refreshEntries();});
  if(module==='nas')button('测试',async()=>{status.textContent=(await call('/nas/test',{id:entry.id})).result;});list.append(row);});
 }
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('form').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();if(module==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}});
-document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(f));if(f.id==='smb')data.encryption=f.elements.encryption.checked;const result=await call('/'+f.id,data);if(f.id==='sources'){await watchSource(result.importId);return;}f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('#tmdb,#sources,#live,#nas').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();if(module==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}});
+document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit):not(#personal-edit):not(#personal-match)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(f));if(f.id==='smb')data.encryption=f.elements.encryption.checked;const result=await call('/'+f.id,data);if(f.id==='sources'){await watchSource(result.importId);return;}f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
 document.querySelector('#test').onclick=async()=>{try{status.textContent=(await call('/tmdb/test')).result;await refreshTmdbStatus();}catch(e){status.textContent=e.message;}};
 document.querySelector('#end').onclick=async()=>{try{await call('/end');}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束，请在电视重新开启';}};
 // Editing a long form is activity; refresh only while the user is actively editing.
@@ -89,8 +89,34 @@ document.querySelector('#catalog-new').onclick=()=>document.querySelector('#cata
 document.querySelector('#catalog-disable').onclick=async()=>{try{await call('/catalogs/activate',{id:''});await refreshCatalogs();}catch(e){status.textContent=e.message;}};
 
 async function refreshTmdbStatus(){const r=await call('/status');document.querySelector('#endpoint').textContent=r.endpoint+' · '+(r.tokenConfigured?'已配置':'未配置');}
-document.querySelector('#nas-test').onclick=async()=>{try{status.textContent=(await call('/nas/test')).result;}catch(e){status.textContent=e.message;}};
 
-document.querySelector('#cloud-test').onclick=async()=>{try{status.textContent=(await call('/cloud/test')).result;}catch(e){status.textContent=e.message;}};
 
-document.querySelector('#smb-test').onclick=async()=>{try{status.textContent=(await call('/smb/test')).result;}catch(e){status.textContent=e.message;}};
+
+let personalConnection='';
+function actionButton(parent,label,action){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await action();}catch(e){status.textContent=e.message;}finally{b.disabled=false;}};parent.append(b);}
+async function personalCall(path,data={}){const r=await call('/personal'+path,data);if(r.ok===false)throw Error(r.error||'操作失败');return r;}
+async function refreshPersonal(){
+ const r=await personalCall('');const list=document.querySelector('#personal-connections');list.replaceChildren();
+ r.connections.forEach(c=>{const row=document.createElement('p');row.textContent=c.name+' · '+c.protocol+' · '+(c.enabled?'启用':'停用');
+ actionButton(row,'编辑',()=>{const f=document.querySelector('#personal-edit');f.reset();for(const key of ['id','name','protocol','host','port','username','domain'])f.elements[key].value=c[key]||'';f.elements.encryption.checked=c.encryption;});
+ actionButton(row,'测试 / 浏览',async()=>{personalConnection=c.id;document.querySelector('#personal-browser').hidden=false;await browsePersonal();});
+ actionButton(row,c.enabled?'停用':'启用',async()=>{await personalCall('/toggle',{id:c.id});await refreshPersonal();});
+ actionButton(row,'删除',async()=>{if(confirm('删除此连接及本地目录索引？不会删除服务器文件。')){await personalCall('/delete',{id:c.id,confirmed:true});await refreshPersonal();}});list.append(row);});
+ const folders=document.querySelector('#personal-folders');folders.replaceChildren();r.folders.forEach(f=>{const row=document.createElement('p');row.textContent=f.path+' · '+f.type+' · '+(f.enabled?'启用':'停用');
+ actionButton(row,'刷新',()=>personalCall('/refresh',{id:f.id}));
+ actionButton(row,'修改类型',async()=>{await personalCall('/folder',{...f,type:document.querySelector('#personal-type').value,scan:false});await refreshPersonal();});
+ actionButton(row,f.enabled?'停用':'启用',async()=>{await personalCall('/folder',{...f,enabled:!f.enabled,scan:false});await refreshPersonal();});
+ actionButton(row,'移除',async()=>{if(confirm('移除此目录的本地索引？服务器文件保留。')){await personalCall('/folder/delete',{id:f.id,confirmed:true});await refreshPersonal();}});folders.append(row);});
+ document.querySelector('#personal-progress').textContent=r.progress;
+ const media=document.querySelector('#personal-media');media.replaceChildren();r.media.forEach(m=>{const row=document.createElement('p');row.textContent=(m.tmdb?'已匹配':'未识别')+' · '+m.type+' · '+m.name;actionButton(row,'手动匹配',()=>{document.querySelector('#personal-match [name=id]').value=m.id;document.querySelector('#personal-match [name=query]').value=m.title;});media.append(row);});
+}
+async function browsePersonal(){const path=document.querySelector('#personal-path').value;const r=await personalCall('/browse',{id:personalConnection,path});const list=document.querySelector('#personal-directories');list.replaceChildren();r.files.forEach(f=>actionButton(list,f.name,async()=>{document.querySelector('#personal-path').value=f.path;await browsePersonal();}));status.textContent=r.result;}
+document.querySelector('#personal-edit [name=protocol]').onchange=e=>{document.querySelector('#personal-edit [name=port]').value={https:443,http:80,smb:445}[e.target.value];};
+document.querySelector('#personal-edit').onsubmit=async e=>{e.preventDefault();const f=e.target;const b=f.querySelector('button');b.disabled=true;try{const v=Object.fromEntries(new FormData(f));v.encryption=f.elements.encryption.checked;const r=await personalCall('/save',v);personalConnection=r.id;f.elements.password.value='';document.querySelector('#personal-browser').hidden=false;document.querySelector('#personal-path').value=r.path;await refreshPersonal();await browsePersonal();}catch(error){status.textContent=error.message;}finally{b.disabled=false;}};
+document.querySelector('#personal-new').onclick=()=>document.querySelector('#personal-edit').reset();
+document.querySelector('#personal-browse').onclick=()=>browsePersonal().catch(e=>status.textContent=e.message);
+document.querySelector('#personal-parent').onclick=()=>{const f=document.querySelector('#personal-path');f.value=f.value.replace(/\/?[^/]+\/?$/,'');browsePersonal().catch(e=>status.textContent=e.message);};
+document.querySelector('#personal-import').onclick=async()=>{try{await personalCall('/folder',{connection:personalConnection,path:document.querySelector('#personal-path').value,type:document.querySelector('#personal-type').value});await refreshPersonal();}catch(e){status.textContent=e.message;}};
+document.querySelector('#personal-cancel').onclick=()=>personalCall('/cancel').catch(e=>status.textContent=e.message);
+document.querySelector('#personal-match').onsubmit=async e=>{e.preventDefault();try{const f=e.target;const r=await personalCall('/search',{query:f.elements.query.value});const list=document.querySelector('#personal-matches');list.replaceChildren();r.matches.forEach(m=>actionButton(list,m.title+' · '+m.year,async()=>{await personalCall('/match',{id:f.elements.id.value,tmdb:m.tmdb,type:m.type,title:m.title});await refreshPersonal();}));}catch(error){status.textContent=error.message;}};
+setInterval(()=>{if(session&&module==='nas'&&Date.now()-lastActivity<60000)refreshPersonal().catch(()=>{});},3000);

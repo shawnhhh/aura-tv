@@ -121,7 +121,7 @@ internal class HerrinSourceDiscovery {
             if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderLock.withLock { execute() }
             else cmsSlots.withPermit { execute() }
         }
-        val personal = unique.filter { it.type == HerrinSourceType.NAS || it.type == HerrinSourceType.CLOUD }
+        val personal = unique.filter { it.type == HerrinSourceType.NAS }
         personal.forEach { run(it) }
         unique.firstOrNull { it.id == preferred && it !in personal }?.let { run(it) }
         // Independent lanes: queued Spider calls do not occupy the CMS slots.

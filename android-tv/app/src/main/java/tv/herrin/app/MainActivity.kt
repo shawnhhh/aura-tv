@@ -573,11 +573,8 @@ private fun Herrin(startup: StartupPresentation) {
     val smbConfigured=remember(personalSourceConfigEpoch){HerrinSmbConfigStore(context).configured()}
 
     var nasDavUrlDraft by remember { mutableStateOf(prefs.nasWebDavUrl) }
-    var cloudDavUrlDraft by remember { mutableStateOf(prefs.cloudWebDavUrl) }
     var nasDavUserDraft by remember { mutableStateOf("") }
     var nasDavPasswordDraft by remember { mutableStateOf("") }
-    var cloudDavUserDraft by remember { mutableStateOf("") }
-    var cloudDavPasswordDraft by remember { mutableStateOf("") }
     var personalSourceFeedback by remember { mutableStateOf("") }
     val tmdbState=remember { TmdbScreenState() }
     SourceSearchLifecycle(tmdbState)
@@ -985,7 +982,7 @@ private fun Herrin(startup: StartupPresentation) {
     val tmdbPrimary = prefs.tmdbReadToken.isNotBlank()
     val extraNasConfigured = remember(personalSourceConfigEpoch) { AdditionalServiceConfigs(context).enabled("nas").isNotEmpty() }
     val sourceConfigured = smbConfigured || extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbBrowseIndex.isNotEmpty() ||
-        prefs.nasWebDavUrl.isNotBlank() || prefs.cloudWebDavUrl.isNotBlank()
+        prefs.nasWebDavUrl.isNotBlank()
     var recentIndexEpoch by remember { zeroIntState() }
     var recentIndexFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
     LaunchedEffect(recentIndexEpoch) { recentIndexFilms = withContext(Dispatchers.IO) { watchHistory.indexedFilms() } }
@@ -1290,7 +1287,7 @@ private fun Herrin(startup: StartupPresentation) {
         // Category entry and cancelled/restarted effects reuse fresh pages.
         // Explicit rail retry still forces a refresh through TmdbBrowseState.retry.
         tmdbBrowseState.refresh(page)
-        tmdbState.tmdbDiscoveryStatus = "TMDB 栏目已更新；播放时优先检索 NAS／云盘"
+        tmdbState.tmdbDiscoveryStatus = "TMDB 栏目已更新；播放时优先检索 SMB／WebDAV"
     }
     LaunchedEffect(category, metadataToken, tmdbConnectivity, tmdbState.tmdbTop250RetryEpoch, startup.networkReady) {
         if(!startup.networkReady)return@LaunchedEffect
@@ -1436,7 +1433,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.tmdbStatusFilm=targetId
         tmdbState.tmdbSearchStarted=SourceSearchDiagnostics.begin()
         tmdbState.tmdbSearchRunning=true;tmdbState.tmdbStageStarted=tmdbState.tmdbSearchStarted
-        tmdbState.tmdbSourceStatus = "正在快速检索 NAS／云盘及已授权影视点…"
+        tmdbState.tmdbSourceStatus = "正在快速检索 SMB／WebDAV及已授权影视点…"
         HerrinPlaybackDiagnosticJournal.record("LOOKUP", "TMDB_SEARCH_STARTED")
         val currentTvbox = tvBoxSingle
         val trustedSpiderRoot = prefs.tvBoxTrustedSpiderRootUrl
@@ -1454,9 +1451,7 @@ private fun Herrin(startup: StartupPresentation) {
                 (it.spiderApi != null || it.scriptApi != null) }
         else null
         val nasUrl = prefs.nasWebDavUrl
-        val cloudUrl = prefs.cloudWebDavUrl
         val allowNasHttp = prefs.nasAllowHttp
-        val allowCloudHttp = prefs.cloudAllowHttp
         var health:SourceHealthIndex?=null
         var planRevision=""
         suspend fun sourceEvent(event:SourceSearchEvent){
@@ -1473,24 +1468,7 @@ private fun Herrin(startup: StartupPresentation) {
         }
         val searchOutput=try { withTimeoutOrNull(if(screen == "detail") Long.MAX_VALUE else budgetMs) { withContext(Dispatchers.IO+SpiderSearchAuthority(consentAtStart)+PlaybackDiagnosticSession.context(playbackDiagnosticId)) {
             val adapters = mutableListOf<HerrinFilmSource>()
-            HerrinSmbConfigStore(context).account()?.let{adapters+=HerrinSmbSource(it,smbSessions)}
-            for ((slot, url, insecure, kind) in listOf(
-                listOf("nas", nasUrl, allowNasHttp.toString(), "NAS"),
-                listOf("cloud", cloudUrl, allowCloudHttp.toString(), "CLOUD")
-            )) {
-                if (url.isBlank()) continue
-                val login = HerrinPersonalCredentialStore(context, slot).load()
-                val account = HerrinWebDavAccount(
-                    if (slot == "nas") "NAS" else "云盘", url,
-                    login.first, login.second,
-                    if (kind == "NAS") HerrinSourceType.NAS else HerrinSourceType.CLOUD,
-                    insecure.toBoolean()
-                )
-                runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
-            }
-            AdditionalServiceConfigs(context).nasAccounts().forEach { account ->
-                runCatching { HerrinWebDavSource(account) }.getOrNull()?.let(adapters::add)
-            }
+            adapters += PersonalLibrary(context).sources(smbSessions)
             val preferredSite = currentTvbox?.sites?.firstOrNull {
                 prefs.tvBoxPreferredRootId == SourceHealthIndex.digest(approvedRoot) &&
                     TvBoxAutoSites.identity(it, currentTvbox.spiderJar) == prefs.tvBoxPreferredSiteId
@@ -1845,7 +1823,7 @@ private fun Herrin(startup: StartupPresentation) {
                 "已检查 ${(previousCompleted + batchScan.checked).coerceAtMost(batchScan.eligible)}/${batchScan.eligible} 个授权 Spider 影视点，本次达到检索时间上限；点击重新检索可继续剩余节点"
             else if (lookup.errors.isNotEmpty())
                 "部分资源源检索失败或超时，尚未找到可播放的授权选集；可重新检索"
-            else "NAS／云盘／TVBox 均未找到可播放的授权选集；可重新检索"
+            else "SMB／WebDAV／TVBox 均未找到可播放的授权选集；可重新检索"
             tmdbState.tmdbSourceStatus += " · ${tmdbState.tmdbSearchPlans.progress(targetId,planRevision).text()}"
             return@LaunchedEffect
         }
@@ -3437,8 +3415,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 settingsTvBoxOnly = true
                                 screen = "settings"
                             }
-                            Text("NAS ${if (prefs.nasWebDavUrl.isBlank() && !smbConfigured) "未配置" else "已配置"}" +
-                                " · 云盘 ${if (prefs.cloudWebDavUrl.isBlank()) "未配置" else "已配置"}",
+                            Text("SMB / WebDAV 个人媒体库",
                                 modifier = Modifier.testTag("my-personal-source-status"),
                                 color = Color(0xFFAFC1D7), fontSize = 12.sp)
                         }
@@ -4415,91 +4392,21 @@ private fun Herrin(startup: StartupPresentation) {
                         }
                         if (settingsTvBoxOnly && settingsModule == "个人媒体库") {
                             item { PersonalProtocolTabs(personalProtocol, reduceMotion) { personalProtocol = it } }
-                            if (personalProtocol == "WebDAV") {
-                            item { Text("WebDAV", fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold) }
-                            item { OutlinedTextField(nasDavUrlDraft, { nasDavUrlDraft = it.take(2048) },
-                                Modifier.fillMaxWidth().testTag("nas-webdav-url"),
-                                label = { Text("NAS WebDAV 根目录 URL（优先）") }, singleLine = true) }
-                            item { OutlinedTextField(nasDavUserDraft, { nasDavUserDraft = it.take(256) },
-                                Modifier.fillMaxWidth().testTag("nas-webdav-user"),
-                                label = { Text("NAS 用户名（可留空）") }, singleLine = true) }
-                            item { OutlinedTextField(nasDavPasswordDraft, { nasDavPasswordDraft = it.take(2048) },
-                                Modifier.fillMaxWidth().testTag("nas-webdav-password"),
-                                label = { Text("NAS 密码（不显示、不存明文）") }, singleLine = true,
-                                visualTransformation = PasswordVisualTransformation()) }
-                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                TvButton("保存 NAS 地址", modifier = Modifier.testTag("nas-webdav-save"),
-                                    reduced = reduceMotion) {
-                                    val valid = nasDavUrlDraft.isBlank() || runCatching {
-                                        HerrinWebDavSource(HerrinWebDavAccount("NAS", nasDavUrlDraft.trim(),
-                                            category = HerrinSourceType.NAS, allowInsecureHttp = prefs.nasAllowHttp))
-                                    }.isSuccess
-                                    if (!valid) personalSourceFeedback = "NAS URL 必须是合法 HTTPS；HTTP 需手动授权"
-                                    else {
-                                        val vault = HerrinPersonalCredentialStore(context, "nas")
-                                        val old = vault.load()
-                                        val saved = vault.save(nasDavUserDraft.ifBlank { old.first },
-                                            nasDavPasswordDraft.ifBlank { old.second })
-                                        if (saved) {
-                                            prefs.nasWebDavUrl = nasDavUrlDraft.trim()
-                                            nasDavPasswordDraft = ""
-                                            personalSourceConfigEpoch++
-                                            personalSourceFeedback = "NAS 地址和加密凭据已保存；详情将优先搜索 NAS"
-                                        } else personalSourceFeedback = "设备凭据加密失败，未保存 NAS 地址"
+                            item { PersonalLibrarySettings(personalProtocol, onChanged = { personalSourceConfigEpoch++ }, onPlay = { mediaId ->
+                                uiScope.launch {
+                                    val result = withContext(Dispatchers.IO) { PersonalLibrary(context).play(mediaId, smbSessions) }
+                                    if(result is PlaybackResult.Ready) {
+                                        val target = "personal-$mediaId"
+                                        val entry = Film(target, result.media.displayTitle, "", "个人媒体", "", "", R.drawable.photofilm_orbit,
+                                            playbackEpisodes = listOf(PlaybackEpisode(1, "正片", listOf(PlaybackLine("personal-file", "个人媒体", result.media.uri)))))
+                                        tmdbState.tmdbResolved[target] = entry
+                                        tmdbState.tmdbPersonalPlayback[target] = mapOf("personal-file" to result.media)
+                                        tmdbState.tmdbPlaybackRoutes.personal(target)
+                                        activeCmsSite = null; spiderActive = false
+                                        filmId = target; episode = 1; line = "personal-file"; screen = "player"
                                     }
                                 }
-                                TvButton(if (prefs.nasAllowHttp) "NAS HTTP 已允许" else "允许 NAS HTTP（仅可信局域网）",
-                                    reduced = reduceMotion) {
-                                    prefs.nasAllowHttp = !prefs.nasAllowHttp
-                                    personalSourceConfigEpoch++
-                                }
-                            } }
-                            item { OutlinedTextField(cloudDavUrlDraft, { cloudDavUrlDraft = it.take(2048) },
-                                Modifier.fillMaxWidth().testTag("cloud-webdav-url"),
-                                label = { Text("云盘 WebDAV 桥接根目录 URL") }, singleLine = true) }
-                            item { OutlinedTextField(cloudDavUserDraft, { cloudDavUserDraft = it.take(256) },
-                                Modifier.fillMaxWidth().testTag("cloud-webdav-user"),
-                                label = { Text("云盘 WebDAV 用户名（可留空）") }, singleLine = true) }
-                            item { OutlinedTextField(cloudDavPasswordDraft, { cloudDavPasswordDraft = it.take(2048) },
-                                Modifier.fillMaxWidth().testTag("cloud-webdav-password"),
-                                label = { Text("云盘 WebDAV 密码（本机加密）") }, singleLine = true,
-                                visualTransformation = PasswordVisualTransformation()) }
-                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                TvButton("保存云盘 WebDAV", modifier = Modifier.testTag("cloud-webdav-save"),
-                                    reduced = reduceMotion) {
-                                    val valid = cloudDavUrlDraft.isBlank() || runCatching {
-                                        HerrinWebDavSource(HerrinWebDavAccount("云盘", cloudDavUrlDraft.trim(),
-                                            category = HerrinSourceType.CLOUD, allowInsecureHttp = prefs.cloudAllowHttp))
-                                    }.isSuccess
-                                    if (!valid) personalSourceFeedback = "云盘 WebDAV URL 无效；默认必须 HTTPS"
-                                    else {
-                                        val vault = HerrinPersonalCredentialStore(context, "cloud")
-                                        val old = vault.load()
-                                        val saved = vault.save(cloudDavUserDraft.ifBlank { old.first },
-                                            cloudDavPasswordDraft.ifBlank { old.second })
-                                        if (saved) {
-                                            prefs.cloudWebDavUrl = cloudDavUrlDraft.trim()
-                                            cloudDavPasswordDraft = ""
-                                            personalSourceConfigEpoch++
-                                            personalSourceFeedback = "云盘 WebDAV 已保存；优先于 TVBox 查找"
-                                        } else personalSourceFeedback = "设备加密失败，未保存云盘 URL"
-                                    }
-                                }
-                                TvButton(if (prefs.cloudAllowHttp) "云盘 HTTP 已允许" else "允许云盘 HTTP（不推荐）",
-                                    reduced = reduceMotion) {
-                                    prefs.cloudAllowHttp = !prefs.cloudAllowHttp
-                                    personalSourceConfigEpoch++
-                                }
-                            } }
-                            item { Text(personalSourceFeedback.ifBlank { tmdbState.tmdbDiscoveryStatus },
-                                modifier = Modifier.testTag("personal-source-feedback"),
-                                color = Color(0xFFBDD9EF)) }
-                            } else if (personalProtocol == "SMB") {
-                                item { SmbProtocolSettings { personalSourceConfigEpoch++ } }
-                            } else {
-                                item { Text("$personalProtocol 原生接入 · 待接入：尚无正式 API 授权能力。", color = Color(0xFFBDC9D7)) }
-                            }
+                            }) }
                         }
                         if (!settingsTvBoxOnly || settingsModule == "直播源") {
                         item { Text("直播源", fontSize = 22.sp) }
@@ -5051,7 +4958,7 @@ private fun Herrin(startup: StartupPresentation) {
                                                 cmsVodId = null, spiderVodId = null)
                                         }
                                         tmdbState.tmdbPersonalPlayback.remove(film.id)
-                                        tmdbState.tmdbSourceStatus = "正在重新检索 NAS／云盘／TVBox…"
+                                        tmdbState.tmdbSourceStatus = "正在重新检索 SMB／WebDAV／TVBox…"
                                         tmdbState.tmdbLookupEpoch++
                                     }
                                 } else if (providerFilms == null || film.id.startsWith("tmdb-")) TvButton(when {
@@ -5344,7 +5251,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 "catalogs" -> { catalogRefresh++ }
                 "live" -> { liveRefresh++; epgRefresh++ }
-                "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; cloudDavUrlDraft = prefs.cloudWebDavUrl; personalSourceConfigEpoch++ }
+                "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }
             }
         })
         SideEffect {

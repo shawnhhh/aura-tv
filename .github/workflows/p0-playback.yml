@@ -1,7 +1,7 @@
 name: HERRIN P0 Serial Verification
 on:
   push:
-    branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106', 'codex/herrin-startup-source-health-20261107']
+    branches: ['codex/herrin-p0-live-playback-20261110', 'codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106', 'codex/herrin-startup-source-health-20261107']
     paths:
       - 'android-tv/**'
       - '!android-tv/docs/**'
