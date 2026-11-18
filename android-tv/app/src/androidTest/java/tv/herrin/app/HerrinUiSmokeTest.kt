@@ -625,7 +625,7 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithText("第 6 集").assertExists()
         compose.onNodeWithText("集数").assertIsDisplayed()
         capture("detail")
-        activate("▶ 播放演示")
+        compose.onNodeWithTag("detail-play-cta").performScrollTo().performClick()
         compose.onNodeWithText("播放演示").assertExists()
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithText("集数").assertExists()
@@ -664,7 +664,7 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("episode-4").performClick()
         compose.onNodeWithText("播放演示").assertExists()
     }
-    @Test fun tmdbDetailStreamsBothCmsSourcesAndLoadsOnlyChosenProviderVod() {
+    @Test fun tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests() {
         MockWebServer().use { server ->
             val details=java.util.concurrent.ConcurrentLinkedQueue<String>()
             val mediaCalls=java.util.concurrent.atomic.AtomicInteger()
@@ -704,25 +704,19 @@ http://example.org/live/channel.m3u8
             protocolSearch("Protocol 1")
             focus("card-tmdb-movie-9001");key(KeyEvent.KEYCODE_DPAD_CENTER)
             val list=compose.onNodeWithTag("film-detail-list")
-            list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
-            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status").assertTextContains("命中 2",substring=true)}.isSuccess}
-            assertEquals(0,details.size);assertEquals(0,mediaCalls.get())
-            fun tag(source:String):String {
-                val site=TvBoxSite("CMS "+source.uppercase(),false,server.url("/$source").toString(),key=source)
-                return "source-hit-"+HerrinDiscoveryNodes.id(root,site,null)+":local-$source"
+            list.performScrollToNode(hasTestTag("source-region"))
+            compose.waitUntil(15000) { details.contains("a:local-a") && details.contains("b:local-b") }
+            assertEquals(0, mediaCalls.get())
+            for (source in listOf("a", "b")) {
+                val site = TvBoxSite("CMS " + source.uppercase(), false, server.url("/$source").toString(), key = source)
+                compose.onNodeWithTag("source-node-menu").performClick()
+                compose.onNodeWithTag("source-node-" + HerrinDiscoveryNodes.id(root, site, null)).performClick()
+                compose.onNodeWithText("线路 1").performClick()
+                compose.waitUntil(10000) { details.count { it == "$source:local-$source" } >= 2 }
             }
-            for(source in listOf("a","b")) {
-                list.performScrollToNode(hasTestTag(tag(source)))
-                compose.onNodeWithTag(tag(source)).performClick()
-                list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
-                compose.waitUntil(10000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status")
-                    .assertTextContains("CMS "+source.uppercase(),substring=true)
-                    .assertTextContains("选择集数后",substring=true)}.isSuccess}
-            }
-            assertEquals(listOf("a:local-a","b:local-b"),details.toList())
-            assertEquals(0,mediaCalls.get())
-            list.performScrollToNode(hasTestTag(tag("a")))
-            compose.onNodeWithTag(tag("a")).assertExists()
+            assertTrue(details.all { it == "a:local-a" || it == "b:local-b" })
+            assertEquals(0, mediaCalls.get())
+            compose.onNodeWithTag("source-region").assertIsDisplayed()
             capture("p0-real-cms-protocol-source-groups-before-media")
         }
     }

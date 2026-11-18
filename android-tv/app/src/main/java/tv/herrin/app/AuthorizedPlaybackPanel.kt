@@ -150,7 +150,13 @@ private fun AuthorizedPlaybackSession(
     var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(media) { DetailPlaybackMetrics.timeline.mediaReady() }
     val remoteHoldSeek = remember(media) { RemoteHoldSeek() }
+    var seekAcceleration by remember(media) { mutableIntStateOf(1) }
+    fun resetHoldSeek() { remoteHoldSeek.reset(); seekAcceleration = 1 }
+    LaunchedEffect(kernelPanelOpen, playbackState) {
+        if (kernelPanelOpen || playbackState == Player.STATE_ENDED) resetHoldSeek()
+    }
     // Keep updates within one media session, while retaining the old session's
     // callbacks until its DisposableEffect has persisted and released its player.
     // A single shared State would route old onDispose progress into the new episode.
@@ -190,7 +196,7 @@ private fun AuthorizedPlaybackSession(
                     uiEpoch++
                 }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
-                override fun onRenderedFirstFrame() { uiEpoch++ }
+                override fun onRenderedFirstFrame() { DetailPlaybackMetrics.timeline.firstFrame(); uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
@@ -471,6 +477,7 @@ private fun AuthorizedPlaybackSession(
                     tv.herrin.kernel.Kernel.Phase.BUFFERING, tv.herrin.kernel.Kernel.Phase.PLAYING,
                     tv.herrin.kernel.Kernel.Phase.PAUSED)) displayPlayer.value = playback.player
                 kernelFirstFrame = state.renderedFirstFrame()
+                if (kernelFirstFrame) DetailPlaybackMetrics.timeline.firstFrame()
                 uiEpoch++
                 if (state.phase() == tv.herrin.kernel.Kernel.Phase.ERROR)
                     errorMessage = "原版内核播放失败；可重新解析、切集或返回详情"
@@ -495,11 +502,22 @@ private fun AuthorizedPlaybackSession(
         if (!isLive) controlsVisible = true
         controlsInteractionEpoch++
     }
+    fun holdSeek(direction: Int, key: KeyEvent): Boolean {
+        if (!player.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) { resetHoldSeek(); return true }
+        val delta = when (key.action) {
+            KeyEvent.ACTION_DOWN -> remoteHoldSeek.down(direction, key.repeatCount, key.eventTime)
+            KeyEvent.ACTION_UP -> remoteHoldSeek.up(direction)
+            else -> null
+        }
+        seekAcceleration = remoteHoldSeek.acceleration
+        if (delta != null) applyRemoteSeek(delta)
+        return true
+    }
     BackHandler { requestBack("dispatcher") }
     Box(Modifier.fillMaxSize().background(Color.Black)
         .testTag("player-root-focus")
         .focusRequester(playerRootFocus)
-        .onFocusChanged { playerRootFocused = it.isFocused }.focusable()
+        .onFocusChanged { if (playerRootFocused != it.isFocused) resetHoldSeek(); playerRootFocused = it.isFocused }.focusable()
         .onPreviewKeyEvent { event ->
         val key = event.nativeKeyEvent
         if (!isLive && key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_UP,
@@ -532,14 +550,7 @@ private fun AuthorizedPlaybackSession(
             (key.keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
                 key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
             val direction = if (key.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
-            val delta = when (key.action) {
-                KeyEvent.ACTION_DOWN -> remoteHoldSeek.down(
-                    direction, key.repeatCount, key.eventTime)
-                KeyEvent.ACTION_UP -> remoteHoldSeek.up(direction)
-                else -> null
-            }
-            if (delta != null) applyRemoteSeek(delta)
-            true
+            holdSeek(direction, key)
         } else if (!isLive && playerRootFocused &&
             key.keyCode in setOf(KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
@@ -557,14 +568,7 @@ private fun AuthorizedPlaybackSession(
         } else if (key.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
             key.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
             val direction = if (key.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 1 else -1
-            val delta = when (key.action) {
-                KeyEvent.ACTION_DOWN -> remoteHoldSeek.down(
-                    direction, key.repeatCount, key.eventTime)
-                KeyEvent.ACTION_UP -> remoteHoldSeek.up(direction)
-                else -> null
-            }
-            if (delta != null) applyRemoteSeek(delta)
-            true
+            holdSeek(direction, key)
         } else if (key.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
             if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
@@ -592,11 +596,7 @@ private fun AuthorizedPlaybackSession(
                     }
                     if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
                         event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
-                        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                            playback.manager.seekBy(
-                                if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 10_000L else -10_000L)
-                        }
-                        return true
+                        return holdSeek(if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) 1 else -1, event)
                     }
                     return super.dispatchKeyEvent(event)
                 }
@@ -731,7 +731,8 @@ private fun AuthorizedPlaybackSession(
         if (!isLive && !testDiagnostics && controlsVisible && errorMessage == null) KernelMinimalControls(
             playback, media.kernelPlayback?.title ?: media.displayTitle, shownPosition, shownDuration,
             initialControl, moreControl, { onBack() }, ::applyRemoteSeek,
-            { controlsInteractionEpoch++ }, { kernelPanelOpen = it }, onLineSelection, onEpisodeSelection)
+            { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() }, onLineSelection, onEpisodeSelection,
+            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, seekAcceleration = seekAcceleration)
         if (testDiagnostics && !playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(

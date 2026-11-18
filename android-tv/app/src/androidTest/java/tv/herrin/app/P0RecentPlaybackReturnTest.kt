@@ -54,7 +54,7 @@ class P0RecentPlaybackReturnTest {
     }
     @get:Rule(order=1) val compose=createAndroidComposeRule<MainActivity>()
 
-    @Test fun recentOutsideTmdbHomeOpensDetailsAndPlaysOnlyAfterExplicitClick() {
+    @Test fun recentOutsideTmdbHomeDirectlyPlaysFreshAuthorizedSourceAndReturnsToCard() {
         val card="card-tmdb-movie-157336"
         compose.waitUntil(15000) { runCatching {
             compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
@@ -62,17 +62,10 @@ class P0RecentPlaybackReturnTest {
         }.isSuccess }
         compose.onNodeWithTag(card).performScrollTo().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithTag(card).performClick()
-        compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("film-detail-list").assertIsDisplayed() }.isSuccess }
-        // A recent poster is navigation, not a hidden autoplay command.
-        compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
-        compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("detail-play-cta").assertExists() }.isSuccess }
-        compose.onNodeWithTag("detail-play-cta").performClick()
         compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("player-root-focus").assertIsDisplayed() }.isSuccess }
+        compose.onNodeWithTag("film-detail-list").assertDoesNotExist()
         assertTrue("Current NAS must be searched/probed rather than replaying the retired URL",server.requestCount>=2)
         val inst=InstrumentationRegistry.getInstrumentation()
-        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-        compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("film-detail-list").assertIsDisplayed() }.isSuccess }
-        // Back from the player returns to details; another Back returns to the recent poster.
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(card).assertIsDisplayed().assertIsFocused() }.isSuccess }
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()

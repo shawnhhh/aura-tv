@@ -48,4 +48,36 @@ class DiscoveryLayoutPrefetchTest {
         assertEquals(original, latest.routes)
         assertEquals(2, latest.hits.size)
     }
+
+    @Test fun canceledPrefetchResumesWithoutRepeatingTerminalSearch() = runBlocking {
+        var searches = 0
+        var loads = 0
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val node = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
+            { searches++; listOf(offer("a")) }, {
+                loads++; entered.complete(Unit); release.await(); detail(it, 1)
+            })
+        val service = HerrinSourceDiscovery()
+        val job = launch { service.search("r", listOf(node), null, Mutex()) {} }
+        withTimeout(1000) { entered.await() }; job.cancelAndJoin()
+        release.complete(Unit)
+        var snapshot = HerrinSourceDiscovery.Snapshot("", 0)
+        service.search("r", listOf(node), null, Mutex()) { snapshot = it }
+        assertEquals(1, searches); assertEquals(2, loads)
+        assertEquals(2, snapshot.routes.size)
+    }
+
+    @Test fun slowPreferredDetailsNeverOccupySearchLane() = runBlocking {
+        val release = CompletableDeferred<Unit>()
+        val fallbackSearched = CompletableDeferred<Unit>()
+        val first = HerrinSourceDiscovery.Node("preferred", "CMS", HerrinSourceType.TVBOX_CMS,
+            { listOf(offer("a")) }, { release.await(); detail(it, 1) })
+        val fallback = HerrinSourceDiscovery.Node("fallback", "CMS", HerrinSourceType.TVBOX_CMS,
+            { fallbackSearched.complete(Unit); emptyList() }, { null })
+        val job = launch { HerrinSourceDiscovery().search("r", listOf(first, fallback), "preferred", Mutex()) {} }
+        withTimeout(1000) { fallbackSearched.await() }
+        assertFalse(job.isCompleted)
+        release.complete(Unit); job.join()
+    }
 }

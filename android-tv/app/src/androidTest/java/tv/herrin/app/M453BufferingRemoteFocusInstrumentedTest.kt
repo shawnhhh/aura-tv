@@ -25,7 +25,7 @@ import org.junit.runner.RunWith
 class M453BufferingRemoteFocusInstrumentedTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun productionPlayerUsesMinimalControlsAndSettingsOnTheSoleSession() {
+    @Test fun productionMinimalControlsMenusRetainTheSoleSession() {
         val server = MockWebServer()
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         server.start()
@@ -37,7 +37,7 @@ class M453BufferingRemoteFocusInstrumentedTest {
             }
             compose.waitUntil(7_000) { runCatching {
                 compose.onNodeWithTag("transport-toggle").assertExists()
-                compose.onNodeWithTag("kernel-settings").assertExists()
+                compose.onNodeWithTag("transport-speed").assertExists()
             }.isSuccess }
             compose.onNodeWithText("Original fixture").assertExists()
             for (tag in listOf("transport-speed", "transport-audio", "transport-subtitle", "player-back",
@@ -46,15 +46,17 @@ class M453BufferingRemoteFocusInstrumentedTest {
             for (tag in listOf("danmaku-controls", "transport-repeat", "transport-skip-silence",
                 "player-quality-label", "transport-viewport-mode", "transport-more", "player-verification-toggle"))
                 compose.onNodeWithTag(tag).assertDoesNotExist()
-            compose.onNodeWithTag("kernel-settings")
+            compose.onNodeWithTag("kernel-settings").assertDoesNotExist()
+            compose.onNodeWithTag("transport-speed")
                 .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
-            compose.onNodeWithText("技术信息").assertExists()
+            compose.onNodeWithText("2.0×").assertExists()
+            compose.onNodeWithText("0.5×").assertExists()
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             compose.onNodeWithTag("transport-toggle").assertExists()
             compose.onNodeWithTag("transport-subtitle").performClick()
             compose.onNodeWithText("关闭字幕").performClick()
-            compose.runOnIdle { org.junit.Assert.assertEquals("Settings retain sole player", 1, players.size) }
+            compose.runOnIdle { org.junit.Assert.assertEquals("Menus retain sole player", 1, players.size) }
         } finally { server.shutdown() }
     }
 

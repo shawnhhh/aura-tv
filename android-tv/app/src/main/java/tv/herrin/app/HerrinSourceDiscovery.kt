@@ -32,7 +32,8 @@ internal class HerrinSourceDiscovery {
     data class Snapshot(val revision: String, val nodes: Int,
         val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList(),
         val expanding: Boolean = false, val warehouseFailures: Int = 0,
-        val routes: List<Route> = emptyList()) {
+        val routes: List<Route> = emptyList(),
+        val detailed: Set<String> = emptySet()) {
         val confirmed get() = hits.count { it.relevance == SourceRelevance.CONFIRMED }
         val possible get() = hits.count { it.relevance == SourceRelevance.POSSIBLE }
         val excluded get() = hits.count { it.relevance == SourceRelevance.OTHER }
@@ -65,7 +66,7 @@ internal class HerrinSourceDiscovery {
         }
         val routes = layout.flatMap { it.lines }.map { Route(hit.node.id, key, it.first) }.distinct()
         snapshot=snapshot.copy(hits=snapshot.hits.map{if(it.key==key)it.copy(episodes=layout) else it},
-            routes = (snapshot.routes + routes).distinct())
+            routes = (snapshot.routes + routes).distinct(), detailed = snapshot.detailed + key)
         snapshot
     }
 
@@ -87,85 +88,100 @@ internal class HerrinSourceDiscovery {
         publish(snapshot)
         val cmsSlots = Semaphore(4)
         val detailSlots = Semaphore(2)
-        suspend fun run(node: Node) {
-            if (snapshot.outcomes[node.id]?.let { it != Outcome.SEARCHING } == true) return
-            if (node.type == HerrinSourceType.TVBOX_SPIDER) {
+        suspend fun spiderOperation(block: suspend () -> Unit) {
+            while (true) {
                 while (spiderPaused) { coroutineContext.ensureActive(); kotlinx.coroutines.delay(100) }
-            }
-            suspend fun update(outcome: Outcome, offers: List<HerrinSourceMovie> = emptyList()) {
-                mutations.withLock {
-                    coroutineContext.ensureActive()
-                    if (version.get() != ticket || snapshot.revision != revision) return@withLock
-                    val hits = offers.map { movie ->
-                        // A VOD belongs to a provider, never to a TMDB id or array index.
-                        Hit(node.id + ":" + (movie.film.spiderVodId ?: movie.film.cmsVodId ?: movie.film.id), node, movie,
-                            relevance = node.identity?.let { HerrinSourceRelevance.classify(it, movie) } ?: SourceRelevance.CONFIRMED)
-                    }
-                    snapshot = snapshot.copy(outcomes = snapshot.outcomes + (node.id to outcome),
-                        hits = (snapshot.hits + hits).distinctBy { it.key })
-                    publish(snapshot)
+                val executed = spiderLock.withLock {
+                    if (spiderPaused) false else { block(); true }
                 }
+                if (executed) return
             }
-            suspend fun execute() {
-                update(Outcome.SEARCHING)
-                val started = System.nanoTime()
-                var failureStage = SourceSearchStage.SEARCH
-                var failureCode: SourceSearchOutcome? = null
-                try {
-                    val result = withTimeoutOrNull(node.timeoutMs) { node.search() }
-                    update(if (result == null) Outcome.TIMEOUT else if (result.isEmpty()) Outcome.EMPTY else Outcome.FOUND,
-                        result.orEmpty())
-                    // Layout only: never retain resolved media, tickets or signed URLs.
-                    // This lane is bounded separately from search; Spider already owns
-                    // its serial session lock here. A failed detail cannot erase a hit.
-                    result.orEmpty().forEach { offer ->
-                        if (node.type == HerrinSourceType.TVBOX_SPIDER && spiderPaused) return@forEach
-                        val key = node.id + ":" + (offer.film.spiderVodId ?: offer.film.cmsVodId ?: offer.film.id)
-                        if (snapshot.hits.firstOrNull { it.key == key }?.relevance != SourceRelevance.CONFIRMED) return@forEach
-                        if (snapshot.hits.firstOrNull { it.key == key }?.episodes?.isNotEmpty() == true) return@forEach
-                        val hitAt = System.nanoTime()
-                        try {
-                            val detail = detailSlots.withPermit { withTimeoutOrNull(node.timeoutMs) { node.details(offer) } }
-                            if (detail != null) retainEpisodes(revision, key, detail.film)?.let { ready ->
-                                publish(ready)
-                                if (ready.hits.firstOrNull { it.key == key }?.episodes?.isNotEmpty() == true)
-                                    HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
-                                        "MS=${(System.nanoTime()-hitAt)/1_000_000}")
-                            }
-                        } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (_: Exception) { /* Search remains usable; selection can retry. */ }
-                    }
-                } catch (cancelled: CancellationException) { throw cancelled
-                } catch (failure: SourceCandidateFailure) {
-                    failureStage = failure.stage; failureCode = failure.outcome; update(Outcome.FAILED)
-                } catch (failure: SourceHttpFailure) {
-                    failureCode = SourceHealthIndex.httpOutcome(failure.code); update(Outcome.FAILED)
-                } catch (_: Exception) { update(Outcome.FAILED) }
-                diagnose(SourceSearchEvent(node.id, failureStage,
-                    failureCode ?: when(snapshot.outcomes[node.id]) {
-                        Outcome.FOUND -> SourceSearchOutcome.VERIFIED
-                        Outcome.EMPTY -> SourceSearchOutcome.NO_MATCH
-                        Outcome.TIMEOUT -> SourceSearchOutcome.TIMEOUT
-                        else -> SourceSearchOutcome.ERROR
-                    }, (System.nanoTime() - started) / 1_000_000, completed = snapshot.checked, total = snapshot.nodes, nodeComplete = true))
-            }
-            if (node.type == HerrinSourceType.TVBOX_SPIDER) {
-                while (true) {
-                    while (spiderPaused) { coroutineContext.ensureActive(); kotlinx.coroutines.delay(100) }
-                    val executed = spiderLock.withLock {
-                        if (spiderPaused) false else { execute(); true }
-                    }
-                    if (executed) break
-                }
-            } else cmsSlots.withPermit { execute() }
         }
-        val personal = unique.filter { it.type == HerrinSourceType.NAS }
-        personal.forEach { run(it) }
-        unique.firstOrNull { it.id == preferred && it !in personal }?.let { run(it) }
-        // Independent lanes: queued Spider calls do not occupy the CMS slots.
         coroutineScope {
+            val owner = this
+            val queued = hashSetOf<String>()
+            fun prefetch(node: Node) {
+                snapshot.hits.filter { it.node.id == node.id && it.relevance == SourceRelevance.CONFIRMED &&
+                    it.key !in snapshot.detailed }.forEach { hit ->
+                    if (!queued.add(hit.key)) return@forEach
+                    owner.launch {
+                        suspend fun load() {
+                            val started = System.nanoTime()
+                            try {
+                                val detail = withTimeoutOrNull(node.timeoutMs) { node.details(hit.movie) }
+                                if (detail != null) retainEpisodes(revision, hit.key, detail.film)?.let { ready ->
+                                    mutations.withLock {
+                                        if (snapshot.revision == revision && version.get() == ticket) publish(snapshot)
+                                    }
+                                    HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
+                                        "MS=${(System.nanoTime()-started)/1_000_000}")
+                                }
+                                // Failed/empty details terminate this run, but remain retryable
+                                // on explicit selection. Cancellation never marks completion.
+                                mutations.withLock {
+                                    if (snapshot.revision == revision && version.get() == ticket) {
+                                        snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key)
+                                        publish(snapshot)
+                                    }
+                                }
+                            } catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { /* Preserve hit and allow safe continuation. */ }
+                        }
+                        if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation { load() }
+                        else detailSlots.withPermit { load() }
+                    }
+                }
+            }
+            suspend fun run(node: Node) {
+                if (snapshot.outcomes[node.id]?.let { it != Outcome.SEARCHING } == true) {
+                    prefetch(node)
+                    return
+                }
+                suspend fun update(outcome: Outcome, offers: List<HerrinSourceMovie> = emptyList()) {
+                    mutations.withLock {
+                        coroutineContext.ensureActive()
+                        if (version.get() != ticket || snapshot.revision != revision) return@withLock
+                        val hits = offers.map { movie ->
+                            Hit(node.id + ":" + (movie.film.spiderVodId ?: movie.film.cmsVodId ?: movie.film.id), node, movie,
+                                relevance = node.identity?.let { HerrinSourceRelevance.classify(it, movie) } ?: SourceRelevance.CONFIRMED)
+                        }
+                        snapshot = snapshot.copy(outcomes = snapshot.outcomes + (node.id to outcome),
+                            hits = (snapshot.hits + hits).distinctBy { it.key })
+                        publish(snapshot)
+                    }
+                }
+                suspend fun execute() {
+                    update(Outcome.SEARCHING)
+                    val started = System.nanoTime()
+                    var failureStage = SourceSearchStage.SEARCH
+                    var failureCode: SourceSearchOutcome? = null
+                    try {
+                        val result = withTimeoutOrNull(node.timeoutMs) { node.search() }
+                        update(if (result == null) Outcome.TIMEOUT else if (result.isEmpty()) Outcome.EMPTY else Outcome.FOUND,
+                            result.orEmpty())
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (failure: SourceCandidateFailure) {
+                        failureStage = failure.stage; failureCode = failure.outcome; update(Outcome.FAILED)
+                    } catch (failure: SourceHttpFailure) {
+                        failureCode = SourceHealthIndex.httpOutcome(failure.code); update(Outcome.FAILED)
+                    } catch (_: Exception) { update(Outcome.FAILED) }
+                    diagnose(SourceSearchEvent(node.id, failureStage,
+                        failureCode ?: when(snapshot.outcomes[node.id]) {
+                            Outcome.FOUND -> SourceSearchOutcome.VERIFIED // SEARCH stage only; never media verification.
+                            Outcome.EMPTY -> SourceSearchOutcome.NO_MATCH
+                            Outcome.TIMEOUT -> SourceSearchOutcome.TIMEOUT
+                            else -> SourceSearchOutcome.ERROR
+                        }, (System.nanoTime() - started) / 1_000_000, completed = snapshot.checked, total = snapshot.nodes, nodeComplete = true))
+                }
+                if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation { execute() }
+                else cmsSlots.withPermit { execute() }
+                prefetch(node)
+            }
+            val personal = unique.filter { it.type == HerrinSourceType.NAS }
+            personal.forEach { run(it) }
+            unique.firstOrNull { it.id == preferred && it !in personal }?.let { run(it) }
             unique.filter { it !in personal && it.id != preferred }.forEach { node -> launch { run(node) } }
-            if(expand != null) launch {
+            if (expand != null) launch {
                 val failures = expand { additions ->
                     val fresh = mutations.withLock {
                         if (version.get() != ticket || snapshot.revision != revision) return@withLock emptyList<Node>()
@@ -184,6 +200,6 @@ internal class HerrinSourceDiscovery {
                 }
             }
         }
-    }
+        }
     }
 }
