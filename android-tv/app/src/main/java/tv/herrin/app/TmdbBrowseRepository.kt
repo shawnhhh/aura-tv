@@ -56,7 +56,10 @@ internal class TmdbBrowseRepository(
                 ?.sortedByDescending(File::lastModified)?.drop(if (group == "-proof-") 512 else 64)?.forEach(File::delete)
         } finally { temporary.delete() }
     }
-    private val requestLocks = Array(64) { Mutex() }
+    // A stalled release proof must never hold a request stripe needed by browse lists.
+    // Cache deduplication remains per request type while the network still caps proofs at two.
+    private val listRequestLocks = Array(64) { Mutex() }
+    private val proofRequestLocks = Array(64) { Mutex() }
     private val responses = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, Pair<Long, String>>(64, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?) = size > 64
@@ -64,7 +67,9 @@ internal class TmdbBrowseRepository(
     private suspend fun get(path: String, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + path
         val previousResponse = responses[key]
-        return requestLocks[(key.hashCode() and Int.MAX_VALUE) % requestLocks.size].withLock {
+        val proofRequest = Regex("^/(movie|tv)/[0-9]+(?:/|\\?|$)").containsMatchIn(path)
+        val locks = if (proofRequest) proofRequestLocks else listRequestLocks
+        return locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             responses[key]?.takeIf { (!force || it !== previousResponse) && clock() - it.first in 0..30_000L }?.let { return@withLock JSONObject(it.second) }
             val request: suspend () -> JSONObject = {
                 network.withPermit {
@@ -82,7 +87,7 @@ internal class TmdbBrowseRepository(
             }
             // Release/episode proof calls are individually slow or rate-limited.
             // They must not occupy all three slots while HOT/DOMESTIC lists wait.
-            if (Regex("^/(movie|tv)/[0-9]+(?:/|\\?|$)").containsMatchIn(path)) {
+            if (proofRequest) {
                 proofNetwork.withPermit { request() }
             } else request()
         }
