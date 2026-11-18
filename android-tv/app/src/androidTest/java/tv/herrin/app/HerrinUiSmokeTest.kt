@@ -670,6 +670,7 @@ http://example.org/live/channel.m3u8
         MockWebServer().use { server ->
             val details=java.util.concurrent.ConcurrentLinkedQueue<String>()
             val mediaCalls=java.util.concurrent.atomic.AtomicInteger()
+            val failChosenB=java.util.concurrent.atomic.AtomicBoolean(false)
             server.dispatcher=object:okhttp3.mockwebserver.Dispatcher() {
                 override fun dispatch(request:okhttp3.mockwebserver.RecordedRequest):MockResponse {
                     val url=request.requestUrl!!
@@ -685,6 +686,7 @@ http://example.org/live/channel.m3u8
                         .put("type_name","电影").put("vod_year", if (source == "c") "2020" else "2025")
                     if(url.queryParameter("ids") != null) {
                         details.add(source+":"+url.queryParameter("ids"))
+                        if (source == "b" && failChosenB.get()) return MockResponse().setResponseCode(503)
                         row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/unavailable-$source.mp4"))
                     }
                     return MockResponse().setHeader("Content-Type","application/json")
@@ -724,6 +726,30 @@ http://example.org/live/channel.m3u8
             assertTrue("An unconfirmed year must never be prefetched", details.none { it.startsWith("c:") })
             assertEquals(0, mediaCalls.get())
             compose.onNodeWithTag("source-region").assertIsDisplayed()
+            compose.waitUntil(10000) { runCatching {
+                list.performScrollToNode(hasTestTag("detail-play-cta"))
+                compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+            }.isSuccess }
+            val aReadsBeforeRetry = details.count { it == "a:local-a" }
+            failChosenB.set(true)
+            list.performScrollToNode(hasTestTag("source-region"))
+            compose.onNodeWithText("线路 1").performClick()
+            compose.waitUntil(10000) { runCatching { compose.onNodeWithText("暂无可用线路").assertIsDisplayed() }.isSuccess }
+            list.performScrollToNode(hasText("请选择片源线路"))
+            compose.onNodeWithText("请选择片源线路").assertIsDisplayed()
+            compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
+            failChosenB.set(false)
+            list.performScrollToNode(hasTestTag("source-region"))
+            compose.onNodeWithText("重试").performClick()
+            compose.waitUntil(10000) { runCatching { compose.onNodeWithText("线路 1").assertExists() }.isSuccess }
+            compose.onNodeWithText("线路 1").performClick()
+            compose.waitUntil(10000) { runCatching {
+                list.performScrollToNode(hasTestTag("detail-play-cta"))
+                compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+            }.isSuccess }
+            assertEquals("Targeted retry must preserve another provider's detail", aReadsBeforeRetry, details.count { it == "a:local-a" })
+            assertEquals(0, mediaCalls.get())
+            list.performScrollToNode(hasTestTag("source-region"))
             capture("p0-real-cms-protocol-source-groups-before-media")
         }
     }

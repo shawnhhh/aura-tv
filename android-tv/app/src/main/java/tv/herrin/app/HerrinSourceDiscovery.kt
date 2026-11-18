@@ -36,6 +36,10 @@ internal class HerrinSourceDiscovery {
         val expanding: Boolean = false, val warehouseFailures: Int = 0,
         val routes: List<Route> = emptyList(),
         val detailed: Set<String> = emptySet()) {
+        val readyRoutes: List<Route> get() {
+            val ids = hits.associate { hit -> hit.key to hit.episodes.flatMap { it.lines }.map { it.first }.toSet() }
+            return routes.filter { it.lineId in ids[it.hitKey].orEmpty() }
+        }
         val confirmed get() = hits.count { it.relevance == SourceRelevance.CONFIRMED }
         val possible get() = hits.count { it.relevance == SourceRelevance.POSSIBLE }
         val excluded get() = hits.count { it.relevance == SourceRelevance.OTHER }
@@ -69,6 +73,22 @@ internal class HerrinSourceDiscovery {
         val routes = layout.flatMap { it.lines }.map { Route(hit.node.id, key, it.first) }.distinct()
         snapshot=snapshot.copy(hits=snapshot.hits.map{if(it.key==key)it.copy(episodes=layout) else it},
             routes = (snapshot.routes + routes).distinct(), detailed = snapshot.detailed + key)
+        snapshot
+    }
+
+    suspend fun invalidateLayout(revision: String, key: String): Snapshot? = mutations.withLock {
+        if (snapshot.revision != revision) return@withLock null
+        snapshot = snapshot.copy(hits = snapshot.hits.map { if (it.key == key) it.copy(episodes = emptyList()) else it },
+            detailed = snapshot.detailed - key)
+        snapshot
+    }
+
+    /** Keep route ordinals as tombstones, while retrying only the explicitly requested node. */
+    suspend fun resetNode(revision: String, nodeId: String): Snapshot? = mutations.withLock {
+        if (snapshot.revision != revision) return@withLock null
+        val keys = snapshot.hits.filter { it.node.id == nodeId }.map { it.key }.toSet()
+        snapshot = snapshot.copy(outcomes = snapshot.outcomes - nodeId,
+            hits = snapshot.hits.filterNot { it.node.id == nodeId }, detailed = snapshot.detailed - keys)
         snapshot
     }
 
@@ -154,7 +174,8 @@ internal class HerrinSourceDiscovery {
                                 relevance = node.identity?.let { HerrinSourceRelevance.classify(it, movie) } ?: SourceRelevance.CONFIRMED)
                         }
                         snapshot = snapshot.copy(outcomes = snapshot.outcomes + (node.id to outcome),
-                            hits = (snapshot.hits + hits).distinctBy { it.key })
+                            hits = if (outcome == Outcome.SEARCHING) snapshot.hits else
+                                (snapshot.hits.filterNot { it.node.id == node.id } + hits).distinctBy { it.key })
                         publish(snapshot)
                     }
                 }
