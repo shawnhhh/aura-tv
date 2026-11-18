@@ -28,9 +28,11 @@ internal class HerrinSourceDiscovery {
     data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie,
         val episodes: List<EpisodeLayout> = emptyList(),
         val relevance: SourceRelevance = SourceRelevance.CONFIRMED)
+    data class Route(val nodeId: String, val hitKey: String, val lineId: String)
     data class Snapshot(val revision: String, val nodes: Int,
         val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList(),
-        val expanding: Boolean = false, val warehouseFailures: Int = 0) {
+        val expanding: Boolean = false, val warehouseFailures: Int = 0,
+        val routes: List<Route> = emptyList()) {
         val confirmed get() = hits.count { it.relevance == SourceRelevance.CONFIRMED }
         val possible get() = hits.count { it.relevance == SourceRelevance.POSSIBLE }
         val excluded get() = hits.count { it.relevance == SourceRelevance.OTHER }
@@ -42,6 +44,8 @@ internal class HerrinSourceDiscovery {
             "超时 ${outcomes.count { it.value == Outcome.TIMEOUT }} · 剩余 $remaining" +
             if(expanding) " · 正在读取其他已导入影视仓" else if(warehouseFailures > 0) " · $warehouseFailures 个影视仓读取失败，可继续重试" else ""
     }
+    // UI selection owns the next Spider session. CMS/NAS lanes remain independent.
+    @Volatile var spiderPaused: Boolean = false
     private val version = java.util.concurrent.atomic.AtomicLong()
     private val runs = Mutex()
     private val mutations = Mutex()
@@ -59,7 +63,9 @@ internal class HerrinSourceDiscovery {
         val layout=detailed.playbackEpisodes.map { episode ->
             EpisodeLayout(episode.number,episode.title,episode.lines.map { it.id to it.title })
         }
-        snapshot=snapshot.copy(hits=snapshot.hits.map{if(it.key==key)it.copy(episodes=layout) else it})
+        val routes = layout.flatMap { it.lines }.map { Route(hit.node.id, key, it.first) }.distinct()
+        snapshot=snapshot.copy(hits=snapshot.hits.map{if(it.key==key)it.copy(episodes=layout) else it},
+            routes = (snapshot.routes + routes).distinct())
         snapshot
     }
 
@@ -75,12 +81,17 @@ internal class HerrinSourceDiscovery {
         if (snapshot.revision != revision) snapshot = Snapshot(revision, unique.size)
         else snapshot = snapshot.copy(nodes = unique.size,
             outcomes = snapshot.outcomes.filter { it.key in known && it.value != Outcome.SEARCHING },
-            hits = snapshot.hits.filter { it.node.id in known })
+            hits = snapshot.hits.filter { it.node.id in known },
+            routes = snapshot.routes.filter { it.nodeId in known })
         snapshot = snapshot.copy(expanding = expand != null, warehouseFailures = 0)
         publish(snapshot)
         val cmsSlots = Semaphore(4)
+        val detailSlots = Semaphore(2)
         suspend fun run(node: Node) {
             if (snapshot.outcomes[node.id]?.let { it != Outcome.SEARCHING } == true) return
+            if (node.type == HerrinSourceType.TVBOX_SPIDER) {
+                while (spiderPaused) { coroutineContext.ensureActive(); kotlinx.coroutines.delay(100) }
+            }
             suspend fun update(outcome: Outcome, offers: List<HerrinSourceMovie> = emptyList()) {
                 mutations.withLock {
                     coroutineContext.ensureActive()
@@ -104,6 +115,26 @@ internal class HerrinSourceDiscovery {
                     val result = withTimeoutOrNull(node.timeoutMs) { node.search() }
                     update(if (result == null) Outcome.TIMEOUT else if (result.isEmpty()) Outcome.EMPTY else Outcome.FOUND,
                         result.orEmpty())
+                    // Layout only: never retain resolved media, tickets or signed URLs.
+                    // This lane is bounded separately from search; Spider already owns
+                    // its serial session lock here. A failed detail cannot erase a hit.
+                    result.orEmpty().forEach { offer ->
+                        if (node.type == HerrinSourceType.TVBOX_SPIDER && spiderPaused) return@forEach
+                        val key = node.id + ":" + (offer.film.spiderVodId ?: offer.film.cmsVodId ?: offer.film.id)
+                        if (snapshot.hits.firstOrNull { it.key == key }?.relevance != SourceRelevance.CONFIRMED) return@forEach
+                        if (snapshot.hits.firstOrNull { it.key == key }?.episodes?.isNotEmpty() == true) return@forEach
+                        val hitAt = System.nanoTime()
+                        try {
+                            val detail = detailSlots.withPermit { withTimeoutOrNull(node.timeoutMs) { node.details(offer) } }
+                            if (detail != null) retainEpisodes(revision, key, detail.film)?.let { ready ->
+                                publish(ready)
+                                if (ready.hits.firstOrNull { it.key == key }?.episodes?.isNotEmpty() == true)
+                                    HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
+                                        "MS=${(System.nanoTime()-hitAt)/1_000_000}")
+                            }
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { /* Search remains usable; selection can retry. */ }
+                    }
                 } catch (cancelled: CancellationException) { throw cancelled
                 } catch (failure: SourceCandidateFailure) {
                     failureStage = failure.stage; failureCode = failure.outcome; update(Outcome.FAILED)
@@ -118,8 +149,15 @@ internal class HerrinSourceDiscovery {
                         else -> SourceSearchOutcome.ERROR
                     }, (System.nanoTime() - started) / 1_000_000, completed = snapshot.checked, total = snapshot.nodes, nodeComplete = true))
             }
-            if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderLock.withLock { execute() }
-            else cmsSlots.withPermit { execute() }
+            if (node.type == HerrinSourceType.TVBOX_SPIDER) {
+                while (true) {
+                    while (spiderPaused) { coroutineContext.ensureActive(); kotlinx.coroutines.delay(100) }
+                    val executed = spiderLock.withLock {
+                        if (spiderPaused) false else { execute(); true }
+                    }
+                    if (executed) break
+                }
+            } else cmsSlots.withPermit { execute() }
         }
         val personal = unique.filter { it.type == HerrinSourceType.NAS }
         personal.forEach { run(it) }

@@ -8,9 +8,11 @@ import java.util.concurrent.atomic.AtomicLong
 @Stable
 internal class TmdbScreenState {
     val sourceDiscoveries = mutableMapOf<String, HerrinSourceDiscovery>()
+    val autoLayoutSelected = mutableSetOf<String>()
     val discoveredSources = mutableStateMapOf<String, HerrinSourceDiscovery.Snapshot>()
     val discoverySpiderLock = kotlinx.coroutines.sync.Mutex()
     var discoverySelection by mutableStateOf<Pair<String, String>?>(null)
+    var discoveryLine: String? by mutableStateOf(null)
     var discoverySelectionEpoch by mutableIntStateOf(0)
     fun discoveryFor(id: String): HerrinSourceDiscovery {
         sourceDiscoveries[id]?.let { return it }

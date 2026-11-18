@@ -1330,6 +1330,7 @@ private fun Herrin(startup: StartupPresentation) {
         val snapshot = tmdbState.discoveredSources[filmId] ?: return@LaunchedEffect
         val hit = snapshot.hits.firstOrNull { it.key == selection.second } ?: return@LaunchedEffect
         if (hit.relevance == SourceRelevance.OTHER) return@LaunchedEffect
+        tmdbState.sourceDiscoveries[filmId]?.spiderPaused = hit.node.type == HerrinSourceType.TVBOX_SPIDER
         val consent = spiderBridge.configurationTicket()
         val metadata = tmdbState.tmdbResolved[filmId] ?: return@LaunchedEffect
         tmdbState.tmdbSourceStatus = "正在读取 ${hit.node.name} 的真实选集…"
@@ -1339,8 +1340,10 @@ private fun Herrin(startup: StartupPresentation) {
         val loaded = withContext(Dispatchers.IO + SpiderSearchAuthority(consent)) {
             try {
                 withTimeoutOrNull(15_000) {
-                    tmdbState.discoverySpiderLock.lock()
-                    try { hit.node.details(hit.movie) } finally { tmdbState.discoverySpiderLock.unlock() }
+                    if (hit.node.type == HerrinSourceType.TVBOX_SPIDER) {
+                        tmdbState.discoverySpiderLock.lock()
+                        try { hit.node.details(hit.movie) } finally { tmdbState.discoverySpiderLock.unlock() }
+                    } else hit.node.details(hit.movie)
                 }
             } catch(cancelled: kotlinx.coroutines.CancellationException) { throw cancelled
             } catch(failure: SourceCandidateFailure) { detailStage=failure.stage;detailOutcome=failure.outcome;null
@@ -1384,7 +1387,11 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.tmdbResolved[filmId] = metadata.copy(cmsVodId = detailed.cmsVodId,
             spiderVodId = detailed.spiderVodId, playbackEpisodes = detailed.playbackEpisodes,
             episodes = detailed.playbackEpisodes.size)
-        HerrinPlaybackEntry.firstPlayable(tmdbState.tmdbResolved[filmId])?.let { (number, id) -> episode = number; line = id }
+        val requestedLine = tmdbState.discoveryLine
+        tmdbState.discoveryLine = null
+        val requestedEpisode = detailed.playbackEpisodes.firstOrNull { ep -> ep.lines.any { it.id == requestedLine } }
+        if (requestedEpisode != null && requestedLine != null) { episode = requestedEpisode.number; line = requestedLine }
+        else HerrinPlaybackEntry.firstPlayable(tmdbState.tmdbResolved[filmId])?.let { (number, id) -> episode = number; line = id }
         tmdbState.tmdbSourceStatus = "${hit.node.name} · ${detailed.playbackEpisodes.size} 集 · 选择集数后解析并验证播放"
         HerrinPlaybackDiagnosticJournal.record("SOURCE", "DISCOVERY_DETAIL_READY", "EPISODES=${detailed.playbackEpisodes.size}")
     }
@@ -1412,9 +1419,7 @@ private fun Herrin(startup: StartupPresentation) {
         if(!sourceSearchForeground)return@LaunchedEffect
         tmdbState.sourceSearchJob=kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val recoveryRequest = tmdbState.automaticSearch?.takeIf { it.film == filmId && screen == "player" }
-        if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-") ||
-            (tmdbState.tmdbExtendedRequest != filmId && tmdbState.tmdbResolved[filmId]?.playbackEpisodes?.isNotEmpty() == true &&
-                tmdbState.tmdbPlaybackRoutes.usable(filmId,spiderBridge.approvedActiveSiteKey())!=null)) return@LaunchedEffect
+        if ((screen != "detail" && recoveryRequest == null) || !filmId.startsWith("tmdb-")) return@LaunchedEffect
         val tmdbFilm = lookupFilm ?: return@LaunchedEffect
         val tmdbKey = tmdbDiscovery.identity(tmdbFilm) ?: return@LaunchedEffect
         val targetId = tmdbFilm.id
@@ -1555,6 +1560,7 @@ private fun Herrin(startup: StartupPresentation) {
                 val preferredNode = preferredSite?.let { HerrinDiscoveryNodes.id(approvedRoot, it,
                     if(it.spiderApi != null) currentTvbox?.spiderJar else null) }
                 val discovery = tmdbState.discoveryFor(targetId)
+                discovery.spiderPaused = false
                 discovery.search(planRevision, nodes, preferredNode, tmdbState.discoverySpiderLock, SourceSearchDiagnostics::record,
                     expand = if(importedWarehouses.isEmpty()) null else { emit ->
                         HerrinDiscoveryWarehouses.expand(importedWarehouses,tvBoxRepository,tvBoxAllowHttp,
@@ -1568,6 +1574,13 @@ private fun Herrin(startup: StartupPresentation) {
                             tmdbState.discoveredSources[targetId] = snapshot
                             tmdbState.tmdbSourceStatus = snapshot.text() +
                                 if(snapshot.hits.isEmpty()) " · 尚无站点搜索结果" else " · 选择影视点条目读取真实选集"
+                            if (targetId + planRevision !in tmdbState.autoLayoutSelected && tmdbState.discoverySelection == null && tmdbState.tmdbResolved[targetId]?.playbackEpisodes.isNullOrEmpty()) {
+                                snapshot.hits.firstOrNull { it.relevance == SourceRelevance.CONFIRMED && it.episodes.isNotEmpty() }?.let { ready ->
+                                    tmdbState.autoLayoutSelected += targetId + planRevision
+                                    tmdbState.discoverySelection = targetId to ready.key
+                                    tmdbState.discoverySelectionEpoch++
+                                }
+                            }
                             if(tmdbState.resumeSourceFilm == targetId) {
                                 snapshot.hits.firstOrNull { it.relevance == SourceRelevance.CONFIRMED && HerrinFilmIdentityMatch.matches(searchIdentity,it.movie) }?.let { hit ->
                                     // A recent-card click is an explicit resume request. Reacquire
@@ -1575,7 +1588,6 @@ private fun Herrin(startup: StartupPresentation) {
                                     tmdbState.resumeSourceFilm = null
                                     tmdbState.discoverySelection = targetId to hit.key
                                     tmdbState.discoverySelectionEpoch++
-                                    tmdbState.sourceSearchJob?.cancel()
                                 }
                             }
                         }
@@ -4859,16 +4871,11 @@ private fun Herrin(startup: StartupPresentation) {
                                     modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
                                     color = Color(0xFFE1E8F2))
                             } }
-                        if (film.id.startsWith("tmdb-") && screen == "detail") item {
-                            SourceSearchStatus(if(tmdbState.tmdbStatusFilm==film.id)tmdbState.tmdbSourceStatus.ifBlank{"正在快速检索已配置来源…"} else "正在快速检索已配置来源…",
-                                tmdbState.tmdbStageStarted,tmdbState.tmdbSearchRunning &&tmdbState.tmdbStatusFilm==film.id,
-                                if(tmdbState.tmdbStatusFilm==film.id)tmdbState.tmdbSearchStarted else 0L)
-                        }
                         if(film.id.startsWith("tmdb-") && screen == "detail") {
                             tmdbState.discoveredSources[film.id]?.let { discovery ->
                                 herrinDiscoveryItems(discovery, tmdbState.tmdbSearchRunning, reduceMotion,
-                                    select = { hit ->
-                                        tmdbState.sourceSearchJob?.cancel()
+                                    select = { hit, selectedLine ->
+                                        tmdbState.discoveryLine = selectedLine
                                         tmdbState.discoverySelection = film.id to hit.key
                                         tmdbState.discoverySelectionEpoch++
                                     }, pause = { tmdbState.sourceSearchJob?.cancel() }, resume = {
@@ -4961,24 +4968,12 @@ private fun Herrin(startup: StartupPresentation) {
                                         tmdbState.tmdbSourceStatus = "正在重新检索 SMB／WebDAV／TVBox…"
                                         tmdbState.tmdbLookupEpoch++
                                     }
-                                } else if (providerFilms == null || film.id.startsWith("tmdb-")) TvButton(when {
-                                    showGroup != null && groupResume != null ->
-                                        "▶ 继续播放 第${groupResume.first.season}季 第${groupResume.first.number}集 ${formatSeasonClock(groupResume.second.positionMs)}"
-                                    showGroup != null && groupSection?.episodes?.isNotEmpty() == true ->
-                                        "▶ 播放 第${groupSection.number}季 第${groupSection.episodes.first().number}集"
-                                    showGroup != null -> "正在读取多季选集"
-                                    spiderActive && film.playbackEpisodes.isEmpty() -> "正在获取选集"
-                                    seasonResume != null ->
-                                        "▶ 继续播放 第${seasonResume.entry.season}季 第${seasonResume.entry.number}集 ${formatSeasonClock(seasonResume.position.positionMs)}"
-                                    seasonLayout != null && detailSeasonEntries.isNotEmpty() ->
-                                        "▶ 播放 第${detailSeason!!.number}季 第${(detailSeasonSource ?: detailSeasonEntries.first()).number}集"
-                                    resume != null && resume.positionMs > 0L ->
-                                        "▶ 继续播放 ${resume.positionMs / 60000}:${"%02d".format(resume.positionMs / 1000 % 60)}"
-                                    spiderActive -> "▶ 播放当前集"
-                                    providerFilms != null && film.playbackEpisodes.isEmpty() -> "暂无可播选集"
-                                    film.playbackEpisodes.isEmpty() -> "▶ 播放演示"
-                                    else -> "▶ 播放授权片源"
-                                }, modifier = Modifier.testTag("detail-play-cta"), selected = true, reduced = reduceMotion) {
+                                } else if (providerFilms == null || film.id.startsWith("tmdb-")) TvButton(DetailPlayLabel.text(
+                                    season = groupResume?.first?.season ?: seasonResume?.entry?.season ?: detailSeason?.number,
+                                    episode = groupResume?.first?.number ?: seasonResume?.entry?.number ?:
+                                        (detailSeasonSource ?: detailSeasonEntries.firstOrNull())?.number,
+                                    positionMs = groupResume?.second?.positionMs ?: seasonResume?.position?.positionMs ?: resume?.positionMs
+                                ), modifier = Modifier.testTag("detail-play-cta"), selected = true, reduced = reduceMotion) {
                                     if (showGroup != null && groupResume != null)
                                         playGroupSource(groupResume.first)
                                     else if (showGroup != null && groupSection?.episodes?.isNotEmpty() == true)
