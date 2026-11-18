@@ -55,6 +55,7 @@ internal class PersonalConnections(private val context: Context) {
         require(status in setOf("connected", "failed", "unknown"))
         check(prefs.edit().putString("personal_status_$id", status).commit())
     }
+    fun migrationWarning() = prefs.getBoolean("personal_migration_attention", false)
     fun publicList() = JSONArray().apply { list().forEach { c ->
         put(c.publicJson().put("status", prefs.getString("personal_status_${c.id}", "unknown")))
     } }
@@ -69,12 +70,18 @@ internal class PersonalConnections(private val context: Context) {
         if (prefs.getBoolean("personal_migrated_v1", false)) return@synchronized
         fun add(key: String, name: String, url: String, user: String, password: String, domain: String = "", encryption: Boolean = false, enabled: Boolean = true) {
             if (url.isBlank() || prefs.contains("personal_migration_$key")) return
+            runCatching {
             val u = URI(url); val protocol = u.scheme.lowercase(java.util.Locale.ROOT)
+            val cleanPath = PersonalStoragePolicy.path(u.path.orEmpty())
+            require(!u.host.isNullOrBlank())
+            PersonalStoragePolicy.endpoint(protocol, u.host, if(u.port > 0) u.port else if(protocol == "https") 443 else if(protocol == "http") 80 else 445)
             val c = save(JSONObject().put("name", name).put("protocol", protocol).put("host", u.host)
                 .put("port", if (u.port > 0) u.port else if (protocol == "https") 443 else if (protocol == "http") 80 else 445)
                 .put("username", user).put("password", password).put("domain", domain).put("encryption", encryption).put("enabled", enabled))
-            index.folder(c.id, u.path.orEmpty().trim('/'), "auto")
+            index.folder(c.id, cleanPath, "auto")
             check(prefs.edit().putString("personal_migration_$key", c.id).commit())
+            }.onFailure { check(prefs.edit().putBoolean("personal_migration_attention", true).commit()) }
+
         }
         val legacy = Preferences(context)
         val dav = HerrinPersonalCredentialStore(context, "nas").load()

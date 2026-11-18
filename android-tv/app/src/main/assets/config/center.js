@@ -96,7 +96,7 @@ let personalConnection='', personalPage=0;
 function actionButton(parent,label,action){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await action();}catch(e){status.textContent=e.message;}finally{b.disabled=false;}};parent.append(b);}
 async function personalCall(path,data={}){const r=await call('/personal'+path,data);if(r.ok===false)throw Error(r.error||'操作失败');return r;}
 async function refreshPersonal(){
- const r=await personalCall('',{offset:personalPage*100,category:document.querySelector('#personal-category').value});const list=document.querySelector('#personal-connections');list.replaceChildren();
+ const r=await personalCall('',{offset:personalPage*100,category:document.querySelector('#personal-category').value});document.querySelector('#personal-migration-warning').textContent=r.migrationWarning?'部分旧配置无效，原配置已保留；请手动添加对应连接。':'';const list=document.querySelector('#personal-connections');list.replaceChildren();
  r.connections.forEach(c=>{const row=document.createElement('p');row.textContent=c.name+' · '+c.protocol+' · '+(c.enabled?'启用':'停用');
  actionButton(row,'编辑',()=>{const f=document.querySelector('#personal-edit');f.reset();for(const key of ['id','name','protocol','host','port','username','domain'])f.elements[key].value=c[key]||'';f.elements.encryption.checked=c.encryption;});
  actionButton(row,'测试 / 浏览',async()=>{personalConnection=c.id;document.querySelector('#personal-browser').hidden=false;await browsePersonal();});

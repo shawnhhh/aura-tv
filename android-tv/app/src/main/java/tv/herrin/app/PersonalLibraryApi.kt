@@ -75,7 +75,7 @@ internal class PersonalLibraryApi(context: Context) {
             "/personal" -> Unit
             else -> error("UNKNOWN_PERSONAL_OPERATION")
         }
-        return JSONObject().put("ok", true).put("connections", library.connections.publicList())
+        return JSONObject().put("ok", true).put("migrationWarning", library.connections.migrationWarning()).put("connections", library.connections.publicList())
             .put("folders", JSONArray().apply { library.index.folders().forEach { f -> put(JSONObject().put("id", f.id).put("connection", f.connection).put("path", f.path).put("type", f.type).put("enabled", f.enabled).put("state", f.state).put("scanned", f.scanned)) } })
             .put("media", library.index.media(limit = 100, offset = input.optInt("offset"), category = input.optString("category", "all"))).put("progress", PersonalLibrary.progress)
     }

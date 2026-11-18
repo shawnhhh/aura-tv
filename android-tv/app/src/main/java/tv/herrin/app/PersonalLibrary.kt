@@ -2,6 +2,9 @@ package tv.herrin.app
 
 import android.content.Context
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
@@ -94,6 +97,7 @@ internal class PersonalLibrary(context: Context) {
                     }
                 }
                 index.finish(f.id, stamp)
+                publishIndexChange()
                 connections.status(c.id, "connected")
                 progress = "扫描完成：$count 个视频；正在匹配资料"
                 scrape(f)
@@ -105,7 +109,7 @@ internal class PersonalLibrary(context: Context) {
                 connections.status(c.id, "failed")
                 index.state(f.id, "offline"); progress = PersonalRemoteFiles.message(error)
                 // No deletion on failure, cancellation, limits or an offline server.
-            }
+            } finally { publishIndexChange() }
         }
     }
     private suspend fun scrape(folder: PersonalMediaIndex.Folder) {
@@ -139,6 +143,9 @@ internal class PersonalLibrary(context: Context) {
     fun cancelAndWait() { runBlocking { active?.cancelAndJoin() } }
     fun cancel() { active?.cancel() }
     companion object {
+        private val revision = MutableStateFlow(0L)
+        val revisions = revision.asStateFlow()
+        private fun publishIndexChange() { revision.update { it + 1 } }
         private val scanLock = Any()
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
         @Volatile private var active: Job? = null

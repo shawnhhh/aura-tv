@@ -38,6 +38,7 @@ class PersonalLibraryImportTest {
                     .put("host", "localhost").put("port", server.port).put("path", "media")
                     .put("username", "fixture-user").put("password", "fixture-secret"))
                 assertTrue(added.getBoolean("ok")); connection = added.getString("id")
+                val before = PersonalLibrary.revisions.value
                 api.handle("/personal/folder", JSONObject().put("connection", connection).put("path", "media").put("type", "movie"))
                 val folder = library.index.folders(connection).single()
                 suspend fun awaitState(state: String) {
@@ -45,6 +46,7 @@ class PersonalLibraryImportTest {
                     library.cancelAndWait()
                 }
                 awaitState("complete")
+                assertTrue(PersonalLibrary.revisions.value > before)
                 assertEquals(2, library.index.media(folder.id).length())
                 HerrinSmbSessions().use { streams ->
                     val source = library.sources(streams).first { it.id == "personal:$connection" }

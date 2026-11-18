@@ -56,6 +56,7 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("存储连接管理 · $tab")
+        if(data.optBoolean("migrationWarning")) Text("部分旧配置无效，原配置已保留；请手动添加对应连接。")
         val connections = data.optJSONArray("connections")
         if(connections != null) for(i in 0 until connections.length()) {
             val c = connections.getJSONObject(i)

@@ -572,7 +572,8 @@ private fun Herrin(startup: StartupPresentation) {
     DisposableEffect(smbSessions){onDispose{smbSessions.close()}}
 
     val tmdbState=remember { TmdbScreenState() }
-    PersonalLibraryStartupImport { tmdbState.tmdbLookupEpoch++ }
+    val personalIndexRevision by PersonalLibrary.revisions.collectAsState()
+    PersonalLibraryStartupImport()
     SourceSearchLifecycle(tmdbState)
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
@@ -1398,6 +1399,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.preferredSiteStatus = "首选影视点：${site.name}"
         tmdbState.tmdbLookupEpoch++
     }
+    PersonalLibraryIndexChanges(personalIndexRevision, screen, tmdbState)
     val lookupFilm = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbBrowseIndex + tmdbState.tmdbTop250Films + recentIndexFilms).firstOrNull { it.id == filmId }
     // Capture the same value as the effect key. Lifecycle observers can publish
     // STARTED during apply, before the old (false-keyed) effect is launched.
@@ -1493,7 +1495,7 @@ private fun Herrin(startup: StartupPresentation) {
             preferredSite?.takeIf { it.apiUrl != null }?.let(directSites::add)
             directSites += currentTvbox?.sites?.filter { it.apiUrl != null }.orEmpty().take(100-directSites.size)
             // Metadata cache first; explicit continuation alone may refresh missing warehouse data.
-            val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),prefs.tvBoxPreferredRootId,prefs.tvBoxPreferredSiteId,nasUrl,
+            val scope=SourceHealthIndex.digest(listOf(approvedRoot,trustedSpiderRoot,trustedSpiderJar,currentTvbox.toString(),prefs.tvBoxPreferredRootId,prefs.tvBoxPreferredSiteId,nasUrl,configEpoch.toString(),personalIndexRevision.toString(),
                 HerrinSmbConfigStore(context).publicConfig().toString(),
                 AdditionalServiceConfigs(context).enabled("nas").toString(),importedWarehouses.toString(),
                 context.getSharedPreferences("herrin_personal_secrets",0).getString("_revision","legacy").orEmpty()).joinToString("|"))
