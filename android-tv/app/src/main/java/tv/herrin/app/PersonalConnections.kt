@@ -66,7 +66,7 @@ internal class PersonalConnections(private val context: Context) {
         prefs.edit().remove("personal_status_$id").commit()
     }
     /** Idempotent migration: originals stay intact until explicit user edits/removal. */
-    fun migrate(index: PersonalMediaIndex) = synchronized(lock) {
+    fun migrate(index: PersonalMediaIndex) = if(prefs.getBoolean("personal_migrated_v1", false)) Unit else synchronized(lock) {
         if (prefs.getBoolean("personal_migrated_v1", false)) return@synchronized
         fun add(key: String, name: String, url: String, user: String, password: String, domain: String = "", encryption: Boolean = false, enabled: Boolean = true) {
             if (url.isBlank() || prefs.contains("personal_migration_$key")) return
