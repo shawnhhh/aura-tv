@@ -4149,7 +4149,7 @@ private fun Herrin(startup: StartupPresentation) {
                             ?: (currentSpiderResult as? PlaybackResult.Unavailable)?.reason
                             ?: (licensed as? PlaybackResult.Unavailable)?.reason.orEmpty()
                         if (!recoverPlayback(HerrinAutomaticPlayback.resolutionFailure(reason),
-                                tmdbState.automaticResume?.position ?: previous?.positionMs ?: 0L)) screen = "detail"
+                                tmdbState.automaticResume?.position ?: watchHistory.load(catalogScope, film.id, episode, line)?.positionMs ?: 0L)) screen = "detail"
                     }
                     PlayerStartupSurface(
                         loading = !playbackUnavailable,
