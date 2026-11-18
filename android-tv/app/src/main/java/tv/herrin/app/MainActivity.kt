@@ -570,12 +570,7 @@ private fun Herrin(startup: StartupPresentation) {
     var personalSourceConfigEpoch by remember { zeroIntState() }
     val smbSessions=remember(context,personalSourceConfigEpoch){HerrinSmbSessions()}
     DisposableEffect(smbSessions){onDispose{smbSessions.close()}}
-    val smbConfigured=remember(personalSourceConfigEpoch){HerrinSmbConfigStore(context).configured()}
 
-    var nasDavUrlDraft by remember { mutableStateOf(prefs.nasWebDavUrl) }
-    var nasDavUserDraft by remember { mutableStateOf("") }
-    var nasDavPasswordDraft by remember { mutableStateOf("") }
-    var personalSourceFeedback by remember { mutableStateOf("") }
     val tmdbState=remember { TmdbScreenState() }
     SourceSearchLifecycle(tmdbState)
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
@@ -981,7 +976,10 @@ private fun Herrin(startup: StartupPresentation) {
     var catalogRefresh by remember { zeroIntState() }
     val tmdbPrimary = prefs.tmdbReadToken.isNotBlank()
     val extraNasConfigured = remember(personalSourceConfigEpoch) { AdditionalServiceConfigs(context).enabled("nas").isNotEmpty() }
-    val sourceConfigured = smbConfigured || extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbBrowseIndex.isNotEmpty() ||
+    val personalConfigured = remember(personalSourceConfigEpoch) {
+        context.getSharedPreferences("herrin", 0).getString("personal_connection_ids", "[]") != "[]" || HerrinSmbConfigStore(context).configured()
+    }
+    val sourceConfigured = personalConfigured || extraNasConfigured || tmdbPrimary || configuredTvBoxUrl.isNotBlank() || tmdbState.tmdbBrowseIndex.isNotEmpty() ||
         prefs.nasWebDavUrl.isNotBlank()
     var recentIndexEpoch by remember { zeroIntState() }
     var recentIndexFilms by remember { mutableStateOf<List<Film>>(emptyList()) }
@@ -1451,7 +1449,6 @@ private fun Herrin(startup: StartupPresentation) {
                 (it.spiderApi != null || it.scriptApi != null) }
         else null
         val nasUrl = prefs.nasWebDavUrl
-        val allowNasHttp = prefs.nasAllowHttp
         var health:SourceHealthIndex?=null
         var planRevision=""
         suspend fun sourceEvent(event:SourceSearchEvent){
@@ -5251,7 +5248,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 "catalogs" -> { catalogRefresh++ }
                 "live" -> { liveRefresh++; epgRefresh++ }
-                "nas" -> { nasDavUrlDraft = prefs.nasWebDavUrl; personalSourceConfigEpoch++ }
+                "nas" -> { personalSourceConfigEpoch++ }
             }
         })
         SideEffect {

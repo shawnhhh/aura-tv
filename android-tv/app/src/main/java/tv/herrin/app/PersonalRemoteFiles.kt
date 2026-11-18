@@ -61,6 +61,7 @@ internal object PersonalRemoteFiles {
         is java.net.SocketTimeoutException -> "服务器连接超时"
         is java.net.UnknownHostException -> "服务器域名无法解析"
         is IllegalArgumentException -> if(error.message == "SMB_SHARE_REQUIRED") "请输入 SMB 共享名称后浏览；无需再次输入服务器账号" else "路径或连接字段无效"
-        else -> "连接或目录读取失败，请检查服务器、共享名称及权限；超大目录须拆分导入"
+        else -> if(generateSequence<Throwable>(error) { it.cause }.take(8).any { it is com.hierynomus.mssmb2.SMBApiException }) SmbFailure.message(error)
+            else "连接或目录读取失败，请检查服务器、共享名称及权限；超大目录须拆分导入"
     }
 }

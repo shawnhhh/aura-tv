@@ -156,7 +156,7 @@ internal class HerrinWebDavSource(
                 .startsWith(rootPrefix)
     }.getOrDefault(false)
 
-    /** Depth:1 with strict 256 KiB response limit, same-origin hrefs and no redirects. */
+    /** Depth:1 with strict 4 MiB / 10,000 entry response limit, same-origin hrefs and no redirects. */
     internal suspend fun list(directory: String): List<DavEntry> {
         if (!sameOriginUnderRoot(directory) && directory != root.toString()) return emptyList()
         val xml = """<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/><d:getlastmodified/></d:prop></d:propfind>"""
@@ -176,7 +176,7 @@ internal class HerrinWebDavSource(
             while (true) {
                 val n = input.read(buffer)
                 if (n < 0) break
-                check(output.size() + n <= 262144) { "DAV_DIRECTORY_LIMIT" }
+                check(output.size() + n <= 4 * 1024 * 1024) { "DAV_DIRECTORY_LIMIT" }
                 output.write(buffer, 0, n)
             }
             // Android's platform DOM parser does not implement every Xerces
@@ -206,7 +206,7 @@ internal class HerrinWebDavSource(
                 .parse(InputSource(StringReader(xmlText)))
             check(document.documentElement.localName == "multistatus" && document.documentElement.namespaceURI == "DAV:") { "DAV_INVALID_RESPONSE" }
             val results = document.getElementsByTagNameNS("DAV:", "response")
-            check(results.length <= 250) { "DAV_DIRECTORY_LIMIT" }
+            check(results.length <= 10000) { "DAV_DIRECTORY_LIMIT" }
             (0 until results.length).mapNotNull { index ->
                 val element = results.item(index) as? Element ?: return@mapNotNull null
                 val href = element.getElementsByTagNameNS("DAV:", "href").item(0)

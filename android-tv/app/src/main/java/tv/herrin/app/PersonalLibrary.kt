@@ -94,6 +94,7 @@ internal class PersonalLibrary(context: Context) {
                     }
                 }
                 index.finish(f.id, stamp)
+                connections.status(c.id, "connected")
                 progress = "扫描完成：$count 个视频；正在匹配资料"
                 scrape(f)
                 progress = "扫描完成：$count 个视频"
@@ -101,6 +102,7 @@ internal class PersonalLibrary(context: Context) {
                 index.state(f.id, "cancelled"); progress = "扫描已取消；再次刷新可恢复，已保存索引保留"
                 throw cancel
             } catch(error: Exception) {
+                connections.status(c.id, "failed")
                 index.state(f.id, "offline"); progress = PersonalRemoteFiles.message(error)
                 // No deletion on failure, cancellation, limits or an offline server.
             }

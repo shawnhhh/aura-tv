@@ -25,6 +25,11 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
     var browser by remember { mutableStateOf(JSONObject()) }
     var kind by remember { mutableStateOf("auto") }
     var confirm by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var page by remember { mutableStateOf(0) }
+    var category by remember { mutableStateOf("all") }
+    var matchId by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
+    var matches by remember { mutableStateOf(JSONObject()) }
     var busy by remember { mutableStateOf(false) }
     fun execute(route: String, value: JSONObject = JSONObject(), browse: Boolean = false) {
         scope.launch {
@@ -34,17 +39,18 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
                 status = result.optString("error", result.optString("result", "已保存"))
                 if(result.optBoolean("ok", true)) {
                     if(browse) browser = result
+                    if(route == "/personal/search") matches = result
                     if(route == "/personal/save") { selected = result.getString("id"); path = result.getString("path"); input.remove("password") }
-                    data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject()) }
+                    data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
                     onChanged()
                 }
             } catch(_: Exception) { status = "操作失败：请检查字段、目录重叠或是否已有扫描任务" }
             finally { busy = false }
         }
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(page, category) {
         while(isActive) {
-            data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject()) }
+            data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
             delay(1500)
         }
     }
@@ -92,7 +98,7 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
         val folders = data.optJSONArray("folders")
         if(folders != null) for(i in 0 until folders.length()) {
             val f = folders.getJSONObject(i)
-            Text(f.getString("path") + " · " + f.getString("type"))
+            Text(f.getString("path") + " · " + f.getString("type") + " · " + f.optString("state"))
             Row {
                 TvButton("刷新") { execute("/personal/refresh", JSONObject().put("id", f.getString("id"))) }
                 TvButton("类型设为 $kind") { execute("/personal/folder", JSONObject(f.toString()).put("type", kind).put("scan", false)) }
@@ -103,10 +109,36 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
         Text(data.optString("progress"))
         TvButton("取消扫描") { execute("/personal/cancel") }
         Text("已导入电影 / 剧集 / 未识别视频")
+        Row { listOf("all" to "全部", "movie" to "电影", "tv" to "剧集", "unmatched" to "未识别").forEach { (key, label) ->
+            TvButton(label) { category = key; page = 0 }
+        } }
         val media = data.optJSONArray("media")
-        if(media != null) for(i in 0 until minOf(media.length(), 100)) {
-            val row = media.getJSONObject(i)
-            TvButton((if(row.optInt("tmdb") > 0) "已匹配 · " else "未识别 · ") + row.getString("name")) { onPlay(row.getString("id")) }
+        val groups = (0 until (media?.length() ?: 0)).map { media!!.getJSONObject(it) }.groupBy {
+            if(it.optInt("tmdb") > 0) "${it.getString("type")}:${it.getString("tmdb")}:${it.optString("season")}:${it.optString("episode")}" else it.getString("id")
+        }
+        groups.values.forEach { versions ->
+            Text(versions.first().getString("title") + if(versions.size > 1) " · ${versions.size} 个版本" else "")
+            versions.forEach { row -> Row {
+                TvButton(row.getString("name")) { onPlay(row.getString("id")) }
+                TvButton("匹配") { matchId = row.getString("id"); query = row.getString("title") }
+            } }
+        }
+        Row {
+            TvButton("上一页") { page = (page - 1).coerceAtLeast(0) }
+            Text("第 ${page + 1} 页")
+            TvButton("下一页") { if((media?.length() ?: 0) == 100) page++ }
+        }
+        if(matchId.isNotEmpty()) {
+            OutlinedTextField(query, { query = it.take(200) }, label = { Text("搜索 TMDB 并纠正匹配") })
+            TvButton("搜索影片") { execute("/personal/search", JSONObject().put("query", query)) }
+            val results = matches.optJSONArray("matches")
+            if(results != null) for(i in 0 until results.length()) {
+                val m = results.getJSONObject(i)
+                TvButton(m.getString("title") + " · " + m.getString("year")) {
+                    execute("/personal/match", JSONObject().put("id", matchId).put("tmdb", m.getInt("tmdb")).put("type", m.getString("type")).put("title", m.getString("title")))
+                    matchId = ""
+                }
+            }
         }
         Text(status)
     }

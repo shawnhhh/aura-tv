@@ -92,17 +92,17 @@ async function refreshTmdbStatus(){const r=await call('/status');document.queryS
 
 
 
-let personalConnection='';
+let personalConnection='', personalPage=0;
 function actionButton(parent,label,action){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await action();}catch(e){status.textContent=e.message;}finally{b.disabled=false;}};parent.append(b);}
 async function personalCall(path,data={}){const r=await call('/personal'+path,data);if(r.ok===false)throw Error(r.error||'操作失败');return r;}
 async function refreshPersonal(){
- const r=await personalCall('');const list=document.querySelector('#personal-connections');list.replaceChildren();
+ const r=await personalCall('',{offset:personalPage*100,category:document.querySelector('#personal-category').value});const list=document.querySelector('#personal-connections');list.replaceChildren();
  r.connections.forEach(c=>{const row=document.createElement('p');row.textContent=c.name+' · '+c.protocol+' · '+(c.enabled?'启用':'停用');
  actionButton(row,'编辑',()=>{const f=document.querySelector('#personal-edit');f.reset();for(const key of ['id','name','protocol','host','port','username','domain'])f.elements[key].value=c[key]||'';f.elements.encryption.checked=c.encryption;});
  actionButton(row,'测试 / 浏览',async()=>{personalConnection=c.id;document.querySelector('#personal-browser').hidden=false;await browsePersonal();});
  actionButton(row,c.enabled?'停用':'启用',async()=>{await personalCall('/toggle',{id:c.id});await refreshPersonal();});
  actionButton(row,'删除',async()=>{if(confirm('删除此连接及本地目录索引？不会删除服务器文件。')){await personalCall('/delete',{id:c.id,confirmed:true});await refreshPersonal();}});list.append(row);});
- const folders=document.querySelector('#personal-folders');folders.replaceChildren();r.folders.forEach(f=>{const row=document.createElement('p');row.textContent=f.path+' · '+f.type+' · '+(f.enabled?'启用':'停用');
+ const folders=document.querySelector('#personal-folders');folders.replaceChildren();r.folders.forEach(f=>{const row=document.createElement('p');row.textContent=f.path+' · '+f.type+' · '+f.state+' · '+(f.enabled?'启用':'停用');
  actionButton(row,'刷新',()=>personalCall('/refresh',{id:f.id}));
  actionButton(row,'修改类型',async()=>{await personalCall('/folder',{...f,type:document.querySelector('#personal-type').value,scan:false});await refreshPersonal();});
  actionButton(row,f.enabled?'停用':'启用',async()=>{await personalCall('/folder',{...f,enabled:!f.enabled,scan:false});await refreshPersonal();});
@@ -120,3 +120,7 @@ document.querySelector('#personal-import').onclick=async()=>{try{await personalC
 document.querySelector('#personal-cancel').onclick=()=>personalCall('/cancel').catch(e=>status.textContent=e.message);
 document.querySelector('#personal-match').onsubmit=async e=>{e.preventDefault();try{const f=e.target;const r=await personalCall('/search',{query:f.elements.query.value});const list=document.querySelector('#personal-matches');list.replaceChildren();r.matches.forEach(m=>actionButton(list,m.title+' · '+m.year,async()=>{await personalCall('/match',{id:f.elements.id.value,tmdb:m.tmdb,type:m.type,title:m.title});await refreshPersonal();}));}catch(error){status.textContent=error.message;}};
 setInterval(()=>{if(session&&module==='nas'&&Date.now()-lastActivity<60000)refreshPersonal().catch(()=>{});},3000);
+
+document.querySelector('#personal-previous').onclick=()=>{personalPage=Math.max(0,personalPage-1);refreshPersonal().catch(e=>status.textContent=e.message);};
+document.querySelector('#personal-next').onclick=()=>{personalPage++;refreshPersonal().catch(e=>status.textContent=e.message);};
+document.querySelector('#personal-category').onchange=()=>{personalPage=0;refreshPersonal().catch(e=>status.textContent=e.message);};

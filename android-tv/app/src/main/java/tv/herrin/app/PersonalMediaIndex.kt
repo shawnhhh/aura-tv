@@ -17,10 +17,10 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         db.execSQL("CREATE INDEX media_tmdb ON media(tmdb,type,status)")
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
-    data class Folder(val id: String, val connection: String, val path: String, val type: String, val enabled: Boolean)
+    data class Folder(val id: String, val connection: String, val path: String, val type: String, val enabled: Boolean, val state: String, val scanned: Long)
     fun folders(connection: String? = null): List<Folder> = readableDatabase.query("folders", null,
         connection?.let { "connection=?" }, connection?.let { arrayOf(it) }, null, null, "path").use { c ->
-        buildList { while(c.moveToNext()) add(Folder(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getInt(4) != 0)) }
+        buildList { while(c.moveToNext()) add(Folder(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getInt(4) != 0, c.getString(5), c.getLong(6))) }
     }
     fun folder(connection: String, raw: String, type: String, enabled: Boolean = true): String {
         val path = PersonalStoragePolicy.path(raw)
@@ -72,9 +72,14 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
             writableDatabase.setTransactionSuccessful()
         } finally { writableDatabase.endTransaction() }
     }
-    fun media(folder: String? = null, limit: Int = 500): JSONArray = readableDatabase.query("media", null,
-        if(folder == null) "status='available'" else "status='available' AND folder=?", folder?.let { arrayOf(it) }, null, null, "title,path", limit.coerceIn(1, 500).toString()).use { c ->
-        JSONArray().apply { while(c.moveToNext()) put(JSONObject().apply { c.columnNames.forEachIndexed { i, key -> if(!c.isNull(i)) put(key, c.getString(i)) } }) }
+    fun media(folder: String? = null, limit: Int = 500, offset: Int = 0, category: String = "all"): JSONArray {
+        require(category in setOf("all", "movie", "tv", "unmatched"))
+        val filter = when(category) { "unmatched" -> " AND tmdb IS NULL"; "movie" -> " AND type='movie'"; "tv" -> " AND type IN ('tv','anime')"; else -> "" }
+        val where = "status='available'" + (if(folder != null) " AND folder=?" else "") + filter
+        return readableDatabase.query("media", null, where, folder?.let { arrayOf(it) }, null, null, "title,path",
+            "${offset.coerceIn(0, 10000000)},${limit.coerceIn(1, 500)}").use { c ->
+            JSONArray().apply { while(c.moveToNext()) put(JSONObject().apply { c.columnNames.forEachIndexed { i, key -> if(!c.isNull(i)) put(key, c.getString(i)) } }) }
+        }
     }
     private fun rows(sql: String, args: Array<String>): List<JSONObject> = readableDatabase.rawQuery(sql, args).use { c ->
         buildList { while(c.moveToNext()) add(JSONObject().apply { c.columnNames.forEachIndexed { i, key -> if(!c.isNull(i)) put(key, c.getString(i)) } }) }

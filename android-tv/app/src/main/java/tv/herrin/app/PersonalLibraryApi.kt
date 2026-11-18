@@ -26,6 +26,7 @@ internal class PersonalLibraryApi(context: Context) {
                 val folder = PersonalStoragePolicy.path(input.optString("path"))
                 try { runBlocking { PersonalRemoteFiles.list(candidate, folder) } }
                 catch(error: Exception) { return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
+                library.cancelAndWait()
                 val saved = library.connections.save(input)
                 library.connections.status(saved.id, "connected")
                 return JSONObject().put("ok", true).put("id", saved.id).put("path", folder)
@@ -53,6 +54,7 @@ internal class PersonalLibraryApi(context: Context) {
             }
             "/personal/folder" -> {
                 requireNotNull(library.connections.get(input.getString("connection")))
+                library.cancelAndWait()
                 val folder = library.index.folder(input.getString("connection"), input.getString("path"), input.getString("type"), input.optBoolean("enabled", true))
                 if(input.optBoolean("scan", true)) library.refresh(folder)
             }
@@ -73,7 +75,7 @@ internal class PersonalLibraryApi(context: Context) {
             else -> error("UNKNOWN_PERSONAL_OPERATION")
         }
         return JSONObject().put("ok", true).put("connections", library.connections.publicList())
-            .put("folders", JSONArray().apply { library.index.folders().forEach { f -> put(JSONObject().put("id", f.id).put("connection", f.connection).put("path", f.path).put("type", f.type).put("enabled", f.enabled)) } })
-            .put("media", library.index.media()).put("progress", PersonalLibrary.progress)
+            .put("folders", JSONArray().apply { library.index.folders().forEach { f -> put(JSONObject().put("id", f.id).put("connection", f.connection).put("path", f.path).put("type", f.type).put("enabled", f.enabled).put("state", f.state).put("scanned", f.scanned)) } })
+            .put("media", library.index.media(limit = 100, offset = input.optInt("offset"), category = input.optString("category", "all"))).put("progress", PersonalLibrary.progress)
     }
 }
