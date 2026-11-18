@@ -130,6 +130,7 @@ private fun AuthorizedPlaybackSession(
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
     var uiEpoch by remember(media) { mutableIntStateOf(0) }
     var frameSinceSelection by remember(media) { mutableStateOf(false) }
+    val metricToken = remember(media) { DetailPlaybackMetrics.timeline.token() }
     var activeVariant by remember(media) { mutableIntStateOf(0) }
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
@@ -153,7 +154,7 @@ private fun AuthorizedPlaybackSession(
     var playerRootFocused by remember { mutableStateOf(false) }
     var controlsInteractionEpoch by remember { mutableIntStateOf(0) }
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
-    LaunchedEffect(media) { DetailPlaybackMetrics.timeline.mediaReady() }
+    LaunchedEffect(media) { DetailPlaybackMetrics.timeline.mediaReady(metricToken) }
     val remoteHoldSeek = remember(media) { RemoteHoldSeek() }
     var seekAcceleration by remember(media) { mutableIntStateOf(1) }
     fun resetHoldSeek() { remoteHoldSeek.reset(); seekAcceleration = 1 }
@@ -199,7 +200,7 @@ private fun AuthorizedPlaybackSession(
                     uiEpoch++
                 }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
-                override fun onRenderedFirstFrame() { frameSinceSelection = true; DetailPlaybackMetrics.timeline.firstFrame(); uiEpoch++ }
+                override fun onRenderedFirstFrame() { frameSinceSelection = true; DetailPlaybackMetrics.timeline.firstFrame(metricToken); uiEpoch++ }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
@@ -483,7 +484,7 @@ private fun AuthorizedPlaybackSession(
                     tv.herrin.kernel.Kernel.Phase.BUFFERING, tv.herrin.kernel.Kernel.Phase.PLAYING,
                     tv.herrin.kernel.Kernel.Phase.PAUSED)) displayPlayer.value = playback.player
                 kernelFirstFrame = state.renderedFirstFrame()
-                if (kernelFirstFrame) DetailPlaybackMetrics.timeline.firstFrame()
+                if (kernelFirstFrame) DetailPlaybackMetrics.timeline.firstFrame(metricToken)
                 uiEpoch++
                 if (state.phase() == tv.herrin.kernel.Kernel.Phase.ERROR)
                     errorMessage = "原版内核播放失败；可重新解析、切集或返回详情"

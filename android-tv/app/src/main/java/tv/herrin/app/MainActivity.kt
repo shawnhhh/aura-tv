@@ -1383,6 +1383,7 @@ private fun Herrin(startup: StartupPresentation) {
             return@LaunchedEffect
         }
         tmdbState.selectedDiscoveryHit = hit.key
+        tmdbState.selectedDiscoveryNode[filmId] = hit.node.id
         tmdbState.sourceDiscoveries[filmId]?.retainEpisodes(snapshot.revision,hit.key,detailed)?.let {
             tmdbState.discoveredSources[filmId] = it
         }

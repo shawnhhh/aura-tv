@@ -31,7 +31,7 @@ internal fun PlaybackSelectionDialog(
     film: Film, episode: Int, line: String, linesOnly: Boolean,
     onSelect: (Int, String) -> Unit, onDismiss: () -> Unit, reduced: Boolean = false
 ) {
-    val layout = remember(film) { SeasonEpisodes.fromFilm(film) }
+    val layout = remember(film) { SeasonEpisodes.fromFilm(film, allowSingleSeason = true) }
     val current = layout?.sections?.firstOrNull { section -> section.episodes.any {
         it.source.number == episode && it.lines.any { option -> option.id == line }
     } }

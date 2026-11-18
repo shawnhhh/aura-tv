@@ -93,7 +93,7 @@ internal object SeasonEpisodes {
         }.firstOrNull()?.takeIf { it in 1..999 }
 
     /** A single reliable season is *not* a season selector; retain the existing UI. */
-    fun fromFilm(film: Film): SeasonLayout? {
+    fun fromFilm(film: Film, allowSingleSeason: Boolean = false): SeasonLayout? {
         if (film.playbackEpisodes.isEmpty()) return null
         data class Indexed(val season: Int, val number: Int, val source: PlaybackEpisode, val line: PlaybackLine)
         val indexed = film.playbackEpisodes.flatMap { episode ->
@@ -109,7 +109,8 @@ internal object SeasonEpisodes {
                 Indexed(season, number, episode, line)
             }
         }
-        if (indexed.map { it.season }.distinct().size < 2) return null
+        val minimumSeasons = if (allowSingleSeason) 1 else 2
+        if (indexed.map { it.season }.distinct().size < minimumSeasons) return null
         val entries = indexed.groupBy { it.season to it.number }.mapNotNull { (coordinate, rows) ->
             // A duplicate season/episode pointing to two source indexes is ambiguous.
             if (rows.map { it.source.number }.distinct().size != 1) return null
@@ -120,6 +121,6 @@ internal object SeasonEpisodes {
         val sections = entries.groupBy { it.season }.toSortedMap().map { (number, episodes) ->
             SeasonSection(number, episodes.sortedBy { it.number })
         }
-        return SeasonLayout(sections).takeIf { it.sections.size >= 2 }
+        return SeasonLayout(sections).takeIf { it.sections.size >= minimumSeasons }
     }
 }

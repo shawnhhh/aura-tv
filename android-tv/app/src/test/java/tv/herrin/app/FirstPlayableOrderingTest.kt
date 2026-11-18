@@ -17,4 +17,13 @@ class FirstPlayableOrderingTest {
         assertNull(HerrinPlaybackEntry.firstPlayable(film))
         assertTrue(HerrinPlaybackEntry.unavailableTmdb(film))
     }
+    @Test fun panelCanShowOneAuthoritativeSeasonWithoutChangingTheLegacyMultiSeasonIndex() {
+        val film = Film("fixture", "Fixture", "", "剧集", "2026", "", 1,
+            playbackEpisodes = listOf(ep(7, "S2E1", "season2")))
+        assertNull(SeasonEpisodes.fromFilm(film))
+        val panel = SeasonEpisodes.fromFilm(film, allowSingleSeason = true)!!
+        assertEquals(2, panel.sections.single().number)
+        assertEquals(7, panel.sections.single().episodes.single().source.number)
+        assertEquals("season2", panel.sections.single().episodes.single().preferredLine(null).id)
+    }
 }

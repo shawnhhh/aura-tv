@@ -82,7 +82,7 @@ internal class HerrinSourceDiscovery {
         if (snapshot.revision != revision) snapshot = Snapshot(revision, unique.size)
         else snapshot = snapshot.copy(nodes = unique.size,
             outcomes = snapshot.outcomes.filter { it.key in known && it.value != Outcome.SEARCHING },
-            hits = snapshot.hits.filter { it.node.id in known },
+            hits = snapshot.hits.filter { it.node.id in known }.map { it.copy(node = known.getValue(it.node.id)) },
             routes = snapshot.routes.filter { it.nodeId in known },
             detailed = snapshot.detailed.intersect(snapshot.hits.filter { it.node.id in known }.map { it.key }.toSet()))
         snapshot = snapshot.copy(expanding = expand != null, warehouseFailures = 0)

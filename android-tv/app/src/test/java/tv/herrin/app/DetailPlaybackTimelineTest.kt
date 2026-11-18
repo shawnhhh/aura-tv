@@ -15,7 +15,11 @@ class DetailPlaybackTimelineTest {
         assertEquals(listOf("ENTRY_TO_HIT" to 10L, "HIT_TO_DETAILS" to 15L,
             "HIT_TO_LINE_CPU_DRAW" to 20L, "HIT_TO_EPISODE_CPU_DRAW" to 35L,
             "CLICK_TO_MEDIA_READY" to 20L, "CLICK_TO_FIRST_FRAME" to 70L), events)
-        trace.click(); now = 125; trace.firstFrame()
+        val oldSession = trace.token()
+        trace.click(); now = 125
+        trace.firstFrame(oldSession)
+        assertEquals("CLICK_TO_FIRST_FRAME" to 70L, events.last())
+        trace.firstFrame()
         assertEquals("CLICK_TO_FIRST_FRAME" to 5L, events.last())
     }
 }

@@ -98,4 +98,23 @@ class DiscoveryLayoutPrefetchTest {
         withTimeout(1000) { job.join() }
         assertEquals(1, spiderCalls)
     }
+
+    @Test fun cachedLayoutRebindsCallbacksToTheCurrentAuthorizedNode() = runBlocking {
+        var searches = 0
+        val original = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
+            { searches++; listOf(offer("a")) }, { detail(it, 1) })
+        val service = HerrinSourceDiscovery()
+        service.search("r", listOf(original), null, Mutex()) {}
+        var currentDetails = 0
+        val replacement = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
+            { error("Valid terminal searches must be reused") }, { currentDetails++; detail(it, 1) })
+        var snapshot = HerrinSourceDiscovery.Snapshot("", 0)
+        service.search("r", listOf(replacement), null, Mutex()) { snapshot = it }
+        val hit = snapshot.hits.single()
+        assertSame(replacement, hit.node)
+        hit.node.details(hit.movie)
+        assertEquals(1, currentDetails)
+        assertEquals(1, searches)
+        assertEquals(2, snapshot.routes.size)
+    }
 }
