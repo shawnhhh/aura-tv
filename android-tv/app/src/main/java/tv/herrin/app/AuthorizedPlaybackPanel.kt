@@ -130,6 +130,7 @@ private fun AuthorizedPlaybackSession(
     var playbackState by remember(media) { mutableIntStateOf(Player.STATE_IDLE) }
     var uiEpoch by remember(media) { mutableIntStateOf(0) }
     var frameSinceSelection by remember(media) { mutableStateOf(false) }
+    var kernelSelectedEpisode by remember(media) { mutableStateOf<String?>(null) }
     val metricToken = remember(media) { DetailPlaybackMetrics.timeline.token() }
     var activeVariant by remember(media) { mutableIntStateOf(0) }
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
@@ -200,7 +201,13 @@ private fun AuthorizedPlaybackSession(
                     uiEpoch++
                 }
                 override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { uiEpoch++ }
-                override fun onRenderedFirstFrame() { frameSinceSelection = true; DetailPlaybackMetrics.timeline.firstFrame(metricToken); uiEpoch++ }
+                override fun onRenderedFirstFrame() {
+                    if (!playback.whole || kernelSelectedEpisode == media.kernelPlayback?.episode) {
+                        frameSinceSelection = true
+                        DetailPlaybackMetrics.timeline.firstFrame(metricToken)
+                    }
+                    uiEpoch++
+                }
                 override fun onIsPlayingChanged(isPlaying: Boolean) { uiEpoch++ }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     journey.onPlayWhenReady(playWhenReady, android.os.SystemClock.elapsedRealtime())
@@ -479,11 +486,15 @@ private fun AuthorizedPlaybackSession(
     }
     LaunchedEffect(playback, media.kernelPlayback, if (playback.whole) media.diagnosticSessionId else null) {
         if (playback.whole) {
+            var frameRequest: Long? = null
             playback.observe { state ->
                 if (!playback.isClosed && state.phase() in setOf(tv.herrin.kernel.Kernel.Phase.RESOLVING,
                     tv.herrin.kernel.Kernel.Phase.BUFFERING, tv.herrin.kernel.Kernel.Phase.PLAYING,
                     tv.herrin.kernel.Kernel.Phase.PAUSED)) displayPlayer.value = playback.player
-                kernelFirstFrame = state.renderedFirstFrame()
+                kernelSelectedEpisode = state.selectedEpisodeHandle()
+                val belongsToSelection = kernelSelectedEpisode == media.kernelPlayback?.episode
+                if (belongsToSelection && !state.renderedFirstFrame()) frameRequest = state.request()
+                kernelFirstFrame = belongsToSelection && state.renderedFirstFrame() && frameRequest == state.request()
                 if (kernelFirstFrame) DetailPlaybackMetrics.timeline.firstFrame(metricToken)
                 uiEpoch++
                 if (state.phase() == tv.herrin.kernel.Kernel.Phase.ERROR)
@@ -739,7 +750,7 @@ private fun AuthorizedPlaybackSession(
             playback, media.kernelPlayback?.title ?: media.displayTitle, shownPosition, shownDuration,
             initialControl, moreControl, { onBack() }, ::applyRemoteSeek,
             { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() }, onLineSelection, onEpisodeSelection,
-            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, seekAcceleration = seekAcceleration, specsReady = if (playback.whole) kernelFirstFrame else frameSinceSelection)
+            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, seekAcceleration = seekAcceleration, specsReady = if (playback.whole) kernelFirstFrame || frameSinceSelection && kernelSelectedEpisode == media.kernelPlayback?.episode else frameSinceSelection)
         if (testDiagnostics && !playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(
