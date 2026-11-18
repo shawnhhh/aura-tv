@@ -25,7 +25,7 @@ class P0RecentPlaybackReturnTest {
             c.getSharedPreferences("herrin",0).edit().clear().commit()
             c.getSharedPreferences("herrin-watch-history",0).edit().clear().commit()
             java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
-            val video=inst.context.assets.open("synthetic.mp4").use { it.readBytes() }
+            val video=inst.context.assets.open("playback-diagnostics/baseline-72.mp4").use { it.readBytes() }
             server.dispatcher=object:Dispatcher() {
                 override fun dispatch(request:RecordedRequest):MockResponse = when {
                     request.method=="PROPFIND" && discoveryFails.get() -> { discoveries.incrementAndGet(); MockResponse().setResponseCode(503) }
@@ -45,8 +45,8 @@ class P0RecentPlaybackReturnTest {
                 metadataSource="TMDB",playbackEpisodes=listOf(PlaybackEpisode(1,"正片",listOf(PlaybackLine("retired","retired","https://retired.invalid/not-persisted.mp4")))))
             PlaybackHistory(c).apply {
                 val ticket=begin("tmdb:discovery",f.id,1,"retired")
-                updateSession(ticket,"tmdb:discovery",f.id,1,"retired",3000,30000,false)
-                recordFilm(ticket,"tmdb:discovery",f,1,"retired",3000,30000)
+                updateSession(ticket,"tmdb:discovery",f.id,1,"retired",30000,72000,false)
+                recordFilm(ticket,"tmdb:discovery",f,1,"retired",30000,72000)
             }
         }
         override fun after() {
@@ -69,6 +69,7 @@ class P0RecentPlaybackReturnTest {
         compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("player-root-focus").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithTag("film-detail-list").assertDoesNotExist()
         compose.waitUntil(30000) { HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_FIRST_FRAME") }
+        assertResumedPosition()
         assertTrue(HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_MEDIA_READY"))
         assertTrue("Current NAS must be searched/probed rather than replaying the retired URL",server.requestCount>=2)
         val inst=InstrumentationRegistry.getInstrumentation()
@@ -76,6 +77,14 @@ class P0RecentPlaybackReturnTest {
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(card).assertIsDisplayed().assertIsFocused() }.isSuccess }
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
     }
+    private fun assertResumedPosition() {
+        // A fresh start cannot naturally reach 30s within this 5s observation.
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.waitUntil(5000) { runCatching {
+            compose.onNodeWithTag("player-position-label").assertTextContains("00:3", substring = true)
+        }.isSuccess }
+    }
+
     private fun homeReady() {
         compose.waitUntil(15000) { runCatching {
             compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
@@ -89,6 +98,7 @@ class P0RecentPlaybackReturnTest {
         compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("player-root-focus").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithTag("film-detail-list").assertDoesNotExist()
         compose.waitUntil(30000) { HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_FIRST_FRAME") }
+        assertResumedPosition()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(tag).assertIsDisplayed().assertIsFocused() }.isSuccess }
     }
@@ -112,7 +122,7 @@ class P0RecentPlaybackReturnTest {
         compose.onNodeWithTag("recent-heading").assertTextContains("继续观看", substring = true)
     }
 
-    @Test fun failedQuickDiscoveryFallsBackToDetailAndReusesCompletedNodeState() {
+    @Test fun failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan() {
         discoveryFails.set(true)
         homeReady()
         compose.onNodeWithTag("play").performClick()
@@ -120,10 +130,10 @@ class P0RecentPlaybackReturnTest {
         compose.onNodeWithTag("one-tap-loading").assertDoesNotExist()
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
         val completed = discoveries.get()
-        assertTrue("The explicitly requested source must actually be searched", completed > 0)
+        assertTrue("The controlled initial import must have reached the unavailable server", completed > 0)
         compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("source-region"))
         compose.waitForIdle()
-        org.junit.Assert.assertEquals("Returning to detail must reuse the terminal discovery outcome", completed, discoveries.get())
+        org.junit.Assert.assertEquals("Returning to detail must not implicitly restart the failed storage scan", completed, discoveries.get())
         compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
     }
 
