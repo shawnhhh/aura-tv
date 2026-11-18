@@ -151,7 +151,8 @@ internal class HerrinWebDavSource(
         val origin = root.normalize()
         target.scheme.equals(origin.scheme, true) &&
             target.host.equals(origin.host, true) && target.port == origin.port &&
-            target.rawUserInfo == null &&
+            target.rawUserInfo == null && target.fragment == null &&
+            target.path.orEmpty().split('/').none { it == "." || it == ".." || it.contains('\\') } &&
             (target.path.orEmpty() + if (url.endsWith('/')) "/" else "")
                 .startsWith(rootPrefix)
     }.getOrDefault(false)

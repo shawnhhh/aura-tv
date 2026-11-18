@@ -129,6 +129,21 @@ class M468WebDavPersonalSourceTest {
         }
     }
 
+    @Test fun encodedTraversalCannotEscapeAnAuthorizedDavFolder() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setResponseCode(207).setBody("""
+                <d:multistatus xmlns:d="DAV:"><d:response>
+                <d:href>/dav/%2e%2e/Interstellar.2014.mkv</d:href>
+                <d:propstat><d:prop><d:resourcetype/></d:prop></d:propstat>
+                </d:response></d:multistatus>
+            """.trimIndent()))
+            val source = HerrinWebDavSource(HerrinWebDavAccount("Fixture", server.url("/dav/").toString()))
+            assertTrue(source.list(server.url("/dav/").toString()).isEmpty())
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test fun manuallyConfiguredHttpWebdavIsAcceptedWithoutExtraApproval() {
         MockWebServer().use { server ->
             server.start()

@@ -23,6 +23,9 @@ class PersonalMediaIndexTest {
             val corrected = index.media(folderId).getJSONObject(0)
             assertEquals("User title", corrected.getString("title"))
             assertEquals(123, corrected.getInt("tmdb")); assertEquals(1, corrected.getInt("manual"))
+            index.folder(connection, "Movies", "tv")
+            assertEquals("movie", index.media(folderId).getJSONObject(0).getString("type"))
+            assertEquals(123, index.media(folderId).getJSONObject(0).getInt("tmdb"))
             // A partial/failed scan never calls finish and must retain the existing file.
             assertEquals(1, index.media(folderId).length())
             index.finish(folderId, 3L)

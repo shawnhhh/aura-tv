@@ -22,7 +22,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         connection?.let { "connection=?" }, connection?.let { arrayOf(it) }, null, null, "path").use { c ->
         buildList { while(c.moveToNext()) add(Folder(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getInt(4) != 0, c.getString(5), c.getLong(6))) }
     }
-    fun folder(connection: String, raw: String, type: String, enabled: Boolean = true): String {
+    @Synchronized fun folder(connection: String, raw: String, type: String, enabled: Boolean = true): String {
         val path = PersonalStoragePolicy.path(raw)
         require(type in PersonalStoragePolicy.mediaTypes)
         val current = folders(connection)
@@ -32,6 +32,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         val values = ContentValues().apply { put("id", id); put("connection", connection); put("path", path); put("type", type); put("enabled", if(enabled) 1 else 0) }
         if(old == null) writableDatabase.insertOrThrow("folders", null, values)
         else writableDatabase.update("folders", values, "id=?", arrayOf(id))
+        if(old != null && old.type != type) writableDatabase.execSQL("UPDATE media SET tmdb=NULL,confidence=0,synopsis=NULL,poster=NULL WHERE folder=? AND manual=0", arrayOf(id))
         writableDatabase.execSQL("UPDATE media SET type=CASE WHEN ?='auto' THEN CASE WHEN episode IS NULL THEN 'movie' ELSE 'tv' END ELSE ? END WHERE folder=? AND manual=0", arrayOf(type, type, id))
         return id
     }
@@ -45,6 +46,13 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
     }
     fun state(id: String, state: String) { writableDatabase.execSQL("UPDATE folders SET state=? WHERE id=?", arrayOf(state, id)) }
     fun record(f: Folder, file: PersonalRemoteFile, scan: Long) {
+        writableDatabase.beginTransaction()
+        try {
+            recordInTransaction(f, file, scan)
+            writableDatabase.setTransactionSuccessful()
+        } finally { writableDatabase.endTransaction() }
+    }
+    private fun recordInTransaction(f: Folder, file: PersonalRemoteFile, scan: Long) {
         val id = SourceHealthIndex.digest(f.connection + "\u0000" + file.path)
         // Unchanged files keep all scraped metadata and explicit manual corrections.
         val changed = writableDatabase.compileStatement("UPDATE media SET scanned=?,status='available' WHERE id=? AND size=? AND modified=?").use {
