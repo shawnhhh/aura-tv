@@ -9,7 +9,6 @@ import android.graphics.Bitmap
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -37,7 +36,7 @@ class HerrinUiSmokeTest {
                 .getSharedPreferences("herrin", 0).edit().clear().commit()
         }
     }
-    @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 1) val compose = mainActivityComposeRule()
     @get:Rule(order = 2) val evidence = object : TestWatcher() {
         override fun failed(e: Throwable?, d: Description) {
             runCatching { capture("FAIL-${d.methodName}") }
@@ -56,16 +55,6 @@ class HerrinUiSmokeTest {
     }
     private val searchRequests = java.util.concurrent.ConcurrentLinkedQueue<String>()
     @org.junit.After fun clearSearchProtocolFixture() { MetadataFetchers.overrideForTests = null }
-    // When a test recreates MainActivity to enter debug diagnostics, finish the
-    // current instance before ActivityScenarioRule tears the scenario down.
-    // This preserves all test assertions and makes teardown failures independent.
-    @org.junit.After fun finishScenarioActivity() {
-        runCatching {
-            compose.activityRule.scenario.onActivity { activity ->
-                if (!activity.isFinishing) activity.finish()
-            }
-        }.onFailure { android.util.Log.w("HerrinUiCleanup", "Activity already closed or unavailable", it) }
-    }
     /** Controlled TMDB protocol fixture. Never counted as live network acceptance. */
     private fun protocolSearch(query: String = "协议测试") {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -172,8 +161,7 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-list").assertExists()
     }
     private fun advancedSettings() {
-        compose.activityRule.scenario.onActivity { it.intent.action = "tv.herrin.app.DIAGNOSTICS" }
-        compose.activityRule.scenario.recreate()
+        compose.activityRule.openDiagnostics()
         compose.waitUntil(12_000) { runCatching {
             compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
             compose.onNodeWithText("高级设置").assertExists()

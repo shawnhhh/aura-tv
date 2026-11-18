@@ -76,6 +76,9 @@ class TmdbBrowsePageTest {
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
         compose.waitUntil(5000){runCatching{compose.onNodeWithTag(hot).assertIsFocused().assertIsDisplayed()}.isSuccess}
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
+        // HOT has unknown release metadata, so retry precedes the pagination button.
+        compose.onNodeWithTag("tmdb-retry-movie-hot").assertIsFocused()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
         compose.onNodeWithTag("tmdb-more-movie-hot").assertIsFocused()
         compose.onNodeWithTag("nav-电影").performSemanticsAction(SemanticsActions.RequestFocus){it()}
         compose.onNodeWithTag("nav-电影").assertIsFocused()

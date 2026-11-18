@@ -1287,7 +1287,9 @@ private fun Herrin(startup: StartupPresentation) {
         if (!startup.networkReady || !tmdbState.cacheHydrated ||
             tmdbConnectivity != TmdbProbeState.CONNECTED || metadataToken.isBlank()) return@LaunchedEffect
         tmdbState.tmdbDiscoveryStatus = "正在更新 TMDB 栏目，已有缓存保持可浏览"
-        tmdbBrowseState.refresh(page, force = true)
+        // Category entry and cancelled/restarted effects reuse fresh pages.
+        // Explicit rail retry still forces a refresh through TmdbBrowseState.retry.
+        tmdbBrowseState.refresh(page)
         tmdbState.tmdbDiscoveryStatus = "TMDB 栏目已更新；播放时优先检索 NAS／云盘"
     }
     LaunchedEffect(category, metadataToken, tmdbConnectivity, tmdbState.tmdbTop250RetryEpoch, startup.networkReady) {

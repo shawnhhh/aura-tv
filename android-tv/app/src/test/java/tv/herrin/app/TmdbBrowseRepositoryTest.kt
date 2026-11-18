@@ -10,6 +10,26 @@ import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
 
 class TmdbBrowseRepositoryTest {
+    @Test fun freshCategoryCacheSurvivesReentryAndRecreationWithoutNetworkButRetryRefreshes(): Unit = runBlocking {
+        val directory = Files.createTempDirectory("tmdb-category-reentry").toFile()
+        val fixture = TmdbBrowseFixture()
+        val pages = listOf(TmdbBrowsePage.HOME, TmdbBrowsePage.MOVIE, TmdbBrowsePage.SERIES, TmdbBrowsePage.ANIME)
+        try {
+            val seed = TmdbBrowseState(TmdbBrowseRepository(fixture, directory), "fixture")
+            pages.forEach { seed.refresh(it) }
+            fixture.requests.clear()
+            val state = TmdbBrowseState(TmdbBrowseRepository(fixture, directory), "fixture")
+            repeat(2) { pages.forEach { state.hydrate(it); state.refresh(it) } }
+            assertTrue("Fresh cache must not restart list or release proof requests", fixture.requests.isEmpty())
+            val hot = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.HOT)
+            assertEquals("tmdb-movie-11", state.row(hot).entries.first().film.id)
+            fixture.variant = 1
+            state.retry(hot)
+            assertEquals("Explicit retry still replaces metadata", "tmdb-movie-12", state.row(hot).entries.first().film.id)
+            assertTrue(fixture.requests.any { it.contains("/discover/movie") })
+        } finally { directory.deleteRecursively() }
+    }
+
     private val day = LocalDate.of(2026, 11, 9)
     private fun movie(vararg types: Pair<Int, String>) = JSONObject().put("id", 1).put("release_dates",
         JSONObject().put("results", JSONArray().put(JSONObject().put("release_dates", JSONArray().apply {

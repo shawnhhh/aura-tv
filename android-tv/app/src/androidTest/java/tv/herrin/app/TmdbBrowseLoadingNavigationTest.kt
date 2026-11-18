@@ -57,7 +57,7 @@ class TmdbBrowseLoadingNavigationTest {
             assertEquals(2, state.row(spec).entries.size)
             val card = compose.onNodeWithTag("card-tmdb-movie-11")
             card.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            card.performKeyInput { pressKey(Key.DirectionDown); pressKey(Key.DirectionRight) }
+            card.performKeyInput { pressKey(Key.DirectionRight) }
             compose.onNodeWithTag("card-tmdb-movie-72").assertIsFocused()
             release.countDown()
             compose.waitUntil(5000) { !state.row(spec).loading }

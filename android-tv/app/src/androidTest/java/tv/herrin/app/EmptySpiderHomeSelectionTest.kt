@@ -3,7 +3,6 @@ package tv.herrin.app
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -46,7 +45,7 @@ class EmptySpiderHomeSelectionTest {
             context.getSharedPreferences("herrin", 0).edit().clear().commit()
         }
     }
-    @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 1) val compose = mainActivityComposeRule()
 
     private fun activate(tag: String) {
         compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus)
@@ -62,18 +61,11 @@ class EmptySpiderHomeSelectionTest {
         }
     }
     @After fun dismissOwnedInput() {
-        try {
-            if (inputUsed) {
-                runCatching { compose.onNodeWithTag("search").performSemanticsAction(SemanticsActions.RequestFocus) }
-                compose.runOnUiThread {
-                    compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
-                }
-                awaitIme(false)
+        if (inputUsed) {
+            compose.runOnUiThread {
+                compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
             }
-        } finally {
-            // The diagnostic test intentionally recreates MainActivity. Finish
-            // its current instance before ActivityScenarioRule teardown.
-            runCatching { compose.activityRule.scenario.onActivity { if (!it.isFinishing) it.finish() } }
+            awaitIme(false)
         }
     }
     private fun importOriginalFixture() {
@@ -132,8 +124,7 @@ class EmptySpiderHomeSelectionTest {
     }
     @Test fun advancedPreviewRetainsEmptyInitializedSource() {
         importOriginalFixture()
-        compose.activityRule.scenario.onActivity { it.intent.action = "tv.herrin.app.DIAGNOSTICS" }
-        compose.activityRule.scenario.recreate()
+        compose.activityRule.openDiagnostics()
         compose.waitUntil(12_000) { runCatching { compose.onNodeWithTag("splash-curtain").assertDoesNotExist() }.isSuccess }
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-spider-0"))
         activate("tvbox-spider-0")

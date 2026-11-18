@@ -19,6 +19,7 @@ import org.junit.rules.ExternalResource
 class P0MetadataPublicationPressureTest {
     private val token="SyntheticReadAccessForPressure".repeat(4)
     private val requests=AtomicInteger()
+    private val requestUrls=java.util.concurrent.ConcurrentLinkedQueue<String>()
     private val offline=AtomicBoolean()
     @get:Rule(order=0) val setup=object:ExternalResource(){
         override fun before(){
@@ -30,6 +31,7 @@ class P0MetadataPublicationPressureTest {
             Preferences(c).tmdbReadToken=token
             MetadataFetchers.overrideForTests=ArtworkJsonFetcher { url,_ ->
                 requests.incrementAndGet()
+                requestUrls.add(url)
                 if(offline.get()) throw java.net.UnknownHostException()
                 val uri=URI(url)
                 when {
@@ -78,7 +80,10 @@ class P0MetadataPublicationPressureTest {
         compose.waitUntil(5000){runCatching{compose.onNodeWithTag("catalog-film-rail").performScrollToIndex(249)}.isSuccess}
         compose.onNodeWithTag("card-tmdb-movie-1250").assertExists()
         assertFalse(compose.activity.isFinishing)
-        assertTrue("Requests must stay bounded, including cancelled/restarted pages",requests.get()<70)
+        val counts = requestUrls.groupingBy { URI(it).path }.eachCount().toSortedMap()
+        val duplicates = requestUrls.groupingBy { it }.eachCount().filterValues { it > 1 }
+        android.util.Log.i("HerrinMetadataBudget", "total=${requests.get()} paths=$counts duplicates=$duplicates")
+        assertTrue("Requests must stay bounded, including cancelled/restarted pages: total=${requests.get()} paths=$counts duplicates=$duplicates",requests.get()<70)
     }
     @Test fun malformedDetailAndActivityRecreationRetainCachedHomeDuringNetworkLoss(){
         ready();compose.waitUntil(15000){cachedTmdbBrowseTestFilms(InstrumentationRegistry.getInstrumentation().targetContext, token).size>=100}
