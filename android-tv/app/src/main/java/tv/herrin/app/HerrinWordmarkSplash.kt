@@ -23,20 +23,27 @@ import kotlin.math.cos
 
 internal object WordmarkMotion {
     const val REVEAL_MS = 2250f
+    const val BRIGHTEN_MS = 850f
     const val BREATH_MS = 2400f
-    const val BREATH_START_MS = REVEAL_MS - 1050f
-    const val MIN_READY_MS = REVEAL_MS
-    // V13: low-contrast reveal, then a rising breath from 1200ms to the
-    // 2250ms peak. The same 2400ms wave continues while home is loading.
-    // Clamping the phase before 1200ms makes the first breath frame seamless.
+    const val BREATH_START_MS = REVEAL_MS + BRIGHTEN_MS
+    const val REVEAL_BRIGHTNESS = 0.58f
+    const val MIN_READY_MS = BREATH_START_MS + 300f
+    // V13 revised: the *entire* wordmark first feathers in at a comfortable
+    // brightness; only after 2250ms may any letter begin to grow brighter.
+    // Smoothly brighten to white, then keep the 2400ms breathing wave alive.
     fun brightness(elapsedMs: Float): Float {
-        val phaseMs = elapsedMs.coerceAtLeast(BREATH_START_MS) - REVEAL_MS
-        return (0.65 + 0.35 * cos(phaseMs / BREATH_MS * 2 * Math.PI)).toFloat()
+        if (elapsedMs <= REVEAL_MS) return REVEAL_BRIGHTNESS
+        if (elapsedMs < BREATH_START_MS) {
+            val x = ((elapsedMs - REVEAL_MS) / BRIGHTEN_MS).coerceIn(0f, 1f)
+            val eased = x * x * (3f - 2f * x)
+            return REVEAL_BRIGHTNESS + (1f - REVEAL_BRIGHTNESS) * eased
+        }
+        return (0.79 + 0.21 * cos((elapsedMs - BREATH_START_MS) / BREATH_MS * 2 * Math.PI)).toFloat()
     }
-    // Glow is confined to the letters, never a background halo or ripple.
+    // Confine the subtle, synchronized glow to the six glyph outlines.
     fun glow(elapsedMs: Float): Float =
-        if (elapsedMs < BREATH_START_MS) 0f
-        else ((brightness(elapsedMs) - 0.30f) / 0.70f).coerceIn(0f, 1f)
+        if (elapsedMs <= REVEAL_MS) 0f
+        else ((brightness(elapsedMs) - REVEAL_BRIGHTNESS) / (1f - REVEAL_BRIGHTNESS)).coerceIn(0f, 1f)
     fun ready(elapsedMs: Float) = elapsedMs >= MIN_READY_MS
     fun reveal(elapsedMs: Float): Float = (elapsedMs / REVEAL_MS).coerceIn(0f, 1f)
 }

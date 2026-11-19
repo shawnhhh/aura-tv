@@ -9,6 +9,6 @@ class M439LaunchMotionPolicyTest {
         assertTrue(LaunchMotion.FADE_MS in 200..500)
         assertEquals(WordmarkMotion.MIN_READY_MS.toLong()+LaunchMotion.FADE_MS,LaunchMotion.TARGET_ANIMATION_BUDGET_MS)
         assertTrue(LaunchMotion.BREATH_MS>=2400L)
-        assertTrue(LaunchMotion.TARGET_ANIMATION_BUDGET_MS in 2450L..2750L)
+        assertTrue(LaunchMotion.TARGET_ANIMATION_BUDGET_MS in 3600L..3900L)
     }
 }

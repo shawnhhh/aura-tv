@@ -95,7 +95,9 @@ internal object LaunchMotion {
     const val WORDMARK_HOLD_MS = 2250L
     const val FADE_MS = 340
     const val BREATH_MS = 2400L
-    const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + FADE_MS
+    // Reveal 2250ms, then brighten 850ms and retain a brief visible peak
+    // before the curtain may fade. Avoid cutting off the new native breathing.
+    const val TARGET_ANIMATION_BUDGET_MS = WORDMARK_HOLD_MS + 850L + 300L + FADE_MS
 }
 
 /** Elapsed uptime from Activity launch to first interactive home.

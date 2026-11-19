@@ -153,7 +153,7 @@ class HerrinSplashTest {
             }
         }
         val frames=linkedMapOf<Int,Bitmap>()
-        for(t in listOf(0,450,1125,2250,2400,3600,4800)) {
+        for(t in listOf(0,450,1125,2250,2400,3100,4300,6700)) {
             compose.runOnIdle { time=t.toFloat() }
             compose.mainClock.advanceTimeByFrame()
             val bitmap=compose.onNodeWithTag("wordmark-probe").captureToImage().asAndroidBitmap()
@@ -168,8 +168,8 @@ class HerrinSplashTest {
         }
         fun pixels(bitmap:Bitmap)=IntArray(bitmap.width*bitmap.height).also{bitmap.getPixels(it,0,bitmap.width,0,0,bitmap.width,bitmap.height)}
         fun red(color:Int)=android.graphics.Color.red(color)
-        val zero=pixels(frames.getValue(0));val full=pixels(frames.getValue(3600))
-        val partial=pixels(frames.getValue(450));val dim=pixels(frames.getValue(2400));val end=pixels(frames.getValue(4800))
+        val zero=pixels(frames.getValue(0));val full=pixels(frames.getValue(3100))
+        val partial=pixels(frames.getValue(450));val dim=pixels(frames.getValue(4300));val end=pixels(frames.getValue(6700))
         assertTrue("No dim wordmark prepaint",zero.all{red(it)==0})
         val width=frames.getValue(3600).width
         fun mean(colors:IntArray,from:Float,to:Float):Double {
@@ -180,11 +180,11 @@ class HerrinSplashTest {
         assertTrue("Center appears before either outer letter",mean(partial,379f,659f)>mean(partial,37f,163f)+10)
         assertEquals(0.0,mean(partial,797f,923f),1.0)
         for((from,to) in listOf(37f to 163f,228f to 324f,379f to 496f,543f to 659f,706f to 732f,797f to 923f)) {
-            assertTrue("All letters dim together",mean(dim,from,to)/mean(full,from,to) in 0.65..0.8)
+            assertTrue("All letters share the brighter 58%-100% breath",mean(dim,from,to)/mean(full,from,to) in 0.53..0.68)
             assertEquals("All letters repeat the same breath without moving",mean(dim,from,to),mean(end,from,to),1.0)
         }
         assertEquals("No background halo",0,full.indices.count{red(full[it])==0 && red(dim[it])>10})
-        android.util.Log.i("HerrinWordmarkEvidence","frames=7 letters=6 initial_visible_pixels=0 whole_breath_ms=2400 physical_tcl=0")
+        android.util.Log.i("HerrinWordmarkEvidence","frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0")
     }
     @Test fun normalMotionKeepsBreathingUntilHomeIsReadyAfterTheMinimumCycle() {
         compose.mainClock.autoAdvance=false
