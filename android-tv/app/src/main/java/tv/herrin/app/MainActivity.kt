@@ -745,11 +745,13 @@ private fun Herrin(startup: StartupPresentation) {
             tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
             else tvBoxRepository.loadUserWarehouse(address, preferCached = preferCache)
         if (loadedConfig is TvBoxConfig.Error) {
+            HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_FAILED")
             tvBoxStatus = loadedConfig.reason
             vodImportFeedback = "配置读取失败"
             failPhoneSource(LanSourceImport.failure(loadedConfig.reason))
             return@LaunchedEffect
         }
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_PARSED")
         if (phoneSourceId == null) {
             spiderActive = false
             activeCmsSite = null
@@ -3227,6 +3229,8 @@ private fun Herrin(startup: StartupPresentation) {
                                 (site.spiderApi != null || site.scriptApi != null) && selected != null -> uiScope.launch {
                                     val pendingImportId = phoneSourceId
                                     choosePreferredSite(site, selected.spiderJar)
+                                    spiderBridge.close()
+                                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "USER_RESELECT_RESET")
                                     tvBoxStatus = "正在通过 ${site.name} 加载影片…"
                                     when (val result = spiderBridge.browse(site, selected)) {
                                         is SpiderResult.Failure -> { tvBoxStatus = "${site.name}：${result.message}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
@@ -4431,6 +4435,12 @@ private fun Herrin(startup: StartupPresentation) {
                                     keyboard?.hide()
                                 }) {
                                 tvBoxSelectedName = ""
+                                // H-007: explicit reapply must retire an old/hung Spider
+                                // session BEFORE loading the warehouse. Even if the
+                                // HTTP refresh fails, no dead plugin IPC is reused.
+                                // close() does not delete persisted warehouse or trust.
+                                spiderBridge.close()
+                                HerrinPlaybackDiagnosticJournal.record("CONFIG", "SOURCE_REAPPLY_RESET")
                                 tvBoxRunSpiderAfterApply = true
                                 vodImportFeedback = "读取中…"
                                 phoneSourceId?.let { phoneSourceImport.update(it, "SUPERSEDED") }
@@ -4473,6 +4483,8 @@ private fun Herrin(startup: StartupPresentation) {
                         item { TvButton("导入并缓存 TVBox JSON", modifier = Modifier.testTag("tvbox-import-json-save"),
                             reduced = reduceMotion, onFocus = { keyboard?.hide() }) {
                             tvBoxSelectedName = ""
+                            spiderBridge.close()
+                            HerrinPlaybackDiagnosticJournal.record("CONFIG", "JSON_IMPORT_RESET")
                             phoneSourceId?.let { phoneSourceImport.update(it, "SUPERSEDED") }
                             phoneSourceId = null
                             candidateRoot = ""
@@ -4759,6 +4771,8 @@ private fun Herrin(startup: StartupPresentation) {
                                             uiScope.launch {
                                                 val pendingImportId = phoneSourceId
                                                 choosePreferredSite(site, preview.spiderJar)
+                                                spiderBridge.close()
+                                                HerrinPlaybackDiagnosticJournal.record("SPIDER", "USER_RESELECT_RESET")
                                                 tvBoxStatus = "正在核验 JAR 并通过 ${site.name} 读取影视…"
                                                 when (val loaded = spiderBridge.browse(site, preview)) {
                                                     is SpiderResult.Failure -> { tvBoxStatus = "${site.name}：${loaded.message}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
