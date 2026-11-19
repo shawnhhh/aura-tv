@@ -2261,7 +2261,7 @@ private fun Herrin(startup: StartupPresentation) {
             if(current &&film.playbackEpisodes.isNotEmpty())return@LaunchedEffect
             spiderStatus = "正在读取当前授权来源的详情和选集…"
             val loaded=if(current)spiderBridge.details(film) else {
-                val refreshed=withTimeoutOrNull(6_000){withContext(Dispatchers.IO+SpiderRequestBudget(1_500)+SpiderSearchAuthority(selectionConsent)){
+                val refreshed=withTimeoutOrNull(20_000){withContext(Dispatchers.IO+SpiderRequestBudget(9_000)+SpiderSearchAuthority(selectionConsent)){
                     refreshSpiderSelection(film,tvBoxSingle,spiderBridge){site->
                         val runtime=site.jar?:tvBoxSingle?.spiderJar?:site.scriptApi.orEmpty()
                         TvBoxSpiderPolicy.mayRun(false,prefs.tvBoxWarehouseUrl,runtime,prefs.tvBoxTrustedSpiderRootUrl,prefs.tvBoxTrustedSpiderJarSpec)
@@ -2407,7 +2407,7 @@ private fun Herrin(startup: StartupPresentation) {
             }
             var playableFilm: Film = sourceFilm
             if(!withContext(Dispatchers.IO){spiderBridge.isApprovedSourceFilm(playableFilm)}){
-                val fresh=withTimeoutOrNull(6_000){withContext(Dispatchers.IO+SpiderRequestBudget(1_500)+SpiderSearchAuthority(selectionConsent)){
+                val fresh=withTimeoutOrNull(20_000){withContext(Dispatchers.IO+SpiderRequestBudget(9_000)+SpiderSearchAuthority(selectionConsent)){
                     refreshSpiderSelection(playableFilm,tvBoxSingle,spiderBridge){site->
                         TvBoxSpiderPolicy.mayRun(false,prefs.tvBoxWarehouseUrl,site.jar?:tvBoxSingle?.spiderJar?:site.scriptApi.orEmpty(),
                             prefs.tvBoxTrustedSpiderRootUrl,prefs.tvBoxTrustedSpiderJarSpec)

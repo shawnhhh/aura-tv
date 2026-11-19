@@ -14,20 +14,29 @@ internal class PersonalLibraryApi(context: Context) {
         when(path) {
             "/personal/save" -> {
                 // Validate candidate before committing; a failed edit preserves the existing connection.
-                val protocol = input.getString("protocol")
+                val address = input.optString("address").trim()
+                val normalized = JSONObject(input.toString())
+                if (input.optString("protocol") != "smb" && address.isNotBlank()) {
+                    val parsed = PersonalStoragePolicy.webDavAddress(address)
+                    normalized.put("protocol", parsed.scheme).put("host", parsed.host)
+                        .put("port", parsed.port).put("basePath", parsed.basePath)
+                }
+                val protocol = normalized.getString("protocol")
                 val old = id.takeIf { it.isNotBlank() }?.let { library.connections.get(it) }
-                val host = PersonalStoragePolicy.host(input.getString("host"))
-                val port = input.getInt("port")
+                val host = PersonalStoragePolicy.host(normalized.getString("host"))
+                val port = normalized.getInt("port")
                 PersonalStoragePolicy.endpoint(protocol, host, port)
                 val same = old?.takeIf { it.protocol == protocol && it.host.equals(host, true) && it.port == port && it.username == input.optString("username") && it.domain == input.optString("domain") }
-                val candidate = PersonalConnections.Connection(id, input.getString("name"), protocol, host, port,
-                    input.optString("username"), input.optString("password").ifEmpty { same?.password.orEmpty() },
-                    input.optString("domain"), input.optBoolean("encryption"), input.optBoolean("enabled", true))
-                val folder = PersonalStoragePolicy.path(input.optString("path"))
+                val candidate = PersonalConnections.Connection(id, normalized.getString("name"), protocol, host, port,
+                    normalized.optString("username"), normalized.optString("password").ifEmpty { same?.password.orEmpty() },
+                    normalized.optString("domain"), normalized.optBoolean("encryption"), normalized.optBoolean("enabled", true),
+                    PersonalStoragePolicy.path(normalized.optString("path")),
+                    PersonalStoragePolicy.path(normalized.optString("basePath")))
+                val folder = PersonalStoragePolicy.path(normalized.optString("path"))
                 val available = try { runBlocking { PersonalRemoteFiles.list(candidate, folder) } }
                 catch(error: Exception) { return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
                 library.cancelAndWait()
-                val saved = library.connections.save(input)
+                val saved = library.connections.save(normalized)
                 library.connections.status(saved.id, "connected")
                 val directories = available.filter { it.directory }.sortedBy { it.path }
                 return JSONObject().put("ok", true).put("id", saved.id).put("path", folder).put("total", directories.size)

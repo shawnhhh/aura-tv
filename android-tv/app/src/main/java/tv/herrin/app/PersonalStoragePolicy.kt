@@ -14,6 +14,18 @@ internal object PersonalStoragePolicy {
         require(value.isNotBlank() && value.length <= 253 && value.none { it.isWhitespace() || it in "/\\@?#" })
         return if(':' in value) value.lowercase() else java.net.IDN.toASCII(value, java.net.IDN.USE_STD3_ASCII_RULES).lowercase()
     }
+    data class WebDavAddress(val scheme: String, val host: String, val port: Int, val basePath: String)
+    fun webDavAddress(raw: String): WebDavAddress {
+        require(raw.length in 1..2048)
+        val url = URI(raw.trim())
+        val scheme = url.scheme?.lowercase(java.util.Locale.ROOT)
+        require(scheme in setOf("http", "https") && url.host != null &&
+            url.rawUserInfo == null && url.rawQuery == null && url.rawFragment == null)
+        val host = host(requireNotNull(url.host))
+        val port = if (url.port < 0) { if (scheme == "https") 443 else 80 } else url.port
+        endpoint(requireNotNull(scheme), host, port)
+        return WebDavAddress(scheme, host, port, path(url.path.orEmpty()))
+    }
     fun endpoint(protocol: String, host: String, port: Int): String {
         require(protocol in setOf("https", "http", "smb"))
         require(host.isNotBlank() && host.length <= 253 && host.none { it.isWhitespace() || it in "/\\@?#" })

@@ -37,8 +37,12 @@ internal object PersonalRemoteFiles {
             try {
                 val source = dav
                 if(source != null) {
-                    source.list(c.address(clean).trimEnd('/') + "/").map { e ->
-                        PersonalRemoteFile(PersonalStoragePolicy.path(URI(e.address).path), e.isCollection, e.size, e.modified)
+                    source.list(c.address(clean).trimEnd('/') + "/").mapNotNull { e ->
+                        val absolute = PersonalStoragePolicy.path(URI(e.address).path)
+                        if (!PersonalStoragePolicy.contains(c.basePath, absolute)) return@mapNotNull null
+                        val relative = if (c.basePath.isEmpty()) absolute
+                            else absolute.removePrefix(c.basePath).trimStart('/')
+                        PersonalRemoteFile(relative, e.isCollection, e.size, e.modified)
                     }.filter { it.path != clean }
                 } else runInterruptible {
                     val location = SmbLocation.parse(c.address(clean))
