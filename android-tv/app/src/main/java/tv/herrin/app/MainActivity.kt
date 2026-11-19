@@ -767,6 +767,13 @@ private fun Herrin(startup: StartupPresentation) {
         when (val result = loadedConfig) {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
+                if (isRoot && settingsTvBoxOnly && runSpiderAfterApply && result.entries.isNotEmpty()) {
+                    val first = result.entries.first()
+                    tvBoxSelectedName = first.name
+                    tvBoxRunSpiderAfterApply = true
+                    tvBoxRequest = first.url to false
+                    tvBoxLoadEpoch++
+                }
                 tvBoxStatus = "${if (result.fromCache) "已使用本地缓存；" else ""}已识别 ${result.entries.size} 个仓库${if (result.ignored > 0) "；跳过 ${result.ignored} 个无效／重复条目" else ""}。选中下方仓库可预览。"
                 if (settingsTvBoxOnly) {
                     // Multi-warehouse import is metadata-only. TVBox users
@@ -817,7 +824,11 @@ private fun Herrin(startup: StartupPresentation) {
             // Restore at most the previously selected site on startup.
             val candidates = if (phoneSourceId != null)
                 config.sites.filter { it.apiUrl != null }.take(1)
-                else TvBoxAutoSites.resumeOnly(config, savedSite)
+                else TvBoxAutoSites.resumeOnly(config, savedSite).ifEmpty {
+                    if (runSpiderAfterApply) config.sites.filter {
+                        it.apiUrl != null || it.spiderApi != null || it.scriptApi != null
+                    }.take(1) else emptyList()
+                }
             var chosen: Pair<TvBoxSite, List<Film>>? = null
             var chosenSpider = false
             var spiderFailure = ""
@@ -4662,12 +4673,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 }
                             }
                             Spacer(Modifier.weight(1f))
-                            if (settingsTvBoxOnly && liveImportFeedback.isNotBlank()) {
-                                Text(liveImportFeedback, Modifier.testTag("live-apply-feedback"),
-                                    color = if (liveImportFeedback == "成功") Color(0xFF85D9B5)
-                                    else if (liveImportFeedback == "失败") Color(0xFFF2A5A5)
-                                    else Color(0xFFC4D3E7), fontSize = 14.sp)
-                            }
+
                         } }
                         if (!settingsTvBoxOnly) {
                             item { Text(tmdbState.preferredSiteStatus, modifier = Modifier.testTag("preferred-site-status"), fontSize = 13.sp) }
