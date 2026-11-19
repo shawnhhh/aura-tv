@@ -32,6 +32,28 @@ class PersonalStoragePolicyTest {
         assertEquals("Movies/100% Wolf", PersonalStoragePolicy.path("/Movies/100% Wolf/"))
         assertEquals("Movies/电影", PersonalStoragePolicy.path("/Movies/电影/"))
     }
+    @Test fun fullWebDavUrlsPreserveProtocolPortAndBaseDirectory() {
+        val https = PersonalStoragePolicy.webDavAddress("https://nas.example:8443/dav/")
+        assertEquals("https", https.scheme)
+        assertEquals(8443, https.port)
+        assertEquals("dav", https.basePath)
+        val http = PersonalStoragePolicy.webDavAddress("http://192.168.1.8:5244/dav")
+        assertEquals("http", http.scheme)
+        assertEquals(5244, http.port)
+        assertEquals(80, PersonalStoragePolicy.webDavAddress("http://nas.example/dav").port)
+        assertEquals(443, PersonalStoragePolicy.webDavAddress("https://nas.example/dav").port)
+        val c = PersonalConnections.Connection("test", "NAS", https.scheme, https.host, https.port,
+            "", "", "", false, true, "Movies", https.basePath)
+        assertEquals("https://nas.example:8443/dav/Movies", c.address("Movies"))
+        assertEquals("https://nas.example:8443/dav/", c.address(""))
+        for (url in listOf("ftp://nas.example/dav", "nas.example/dav",
+            "https://user:secret@nas.example/dav", "https://nas.example/dav?token=secret",
+            "https://nas.example/dav/%2e%2e/private")) {
+            assertThrows(IllegalArgumentException::class.java) {
+                PersonalStoragePolicy.webDavAddress(url)
+            }
+        }
+    }
     @Test fun episodeAndYearClaimsAreParsedWithoutInferringDecoderCapabilities() {
         val name = PersonalStoragePolicy.parse("Example.Show.2024.S02E13.2160p.DV.mkv")
         assertEquals(2024, name.year); assertEquals(2, name.season); assertEquals(13, name.episode)

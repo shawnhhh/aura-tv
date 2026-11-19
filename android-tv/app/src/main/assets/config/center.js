@@ -135,7 +135,7 @@ async function browsePersonal(){
 }
 $('#personal-browse').onclick=()=>browsePersonal().catch(()=>toast(false));
 $('#personal-parent').onclick=()=>{
- const v=$('#personal-path');v.value=v.value.replace(/\\/?[^/]+\\/?$/,'');directoryPage=0;
+ const v=$('#personal-path');v.value=v.value.split('/').filter(Boolean).slice(0,-1).join('/');directoryPage=0;
  browsePersonal().catch(()=>toast(false));
 };
 $('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(()=>toast(false))};
