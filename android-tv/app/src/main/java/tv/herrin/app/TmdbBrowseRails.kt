@@ -55,8 +55,13 @@ private fun TmdbBrowsePageRails(
     val scope = rememberCoroutineScope()
     val navigation = remember { arrayOfNulls<Job>(1) }
     val pendingRow = remember { arrayOfNulls<String>(1) }
-    val attached = remember { mutableStateMapOf<String, Boolean>() }
-    DisposableEffect(page) { onDispose { navigation[0]?.cancel(); navigation[0] = null } }
+    DisposableEffect(page) {
+        onDispose {
+            navigation[0]?.cancel()
+            navigation[0] = null
+            pendingRow[0] = null
+        }
+    }
     val specs = TmdbRailSpec.forPage(page)
     val lists = buildList<Pair<String, List<Film>>> {
         if (page == TmdbBrowsePage.HOME) add("recent" to recent)
@@ -86,15 +91,24 @@ private fun TmdbBrowsePageRails(
                     contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     itemsIndexed(films, key = { _, f -> f.id }) { index, film ->
                         val tag = TmdbBrowseFocus.tag(page, key, film.id, hasRecent)
-                        DisposableEffect(tag) { onDispose { attached.remove(tag) } }
-                        LaunchedEffect(tag) {
+                        DisposableEffect(tag) {
+                            onDispose { state.attachedPosters.remove(tag) }
+                        }
+                        LaunchedEffect(tag, restoreFocus) {
                             if (tag == restoreFocus) {
-                                snapshotFlow { attached[tag] == true }.first { it }
-                                requester(tag).requestFocus()
+                                // Data/cached IDs can outlive a LazyRow item's focus target.
+                                // Never let a detached requester crash the main UI coroutine.
+                                repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
+                                    snapshotFlow { state.isPosterAttached(tag) }.first { it }
+                                    if (runCatching { requester(tag).requestFocus() }.isSuccess)
+                                        return@LaunchedEffect
+                                    withFrameNanos { }
+                                }
+                                CrashJournal.browseFocus(page.name, "restore-missed", false, films.size)
                             }
                         }
                         Poster(film, Modifier.testTag(tag).focusRequester(requester(tag))
-                            .onGloballyPositioned { attached[tag] = true }
+                            .onGloballyPositioned { state.attachedPosters[tag] = true }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     event.nativeKeyEvent.keyCode in setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)) {
@@ -110,30 +124,43 @@ private fun TmdbBrowsePageRails(
                                     val targetKey = targetIndex?.let { live[it].first }
                                     navigation[0]?.cancel()
                                     pendingRow[0] = targetKey ?: fromKey
+                                    CrashJournal.browseFocus(page.name, if (up) "up" else "down",
+                                        status?.loading == true, films.size)
                                     navigation[0] = scope.launch {
-                                        if (targetKey == null) { if (up) requester("play").requestFocus() }
-                                        else while (true) {
+                                        if (targetKey == null) {
+                                            // A missing next shelf is normal while TMDB loads or fails.
+                                            // Never send focus to a detached button.
+                                            if (up && runCatching { requester("play").requestFocus() }.isFailure)
+                                                CrashJournal.browseFocus(page.name, "hero-missed", false, films.size)
+                                            return@launch
+                                        }
+                                        // A row can be replaced/emptied after the key event and
+                                        // before scroll/layout completes. Retry boundedly using the
+                                        // CURRENT entry ID, not a captured stale requester.
+                                        repeat(12) {
                                             currentCoroutineContext().ensureActive()
                                             val targetFilms = currentLists.firstOrNull { it.first == targetKey }?.second.orEmpty()
-                                            if (targetFilms.isEmpty()) break
+                                            if (targetFilms.isEmpty()) return@launch
                                             val n = index.coerceAtMost(targetFilms.lastIndex)
                                             val id = targetFilms[n].id
                                             val targetTag = TmdbBrowseFocus.tag(page, targetKey, id,
-                                                page == TmdbBrowsePage.HOME && currentLists.firstOrNull { it.first == "recent" }?.second?.isNotEmpty() == true)
+                                                page == TmdbBrowsePage.HOME &&
+                                                    currentLists.firstOrNull { it.first == "recent" }?.second?.isNotEmpty() == true)
                                             val targetRail = state.scrolls.getOrPut(targetKey) { LazyListState() }
+                                            // scrollToItem can suspend or be cancelled on category change.
                                             targetRail.scrollToItem(n)
                                             withFrameNanos { }
-                                            // A response can replace/shrink the row during scroll/layout.
-                                            // Wake on either attachment or replacement, then resolve again.
-                                            snapshotFlow {
-                                                val filmsNow = currentLists.firstOrNull { it.first == targetKey }?.second.orEmpty()
-                                                filmsNow.getOrNull(n)?.id != id ||
-                                                    (attached[targetTag] == true && targetRail.layoutInfo.visibleItemsInfo.any { it.key == id })
-                                            }.first { it }
-                                            if (currentLists.firstOrNull { it.first == targetKey }?.second?.getOrNull(n)?.id != id) continue
-                                            requester(targetTag).requestFocus()
-                                            break
+                                            val sameTarget = currentLists.firstOrNull { it.first == targetKey }
+                                                ?.second?.getOrNull(n)?.id == id
+                                            if (sameTarget && state.isPosterAttached(targetTag) &&
+                                                targetRail.layoutInfo.visibleItemsInfo.any { it.key == id } &&
+                                                runCatching { requester(targetTag).requestFocus() }.isSuccess)
+                                                return@launch
                                         }
+                                        CrashJournal.browseFocus(page.name, "target-missed",
+                                            status?.loading == true, currentLists.firstOrNull {
+                                                it.first == targetKey
+                                            }?.second?.size ?: 0)
                                     }
                                     true
                                 } else false

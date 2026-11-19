@@ -16,6 +16,10 @@ internal data class TmdbRailState(
 internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: String) {
     val rows = mutableStateMapOf<String, TmdbRailState>()
     val scrolls = mutableMapOf<String, LazyListState>()
+    // A cached row entry is NOT necessarily a composed LazyRow poster.
+    // Mark only truly laid-out poster controls as safe explicit D-pad targets.
+    val attachedPosters = mutableStateMapOf<String, Boolean>()
+    fun isPosterAttached(tag: String): Boolean = attachedPosters[tag] == true
     private val pending = mutableMapOf<String, TmdbBrowseBatch>()
     private val failedPages = mutableMapOf<String, Int>()
     private val loads = mutableMapOf<String, Mutex>()

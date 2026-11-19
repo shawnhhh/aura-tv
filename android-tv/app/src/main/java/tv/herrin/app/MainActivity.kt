@@ -3309,8 +3309,13 @@ private fun Herrin(startup: StartupPresentation) {
                 val visibleFirstIndex by remember(railState) {
                     derivedStateOf { railState.firstVisibleItemIndex }
                 }
+                // A TMDB cache row can have entries before the LazyRow has
+                // attached its first poster. Never point the hero's DOWN edge
+                // at a FocusRequester that has not been placed in the tree.
                 val firstPosterTarget = if (independentPage != null)
-                    TmdbBrowseFocus.first(tmdbBrowseState, independentPage, if (category == "首页") railFilms else emptyList())?.let { requester(it) }
+                    TmdbBrowseFocus.first(tmdbBrowseState, independentPage,
+                        if (category == "首页") railFilms else emptyList())
+                        ?.takeIf(tmdbBrowseState::isPosterAttached)?.let { requester(it) }
                 else (railFilms.getOrNull(visibleFirstIndex) ?: recommendedFilms.firstOrNull())
                     ?.let { requester("card-${displayKey(it)}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }

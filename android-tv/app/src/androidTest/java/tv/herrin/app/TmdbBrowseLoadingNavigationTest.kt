@@ -183,4 +183,51 @@ class TmdbBrowseLoadingNavigationTest {
             assertFalse(state.row(spec).error)
         } finally { release.countDown() }
     }
+    @Test fun emptyThenLoadedHeroDownSurvivesRapidNavigationAndReplacement() {
+        val fixture = TmdbBrowseFixture()
+        val state = TmdbBrowseState(TmdbBrowseRepository(fixture), "fixture")
+        val spec = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.HOT)
+        val requesters = mutableMapOf<String, FocusRequester>()
+        val hero = FocusRequester()
+        var focused by mutableStateOf("hero")
+        compose.setContent { MaterialTheme {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                val first = TmdbBrowseFocus.first(state, TmdbBrowsePage.MOVIE, emptyList())
+                    ?.takeIf(state::isPosterAttached)
+                TvButton("播放", Modifier.testTag("hero-play")
+                    .then(if (first != null)
+                        Modifier.focusProperties { down = requesters.getOrPut(first) { FocusRequester() } }
+                    else Modifier)
+                    .focusRequester(hero), reduced = true, onFocus = { focused = "hero" }) {}
+                TmdbBrowseRails(state, TmdbBrowsePage.MOVIE, emptyList(), true,
+                    { requesters.getOrPut(it) { FocusRequester() } },
+                    { _, tag -> focused = tag }, { _, _ -> })
+            }
+        } }
+        val button = compose.onNodeWithTag("hero-play")
+        button.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        repeat(6) { button.performKeyInput { pressKey(Key.DirectionDown) } }
+        // Empty / failed / pending shelves are not errors in remote navigation.
+        compose.runOnIdle { assertTrue(state.row(spec).entries.isEmpty()) }
+        runBlocking { state.refresh(TmdbBrowsePage.MOVIE) }
+        compose.waitUntil(5000) { state.row(spec).entries.isNotEmpty() &&
+            state.isPosterAttached("card-tmdb-movie-11") }
+        button.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        button.performKeyInput { pressKey(Key.DirectionDown) }
+        compose.waitUntil(5000) {
+            runCatching { compose.onNodeWithTag("card-tmdb-movie-11").assertIsFocused() }.isSuccess
+        }
+        // A new first-page response may replace the focused poster mid-movement.
+        compose.runOnIdle {
+            focused = "hero"
+            state.rows[spec.key] = state.row(spec).copy(entries = emptyList())
+        }
+        repeat(12) { compose.onNodeWithTag("hero-play").performKeyInput {
+            pressKey(Key.DirectionDown); pressKey(Key.DirectionUp)
+        } }
+        runBlocking { state.refresh(TmdbBrowsePage.MOVIE, force = true) }
+        compose.waitUntil(5000) { state.row(spec).entries.isNotEmpty() }
+        compose.onNodeWithTag("hero-play").assertExists()
+        assertTrue(focused.isNotEmpty())
+    }
 }
