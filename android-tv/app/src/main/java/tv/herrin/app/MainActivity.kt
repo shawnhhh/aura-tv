@@ -889,8 +889,10 @@ private fun Herrin(startup: StartupPresentation) {
                 prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
                 prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(chosen.first, config.spiderJar)
             }
-            if (phoneSourceId != null && chosen == null && candidates.isNotEmpty())
-                failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED")
+            // A valid phone-imported warehouse is not a failed configuration
+            // merely because a CMS returns no films or a Spider awaits an
+            // explicit TV-side execution approval. Activate the CONFIG below,
+            // independently of whether a particular node can play.
             if (chosen == null && !spiderCrashed &&
                 SystemClock.elapsedRealtime() - scanStarted >= TvBoxAutoScanPolicy.TOTAL_BUDGET_MS)
                 scanBudgetExceeded = true
@@ -966,7 +968,33 @@ private fun Herrin(startup: StartupPresentation) {
                 }
             }
         }
-        if (tvBoxSingle == null) vodImportFeedback = "导入失败"
+        // H-006: a phone submission updates the SAME persisted TV warehouse
+        // slot as the remote "应用影视源" action. Parse success, not playable
+        // site discovery, is the transaction's commit boundary. An untrusted
+        // new Spider still requires explicit TV approval before execution.
+        if (pendingImportId != null && phoneSourceId == pendingImportId) {
+            if (loadedConfig is TvBoxConfig.Single || loadedConfig is TvBoxConfig.Warehouses) {
+                val wasDifferentRoot = prefs.tvBoxWarehouseUrl != address
+                if (finishPhoneSource(pendingImportId)) {
+                    configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
+                    tvBoxUrlDraft = configuredTvBoxUrl
+                    if (wasDifferentRoot) {
+                        // No stale Spider authorization or source-bound films
+                        // may survive replacing the configured warehouse root.
+                        spiderBridge.close()
+                        spiderActive = false
+                        activeCmsSite = null
+                        providerFilms = null
+                        tvBoxVodScope = "tvbox:pending"
+                    }
+                    vodImportFeedback = "影视仓配置已保存"
+                    tvBoxStatus += "；配置已同步电视，可在「选择影视点」选择站点；新 Spider 仍需电视确认"
+                } else failPhoneSource("SOURCE_SAVE_FAILED")
+            } else failPhoneSource("SOURCE_BODY_INVALID")
+        }
+        // Multi-warehouse lists are valid; lack of a Single is not failure.
+        if (tvBoxSingle == null && tvBoxWarehouses.isEmpty() &&
+            loadedConfig !is TvBoxConfig.HerrinCatalog) vodImportFeedback = "导入失败"
     }
     var pendingDeleteSourceId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(pendingDeleteSourceId) {
@@ -5439,15 +5467,17 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 "sources" -> {
                     tvBoxRunSpiderAfterApply = false
-                    personalSourceConfigEpoch++
                     val pending = phoneSourceImport.current()?.takeIf { it.state == "SAVED" }
                     if (pending != null) {
+                        // Never invalidate an active player's personal routes
+                        // merely because the phone SENT a candidate. First
+                        // validate/commit the warehouse, then refresh source state.
                         phoneSourceId = pending.id
                         candidateRoot = pending.url
                         tvBoxUrlDraft = pending.url
                         tvBoxRequest = pending.url to true
                         tvBoxLoadEpoch++
-                    }
+                    } else personalSourceConfigEpoch++
                 }
                 "catalogs" -> { catalogRefresh++ }
                 "live" -> { liveRefresh++; epgRefresh++ }

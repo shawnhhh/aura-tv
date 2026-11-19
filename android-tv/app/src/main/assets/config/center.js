@@ -42,10 +42,12 @@ async function watchSource(importId){
  while(session && ticket===sourcePoll){
    const r=await call('/sources/status',{importId});
    if(ticket!==sourcePoll)return;
-   if(r.state==='ACTIVE'){status.textContent='影视点加载成功，已导入影视源';return;}
+   if(r.state==='ACTIVE'){
+     status.textContent='影视仓配置已保存并同步到电视；可在电视「选择影视点」中打开站点。新 Spider 仍须电视授权。';return;
+   }
    if(r.state==='FAILED'){status.textContent=sourceErrors[r.code]||'影视源导入失败，原配置保留';return;}
    if(r.state==='SUPERSEDED'){status.textContent='已被后续配置替代';return;}
-   status.textContent=r.state==='AWAITING_SITE'?'配置已读取，请在电视选择影视点并确认新 Spider 授权':'候选配置已保存，等待电视读取';
+   status.textContent=r.state==='AWAITING_SITE'?'电视正在读取影视仓配置；站点播放验证与配置保存分开处理':'已发送到电视，正在校验影视仓配置';
    await new Promise(r=>setTimeout(r,1000));
  }
 }
