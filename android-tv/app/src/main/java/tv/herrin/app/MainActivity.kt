@@ -973,7 +973,7 @@ private fun Herrin(startup: StartupPresentation) {
         // site discovery, is the transaction's commit boundary. An untrusted
         // new Spider still requires explicit TV approval before execution.
         if (pendingImportId != null && phoneSourceId == pendingImportId) {
-            if (loadedConfig is TvBoxConfig.Single || loadedConfig is TvBoxConfig.Warehouses) {
+            if (LanWarehouseCommitPolicy.isParsedTvBox(loadedConfig)) {
                 val wasDifferentRoot = prefs.tvBoxWarehouseUrl != address
                 if (finishPhoneSource(pendingImportId)) {
                     configuredTvBoxUrl = prefs.tvBoxWarehouseUrl

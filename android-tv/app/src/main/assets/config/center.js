@@ -2,6 +2,11 @@
 let pairing=location.hash.slice(1), session='', polling=false;
 history.replaceState(null,'',location.pathname);
 const status=document.querySelector('#status');
+const sourcesResult=document.querySelector('#sources-result');
+function sourceFeedback(message){
+ sourcesResult.textContent=message;
+ status.textContent=message;
+}
 async function call(path,value={}){
  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Herrin-Session':session},body:JSON.stringify(value),cache:'no-store',credentials:'omit'});
  if(!r.ok){
@@ -39,15 +44,20 @@ const sourceErrors={
 let sourcePoll=0;
 async function watchSource(importId){
  const ticket=++sourcePoll;
+ const started=Date.now();
  while(session && ticket===sourcePoll){
+   if(Date.now()-started>50_000){
+     sourceFeedback('电视尚未确认应用结果。请检查电视「影视源」状态；原配置在校验失败时会保留。');
+     return;
+   }
    const r=await call('/sources/status',{importId});
    if(ticket!==sourcePoll)return;
    if(r.state==='ACTIVE'){
-     status.textContent='影视仓配置已保存并同步到电视；可在电视「选择影视点」中打开站点。新 Spider 仍须电视授权。';return;
+     sourceFeedback('影视仓配置已保存并同步到电视；可在电视「选择影视点」中打开站点。新 Spider 仍须电视授权。');return;
    }
-   if(r.state==='FAILED'){status.textContent=sourceErrors[r.code]||'影视源导入失败，原配置保留';return;}
-   if(r.state==='SUPERSEDED'){status.textContent='已被后续配置替代';return;}
-   status.textContent=r.state==='AWAITING_SITE'?'电视正在读取影视仓配置；站点播放验证与配置保存分开处理':'已发送到电视，正在校验影视仓配置';
+   if(r.state==='FAILED'){sourceFeedback(sourceErrors[r.code]||'影视源导入失败，原配置保留');return;}
+   if(r.state==='SUPERSEDED'){sourceFeedback('已被后续配置替代');return;}
+   sourceFeedback(r.state==='AWAITING_SITE'?'电视正在读取影视仓配置；站点播放验证与配置保存分开处理':'已发送到电视，正在校验影视仓配置');
    await new Promise(r=>setTimeout(r,1000));
  }
 }
@@ -66,7 +76,21 @@ async function refreshEntries(){
  if(module==='nas')button('测试',async()=>{status.textContent=(await call('/nas/test',{id:entry.id})).result;});list.append(row);});
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('#tmdb,#sources,#live,#nas').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();if(module==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}});
-document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit):not(#personal-edit):not(#personal-match)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(f));if(f.id==='smb')data.encryption=f.elements.encryption.checked;const result=await call('/'+f.id,data);if(f.id==='sources'){await watchSource(result.importId);return;}f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
+document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit):not(#personal-edit):not(#personal-match)').forEach(f=>f.onsubmit=async e=>{
+ e.preventDefault();const button=f.querySelector('button');button.disabled=true;
+ try{
+   const data=Object.fromEntries(new FormData(f));
+   if(f.id==='smb')data.encryption=f.elements.encryption.checked;
+   if(f.id==='sources')sourceFeedback('配置已发往电视，正在保存并校验影视仓…');
+   const result=await call('/'+f.id,data);
+   if(f.id==='sources'){await watchSource(result.importId);return;}
+   f.querySelectorAll('[type=password]').forEach(i=>i.value='');
+   status.textContent='保存成功，电视正在应用';
+   if(f.id==='tmdb')await refreshTmdbStatus();
+ }catch(e){
+   if(f.id==='sources')sourceFeedback(e.message);else status.textContent=e.message;
+ }finally{button.disabled=false;}
+});
 document.querySelector('#test').onclick=async()=>{try{status.textContent=(await call('/tmdb/test')).result;await refreshTmdbStatus();}catch(e){status.textContent=e.message;}};
 document.querySelector('#end').onclick=async()=>{try{await call('/end');}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束，请在电视重新开启';}};
 // Editing a long form is activity; refresh only while the user is actively editing.
