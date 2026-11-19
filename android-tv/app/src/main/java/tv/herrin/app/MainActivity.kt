@@ -1643,7 +1643,9 @@ private fun Herrin(startup: StartupPresentation) {
                             tmdbState.tmdbSourceStatus = snapshot.text() +
                                 if(snapshot.hits.isEmpty()) " · 尚无站点搜索结果" else " · 选择影视点条目读取真实选集"
                             if (tmdbState.autoLayoutSelected[targetId] != planRevision && tmdbState.discoverySelection == null && tmdbState.tmdbResolved[targetId]?.playbackEpisodes.isNullOrEmpty()) {
-                                snapshot.hits.firstOrNull { it.relevance == SourceRelevance.CONFIRMED && it.episodes.isNotEmpty() }?.let { ready ->
+                                snapshot.hits.firstOrNull { it.relevance == SourceRelevance.CONFIRMED &&
+                                    it.node.id in snapshot.selectableNodeIds &&
+                                    it.episodes.isNotEmpty() }?.let { ready ->
                                     tmdbState.autoLayoutSelected[targetId] = planRevision
                                     tmdbState.requestedDiscoveryHits[targetId] = ready.key
                                     tmdbState.discoverySelection = targetId to ready.key
@@ -5004,14 +5006,60 @@ private fun Herrin(startup: StartupPresentation) {
                                     modifier = Modifier.testTag("detail-synopsis"), lineHeight = 26.sp,
                                     color = Color(0xFFE1E8F2))
                             } }
+                        // H-004: Favorite always sits between synopsis and node selector.
+                        if (screen == "detail") item {
+                            val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
+                                ?: (film.id in favorites)
+                            TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏",
+                                modifier = Modifier.testTag("detail-favorite"), reduced = reduceMotion) {
+                                if (showGroup == null) prefs.toggleFor(catalogScope, film.id)
+                                else if (groupFavorited) showGroup.members.filter { it.film.id in favorites }
+                                    .forEach { prefs.toggleFor(catalogScope, it.film.id) }
+                                else prefs.toggleFor(catalogScope, showGroup.representative.id)
+                                favorites = prefs.idsFor(catalogScope)
+                            }
+                        }
                         if(film.id.startsWith("tmdb-") && screen == "detail") {
                             val sourceSnapshot = tmdbState.discoveredSources[film.id] ?: HerrinSourceDiscovery.Snapshot("pending-" + film.id, 0)
                             sourceSnapshot.let { discovery ->
                                 herrinDiscoveryItems(discovery, tmdbState.tmdbSearchRunning || tmdbState.discoveryLoadingFilm == film.id, reduceMotion,
                                     select = { hit, selectedLine ->
+                                        if (hit.node.id !in discovery.selectableNodeIds ||
+                                            hit.episodes.isEmpty()) return@herrinDiscoveryItems
                                         tmdbState.discoveryRecovery = null
                                         tmdbState.rejectedDiscoveryHits.clear()
                                         pendingHistoryFilm = null
+                                        // Reuse the real, already fetched line/episode layout.
+                                        // The preview has no URI, headers or playback authority.
+                                        val preview = hit.episodes.map { ep ->
+                                            PlaybackEpisode(ep.number, ep.title, ep.lines.map { (id, title) ->
+                                                PlaybackLine(id, title, "")
+                                            })
+                                        }
+                                        val previous = tmdbState.tmdbResolved[film.id] ?: film
+                                        val same = tmdbState.loadedDiscoveryHits[film.id] == hit.key &&
+                                            tmdbState.sourceSelectionReady(film.id)
+                                        if (!same) {
+                                            tmdbState.tmdbResolved[film.id] = previous.copy(
+                                                playbackEpisodes = preview, episodes = preview.size,
+                                                cmsVodId = hit.movie.film.cmsVodId,
+                                                spiderVodId = hit.movie.film.spiderVodId)
+                                        }
+                                        val chosen = preview.firstOrNull { ep ->
+                                            ep.lines.any { it.id == selectedLine }
+                                        } ?: preview.firstOrNull()
+                                        if (chosen != null) {
+                                            episode = chosen.number
+                                            line = selectedLine?.takeIf { id ->
+                                                chosen.lines.any { it.id == id }
+                                            } ?: chosen.lines.firstOrNull()?.id.orEmpty()
+                                        }
+                                        if (same) {
+                                            // A different already-loaded line is only UI selection:
+                                            // no second provider detail fetch is necessary.
+                                            tmdbState.discoveryLine = null
+                                            return@herrinDiscoveryItems
+                                        }
                                         tmdbState.requestedDiscoveryHits[film.id] = hit.key
                                         tmdbState.discoveryLine = selectedLine
                                         tmdbState.discoverySelection = film.id to hit.key
@@ -5031,7 +5079,13 @@ private fun Herrin(startup: StartupPresentation) {
                                         tmdbState.tmdbExtendedRequest = film.id
                                     }, selectedNode = tmdbState.selectedDiscoveryNode[film.id],
                                     onNode = { tmdbState.selectedDiscoveryNode[film.id] = it },
-                                    firstLineFocus = requester("detail-first-line"))
+                                    lineFocus = { index -> requester(if (index == 0)
+                                        "detail-first-line" else "detail-line-$index") },
+                                    onLineFocus = { index ->
+                                        lastDetailLineFocus = if (index == 0)
+                                            "detail-first-line" else "detail-line-$index"
+                                    },
+                                    onDown = ::enterDetailEpisodes)
                             }
                         }
                         if (showGroup != null && screen == "detail") item {
@@ -5101,15 +5155,7 @@ private fun Herrin(startup: StartupPresentation) {
                                         playSeasonEpisode(detailSeasonSource ?: detailSeasonEntries.first())
                                     else screen = "player"
                                 }
-                                val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
-                                    ?: (film.id in favorites)
-                                TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏", reduced = reduceMotion) {
-                                    if (showGroup == null) prefs.toggleFor(catalogScope, film.id)
-                                    else if (groupFavorited) showGroup.members.filter { it.film.id in favorites }
-                                        .forEach { prefs.toggleFor(catalogScope, it.film.id) }
-                                    else prefs.toggleFor(catalogScope, showGroup.representative.id)
-                                    favorites = prefs.idsFor(catalogScope)
-                                }
+
                             } }
                             if (providerFilms == null && showGroup == null && resume != null && seasonLayout == null) {
                                 item { Text("继续播放 · 已观看 ${resume.positionMs / 1000} 秒 / ${resume.durationMs / 1000} 秒",
@@ -5179,7 +5225,8 @@ private fun Herrin(startup: StartupPresentation) {
                                         }, onPlay = { entry -> playSeasonEpisode(entry) },
                                         onMoveToCast = ::moveToDetailCast, entryFocus = requester("detail-current-episode"), onMoveToLines = ::returnDetailLine)
                                 }
-                            } else if (HerrinPlaybackEntry.unavailableTmdb(film)) {
+                            } else if (HerrinPlaybackEntry.unavailableTmdb(film) &&
+                                film.playbackEpisodes.isEmpty()) {
                                 item { Text(if(tmdbState.discoveredSources[film.id]?.hits?.isNotEmpty() == true)
                                     "请选择片源线路" else "暂无可用线路",
                                     modifier = Modifier.testTag("tmdb-episodes-unavailable"),

@@ -40,6 +40,23 @@ internal class HerrinSourceDiscovery {
             val ids = hits.associate { hit -> hit.key to hit.episodes.flatMap { it.lines }.map { it.first }.toSet() }
             routes.filter { it.lineId in ids[it.hitKey].orEmpty() }
         }
+        /**
+         * A node must not be selectable when only its search result is known.
+         * All confirmed VOD details for that node must finish first, so each
+         * advertised line already has an episode list when the menu opens.
+         * A bundled NAS playlist comes from the first hit's single detail call.
+         */
+        val selectableNodeIds: Set<String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+            val confirmed = hits.filter { it.relevance == SourceRelevance.CONFIRMED }
+            confirmed.groupBy { it.node.id }.filter { (nodeId, candidates) ->
+                val required = if (candidates.first().node.bundledPersonalLayout)
+                    candidates.take(1) else candidates
+                required.all { it.key in detailed } &&
+                    required.any { it.episodes.isNotEmpty() &&
+                        it.episodes.all { ep -> ep.lines.isNotEmpty() } &&
+                        readyRoutes.any { route -> route.nodeId == nodeId && route.hitKey == it.key } }
+            }.keys
+        }
         val confirmed get() = hits.count { it.relevance == SourceRelevance.CONFIRMED }
         val possible get() = hits.count { it.relevance == SourceRelevance.POSSIBLE }
         val excluded get() = hits.count { it.relevance == SourceRelevance.OTHER }
@@ -143,7 +160,17 @@ internal class HerrinSourceDiscovery {
                         }
                     }
                 } catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { /* Preserve hit and allow safe continuation. */ }
+                catch (_: Exception) {
+                    // A failed detail is terminal for this discovery pass. Let a
+                    // sibling VOD with real episodes become selectable after
+                    // all siblings finish; explicit node retry clears this mark.
+                    mutations.withLock {
+                        if (snapshot.revision == revision && version.get() == ticket) {
+                            snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key)
+                            publish(snapshot)
+                        }
+                    }
+                }
             }
             fun prefetch(node: Node) {
                 val matches = snapshot.hits.filter { it.node.id == node.id && it.relevance == SourceRelevance.CONFIRMED }
