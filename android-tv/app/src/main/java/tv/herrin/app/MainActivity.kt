@@ -1647,6 +1647,23 @@ private fun Herrin(startup: StartupPresentation) {
                                     it.node.id in snapshot.selectableNodeIds &&
                                     it.episodes.isNotEmpty() }?.let { ready ->
                                     tmdbState.autoLayoutSelected[targetId] = planRevision
+                                    // A selectable node has its real episode/line layout already.
+                                    // Publish only a media-free view projection immediately.
+                                    val metadataForPreview = tmdbState.tmdbResolved[targetId] ?: tmdbFilm
+                                    val previewEpisodes = ready.episodes.map { ep ->
+                                        PlaybackEpisode(ep.number, ep.title, ep.lines.map { (id, title) ->
+                                            PlaybackLine(id, title, "")
+                                        })
+                                    }
+                                    tmdbState.tmdbResolved[targetId] = metadataForPreview.copy(
+                                        cmsVodId = ready.movie.film.cmsVodId,
+                                        spiderVodId = ready.movie.film.spiderVodId,
+                                        playbackEpisodes = previewEpisodes, episodes = previewEpisodes.size)
+                                    previewEpisodes.firstOrNull()?.let { first ->
+                                        first.lines.firstOrNull()?.let { firstLine ->
+                                            episode = first.number; line = firstLine.id
+                                        }
+                                    }
                                     tmdbState.requestedDiscoveryHits[targetId] = ready.key
                                     tmdbState.discoverySelection = targetId to ready.key
                                     tmdbState.discoverySelectionEpoch++
@@ -5055,9 +5072,15 @@ private fun Herrin(startup: StartupPresentation) {
                                             } ?: chosen.lines.firstOrNull()?.id.orEmpty()
                                         }
                                         if (same) {
-                                            // A different already-loaded line is only UI selection:
-                                            // no second provider detail fetch is necessary.
+                                            // A different already-loaded line needs no detail fetch.
                                             tmdbState.discoveryLine = null
+                                            return@herrinDiscoveryItems
+                                        }
+                                        if (tmdbState.requestedDiscoveryHits[film.id] == hit.key &&
+                                            tmdbState.discoveryLoadingFilm == film.id) {
+                                            // Keep the requested line while one detail rebind is
+                                            // in flight. Never cancel/restart the same request.
+                                            tmdbState.discoveryLine = selectedLine
                                             return@herrinDiscoveryItems
                                         }
                                         tmdbState.requestedDiscoveryHits[film.id] = hit.key
@@ -5182,8 +5205,10 @@ private fun Herrin(startup: StartupPresentation) {
                                     onSelect = { id -> pendingHistoryFilm = null; line = id; detailSeason?.let { detailSeasonLines[it.number] = id } })
                             }
 
-                            if (film.id.startsWith("tmdb-") && !tmdbState.sourceSelectionReady(film.id)) {
-                                item { Text("请选择片源线路", color = Color(0xFFBDC8D6)) }
+                            if (film.id.startsWith("tmdb-") &&
+                                film.playbackEpisodes.isEmpty() &&
+                                !tmdbState.sourceSelectionReady(film.id)) {
+                                item { Text("正在读取节点线路与集数…", color = Color(0xFFBDC8D6)) }
                             } else if (showGroup != null && groupLayout != null && groupSection != null) {
                                 item {
                                     GroupSeasonBrowser(groupLayout, groupSection,
@@ -5222,7 +5247,13 @@ private fun Herrin(startup: StartupPresentation) {
                                         onSeasonSelect = ::selectDetailSeason,
                                         onEpisodeFocus = { entry ->
                                             detailSeasonEpisodeNumbers[entry.season] = entry.source.number
-                                        }, onPlay = { entry -> playSeasonEpisode(entry) },
+                                        }, onPlay = { entry ->
+                                            if (film.id.startsWith("tmdb-") &&
+                                                (!tmdbState.sourceSelectionReady(film.id) ||
+                                                    HerrinPlaybackEntry.unavailableTmdb(film))) {
+                                                tmdbState.tmdbSourceStatus = "选集已显示，播放授权正在就绪"
+                                            } else playSeasonEpisode(entry)
+                                        },
                                         onMoveToCast = ::moveToDetailCast, entryFocus = requester("detail-current-episode"), onMoveToLines = ::returnDetailLine)
                                 }
                             } else if (HerrinPlaybackEntry.unavailableTmdb(film) &&
@@ -5254,9 +5285,15 @@ private fun Herrin(startup: StartupPresentation) {
                                                     }
                                                 }, reduced = reduceMotion,
                                                 selected = episode == n) {
-                                                episode = n
-                                                DetailPlaybackMetrics.timeline.click()
-                                                screen = "player"
+                                                if (film.id.startsWith("tmdb-") &&
+                                                    (!tmdbState.sourceSelectionReady(film.id) ||
+                                                        HerrinPlaybackEntry.unavailableTmdb(film))) {
+                                                    tmdbState.tmdbSourceStatus = "选集已显示，播放授权正在就绪"
+                                                } else {
+                                                    episode = n
+                                                    DetailPlaybackMetrics.timeline.click()
+                                                    screen = "player"
+                                                }
                                             }
                                         }
                                     } else {
@@ -5276,10 +5313,16 @@ private fun Herrin(startup: StartupPresentation) {
                                                     },
                                                 reduced = reduceMotion, selected = episode == entry.number) {
                                                 DetailPlaybackMetrics.timeline.click()
-                                                episode = entry.number
-                                                line = entry.lines.firstOrNull { it.id == line }?.id
-                                                    ?: entry.lines.firstOrNull()?.id ?: line
-                                                screen = "player"
+                                                if (film.id.startsWith("tmdb-") &&
+                                                    (!tmdbState.sourceSelectionReady(film.id) ||
+                                                        HerrinPlaybackEntry.unavailableTmdb(film))) {
+                                                    tmdbState.tmdbSourceStatus = "选集已显示，播放授权正在就绪"
+                                                } else {
+                                                    episode = entry.number
+                                                    line = entry.lines.firstOrNull { it.id == line }?.id
+                                                        ?: entry.lines.firstOrNull()?.id ?: line
+                                                    screen = "player"
+                                                }
                                             }
                                         }
                                     }

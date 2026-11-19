@@ -160,4 +160,63 @@ class DiscoveryLayoutPrefetchTest {
         assertEquals(2, snapshot.routes.size)
         assertEquals(1, loads)
     }
+    @Test fun nodeRemainsUnavailableUntilEveryConfirmedVodHasFinishedDetails() = runBlocking {
+        val release = CompletableDeferred<Unit>()
+        val started = CompletableDeferred<Unit>()
+        val a = offer("a"); val b = offer("b")
+        val node = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
+            { listOf(a, b) }, { movie ->
+                if (movie.film.cmsVodId == "b") {
+                    started.complete(Unit)
+                    release.await()
+                }
+                detail(movie, 2)
+            })
+        val current = java.util.concurrent.atomic.AtomicReference(HerrinSourceDiscovery.Snapshot("", 0))
+        val job = launch(Dispatchers.Default) {
+            HerrinSourceDiscovery().search("r", listOf(node), null, Mutex()) { current.set(it) }
+        }
+        try {
+            withTimeout(5000) { started.await() }
+            assertFalse(current.get().selectableNodeIds.contains("node"))
+            release.complete(Unit); job.join()
+            assertEquals(setOf("node"), current.get().selectableNodeIds)
+            assertEquals(4, current.get().readyRoutes.size)
+        } finally { release.complete(Unit); job.cancelAndJoin() }
+    }
+
+    @Test fun absentOrIncompleteEpisodesCannotAdvertiseANode() {
+        val movie = offer("a")
+        val node = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
+            { listOf(movie) }, { null })
+        val missing = HerrinSourceDiscovery.Snapshot("r", 1,
+            hits = listOf(HerrinSourceDiscovery.Hit("node:a", node, movie)),
+            detailed = setOf("node:a"))
+        assertTrue(missing.selectableNodeIds.isEmpty())
+        val partial = missing.copy(
+            hits = listOf(HerrinSourceDiscovery.Hit("node:a", node, movie,
+                listOf(HerrinSourceDiscovery.EpisodeLayout(1, "第一集", emptyList())))))
+        assertTrue(partial.selectableNodeIds.isEmpty())
+    }
+
+    @Test fun preloadedEpisodeLayoutCarriesNoPrivateMediaUriOrHeaders() = runBlocking {
+        val movie = offer("a")
+        val node = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
+            { listOf(movie) }, { detail(it, 2) })
+        var snapshot = HerrinSourceDiscovery.Snapshot("", 0)
+        HerrinSourceDiscovery().search("r", listOf(node), null, Mutex()) { snapshot = it }
+        assertEquals(setOf("node"), snapshot.selectableNodeIds)
+        val hit = snapshot.hits.single()
+        val preview = hit.episodes.map { ep ->
+            PlaybackEpisode(ep.number, ep.title, ep.lines.map { (id, title) ->
+                PlaybackLine(id, title, "")
+            })
+        }
+        assertEquals(2, preview.size)
+        assertEquals(2, preview.first().lines.size)
+        assertTrue(preview.flatMap { it.lines }.all { it.uri.isEmpty() && it.subtitles.isEmpty() })
+        assertFalse(snapshot.toString().contains("private.invalid"))
+        assertFalse(snapshot.toString().contains("token=private"))
+    }
+
 }
