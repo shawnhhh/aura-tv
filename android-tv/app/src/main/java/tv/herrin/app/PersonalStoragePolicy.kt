@@ -18,7 +18,7 @@ internal object PersonalStoragePolicy {
     fun webDavAddress(raw: String): WebDavAddress {
         require(raw.length in 1..2048)
         val url = URI(raw.trim())
-        val scheme = url.scheme?.lowercase(java.util.Locale.ROOT)
+        val scheme = requireNotNull(url.scheme) { "WebDAV 地址必须包含协议" }.lowercase(java.util.Locale.ROOT)
         require(scheme in setOf("http", "https") && url.host != null &&
             url.rawUserInfo == null && url.rawQuery == null && url.rawFragment == null)
         val host = host(requireNotNull(url.host))

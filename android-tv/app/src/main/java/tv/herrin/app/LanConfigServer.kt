@@ -148,7 +148,8 @@ internal class LanConfigServer(
                 "/tmdb" -> {
                     val token = input.getString("token").trim()
                     require(token.isEmpty() || TmdbTokenEntry.assemble(token, emptyList(), false) != null)
-                    prefs.tmdbReadToken = token
+                    if (token.isNotBlank()) prefs.tmdbReadToken = token
+                    require(prefs.tmdbReadToken.isNotBlank())
                     applied("tmdb"); JSONObject().put("ok", true)
                 }
                 "/sources/status" -> LanSourceImport(context).status(input.getString("importId"))
