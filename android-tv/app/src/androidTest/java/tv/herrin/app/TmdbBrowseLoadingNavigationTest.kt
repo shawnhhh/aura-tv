@@ -7,7 +7,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -195,7 +197,7 @@ class TmdbBrowseLoadingNavigationTest {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 val first = TmdbBrowseFocus.first(state, TmdbBrowsePage.MOVIE, emptyList())
                     ?.takeIf(state::isPosterAttached)
-                TvButton("播放", Modifier.testTag("hero-play")
+                TvButton("详情", Modifier.testTag("hero-details")
                     .then(if (first != null)
                         Modifier.focusProperties { down = requesters.getOrPut(first) { FocusRequester() } }
                     else Modifier)
@@ -205,7 +207,7 @@ class TmdbBrowseLoadingNavigationTest {
                     { _, tag -> focused = tag }, { _, _ -> })
             }
         } }
-        val button = compose.onNodeWithTag("hero-play")
+        val button = compose.onNodeWithTag("hero-details")
         button.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         repeat(6) { button.performKeyInput { pressKey(Key.DirectionDown) } }
         // Empty / failed / pending shelves are not errors in remote navigation.
@@ -223,12 +225,12 @@ class TmdbBrowseLoadingNavigationTest {
             focused = "hero"
             state.rows[spec.key] = state.row(spec).copy(entries = emptyList())
         }
-        repeat(12) { compose.onNodeWithTag("hero-play").performKeyInput {
+        repeat(12) { compose.onNodeWithTag("hero-details").performKeyInput {
             pressKey(Key.DirectionDown); pressKey(Key.DirectionUp)
         } }
         runBlocking { state.refresh(TmdbBrowsePage.MOVIE, force = true) }
         compose.waitUntil(5000) { state.row(spec).entries.isNotEmpty() }
-        compose.onNodeWithTag("hero-play").assertExists()
+        compose.onNodeWithTag("hero-details").assertExists()
         assertTrue(focused.isNotEmpty())
     }
 }

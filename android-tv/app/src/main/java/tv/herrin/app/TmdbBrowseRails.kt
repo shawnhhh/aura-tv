@@ -130,7 +130,7 @@ private fun TmdbBrowsePageRails(
                                         if (targetKey == null) {
                                             // A missing next shelf is normal while TMDB loads or fails.
                                             // Never send focus to a detached button.
-                                            if (up && runCatching { requester("play").requestFocus() }.isFailure)
+                                            if (up && runCatching { requester("details").requestFocus() }.isFailure)
                                                 CrashJournal.browseFocus(page.name, "hero-missed", false, films.size)
                                             return@launch
                                         }

@@ -2990,7 +2990,7 @@ private fun Herrin(startup: StartupPresentation) {
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
             val id = when (screen) {
-                "browse" -> pendingToolbarFocus ?: focusId
+                "browse" -> (pendingToolbarFocus ?: focusId).let { if (it == "play") "details" else it }
                 "search" -> focusId
                 "facets" -> if (focusId.startsWith("facet-result-")) focusId else "screen-first"
                 else -> "screen-first"
@@ -3301,7 +3301,7 @@ private fun Herrin(startup: StartupPresentation) {
                         "card-${displayKey(railFilms.getOrNull(railState.firstVisibleItemIndex) ?: railFilms.first())}"
                     tmdbPrimary && catalogFilms.isEmpty() -> "tmdb-home-retry"
                     sourceConfigured && catalogFilms.isEmpty() -> null
-                    films.isNotEmpty() -> "play"
+                    films.isNotEmpty() -> "details"
                     else -> null
                 }?.let { requester(it) }
                 // Never observe LazyRow.layoutInfo during composition: each
@@ -3592,19 +3592,16 @@ private fun Herrin(startup: StartupPresentation) {
                         Text(displayFilm.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 7.dp),
                             fontSize = 12.sp, lineHeight = 19.sp, maxLines = 2,
                             color = Color(0xCCDCE5EE))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TvButton("播放",
-                                selected = true, reduced = reduceMotion, onFocus = { tmdbBrowseState.focus(null); focusId = "play" },
-                                modifier = Modifier.testTag("play")
-                                    .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
-                                    .focusRequester(requester("play"))) {
-                                playIntent(displayFilm)
-                            }
-                            TvButton("详情", reduced = reduceMotion, onFocus = { tmdbBrowseState.focus(null); focusId = "details" },
-                                modifier = Modifier.testTag("details")
-                                    .then(if (firstPosterTarget != null) Modifier.focusProperties { down = firstPosterTarget } else Modifier)
-                                    .focusRequester(requester("details"))) { details(displayFilm) }
-                        }
+                        // H-003: TMDB hero is presentation-only. A metadata hero
+                        // must not offer direct play before source resolution.
+                        // Keep the real details entry and preserve DOWN to the first
+                        // attached poster; playback remains inside details/recent.
+                        TvButton("详情", reduced = reduceMotion,
+                            onFocus = { tmdbBrowseState.focus(null); focusId = "details" },
+                            modifier = Modifier.testTag("details")
+                                .then(if (firstPosterTarget != null)
+                                    Modifier.focusProperties { down = firstPosterTarget } else Modifier)
+                                .focusRequester(requester("details"))) { details(displayFilm) }
                         Spacer(Modifier.height(12.dp))
                     }
                     if (independentPage != null) {
@@ -3925,14 +3922,18 @@ private fun Herrin(startup: StartupPresentation) {
                             itemsIndexed(recommendedFilms, key = { _, item -> displayKey(item) }) { index, item ->
                                 Poster(item, Modifier.testTag("${recommendationPrefix}${displayKey(item)}")
                                     .focusProperties {
-                                        up = railFilms.getOrNull(index.coerceAtMost(railFilms.lastIndex))?.let { requester("card-${displayKey(it)}") } ?: requester("play")
+                                        up = railFilms.getOrNull(index.coerceAtMost(railFilms.lastIndex))?.let { requester("card-${displayKey(it)}") } ?: requester("details")
                                         down = FocusRequester.Cancel
                                     }
                                     .onPreviewKeyEvent { event ->
                                         if (event.type == KeyEventType.KeyDown &&
                                             event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
                                             if (railFilms.isEmpty()) {
-                                                uiScope.launch { browseScroll.scrollTo(0); withFrameNanos { }; requester("play").requestFocus() }
+                                                uiScope.launch {
+                                                    browseScroll.scrollTo(0)
+                                                    withFrameNanos { }
+                                                    runCatching { requester("details").requestFocus() }
+                                                }
                                             } else transferPosterFocus(recommendState, railState, index,
                                                 railFilms, "card-", browseScroll, false)
                                             true

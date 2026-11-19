@@ -56,6 +56,9 @@ class P0CachedHomeHeroTest {
             compose.onNodeWithTag("hero-title-tmdb-movie-11").assertTextEquals("Original 11")
             compose.onNodeWithTag("hero-art-tmdb-movie-11").assertExists()
         }.isSuccess }
+        // H-003: The big hero has only a details action, even when cached.
+        compose.onNodeWithTag("play").assertDoesNotExist()
+        compose.onNodeWithTag("details").assertExists()
         // Anime includes serialized animated films as well as TV; preserve the TMDB movie identity.
         val expected=listOf("首页" to "tmdb-movie-11", "电影" to "tmdb-movie-11",
             "剧集" to "tmdb-tv-21", "动漫" to "tmdb-movie-635302", "综艺" to "tmdb-tv-41",
@@ -76,6 +79,8 @@ class P0CachedHomeHeroTest {
             }
             previousId = id
             compose.onNodeWithTag("hero-title-$id").assertTextEquals("Original ${id.substringAfterLast('-')}")
+            compose.onNodeWithTag("play").assertDoesNotExist()
+            if (category != "Top 250") compose.onNodeWithTag("details").assertExists()
             compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("hero-art-$id").assertExists() }.isSuccess }
             if (category == "Top 250") {
                 compose.onNodeWithTag("nav-$category").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }
