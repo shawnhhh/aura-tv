@@ -2633,6 +2633,26 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     var settingsModule by remember { mutableStateOf("影视源") }
+    var settingsNotice by remember { mutableStateOf("") }
+    var settingsNoticeRevision by remember { mutableIntStateOf(0) }
+    var siteMenuOpen by remember { mutableStateOf(false) }
+    fun settingsResult(ok: Boolean) {
+        settingsNotice = if (ok) "成功" else "失败"
+        settingsNoticeRevision++
+    }
+    LaunchedEffect(settingsNoticeRevision) {
+        if (settingsNotice.isNotBlank()) { delay(2400); settingsNotice = "" }
+    }
+    LaunchedEffect(vodImportFeedback, liveImportFeedback) {
+        if (screen != "settings" || !settingsTvBoxOnly) return@LaunchedEffect
+        val state = when (settingsModule) {
+            "影视源" -> vodImportFeedback
+            "直播源" -> liveImportFeedback
+            else -> ""
+        }
+        if (state == "成功") settingsResult(true)
+        else if (state.contains("失败") || state.contains("崩溃") || state.contains("超时")) settingsResult(false)
+    }
     var personalProtocol by remember { mutableStateOf("WebDAV") }
     var lastMovieSettingsAction by remember { mutableStateOf("tvbox-warehouse-load") }
     // Latest D-pad press wins: an old animated scroll must never block a newer
@@ -2647,7 +2667,9 @@ private fun Herrin(startup: StartupPresentation) {
             settingsIntent.clear()
         }
     }
-    fun moveCompactSettingsFocus(target: String) {
+    fun moveCompactSettingsFocus(destination: String) {
+        val target = if (screen == "settings" && settingsTvBoxOnly && destination == "screen-first")
+            "phone-config-main" else destination
         val moduleTargets = when (settingsModule) {
             "影视源" -> setOf("screen-first", "phone-config-main", "tvbox-warehouse-url", "tvbox-warehouse-load", "settings-source-sites")
             "海报与资料" -> setOf("screen-first", "phone-config-main", "compact-tmdb-split-toggle", "compact-tmdb-token", "compact-tmdb-part-1", "compact-tmdb-part-2", "compact-tmdb-part-3", "compact-tmdb-save", "compact-tmdb-rescan")
@@ -2660,14 +2682,10 @@ private fun Herrin(startup: StartupPresentation) {
             "直播源" -> when(target) { "tvbox-live-direct-url" -> 3; "tvbox-live-direct-load" -> 4; else -> 0 }
             else -> TvFocusRoutes.compactSettingsItemIndex(
             target,
-            sourceStatus = vodImportFeedback.isNotBlank(),
-            connectedStatus = metadataToken.isNotBlank(),
-            failedStatus = metadataScanFailures > 0 && metadataScanDone >= metadataScanTotal &&
-                tmdbConnectivity == TmdbProbeState.CONNECTED,
-            noMatchesStatus = tmdbConnectivity == TmdbProbeState.CONNECTED &&
-                metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
-                metadataScanFailures == 0 &&
-                providerFilms.orEmpty().none { it.metadataSource == "TMDB" }
+            sourceStatus = false,
+            connectedStatus = false,
+            failedStatus = false,
+            noMatchesStatus = false
         )
         } ?: return
         settingsIntent.request(target)
@@ -4314,7 +4332,11 @@ private fun Herrin(startup: StartupPresentation) {
                     // MainActivityKt.Herrin otherwise violates the JVM 64-KiB
                     // per-method bytecode limit when TVBox and player UI grow.
                     fun androidx.compose.foundation.lazy.LazyListScope.renderSettingsItems() {
-                        item { Text(if (settingsTvBoxOnly) "设置中心" else "高级设置", fontSize = 32.sp) }
+                        item {
+                            if (settingsTvBoxOnly) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                if (settingsNotice.isNotBlank()) Text(settingsNotice, fontSize = 14.sp)
+                            } else Text("高级设置", fontSize = 32.sp)
+                        }
                         if (!settingsTvBoxOnly) {
                         item { TvButton("减少动态效果：${if (reduced) "开" else "关"}", reduced = reduceMotion) { reduced = !reduced; prefs.reducedMotion = reduced } }
                         item { Text("目录源管理 · 最多 10 个授权 HTTPS 目录", fontSize = 22.sp) }
@@ -4418,7 +4440,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 editRequester = requester("tvbox-warehouse-editor"),
                                 onNavFocus = { focusId = "tvbox-warehouse-url"; configInputFocused = false },
                                 onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-warehouse-editor" },
-                                onMoveUp = { moveCompactSettingsFocus("screen-first") },
+                                onMoveUp = { moveCompactSettingsFocus("phone-config-main") },
                                 onMoveDown = { moveCompactSettingsFocus("tvbox-warehouse-load") }
                             ) else OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
                                 Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
@@ -4451,29 +4473,47 @@ private fun Herrin(startup: StartupPresentation) {
                             }
                             if (settingsTvBoxOnly) {
                                 Spacer(Modifier.width(12.dp))
-                                TvButton("选择影视点", modifier = Modifier.testTag("settings-source-sites")
-                                    .focusRequester(requester("settings-source-sites")),
-                                    reduced = reduceMotion, onFocus = {
-                                        focusId = "settings-source-sites"
-                                        lastMovieSettingsAction = "settings-source-sites"
-                                        keyboard?.hide()
-                                    }) { screen = "sites" }
+                                Box {
+                                    val activeNode = tvBoxSingle?.sites?.firstOrNull {
+                                        it.key == activeCmsSite?.key || it.key == spiderBridge.approvedActiveSiteKey()
+                                    }
+                                    TvButton((activeNode?.name ?: "影视节点") + " ▾",
+                                        modifier = Modifier.testTag("settings-source-sites")
+                                            .focusRequester(requester("settings-source-sites")),
+                                        reduced = reduceMotion, onFocus = {
+                                            focusId = "settings-source-sites"
+                                            lastMovieSettingsAction = "settings-source-sites"
+                                            keyboard?.hide()
+                                        }) { siteMenuOpen = true }
+                                    DropdownMenu(expanded = siteMenuOpen, onDismissRequest = { siteMenuOpen = false }) {
+                                        tvBoxWarehouses.forEach { warehouse ->
+                                            DropdownMenuItem(text = { Text(warehouse.name) }, onClick = {
+                                                siteMenuOpen = false
+                                                tvBoxSelectedName = warehouse.name
+                                                tvBoxRunSpiderAfterApply = true
+                                                tvBoxRequest = warehouse.url to false
+                                                tvBoxLoadEpoch++
+                                            })
+                                        }
+                                        tvBoxSingle?.sites.orEmpty().filter {
+                                            it.apiUrl != null || it.spiderApi != null || it.scriptApi != null
+                                        }.forEach { site ->
+                                            DropdownMenuItem(text = { Text(site.name) }, onClick = {
+                                                siteMenuOpen = false
+                                                choosePreferredSite(site, tvBoxSingle?.spiderJar)
+                                                prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                                                prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, tvBoxSingle?.spiderJar)
+                                                val warehouse = tvBoxWarehouses.firstOrNull { it.name == tvBoxSelectedName }
+                                                tvBoxRunSpiderAfterApply = true
+                                                tvBoxRequest = (warehouse?.url ?: prefs.tvBoxWarehouseUrl) to (warehouse == null)
+                                                tvBoxLoadEpoch++
+                                            })
+                                        }
+                                    }
+                                }
                             }
                             Spacer(Modifier.weight(1f))
-                            if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
-                                Text(vodImportFeedback, Modifier.testTag("vod-apply-feedback"),
-                                    color = if (vodImportFeedback == "成功") Color(0xFF85D9B5)
-                                    else if (vodImportFeedback.contains("失败") || vodImportFeedback.contains("未获取") ||
-                                        vodImportFeedback.contains("崩溃") || vodImportFeedback.contains("超时")) Color(0xFFF2A5A5)
-                                    else Color(0xFFC4D3E7), fontSize = 14.sp)
-                            }
                         } }
-                        if (settingsTvBoxOnly && vodImportFeedback.isNotBlank()) {
-                            item { Text(ConsumerSourceStatus.display(tvBoxStatus), Modifier.testTag("compact-tvbox-status"),
-                                color = if (vodImportFeedback.contains("崩溃") || vodImportFeedback.contains("超时"))
-                                    Color(0xFFF2A5A5) else Color(0xFFCFD7E4),
-                                lineHeight = 21.sp, fontSize = 14.sp) }
-                        }
                         if (!settingsTvBoxOnly) {
                         item { OutlinedTextField(tvBoxJsonDraft, { tvBoxJsonDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-import-json")
@@ -4497,15 +4537,7 @@ private fun Herrin(startup: StartupPresentation) {
                         if (settingsTvBoxOnly && settingsModule == "海报与资料") {
                             item { Text("海报与资料",
                                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
-                            item { Text(if (metadataToken.isBlank())
-                                "未启用自动刮削：没有配置 TMDB API Read Access Token，当前显示影视源海报。" +
-                                    "配置后自动匹配海报、背景、简介、评分和演员资料。"
-                                else "TMDB 匹配检查：已尝试 $metadataScanDone/$metadataScanTotal，" +
-                                    "成功匹配 ${providerFilms.orEmpty().count { it.metadataSource == "TMDB" }} 部，" +
-                                    "未匹配 $metadataScanNoMatch 部，请求失败 $metadataScanFailures 部。" +
-                                    "只有搜索接口验证通过才会开始刮削；播放地址与选集仍由影视源提供。",
-                                modifier = Modifier.testTag("compact-metadata-status"),
-                                color = Color(0xFFBFD6ED), lineHeight = 21.sp) }
+                            item { Spacer(Modifier.height(0.dp)) }
                             item { TmdbTokenEntryFields(
                                 compact = true, reducedMotion = reduceMotion,
                                 splitMode = tmdbTokenSplitMode, onToggle = { toggleTmdbSplitInput() },
@@ -4530,69 +4562,35 @@ private fun Herrin(startup: StartupPresentation) {
                                     onToggleFocus = { focusId = "compact-tmdb-split-toggle" }
                                 )
                             ) }
-                            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                TvButton("保存并开始刮削",
+                            item {
+                                TvButton("刮削",
                                     modifier = Modifier.testTag("compact-tmdb-save")
                                         .focusRequester(requester("compact-tmdb-save")),
                                     reduced = reduceMotion,
                                     onFocus = { focusId = "compact-tmdb-save"; keyboard?.hide() }) {
-                                    val value = candidateTmdbToken()
-                                    if (value != null) uiScope.launch {
-                                        val saved = withContext(Dispatchers.IO) { runCatching { prefs.tmdbReadToken = value }.isSuccess }
-                                        if (!saved) { tmdbSettingsStatus = "安全存储不可用，令牌未保存"; return@launch }
-                                        metadataResolver.clearAuthCooldown(value)
+                                    val candidate = candidateTmdbToken()
+                                    val activeToken = candidate ?: metadataToken.takeIf { it.isNotBlank() }
+                                    if (activeToken == null) settingsResult(false)
+                                    else uiScope.launch {
+                                        val saved = withContext(Dispatchers.IO) {
+                                            runCatching { prefs.tmdbReadToken = activeToken }.isSuccess
+                                        }
+                                        if (!saved) { settingsResult(false); return@launch }
+                                        metadataResolver.clearAuthCooldown(activeToken)
                                         metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
                                         providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
-                                        metadataToken = value
+                                        metadataToken = activeToken
                                         clearTmdbInput()
                                         metadataRescanEpoch++
                                         uiScope.launch {
                                             withContext(Dispatchers.IO) { tmdbDiscovery.invalidate(metadataToken) }
                                             tmdbProbeEpoch++
                                         }
-                                        tmdbSettingsStatus = "正在重新读取 TMDB 海报和影片资料"
-                                    } else tmdbSettingsStatus = "需要完整的 TMDB API Read Access Token"
+                                        settingsResult(true)
+                                    }
                                 }
-                                TvButton("重新刮削",
-                                    modifier = Modifier.testTag("compact-tmdb-rescan")
-                                        .focusRequester(requester("compact-tmdb-rescan")),
-                                    reduced = reduceMotion,
-                                    onFocus = { focusId = "compact-tmdb-rescan"; keyboard?.hide() }) {
-                                    if (metadataToken.isNotBlank()) {
-                                        metadataResolver.clearAuthCooldown(metadataToken)
-                                        metadataForceIds = providerFilms.orEmpty().map { it.id }.toSet()
-                                        providerFilms = providerFilms?.map(FilmMetadataEnrichment::restore)
-                                        metadataRescanEpoch++
-                                        uiScope.launch {
-                                            withContext(Dispatchers.IO) { tmdbDiscovery.invalidate(metadataToken) }
-                                            tmdbProbeEpoch++
-                                        }
-                                        tmdbSettingsStatus = "正在重新匹配当前影视点的元数据"
-                                    } else tmdbSettingsStatus = "请先配置 TMDB Token"
-                                }
-                            } }
-                            item { Text(tmdbSettingsStatus, color = Color(0xFFCFD7E4),
-                                modifier = Modifier.testTag("compact-tmdb-feedback")) }
-                            if (metadataToken.isNotBlank()) item {
-                                Text(tmdbProbeMessage,
-                                    modifier = Modifier.testTag("compact-tmdb-connectivity"),
-                                    color = if (tmdbConnectivity == TmdbProbeState.CONNECTED)
-                                        Color(0xFFB3E8D2) else Color(0xFFFFD49D))
                             }
-                            if (metadataScanFailures > 0 && metadataScanDone >= metadataScanTotal &&
-                                tmdbConnectivity == TmdbProbeState.CONNECTED) item {
-                                Text("本轮 $metadataScanFailures 部 TMDB 请求失败，不是片名无匹配。请检查电视网络并点重新刮削。",
-                                    color = Color(0xFFFFD49D))
-                            }
-                            if (tmdbConnectivity == TmdbProbeState.CONNECTED &&
-                                metadataScanTotal > 0 && metadataScanDone >= metadataScanTotal &&
-                                metadataScanFailures == 0 &&
-                                providerFilms.orEmpty().none { it.metadataSource == "TMDB" }) item {
-                                Text("已连通 TMDB，但本轮没有可靠的同名匹配。请检查影视源片名、电影/剧集分类，" +
-                                    "或在影片详情中手动纠正匹配；不会误用其他影片的海报。",
-                                    modifier = Modifier.testTag("compact-tmdb-no-matches"),
-                                    color = Color(0xFFFFD49D))
-                            }
+                            item { Spacer(Modifier.height(0.dp)) }
                         }
                         if (settingsTvBoxOnly && settingsModule == "个人媒体库") {
                             item { PersonalProtocolTabs(personalProtocol, reduceMotion) { personalProtocol = it } }
@@ -4623,7 +4621,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 editRequester = requester("tvbox-live-direct-editor"),
                                 onNavFocus = { focusId = "tvbox-live-direct-url"; configInputFocused = false },
                                 onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-live-direct-editor" },
-                                onMoveUp = { moveCompactSettingsFocus("compact-tmdb-save") },
+                                onMoveUp = { moveCompactSettingsFocus("phone-config-main") },
                                 onMoveDown = { moveCompactSettingsFocus("tvbox-live-direct-load") }
                             ) else OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                                 Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
@@ -5434,8 +5432,9 @@ private fun Herrin(startup: StartupPresentation) {
                     contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
                     verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
                     item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
-                            reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() }
+                        if (screen != "settings" || !settingsTvBoxOnly)
+                            TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
+                                reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() }
                         if (screen == "settings") Spacer(Modifier.weight(1f))
                         if (screen == "settings") TvButton("手机扫码配置", Modifier.testTag("phone-config-main")
                             .focusRequester(requester("phone-config-main")), reduceMotion,
