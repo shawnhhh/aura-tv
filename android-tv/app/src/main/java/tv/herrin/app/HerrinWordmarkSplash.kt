@@ -26,8 +26,17 @@ internal object WordmarkMotion {
     const val BREATH_MS = 2400f
     const val BREATH_START_MS = REVEAL_MS - 1050f
     const val MIN_READY_MS = REVEAL_MS
-    fun brightness(elapsedMs: Float): Float = if (elapsedMs < BREATH_START_MS) 1f else
-        (0.85 + 0.15 * cos((elapsedMs - BREATH_START_MS) / BREATH_MS * 2 * Math.PI)).toFloat()
+    // V13: low-contrast reveal, then a rising breath from 1200ms to the
+    // 2250ms peak. The same 2400ms wave continues while home is loading.
+    // Clamping the phase before 1200ms makes the first breath frame seamless.
+    fun brightness(elapsedMs: Float): Float {
+        val phaseMs = elapsedMs.coerceAtLeast(BREATH_START_MS) - REVEAL_MS
+        return (0.65 + 0.35 * cos(phaseMs / BREATH_MS * 2 * Math.PI)).toFloat()
+    }
+    // Glow is confined to the letters, never a background halo or ripple.
+    fun glow(elapsedMs: Float): Float =
+        if (elapsedMs < BREATH_START_MS) 0f
+        else ((brightness(elapsedMs) - 0.30f) / 0.70f).coerceIn(0f, 1f)
     fun ready(elapsedMs: Float) = elapsedMs >= MIN_READY_MS
     fun reveal(elapsedMs: Float): Float = (elapsedMs / REVEAL_MS).coerceIn(0f, 1f)
 }

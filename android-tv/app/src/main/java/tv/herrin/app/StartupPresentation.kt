@@ -50,8 +50,10 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
             val preferences = async {
                 Preferences(context).apply {
                     tmdbReadToken
-                    state.reduced=reducedMotion ||android.provider.Settings.Global.getFloat(context.contentResolver,
-                        android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,1f)==0f
+                    // Some Android TV firmware sets the global animation scale
+                    // to zero by default, unintentionally replacing V13 with a
+                    // static wordmark. Honor the explicit Herrin preference only.
+                    state.reduced = reducedMotion
                 }
             }
             profiles.await()

@@ -7,22 +7,62 @@ internal class WordmarkRenderer {
     private val left=android.graphics.LinearGradient(0f,0f,80f,0f,android.graphics.Color.TRANSPARENT,android.graphics.Color.WHITE,android.graphics.Shader.TileMode.CLAMP)
     private val right=android.graphics.LinearGradient(0f,0f,80f,0f,android.graphics.Color.WHITE,android.graphics.Color.TRANSPARENT,android.graphics.Shader.TileMode.CLAMP)
     private val lm=android.graphics.Matrix();private val rm=android.graphics.Matrix()
+
+    // Native Canvas draws the V13 vector directly each vsync. Three lightweight
+    // translucent outlines produce letter-local bloom without bitmap allocation.
+    private fun drawLitPath(
+        canvas: android.graphics.Canvas,
+        shader: android.graphics.Shader?,
+        brightness: Float,
+        glow: Float
+    ) {
+        paint.shader = shader
+        if (glow > 0.01f) {
+            paint.style = android.graphics.Paint.Style.STROKE
+            paint.strokeJoin = android.graphics.Paint.Join.ROUND
+            paint.strokeCap = android.graphics.Paint.Cap.ROUND
+            paint.strokeWidth = 28f
+            paint.alpha = (glow * 9f).toInt().coerceIn(0, 255)
+            canvas.drawPath(path, paint)
+            paint.strokeWidth = 16f
+            paint.alpha = (glow * 22f).toInt().coerceIn(0, 255)
+            canvas.drawPath(path, paint)
+            paint.strokeWidth = 8f
+            paint.alpha = (glow * 39f).toInt().coerceIn(0, 255)
+            canvas.drawPath(path, paint)
+        }
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.alpha = (brightness * 255f).toInt().coerceIn(0, 255)
+        canvas.drawPath(path, paint)
+    }
+
     fun draw(canvas:android.graphics.Canvas,width:Float,height:Float,time:Float){
         if(time<=0f)return // No dim prepaint anywhere in the wordmark.
         val scale=minOf(width/960f,height/180f)
         val saved=canvas.save()
         canvas.translate((width-960*scale)/2,(height-180*scale)/2);canvas.scale(scale,scale)
-        val progress=WordmarkMotion.reveal(time)
-        if(progress>=1){
-            paint.shader=null;paint.alpha=(WordmarkMotion.brightness(time)*255).toInt();canvas.drawPath(path,paint)
-        }else{
-            paint.alpha=(WordmarkMotion.brightness(time)*255).toInt()
-            val eased=progress*progress*(3-2*progress)
-            val radius=560f*eased
-            lm.setTranslate(480f-radius,0f);left.setLocalMatrix(lm);paint.shader=left
-            var clip=canvas.save();canvas.clipRect(0f,0f,480f,180f);canvas.drawPath(path,paint);canvas.restoreToCount(clip)
-            rm.setTranslate(480f+radius-80f,0f);right.setLocalMatrix(rm);paint.shader=right
-            clip=canvas.save();canvas.clipRect(480f,0f,960f,180f);canvas.drawPath(path,paint);canvas.restoreToCount(clip)
+        val progress = WordmarkMotion.reveal(time)
+        val brightness = WordmarkMotion.brightness(time)
+        val glow = WordmarkMotion.glow(time)
+        if (progress >= 1f) {
+            drawLitPath(canvas, null, brightness, glow)
+        } else {
+            // Fixed HERRIN glyphs feather from the center to both edges.
+            // Both the glyph and its glow use the same reveal mask.
+            val eased = progress * progress * (3f - 2f * progress)
+            val radius = 560f * eased
+            lm.setTranslate(480f - radius, 0f)
+            left.setLocalMatrix(lm)
+            var clip = canvas.save()
+            canvas.clipRect(0f, 0f, 480f, 180f)
+            drawLitPath(canvas, left, brightness, glow)
+            canvas.restoreToCount(clip)
+            rm.setTranslate(480f + radius - 80f, 0f)
+            right.setLocalMatrix(rm)
+            clip = canvas.save()
+            canvas.clipRect(480f, 0f, 960f, 180f)
+            drawLitPath(canvas, right, brightness, glow)
+            canvas.restoreToCount(clip)
         }
         canvas.restoreToCount(saved)
     }
