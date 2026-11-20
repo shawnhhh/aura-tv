@@ -3413,11 +3413,15 @@ private fun Herrin(startup: StartupPresentation) {
                 // A TMDB cache row can have entries before the LazyRow has
                 // attached its first poster. Never point the hero's DOWN edge
                 // at a FocusRequester that has not been placed in the tree.
+                val attachedRailKeys by remember(railState) {
+                    derivedStateOf { railState.layoutInfo.visibleItemsInfo.map { it.key }.toSet() }
+                }
                 val firstPosterTarget = if (independentPage != null)
                     TmdbBrowseFocus.first(tmdbBrowseState, independentPage,
                         if (category == "首页") railFilms else emptyList())
                         ?.takeIf(tmdbBrowseState::isPosterAttached)?.let { requester(it) }
-                else (railFilms.getOrNull(visibleFirstIndex) ?: recommendedFilms.firstOrNull())
+                else railFilms.getOrNull(visibleFirstIndex)
+                    ?.takeIf { displayKey(it) in attachedRailKeys }
                     ?.let { requester("card-${displayKey(it)}") }
                 val sceneLift = with(LocalDensity.current) { 9.dp.toPx() }
                 Column(Modifier.fillMaxSize().testTag("browse-scroll").graphicsLayer {
@@ -3984,8 +3988,9 @@ private fun Herrin(startup: StartupPresentation) {
                                         "search-suggest-${suggestions[index.coerceAtMost(suggestions.lastIndex)]}"
                                         else TvFocusRoutes.posterUp(renderedCategory, index,
                                             heroActionsVisible = tmdbPrimary || !sourceConfigured || catalogFilms.isNotEmpty()))
-                                    down = if (homeRail) requester("recommend-${displayKey(recommendedFilms[index.coerceAtMost(recommendedFilms.lastIndex)])}")
-                                        else FocusRequester.Cancel
+                                    // DOWN is handled by transferPosterFocus, which first
+                                    // scrolls and attaches the destination lazy item.
+                                    down = if (homeRail) FocusRequester.Default else FocusRequester.Cancel
                                 }
                                 .onPreviewKeyEvent { event ->
                                     if (homeRail && event.type == KeyEventType.KeyDown &&

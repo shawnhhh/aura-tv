@@ -65,9 +65,14 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
 
         while (true) { withContext(Dispatchers.IO) { CrashJournal.sampleMemory(); CrashJournal.checkpoint(context) }; delay(5000) }
     }
-    LaunchedEffect(state.showing) {
-        if (!state.showing) {
-            withFrameNanos { }; state.networkReady=true;StartupTiming.networkStart()
+    LaunchedEffect(state.prepareHome, state.preferences) {
+        if (state.prepareHome && state.preferences != null) {
+            // onVisible admits home construction after the branding layer is
+            // mounted. Yield a frame before releasing its network effects;
+            // waiting for showing=false would serialize all I/O after splash.
+            withFrameNanos { }
+            state.networkReady = true
+            StartupTiming.networkStart()
         }
     }
     LaunchedEffect(state.prepareHome,state.preferences) {
