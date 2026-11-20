@@ -18,4 +18,13 @@ class KernelFailureCodeTest {
         assertFalse(report.contains("SOURCE_UNCLASSIFIED"))
         assertTrue(PlaybackErrorReport.source("PLAYER", "KERNEL_SELECTION_EXPIRED").contains("SOURCE_KERNEL_SELECTION_EXPIRED"))
     }
+    @Test fun denialAndExpiredAuthorityNeverEnterAutomaticAlternateSourceRecovery() {
+        for (code in listOf("KERNEL_AUTH_REQUIRED", "KERNEL_SESSION_EXPIRED", "KERNEL_SELECTION_EXPIRED")) {
+            assertEquals(FongMiPlaybackRecovery.Kind.AUTHENTICATION, HerrinAutomaticPlayback.resolutionFailure(code).kind)
+        }
+        assertEquals("KERNEL_AUTH_REQUIRED", KernelFailureCode.classify(SourceHttpFailure(403)))
+        assertEquals(FongMiPlaybackRecovery.Kind.NETWORK_POLICY,
+            HerrinAutomaticPlayback.resolutionFailure("KERNEL_TLS_FAILED").kind)
+    }
+
 }
