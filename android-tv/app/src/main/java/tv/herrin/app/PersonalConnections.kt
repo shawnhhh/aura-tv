@@ -13,9 +13,16 @@ internal class PersonalConnections(private val context: Context) {
         val port: Int, val username: String, val password: String, val domain: String,
         val encryption: Boolean, val enabled: Boolean, val rootPath: String = "", val basePath: String = "") {
         val endpoint get() = PersonalStoragePolicy.endpoint(protocol, host, port)
-        fun address(path: String) = URI(protocol, null, PersonalStoragePolicy.host(host), port,
-            "/" + PersonalStoragePolicy.path(listOf(basePath.takeIf { protocol != "smb" }.orEmpty(), path)
-                .filter { it.isNotBlank() }.joinToString("/")), null, null).toASCIIString()
+        fun address(path: String): String {
+            val relative = PersonalStoragePolicy.path(path)
+            val joined = PersonalStoragePolicy.path(listOf(basePath.takeIf { protocol != "smb" }.orEmpty(), relative)
+                .filter { it.isNotBlank() }.joinToString("/"))
+            // A DAV base URL denotes a collection. Keep its trailing slash so
+            // strict servers need not redirect an authenticated root request.
+            val suffix = if (protocol != "smb" && relative.isEmpty() && joined.isNotEmpty()) "/" else ""
+            return URI(protocol, null, PersonalStoragePolicy.host(host), port,
+                "/$joined$suffix", null, null).toASCIIString()
+        }
         override fun toString() = "Personal storage ($id)"
         fun publicJson() = JSONObject().put("id", id).put("name", name).put("protocol", protocol)
             .put("host", host).put("port", port).put("username", username).put("domain", domain)
