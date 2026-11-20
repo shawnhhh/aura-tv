@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tv.herrin.app.SmbProtocolIntegrationTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-20T06:15:58" hostname="5a86a02e2909" time="0.817">
+  <properties/>
+  <testcase name="invalidAuthenticationDoesNotReturnUsableMediaOrLeakItsSecret" classname="tv.herrin.app.SmbProtocolIntegrationTest" time="0.163"/>
+  <testcase name="cancelledNegotiationDoesNotLeaveAnUnboundedSearch" classname="tv.herrin.app.SmbProtocolIntegrationTest" time="0.029"/>
+  <testcase name="realSmb2AndEncryptedSmb3ReadTheOriginalMedia" classname="tv.herrin.app.SmbProtocolIntegrationTest" time="0.054"/>
+  <testcase name="sourceSearchRangeSeekAndLargeFileUseTheActualSmbServer" classname="tv.herrin.app.SmbProtocolIntegrationTest" time="0.193"/>
+  <testcase name="aDroppedSmbReadReconnectsAtTheSameOffsetAndAllHandlesClose" classname="tv.herrin.app.SmbProtocolIntegrationTest" time="0.034"/>
+  <testcase name="realEncryptedBdavReadsMatchEveryOriginalTsByteAndUnalignedSeekRanges" classname="tv.herrin.app.SmbProtocolIntegrationTest" time="0.344"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

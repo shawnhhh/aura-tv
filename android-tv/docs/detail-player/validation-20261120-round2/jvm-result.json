@@ -1,0 +1,9 @@
+{
+  "tests": 787,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "backend_source": "3e49edd5",
+  "final_code_commit": "d7722b2e",
+  "note": "Subsequent commits change browser/shell regression tests only; final CI must bind exact HEAD."
+}

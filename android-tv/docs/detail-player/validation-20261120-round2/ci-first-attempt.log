@@ -1,0 +1,9 @@
+Run: https://github.com/shawnhhh/aura-tv/actions/runs/44687144804
+Source: d7722b2ebda348807830819c754e431709adc482
+2026-11-20T06:23:21.8782901Z BUILD SUCCESSFUL in 1m 35s
+2026-11-20T06:26:06.8273973Z > Task :app:packageDebug FAILED
+2026-11-20T06:28:41.1473025Z Execution failed for task ':app:packageDebug'.
+2026-11-20T06:28:41.1873319Z org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:packageDebug'.
+2026-11-20T06:28:41.2805945Z Caused by: java.lang.OutOfMemoryError
+2026-11-20T06:28:41.2847785Z Caused by: java.lang.OutOfMemoryError: Java heap space
+2026-11-20T06:28:41.3855889Z | JVM | 787 | 0 | 0 | 0 |
