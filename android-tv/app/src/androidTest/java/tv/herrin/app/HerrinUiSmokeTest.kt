@@ -490,6 +490,7 @@ class HerrinUiSmokeTest {
             compose.onNodeWithTag("source-switch-site").assertDoesNotExist()
             compose.onAllNodesWithText("远端电影").onFirst().assertIsDisplayed()
             compose.onNodeWithText("蓝色边界").assertDoesNotExist()
+            compose.onAllNodesWithText("TVBox", substring = true).assertCountEquals(0)
             focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.onNodeWithTag("settings-list")
                 .performScrollToNode(hasTestTag("settings-source-sites"))

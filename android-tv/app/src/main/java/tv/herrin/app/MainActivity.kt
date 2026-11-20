@@ -2974,7 +2974,7 @@ private fun Herrin(startup: StartupPresentation) {
             restoreSeasonFocus = false
         }
     }
-    fun activateTvBoxSite(site: TvBoxSite, selected: TvBoxConfig.Single?) {
+    fun activateTvBoxSite(site: TvBoxSite, selected: TvBoxConfig.Single?, allowHttp: Boolean = true) {
         siteChoiceEpoch.incrementAndGet()
         siteActivationJob[0]?.cancel()
         if (site == activeCmsSite && providerFilms != null) {
@@ -2986,7 +2986,7 @@ private fun Herrin(startup: StartupPresentation) {
                 val pendingImportId = phoneSourceId
                 choosePreferredSite(site, selected?.spiderJar)
                 tvBoxStatus = "正在读取 ${site.name}…"
-                when (val result = tvBoxVodRepo.load(site, true)) {
+                when (val result = tvBoxVodRepo.load(site, allowHttp)) {
                     is TvBoxVodResult.Error -> { tvBoxStatus = "${site.name}：${result.reason}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
                     is TvBoxVodResult.Ready -> {
                         if (!finishPhoneSource(pendingImportId)) return@launch
@@ -3744,7 +3744,7 @@ private fun Herrin(startup: StartupPresentation) {
                         Text(when { isSearch -> "搜索结果 · ${filtered.size}"; category == "直播" -> "直播频道"; category == "我的" -> "继续观看与收藏 · ${filtered.size} 部"; category == "首页" -> if (sourceConfigured) "最近播放" else "演示片库"; else -> if (sourceConfigured) "${category} · ${filtered.size} 部" else "精选${category} · 演示片库" },
                             modifier = Modifier.testTag("recent-heading"),
                             fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Color.White)
-                        Text(if (!isSearch && category == "首页" && sourceConfigured) "" else if (sourceConfigured) "${providerStatus.take(48)}" else if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN",
+                        Text(if (sourceConfigured) "" else if (!isSearch && category == "首页") "精选首页 · 演示片库" else "DISCOVER   /   HERRIN",
                             fontSize = 11.sp, letterSpacing = 1.5.sp,
                             color = Color(0xFFB6BBC5))
                     }
@@ -4792,34 +4792,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     itemsIndexed(directSites) { index, site ->
                                         TvButton("浏览 ${site.name}", modifier = Modifier.testTag("tvbox-vod-$index"),
                                             reduced = reduceMotion) {
-                                            uiScope.launch {
-                                                tvBoxStatus = "正在读取 ${site.name} 的影视列表…"
-                                                val pendingImportId = phoneSourceId
-                                                choosePreferredSite(site, preview.spiderJar)
-                                                when (val loaded = tvBoxVodRepo.load(site, tvBoxAllowHttp)) {
-                                                    is TvBoxVodResult.Error -> { tvBoxStatus = "${site.name}：${loaded.reason}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
-                                                    is TvBoxVodResult.Ready -> {
-                                                        if (loaded.films.isEmpty()) {
-                                                            failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED")
-                                                            tvBoxStatus = "影视点未返回影片目录"
-                                                            return@launch
-                                                        }
-                                                        if (!finishPhoneSource(pendingImportId)) return@launch
-                                                        configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-                                                        spiderActive = false
-                                                        activeCmsSite = site
-                                                        prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
-                                                        prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, preview.spiderJar)
-                                                        providerFilms = loaded.films
-                                                        providerStatus = "TVBox ${site.name} · ${loaded.films.size} 部（标准 CMS JSON）"
-                                                        tvBoxVodScope = "tvbox:${site.apiUrl}"
-                                                        filmId = loaded.films.first().id
-                                                        category = "首页"
-                                                        screen = "browse"
-                                                        tvBoxStatus = "已读取 ${loaded.films.size} 部影片；点击海报即可尝试播放有权限的 HTTPS 线路"
-                                                    }
-                                                }
-                                            }
+                                            activateTvBoxSite(site, preview, tvBoxAllowHttp)
                                         }
                                     }
                                 } }
@@ -4831,40 +4804,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     itemsIndexed(spiderSites) { index, site ->
                                         TvButton("浏览 ${site.name}", modifier = Modifier.testTag("tvbox-spider-$index"),
                                             reduced = reduceMotion) {
-                                            uiScope.launch {
-                                                val pendingImportId = phoneSourceId
-                                                choosePreferredSite(site, preview.spiderJar)
-                                                spiderBridge.close()
-                                                HerrinPlaybackDiagnosticJournal.record("SPIDER", "USER_RESELECT_RESET")
-                                                tvBoxStatus = "正在核验 JAR 并通过 ${site.name} 读取影视…"
-                                                when (val loaded = spiderBridge.browse(site, preview)) {
-                                                    is SpiderResult.Failure -> { tvBoxStatus = "${site.name}：${loaded.message}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
-                                                    is SpiderResult.Ready -> {
-                                                        if (loaded.value.isEmpty() && phoneSourceId != null) {
-                                                            failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED")
-                                                            tvBoxStatus = "影视点未返回影片目录，可重新选择站点"
-                                                            return@launch
-                                                        }
-                                                        if (!finishPhoneSource(pendingImportId)) return@launch
-                                                        configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-                                                        spiderActive = true
-                                                        activeCmsSite = null
-                                                        prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
-                                                        prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, preview.spiderJar)
-                                                        providerFilms = loaded.value
-                                                        providerStatus = "TVBox Spider ${site.name} · ${loaded.value.size} 部"
-                                                        tvBoxVodScope = "spider:${site.key}:${preview.spiderJar}"
-                                                        loaded.value.firstOrNull()?.let { filmId = it.id }
-                                                        prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
-                                                        prefs.tvBoxTrustedSpiderJarSpec = site.jar ?: preview.spiderJar.orEmpty()
-                                                        category = "首页"
-                                                        screen = "browse"
-                                                        tvBoxStatus = if (loaded.value.isEmpty())
-                                                            "已启用 ${site.name}；首页暂未返回影片，可继续搜索或检查来源授权"
-                                                        else "已读取 ${loaded.value.size} 部；打开详情获取选集，选择线路后解析播放"
-                                                    }
-                                                }
-                                            }
+                                            activateTvBoxSite(site, preview, tvBoxAllowHttp)
                                         }
                                     }
                                 } }
