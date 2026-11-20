@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,10 +41,18 @@ internal fun PlayerStartupSurface(
     reducedMotion: Boolean,
     failureHint: String? = null,
     failureDiagnostic: String? = null,
+    diagnosticsForTest: Boolean = false,
     onRetry: () -> Unit,
     onBack: () -> Unit,
     onTryOtherSource: (() -> Unit)? = null
 ) {
+    BackHandler(onBack = onBack)
+    LaunchedEffect(loading, failureDiagnostic) {
+        if (!loading && !failureDiagnostic.isNullOrBlank()) {
+            // Callers supply PlaybackErrorReport's sanitized host fields only.
+            android.util.Log.w("HerrinPlaybackSource", failureDiagnostic)
+        }
+    }
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     var showJournal by remember { mutableStateOf(false) }
@@ -70,7 +80,7 @@ internal fun PlayerStartupSurface(
                     else -> "请重试，或返回选集切换播放线路。"
                 }, color = Color(0xFFBCCADB), fontSize = 16.sp,
                     modifier = Modifier.testTag("player-startup-failure-hint"))
-                if (!failureDiagnostic.isNullOrBlank() && !offlineDemonstration) {
+                if (diagnosticsForTest && !failureDiagnostic.isNullOrBlank() && !offlineDemonstration) {
                     Text(failureDiagnostic, color = Color(0xFFFFD0D0), fontSize = 15.sp,
                         modifier = Modifier.testTag("player-startup-diagnostic"))
                     TvButton(if (copied) "诊断已复制" else "复制详细诊断日志",
@@ -107,7 +117,7 @@ internal fun PlayerStartupSurface(
                         reduced = reducedMotion, onClick = action)
                 }
             }
-            TvButton(if (cmsFailed) "返回片库" else "返回选集",
+            if (diagnosticsForTest) TvButton(if (cmsFailed) "返回片库" else "返回选集",
                 modifier = Modifier.testTag("player-startup-back"),
                 reduced = reducedMotion, onClick = onBack)
         }

@@ -136,6 +136,9 @@ private fun AuthorizedPlaybackSession(
     var shownPosition by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var shownDuration by remember(media.uri, media.headers, media.subtitles) { mutableLongStateOf(0L) }
     var showVerification by remember { mutableStateOf(false) }
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { android.util.Log.w("HerrinPlaybackFailure", it) }
+    }
     var kernelPanelOpen by remember { mutableStateOf(false) }
     var kernelRemoteHeld by remember { mutableStateOf(false) }
     var verificationTick by remember { mutableIntStateOf(0) }
@@ -652,7 +655,8 @@ private fun AuthorizedPlaybackSession(
             if (errorMessage != null) {
                 Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 42.dp)
                     .background(Color(0xD9161B25), RoundedCornerShape(14.dp)).padding(16.dp)) {
-                    Text(errorMessage!!, color = Color(0xFFFFD0D0),
+                    Text(if (testDiagnostics) errorMessage!! else "暂时无法播放，请重试",
+                        color = Color(0xFFFFD0D0),
                         modifier = Modifier.testTag("player-error"))
                     Button(onClick = { retryPlayback() }, modifier = Modifier.testTag("player-retry")) {
                         Text("重试")
@@ -688,8 +692,9 @@ private fun AuthorizedPlaybackSession(
                     color = Color(0xFFADBBD0))
             }
             if (errorMessage != null) {
-                Text(errorMessage!!, color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
-                Button(onClick = {
+                Text(if (testDiagnostics) errorMessage!! else "暂时无法播放，请重试或选择其他线路",
+                    color = Color(0xFFFFD0D0), modifier = Modifier.testTag("player-error"))
+                if (testDiagnostics) Button(onClick = {
                     val clipboard = context.getSystemService(
                         android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
@@ -727,7 +732,7 @@ private fun AuthorizedPlaybackSession(
                         }
                         if (onEpisodeSelection != null) Button(onClick = onEpisodeSelection,
                             modifier = Modifier.testTag("player-error-change-episode")) {
-                            Text("返回选集")
+                            Text("选集")
                         }
                     }
                 }

@@ -31,7 +31,7 @@ class M467PlaybackRecoveryTest {
             val budget = FongMiPlaybackRecovery.Session()
             compose.setContent {
                 key(refreshEpoch.intValue) {
-                    AuthorizedPlaybackPanel(
+                    AuthorizedPlaybackPanel(testDiagnostics = true,
                         media = PlaybackMedia("http://127.0.0.1:${server.port}/expired.mp4"),
                         recoverySession = budget,
                         onRefreshSource = { refreshEpoch.intValue++ },
@@ -57,7 +57,7 @@ class M467PlaybackRecoveryTest {
             server.start()
             var refreshes = 0
             compose.setContent {
-                AuthorizedPlaybackPanel(
+                AuthorizedPlaybackPanel(testDiagnostics = true,
                     media = PlaybackMedia("http://127.0.0.1:${server.port}/denied.mp4",
                         alternateUris = listOf("http://127.0.0.1:${server.port}/backup.mp4")),
                     onRefreshSource = { refreshes++ }, onBack = {})
