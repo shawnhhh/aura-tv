@@ -643,6 +643,8 @@ private fun Herrin(startup: StartupPresentation) {
     }) }
     val tvBoxVodRepo = remember { TvBoxVodRepository() }
     val spiderBridge = remember(context) { TvBoxSpiderBridge(context) }
+    val siteChoiceEpoch = remember { java.util.concurrent.atomic.AtomicLong() }
+    val siteActivationJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     DisposableEffect(spiderBridge) { onDispose { spiderBridge.close() } }
     // Applying a source is the explicit user action that permits its Spider.
     // On subsequent launches, auto-run only the exact previously accepted JAR+MD5.
@@ -732,6 +734,8 @@ private fun Herrin(startup: StartupPresentation) {
     LaunchedEffect(tvBoxLoadEpoch, startup.networkReady) {
         if(!startup.networkReady)return@LaunchedEffect
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
+        val nodeSelectionTicket = siteChoiceEpoch.incrementAndGet()
+        siteActivationJob[0]?.cancel()
         val pendingImportId = phoneSourceId
         val runSpiderAfterApply = tvBoxRunSpiderAfterApply
         val preferCache = tvBoxColdStartRequest
@@ -751,6 +755,7 @@ private fun Herrin(startup: StartupPresentation) {
             failPhoneSource(LanSourceImport.failure(loadedConfig.reason))
             return@LaunchedEffect
         }
+        if (nodeSelectionTicket != siteChoiceEpoch.get()) return@LaunchedEffect
         HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_PARSED")
         if (phoneSourceId == null) {
             spiderActive = false
@@ -844,6 +849,7 @@ private fun Herrin(startup: StartupPresentation) {
                     prefs.tvBoxTrustedSpiderRootUrl, prefs.tvBoxTrustedSpiderJarSpec)
             }
             for ((candidateIndex, site) in candidates.withIndex()) {
+                if (nodeSelectionTicket != siteChoiceEpoch.get()) break
                 val elapsed = SystemClock.elapsedRealtime() - scanStarted
                 if (elapsed >= TvBoxAutoScanPolicy.TOTAL_BUDGET_MS) {
                     scanBudgetExceeded = true
@@ -861,7 +867,7 @@ private fun Herrin(startup: StartupPresentation) {
                     }
                     cmsElapsed += SystemClock.elapsedRealtime() - cmsStart
                     when (loaded) {
-                        is TvBoxVodResult.Ready -> if (loaded.films.isNotEmpty()) {
+                        is TvBoxVodResult.Ready -> {
                             chosen = site to loaded.films
                             break
                         }
@@ -888,19 +894,24 @@ private fun Herrin(startup: StartupPresentation) {
                         is SpiderResult.Ready -> {
                             chosen = site to result.value
                             chosenSpider = true
-                            prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
-                            prefs.tvBoxTrustedSpiderJarSpec = jarSpec
+                            if (nodeSelectionTicket == siteChoiceEpoch.get()) {
+                                prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
+                                prefs.tvBoxTrustedSpiderJarSpec = jarSpec
+                            }
                             break
                         }
                         null -> spiderFailure = "Spider ${site.name} 响应超时"
                     }
                 }
             }
+            val currentNodeSelection = nodeSelectionTicket == siteChoiceEpoch.get()
             if (chosen != null) {
                 if (!finishPhoneSource(pendingImportId)) return@LaunchedEffect
                 configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-                prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
-                prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(chosen.first, config.spiderJar)
+                if (currentNodeSelection) {
+                    prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                    prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(chosen.first, config.spiderJar)
+                }
             }
             // A valid phone-imported warehouse is not a failed configuration
             // merely because a CMS returns no films or a Spider awaits an
@@ -909,7 +920,7 @@ private fun Herrin(startup: StartupPresentation) {
             if (chosen == null && !spiderCrashed &&
                 SystemClock.elapsedRealtime() - scanStarted >= TvBoxAutoScanPolicy.TOTAL_BUDGET_MS)
                 scanBudgetExceeded = true
-            if (chosen != null) {
+            if (chosen != null && currentNodeSelection) {
                 if (!chosenSpider) spiderBridge.close()
                 spiderActive = chosenSpider
                 activeCmsSite = if (chosenSpider) null else chosen.first
@@ -922,7 +933,7 @@ private fun Herrin(startup: StartupPresentation) {
                     "；已恢复 ${chosen.first.name}，首页暂未返回影片，可继续搜索或检查来源授权"
                 else "；已自动导入 ${chosen.first.name}，首页已切换到影视源内容"
                 vodImportFeedback = "成功"
-            } else {
+            } else if (currentNodeSelection) {
                 if (phoneSourceId == null) {
                     providerFilms = null
                     activeCmsSite = null
@@ -2963,6 +2974,74 @@ private fun Herrin(startup: StartupPresentation) {
             restoreSeasonFocus = false
         }
     }
+    fun activateTvBoxSite(site: TvBoxSite, selected: TvBoxConfig.Single?) {
+        siteChoiceEpoch.incrementAndGet()
+        siteActivationJob[0]?.cancel()
+        if (site == activeCmsSite && providerFilms != null) {
+            category = "首页"; screen = "browse"
+            return
+        }
+        when {
+            site.apiUrl != null -> { siteActivationJob[0] = uiScope.launch {
+                val pendingImportId = phoneSourceId
+                choosePreferredSite(site, selected?.spiderJar)
+                tvBoxStatus = "正在读取 ${site.name}…"
+                when (val result = tvBoxVodRepo.load(site, true)) {
+                    is TvBoxVodResult.Error -> { tvBoxStatus = "${site.name}：${result.reason}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
+                    is TvBoxVodResult.Ready -> {
+                        if (!finishPhoneSource(pendingImportId)) return@launch
+                        configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
+                        spiderBridge.close()
+                        spiderActive = false
+                        activeCmsSite = site
+                        prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                        prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, selected?.spiderJar)
+                        providerFilms = result.films
+                        providerStatus = "TVBox ${site.name} · ${result.films.size} 部"
+                        tvBoxVodScope = "tvbox:${site.apiUrl}"
+                        result.films.firstOrNull()?.let { filmId = it.id }
+                        category = "首页"
+                        screen = "browse"
+                        tvBoxStatus = "已导入 ${site.name} 的影片目录"
+                    }
+                }
+            }
+            }
+            (site.spiderApi != null || site.scriptApi != null) && selected != null -> { siteActivationJob[0] = uiScope.launch {
+                val pendingImportId = phoneSourceId
+                choosePreferredSite(site, selected.spiderJar)
+                spiderBridge.close()
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "USER_RESELECT_RESET")
+                tvBoxStatus = "正在通过 ${site.name} 加载影片…"
+                when (val result = spiderBridge.browse(site, selected)) {
+                    is SpiderResult.Failure -> { tvBoxStatus = "${site.name}：${result.message}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
+                    is SpiderResult.Ready -> {
+                        if (!finishPhoneSource(pendingImportId)) return@launch
+                        configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
+                        spiderActive = true
+                        activeCmsSite = null
+                        prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
+                        prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, selected.spiderJar)
+                        providerFilms = result.value
+                        providerStatus = "TVBox ${site.name} · ${result.value.size} 部"
+                        tvBoxVodScope = "spider:${site.key}:${selected.spiderJar}"
+                        result.value.firstOrNull()?.let { filmId = it.id }
+                        prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
+                        prefs.tvBoxTrustedSpiderJarSpec = site.jar ?: selected.spiderJar.orEmpty()
+                        category = "首页"
+                        screen = "browse"
+                        tvBoxStatus = if (result.value.isEmpty())
+                            "已启用 ${site.name}；首页暂未返回影片，可继续搜索或检查来源授权"
+                        else "已导入 ${site.name} 的影片目录"
+                    }
+                }
+            }
+            }
+            site.scriptApi != null -> tvBoxStatus = "${site.name} 属于 TVBox JS 规则，当前尚未集成对应运行时，请选择 Spider 站点"
+            else -> tvBoxStatus = "${site.name} 使用尚不支持的插件格式，无法直接解析"
+        }
+    }
+    DisposableEffect(spiderBridge) { onDispose { siteActivationJob[0]?.cancel() } }
     // Hiding an IME window alone does not release the TV IME's served input connection.
     // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
     LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
@@ -3071,6 +3150,7 @@ private fun Herrin(startup: StartupPresentation) {
                 "browse" -> (pendingToolbarFocus ?: focusId).let { if (it == "play") "details" else it }
                 "search" -> focusId
                 "facets" -> if (focusId.startsWith("facet-result-")) focusId else "screen-first"
+                "settings" -> if (settingsTvBoxOnly) "phone-config-main" else "screen-first"
                 else -> "screen-first"
             }
             // A lazy search result attaches after its parent. Its item effect restores focus below.
@@ -3226,72 +3306,7 @@ private fun Herrin(startup: StartupPresentation) {
                             site.scriptApi != null -> "JS 规则"
                             else -> "尚不兼容"
                         }}", Modifier.testTag("site-select-$index"), reduceMotion) {
-                            when {
-                                site.apiUrl != null -> uiScope.launch {
-                                    val pendingImportId = phoneSourceId
-                                    choosePreferredSite(site, selected?.spiderJar)
-                                    tvBoxStatus = "正在读取 ${site.name}…"
-                                    when (val result = tvBoxVodRepo.load(site, true)) {
-                                        is TvBoxVodResult.Error -> { tvBoxStatus = "${site.name}：${result.reason}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
-                                        is TvBoxVodResult.Ready -> {
-                                            if (result.films.isEmpty()) {
-                                                failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED")
-                                                tvBoxStatus = "影视点未返回影片目录"
-                                                return@launch
-                                            }
-                                            if (!finishPhoneSource(pendingImportId)) return@launch
-                                            configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-                                            spiderActive = false
-                                            activeCmsSite = site
-                                            prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
-                                            prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, selected?.spiderJar)
-                                            providerFilms = result.films
-                                            providerStatus = "TVBox ${site.name} · ${result.films.size} 部"
-                                            tvBoxVodScope = "tvbox:${site.apiUrl}"
-                                            filmId = result.films.first().id
-                                            category = "首页"
-                                            screen = "browse"
-                                            tvBoxStatus = "已导入 ${site.name} 的影片目录"
-                                        }
-                                    }
-                                }
-                                (site.spiderApi != null || site.scriptApi != null) && selected != null -> uiScope.launch {
-                                    val pendingImportId = phoneSourceId
-                                    choosePreferredSite(site, selected.spiderJar)
-                                    spiderBridge.close()
-                                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "USER_RESELECT_RESET")
-                                    tvBoxStatus = "正在通过 ${site.name} 加载影片…"
-                                    when (val result = spiderBridge.browse(site, selected)) {
-                                        is SpiderResult.Failure -> { tvBoxStatus = "${site.name}：${result.message}"; failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED") }
-                                        is SpiderResult.Ready -> {
-                                            if (result.value.isEmpty() && phoneSourceId != null) {
-                                                failPhoneSource("SOURCE_SITE_ACTIVATION_FAILED")
-                                                tvBoxStatus = "影视点未返回影片目录，可重新选择站点"
-                                                return@launch
-                                            }
-                                            if (!finishPhoneSource(pendingImportId)) return@launch
-                                            configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-                                            spiderActive = true
-                                            activeCmsSite = null
-                                            prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
-                                            prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, selected.spiderJar)
-                                            providerFilms = result.value
-                                            providerStatus = "TVBox ${site.name} · ${result.value.size} 部"
-                                            tvBoxVodScope = "spider:${site.key}:${selected.spiderJar}"
-                                            result.value.firstOrNull()?.let { filmId = it.id }
-                                            prefs.tvBoxTrustedSpiderRootUrl = prefs.tvBoxWarehouseUrl
-                                            prefs.tvBoxTrustedSpiderJarSpec = site.jar ?: selected.spiderJar.orEmpty()
-                                            category = "首页"
-                                            screen = "browse"
-                                            tvBoxStatus = if (result.value.isEmpty())
-                                                "已启用 ${site.name}；首页暂未返回影片，可继续搜索或检查来源授权"
-                                            else "已导入 ${site.name} 的影片目录"
-                                        }
-                                    }
-                                }
-                                site.scriptApi != null -> tvBoxStatus = "${site.name} 属于 TVBox JS 规则，当前尚未集成对应运行时，请选择 Spider 站点"
-                                else -> tvBoxStatus = "${site.name} 使用尚不支持的插件格式，无法直接解析"
-                            }
+                            activateTvBoxSite(site, selected)
                         }
                     }
                 }
@@ -3661,9 +3676,11 @@ private fun Herrin(startup: StartupPresentation) {
                         Spacer(Modifier.height(135.dp))
                         Text("影视源已添加", fontSize = 38.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.testTag("source-empty-title"))
-                        Text(providerStatus + if (spiderActive)
-                            "；该影视点首页暂未返回影片，可继续搜索或检查来源授权"
-                            else "；请进入设置选择站点", fontSize = 15.sp, lineHeight = 23.sp,
+                        val sourceName = activeCmsSite?.name ?: tvBoxSingle?.sites?.firstOrNull {
+                            it.key == spiderBridge.approvedActiveSiteKey()
+                        }?.name ?: "影视源"
+                        Text(if (spiderActive || activeCmsSite != null) "$sourceName：暂无影片，可继续搜索或检查来源授权"
+                            else "影视源已保存，请选择需要浏览的节点", fontSize = 15.sp, lineHeight = 23.sp,
                             color = Color(0xFFCDD8E6), modifier = Modifier.testTag("source-empty-status"))
                         Spacer(Modifier.height(24.dp))
                     } else {
@@ -4543,6 +4560,8 @@ private fun Herrin(startup: StartupPresentation) {
                                             keyboard?.hide()
                                         }) { siteMenuOpen = true }
                                     DropdownMenu(expanded = siteMenuOpen, onDismissRequest = { siteMenuOpen = false }) {
+                                        Text("部分来源需要登录授权；可先选择无需登录的来源。",
+                                            Modifier.padding(12.dp).testTag("source-plugin-limitations"))
                                         tvBoxWarehouses.forEach { warehouse ->
                                             DropdownMenuItem(text = { Text(warehouse.name) }, onClick = {
                                                 siteMenuOpen = false
@@ -4554,16 +4573,10 @@ private fun Herrin(startup: StartupPresentation) {
                                         }
                                         tvBoxSingle?.sites.orEmpty().filter {
                                             it.apiUrl != null || it.spiderApi != null || it.scriptApi != null
-                                        }.forEach { site ->
-                                            DropdownMenuItem(text = { Text(site.name) }, onClick = {
+                                        }.forEachIndexed { index, site ->
+                                            DropdownMenuItem(modifier = Modifier.testTag("site-select-$index"), text = { Text(site.name) }, onClick = {
                                                 siteMenuOpen = false
-                                                choosePreferredSite(site, tvBoxSingle?.spiderJar)
-                                                prefs.tvBoxLastWorkingRootUrl = prefs.tvBoxWarehouseUrl
-                                                prefs.tvBoxLastWorkingSiteId = TvBoxAutoSites.identity(site, tvBoxSingle?.spiderJar)
-                                                val warehouse = tvBoxWarehouses.firstOrNull { it.name == tvBoxSelectedName }
-                                                tvBoxRunSpiderAfterApply = true
-                                                tvBoxRequest = (warehouse?.url ?: prefs.tvBoxWarehouseUrl) to (warehouse == null)
-                                                tvBoxLoadEpoch++
+                                                activateTvBoxSite(site, tvBoxSingle)
                                             })
                                         }
                                     }

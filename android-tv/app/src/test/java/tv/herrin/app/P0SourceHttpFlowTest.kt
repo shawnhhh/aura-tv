@@ -16,6 +16,22 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Real sockets + actual synthetic media response bytes. This is controlled loopback, NOT a live provider benchmark. */
 class P0SourceHttpFlowTest {
     private val request=HerrinFilmIdentity(550,"movie",listOf("受控影片","Controlled Film"),2025)
+    @Test fun emptyCmsCatalogIsReadyWhileInvalidJsonAndAuthorizationStillFail() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("{\"list\":[]}"))
+            server.enqueue(MockResponse().setBody("{\"message\":\"not a catalog\"}"))
+            server.enqueue(MockResponse().setResponseCode(403))
+            server.start()
+            val site = TvBoxSite("empty authorized catalog", false, apiUrl = server.url("/cms").toString())
+            val repository = TvBoxVodRepository()
+            val empty = repository.load(site, true)
+            assertTrue(empty is TvBoxVodResult.Ready)
+            assertTrue((empty as TvBoxVodResult.Ready).films.isEmpty())
+            assertTrue(repository.load(site, true) is TvBoxVodResult.Error)
+            assertTrue(repository.load(site, true) is TvBoxVodResult.Error)
+            assertEquals(3, server.requestCount)
+        }
+    }
     @Test fun actualCmsDiscoveryDetailsAndMediaBytesReachNodesOneThreeSevenEightAcrossSixTwelveFortyFive()=runBlocking {
         val video=File("src/androidTest/assets/synthetic.mp4").readBytes()
         assertTrue(video.size>1024)
