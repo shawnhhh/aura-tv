@@ -19,7 +19,7 @@ internal fun LazyListScope.herrinDiscoveryItems(
     snapshot: HerrinSourceDiscovery.Snapshot,
     running: Boolean, reduced: Boolean,
     select: (HerrinSourceDiscovery.Hit, String?) -> Unit,
-    resume: () -> Unit, selectedNode: String?, onNode: (String) -> Unit,
+    resume: (String?) -> Unit, selectedNode: String?, onNode: (String) -> Unit,
     lineFocus: (Int) -> FocusRequester,
     onLineFocus: (Int) -> Unit, onDown: () -> Unit
 ) {
@@ -78,6 +78,10 @@ internal fun LazyListScope.herrinDiscoveryItems(
                     Modifier.size(18.dp).testTag("source-spinner"), strokeWidth = 2.dp
                 )
             }
+            snapshot.hits.filter { it.key in snapshot.failedDetails }.distinctBy { it.node.id }.forEach { hit ->
+                TvButton("${hit.node.name} · 重试", reduced = reduced,
+                    modifier = Modifier.testTag("source-retry-${hit.node.id}")) { resume(hit.node.id) }
+            }
             val available = snapshot.readyRoutes.toSet()
             val routes = snapshot.routes.filter { it.nodeId == current }
                 .withIndex().filter { it.value in available }
@@ -113,7 +117,7 @@ internal fun LazyListScope.herrinDiscoveryItems(
             if (!running && routes.isEmpty()) {
                 Text("暂无可用线路")
                 TvButton("重试", modifier = Modifier.focusRequester(lineFocus(0)),
-                    reduced = reduced, onClick = resume)
+                    reduced = reduced, onClick = { resume(null) })
             }
         }
     }

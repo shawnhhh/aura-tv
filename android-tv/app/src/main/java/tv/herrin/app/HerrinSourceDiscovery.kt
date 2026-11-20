@@ -35,7 +35,7 @@ internal class HerrinSourceDiscovery {
         val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList(),
         val expanding: Boolean = false, val warehouseFailures: Int = 0,
         val routes: List<Route> = emptyList(),
-        val detailed: Set<String> = emptySet()) {
+        val detailed: Set<String> = emptySet(), val failedDetails: Set<String> = emptySet()) {
         val readyRoutes: List<Route> by lazy(LazyThreadSafetyMode.PUBLICATION) {
             val ids = hits.associate { hit -> hit.key to hit.episodes.flatMap { it.lines }.map { it.first }.toSet() }
             routes.filter { it.lineId in ids[it.hitKey].orEmpty() }
@@ -51,7 +51,7 @@ internal class HerrinSourceDiscovery {
             confirmed.groupBy { it.node.id }.filter { (nodeId, candidates) ->
                 val required = if (candidates.first().node.bundledPersonalLayout)
                     candidates.take(1) else candidates
-                required.all { it.key in detailed } &&
+                required.all { it.key in detailed && it.key !in failedDetails } &&
                     required.any { it.episodes.isNotEmpty() &&
                         it.episodes.all { ep -> ep.lines.isNotEmpty() } &&
                         readyRoutes.any { route -> route.nodeId == nodeId && route.hitKey == it.key } }
@@ -89,14 +89,14 @@ internal class HerrinSourceDiscovery {
         }
         val routes = layout.flatMap { it.lines }.map { Route(hit.node.id, key, it.first) }.distinct()
         snapshot=snapshot.copy(hits=snapshot.hits.map{if(it.key==key)it.copy(episodes=layout) else it},
-            routes = (snapshot.routes + routes).distinct(), detailed = snapshot.detailed + key)
+            routes = (snapshot.routes + routes).distinct(), detailed = snapshot.detailed + key, failedDetails = snapshot.failedDetails - key)
         snapshot
     }
 
     suspend fun invalidateLayout(revision: String, key: String): Snapshot? = mutations.withLock {
         if (snapshot.revision != revision) return@withLock null
         snapshot = snapshot.copy(hits = snapshot.hits.map { if (it.key == key) it.copy(episodes = emptyList()) else it },
-            detailed = snapshot.detailed - key)
+            detailed = snapshot.detailed - key, failedDetails = snapshot.failedDetails - key)
         snapshot
     }
 
@@ -105,7 +105,7 @@ internal class HerrinSourceDiscovery {
         if (snapshot.revision != revision) return@withLock null
         val keys = snapshot.hits.filter { it.node.id == nodeId }.map { it.key }.toSet()
         snapshot = snapshot.copy(outcomes = snapshot.outcomes - nodeId,
-            hits = snapshot.hits.filterNot { it.node.id == nodeId }, detailed = snapshot.detailed - keys)
+            hits = snapshot.hits.filterNot { it.node.id == nodeId }, detailed = snapshot.detailed - keys, failedDetails = snapshot.failedDetails - keys)
         snapshot
     }
 
@@ -155,18 +155,18 @@ internal class HerrinSourceDiscovery {
                     }
                     mutations.withLock {
                         if (snapshot.revision == revision && version.get() == ticket) {
-                            snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key)
+                            snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key,
+                                failedDetails = if (detail == null) snapshot.failedDetails + hit.key else snapshot.failedDetails - hit.key)
                             publish(snapshot)
                         }
                     }
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) {
-                    // A failed detail is terminal for this discovery pass. Let a
-                    // sibling VOD with real episodes become selectable after
-                    // all siblings finish; explicit node retry clears this mark.
+                    // Failure is terminal for this pass, but not a complete
+                    // node layout. Keep it hidden until explicit node retry.
                     mutations.withLock {
                         if (snapshot.revision == revision && version.get() == ticket) {
-                            snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key)
+                            snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key, failedDetails = snapshot.failedDetails + hit.key)
                             publish(snapshot)
                         }
                     }

@@ -5179,9 +5179,9 @@ private fun Herrin(startup: StartupPresentation) {
                                         tmdbState.discoveryLine = selectedLine
                                         tmdbState.discoverySelection = film.id to hit.key
                                         tmdbState.discoverySelectionEpoch++
-                                    }, resume = {
+                                    }, resume = { failedNode ->
                                         tmdbState.discoverySelection = null
-                                        val node = tmdbState.selectedDiscoveryNode[film.id]
+                                        val node = failedNode ?: tmdbState.selectedDiscoveryNode[film.id]
                                         if (node != null) uiScope.launch {
                                             tmdbState.sourceDiscoveries[film.id]?.resetNode(discovery.revision, node)?.let { tmdbState.discoveredSources[film.id] = it }
                                             tmdbState.tmdbLookupEpoch++

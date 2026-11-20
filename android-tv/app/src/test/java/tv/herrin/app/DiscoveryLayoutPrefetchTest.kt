@@ -219,4 +219,25 @@ class DiscoveryLayoutPrefetchTest {
         assertFalse(snapshot.toString().contains("token=private"))
     }
 
+    @Test fun failedSiblingHidesNodeAndIndependentRetryReacquiresCompleteLayout() = runBlocking {
+        var fail = true
+        val node = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
+            { listOf(offer("a"), offer("b")) }, {
+                if (fail && it.film.cmsVodId == "b") error("detail unavailable")
+                detail(it, 2)
+            })
+        val service = HerrinSourceDiscovery()
+        var snapshot = HerrinSourceDiscovery.Snapshot("", 0)
+        service.search("r", listOf(node), null, Mutex()) { snapshot = it }
+        assertTrue(snapshot.selectableNodeIds.isEmpty())
+        assertEquals(setOf("node:b"), snapshot.failedDetails)
+        assertEquals(2, snapshot.readyRoutes.size)
+        fail = false
+        service.resetNode("r", "node")
+        service.search("r", listOf(node), null, Mutex()) { snapshot = it }
+        assertTrue(snapshot.failedDetails.isEmpty())
+        assertEquals(setOf("node"), snapshot.selectableNodeIds)
+        assertEquals(4, snapshot.readyRoutes.size)
+    }
+
 }
