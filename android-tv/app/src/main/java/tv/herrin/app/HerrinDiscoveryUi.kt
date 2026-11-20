@@ -29,9 +29,11 @@ internal fun LazyListScope.herrinDiscoveryItems(
                 it.node.id in snapshot.selectableNodeIds
         }.groupBy { it.node.id }
         var expanded by remember { mutableStateOf(false) }
-        val current = selectedNode?.takeIf { it in groups }
+        val current = selectedNode?.takeIf { id -> id in groups || snapshot.hits.any {
+            it.node.id == id && it.key in snapshot.failedDetails
+        } }
             ?: snapshot.readyRoutes.firstOrNull { it.nodeId in groups }?.nodeId
-        // Pin a ready node; a mere name hit must never steal this selection.
+        // Keep an explicitly failed selection for retry; a name-only hit cannot steal focus.
         LaunchedEffect(current) {
             if (current != null && current != selectedNode) onNode(current)
         }
@@ -47,7 +49,7 @@ internal fun LazyListScope.herrinDiscoveryItems(
                 if (groups.isNotEmpty()) {
                     Box {
                         TvButton(
-                            (groups[current]?.firstOrNull()?.node?.name ?: "选择节点") + " ▾",
+                            (snapshot.hits.firstOrNull { it.node.id == current }?.node?.name ?: "选择节点") + " ▾",
                             modifier = Modifier.testTag("source-node-menu"),
                             reduced = reduced
                         ) { expanded = true }

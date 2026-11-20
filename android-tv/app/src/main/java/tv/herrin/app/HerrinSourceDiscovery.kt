@@ -96,7 +96,7 @@ internal class HerrinSourceDiscovery {
     suspend fun invalidateLayout(revision: String, key: String): Snapshot? = mutations.withLock {
         if (snapshot.revision != revision) return@withLock null
         snapshot = snapshot.copy(hits = snapshot.hits.map { if (it.key == key) it.copy(episodes = emptyList()) else it },
-            detailed = snapshot.detailed - key, failedDetails = snapshot.failedDetails - key)
+            detailed = snapshot.detailed - key, failedDetails = snapshot.failedDetails + key)
         snapshot
     }
 

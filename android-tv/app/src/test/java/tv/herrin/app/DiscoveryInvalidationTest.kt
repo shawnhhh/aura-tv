@@ -26,11 +26,14 @@ class DiscoveryInvalidationTest {
         snapshot = service.invalidateLayout("r", "a:a")!!
         assertTrue(snapshot.readyRoutes.none { it.nodeId == "a" })
         assertEquals(2, snapshot.readyRoutes.count { it.nodeId == "b" })
+        assertTrue("The failed selected node must offer its own retry", "a:a" in snapshot.failedDetails)
+        assertFalse("The healthy sibling must not become a failed retry target", "b:b" in snapshot.failedDetails)
         changed = true
         service.resetNode("r", "a")
         service.search("r", nodes, null, Mutex()) { snapshot = it }
         assertEquals(2, calls["a"])
         assertEquals(1, calls["b"])
+        assertTrue("A successful retry clears only the recovered failure", snapshot.failedDetails.isEmpty())
         val all = snapshot.routes.filter { it.nodeId == "a" }
         assertEquals(original, all.take(2))
         val visible = all.withIndex().filter { it.value in snapshot.readyRoutes }
