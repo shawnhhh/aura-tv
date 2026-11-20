@@ -1,6 +1,5 @@
 package tv.herrin.app
 
-import android.os.SystemClock
 import android.util.Log
 import java.util.ArrayDeque
 
@@ -17,11 +16,14 @@ internal object HerrinPlaybackDiagnosticJournal {
         if (stage !in stageCodes || !eventCode.matches(event)) return
         val safe = detail.takeIf { it.isNotBlank() && detailCode.matches(it) }
         val safeSession = session?.takeIf { it.matches(Regex("[a-f0-9-]{36}")) }
-        val line = "T+${SystemClock.elapsedRealtime()}ms " + (safeSession?.let { "SID=$it " } ?: "") + "$stage $event" +
+        val line = "T+${(System.nanoTime() / 1_000_000)}ms " + (safeSession?.let { "SID=$it " } ?: "") + "$stage $event" +
             (safe?.let { " $it" } ?: "")
         if (events.size == 256) events.removeFirst()
         events.addLast(line)
-        Log.i("HerrinPlaybackDiag", line)
+        // Diagnostics must not turn an accepted source result into a failure.
+        // The bounded ring remains available if Android logging is unavailable
+        // (including plain JVM discovery tests).
+        runCatching { Log.i("HerrinPlaybackDiag", line) }
     }
     @Synchronized fun export(): String =
         "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\n" +
