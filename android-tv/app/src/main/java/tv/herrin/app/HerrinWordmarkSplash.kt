@@ -83,12 +83,14 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             completeOnce()
             return@LaunchedEffect
         }
-        prepareOnce() // Prepare the home concurrently with the reveal.
         val start = withFrameNanos { it }
         var reportedVisible = false
         var reportedReady = false
         while (true) {
             val now = withFrameNanos { it }
+            // The previous positive-time frame has now had a draw opportunity.
+            // Mounting the large home before that frame can stall first reveal.
+            if (reportedVisible) prepareOnce()
             elapsed.floatValue = (now - start) / 1_000_000f
             if (!reportedVisible && elapsed.floatValue > 0f) {
                 reportedVisible = true
