@@ -3,6 +3,8 @@ package tv.herrin.app
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -13,7 +15,8 @@ import org.json.JSONObject
 
 /** Confined to personal settings; existing catalog and player surfaces remain unchanged. */
 @Composable
-internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay: (String) -> Unit) {
+internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = null, onChanged: () -> Unit, onPlay: (String) -> Unit) {
+    key(tab) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val api = remember { PersonalLibraryApi(context) }
@@ -53,13 +56,22 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
                     data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
                     onChanged()
                 }
-            } catch(_: Exception) { status = "操作失败"; toast = "失败" }
+            } catch(cancel: CancellationException) { throw cancel }
+            catch(error: Exception) {
+                android.util.Log.w("HerrinPersonal", "Personal operation failed: " + error.javaClass.simpleName)
+                status = "操作失败"; toast = "失败"
+            }
             finally { busy = false }
         }
     }
     LaunchedEffect(page, category) {
         while(isActive) {
-            data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
+            try {
+                data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
+            } catch(cancel: CancellationException) { throw cancel }
+            catch(error: Exception) {
+                android.util.Log.w("HerrinPersonal", "Personal refresh failed: " + error.javaClass.simpleName)
+            }
             delay(1500)
         }
     }
@@ -72,7 +84,7 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
         if(connections != null) for(i in 0 until connections.length()) {
             val c = connections.getJSONObject(i)
             if((c.getString("protocol") == "smb") != (tab == "SMB")) continue
-            Text(c.getString("name") + (if(c.optBoolean("enabled")) " · 启用" else " · 停用") + " · " + c.optString("status", "unknown"))
+            Text(c.getString("name") + (if(c.optBoolean("enabled")) " · 启用" else " · 停用"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton("编辑") { input = JSONObject(c.toString()); selected = c.getString("id"); path = c.optString("path"); browsePage = 0; browser = JSONObject() }
                 TvButton("浏览目录") { selected = c.getString("id"); browsePage = 0; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
@@ -86,7 +98,8 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
                 "username" to "用户名", "password" to "密码")
         else listOf("name" to "名称", "address" to "地址", "username" to "用户名", "password" to "密码")
         fields.forEach { (key, label) ->
-            OutlinedTextField(input.optString(key), { value -> input = JSONObject(input.toString()).put(key, value.take(if(key == "password") 2048 else 256)) }, modifier = Modifier.testTag("personal-field-$key"), label = { Text(label) },
+            OutlinedTextField(input.optString(key), { value -> input = JSONObject(input.toString()).put(key, value.take(if(key == "password") 2048 else 256)) }, modifier = Modifier.testTag("personal-field-$key").then(
+                    if(key == "name" && nameFocus != null) Modifier.focusRequester(nameFocus) else Modifier), label = { Text(label) },
                 singleLine = true, visualTransformation = if(key == "password") PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None)
         }
         if(tab == "SMB") TvButton("SMB3 加密：${input.optBoolean("encryption")}") { input = JSONObject(input.toString()).put("encryption", !input.optBoolean("encryption")) }
@@ -110,7 +123,7 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
         val folders = data.optJSONArray("folders")
         if(folders != null) for(i in 0 until folders.length()) {
             val f = folders.getJSONObject(i)
-            Text(f.getString("path") + " · " + f.getString("type") + " · " + f.optString("state"))
+            Text(f.getString("path"))
             Row {
                 TvButton("刷新") { execute("/personal/refresh", JSONObject().put("id", f.getString("id"))) }
                 TvButton("类型设为 $kind") { execute("/personal/folder", JSONObject(f.toString()).put("type", kind).put("scan", false)) }
@@ -123,4 +136,5 @@ internal fun PersonalLibrarySettings(tab: String, onChanged: () -> Unit, onPlay:
     confirm?.let { (route, id) -> AlertDialog(onDismissRequest = { confirm = null }, title = { Text("确认删除配置？服务器文件会保留。") },
         confirmButton = { TextButton(onClick = { execute(route, JSONObject().put("id", id).put("confirmed", true)); confirm = null }) { Text("删除") } },
         dismissButton = { TextButton(onClick = { confirm = null }) { Text("取消") } }) }
+}
 }

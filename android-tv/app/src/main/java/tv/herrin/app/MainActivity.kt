@@ -4650,8 +4650,8 @@ private fun Herrin(startup: StartupPresentation) {
                             item { Spacer(Modifier.height(0.dp)) }
                         }
                         if (settingsTvBoxOnly && settingsModule == "个人媒体库") {
-                            item { PersonalProtocolTabs(personalProtocol, reduceMotion) { personalProtocol = it } }
-                            item { PersonalLibrarySettings(personalProtocol, onChanged = { personalSourceConfigEpoch++ }, onPlay = { mediaId ->
+                            item { PersonalProtocolTabs(personalProtocol, reduceMotion, requester("personal-name")) { personalProtocol = it } }
+                            item { PersonalLibrarySettings(personalProtocol, nameFocus = requester("personal-name"), onChanged = { personalSourceConfigEpoch++ }, onPlay = { mediaId ->
                                 uiScope.launch {
                                     val result = withContext(Dispatchers.IO) { PersonalLibrary(context).play(mediaId, smbSessions) }
                                     if(result is PlaybackResult.Ready) {
