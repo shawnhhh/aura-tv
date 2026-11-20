@@ -68,3 +68,21 @@
 手机提交 TVBox HTTP(S) 影视仓地址应与遥控器提交共用最终 tvbox_warehouse_url 目标；候选解析成功即提交该配置，不再要求 CMS 节点返回至少一部影视才认为仓库导入成功，也不会因新 Spider 未获电视授权而判定配置失败。原仓配置解析失败时保持旧根与信任不变；变更根时清除旧可信 JAR、关闭旧 Spider 会话并清理旧目录内容。合法多仓列表不再被 Single-only 逻辑误标为“导入失败”。手机明确提示配置生效与 Spider 需单独电视授权；源配置提交尚未校验时不触发无关个人媒体失效。H-006 代码已修改，仍需 iPhone Safari→电视真实配对/导入与 Android CI 验收。
 
 空仓库（无可用站点、无多仓入口）不属于有效影视源导入；未能从节点取得影片与空仓格式是两类不同结果。已增加 JVM 回归区分单仓含待授权 Spider、多仓含有效入口、空仓及错误文档。
+
+## H-007 · 手机端模块异步状态与真实表单回归（2026-11-20）
+
+本轮按用户“先集中开发、后统一测试”约束，直接提交到现有 Draft PR #85 的目标分支；没有使用 Superpowers、合并主分支或产生验收 APK。本节是**代码交付记录，不是测试通过声明**。
+
+已实施：
+
+- 手机管理中心右上角成功/失败弹窗绑定请求所属模块。影视仓导入轮询、TMDB、直播、个人媒体库等异步回调离开所属模块或会话结束后不再把结果显示在当前模块中；不在 UI 展示技术错误正文。
+- 为影视仓状态轮询、个人媒体库列表刷新及目录浏览分别引入请求代号/上下文核对，迟到响应不能污染后来选择的目录/模块；切换 SMB/WebDAV 时清除旧目录控件。
+- 结束配对会话时主动失效上述异步请求，电视暂时不可达时本地会话仍可安全退出，并处理失败请求避免未处理的前端 Promise 拒绝。
+- 保存 SMB/WebDAV 配置时固定发起请求时的协议上下文。晚到的保存响应不会覆盖新选择的编辑表单；提交成功后仅清除与本次提交相同的密码输入值，避免保留已提交秘密或清空用户后来输入的新密码。
+- 更新 android-tv/scripts/phone_center_browser_test.cjs，删除与当前页面不符的旧 host/protocol 下拉和批量导入选择器；新增黑色主题、单次配对、HTTP/HTTPS WebDAV、SMB、只显示已导入文件夹、影视仓 HTTP/HTTPS、成功/失败弹窗、跨模块请求、迟到目录响应、结束请求失败后的本地收尾等模拟 API 浏览器回归场景。
+
+对应代码提交：8acf6265、1cfcacf8、1f471d63、e7aeccfd、e8b96628、a8d6be90。测试脚本只使用 mocked HTTP API，不能证明真实 iPhone Safari、配对服务器、局域网 NAS、真实 Spider 及 Android TV 兼容性。
+
+**验证状态：尚未实际运行更新后的 Chromium/Playwright 脚本或 Android CI**。GitHub 文件重新读取的静态锚点检查通过，但不能用来代替 JavaScript 语法、浏览器交互或 Android 验收。此前串行 CI 44288936324 已取消，不再沿用历史“正在执行”文案；基线通过的 JVM/Lint/Debug 结果不能当成此批代码的通过证据。
+
+后续集中验证顺序：先运行 node --check android-tv/app/src/main/assets/config/center.js、node --check android-tv/scripts/phone_center_browser_test.cjs，再执行 Playwright 模拟 API 回归；随后统一 Android JVM/Lint/Debug、完整 TV instrumentation/启动/ABBA，并进行真实 iPhone Safari→TV 扫码与 HTTP/HTTPS 影视仓、个人 NAS 导入验证。真实 FongMi/Media3 节点首帧及 TCL 4K/DV/HDR 仍属独立 P0 未完成事项。
