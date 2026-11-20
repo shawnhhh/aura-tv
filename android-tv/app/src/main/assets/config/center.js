@@ -1,5 +1,5 @@
 'use strict';
-let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',personalConnection='',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0;
+let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',personalConnection='',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0;
 history.replaceState(null,'',location.pathname);
 const $=s=>document.querySelector(s);
 const status=$('#status');
@@ -10,11 +10,12 @@ function toast(ok,owner){
  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true},2400);
 }
 async function call(path,data={}){
- const requestedSession=session;
- const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Herrin-Session':session},
-  body:JSON.stringify(data),cache:'no-store',credentials:'omit'});
+ const requestedSession=session,requestedModule=moduleEpoch;
+ const stale=()=>path!=='/pair'&&(requestedSession!==session||(path!=='/personal/save'&&requestedModule!==moduleEpoch));
+ let r;try{r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Herrin-Session':session},
+  body:JSON.stringify(data),cache:'no-store',credentials:'omit'});}catch(error){if(stale())error.stale=true;throw error}
  const json=await r.json().catch(()=>({}));
- if(path!=='/pair'&&requestedSession!==session)throw Object.assign(Error('STALE_SESSION'),{stale:true});
+ if(stale())throw Object.assign(Error('STALE_SESSION'),{stale:true});
  if(!r.ok)throw Error(json.code||('HTTP_'+r.status));
  return json;
 }
@@ -25,11 +26,11 @@ function button(parent,label,action){
  parent.append(b);return b;
 }
 function switchTab(target){
- tab=target;
+ moduleEpoch++;tab=target;
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===target));
  for(const name of ['sources','nas','tmdb','live'])$('#'+name).hidden=name!==target;
  clearTimeout(toastTimer);$('#module-toast').hidden=true;
- if(target==='nas')refreshPersonal().catch(()=>toast(false,'nas'));
+ if(target==='nas')refreshPersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 $('#pair').onclick=async()=>{
@@ -76,13 +77,13 @@ $('#live').onsubmit=async e=>{
  catch(error){if(!error.stale)toast(false,'live')}finally{busy(b,false)}
 };
 function switchProtocol(next){
- protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
+ moduleEpoch++;protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
  const f=$('#personal-edit');f.reset();f.elements.id.value='';f.elements.protocol.value=next==='SMB'?'smb':'https';
  f.elements.address.placeholder=next==='SMB'?'IP 或域名':'http:// 或 https://';
  $('#smb-port').hidden=next!=='SMB';f.elements.port.disabled=next!=='SMB';
  directoryBrowseToken++;$('#personal-directories').replaceChildren();$('#personal-browser').hidden=true;
 }
-document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(()=>toast(false,'nas'))});
+document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(error=>{if(!error.stale)toast(false,'nas')})});
 $('#personal-new').onclick=()=>switchProtocol(protocol);
 async function personal(path,data={}){
  const r=await call('/personal'+path,data);if(r.ok===false)throw Error('PERSONAL_FAILED');return r;
@@ -119,7 +120,7 @@ async function refreshPersonal(){
  }
 }
 $('#personal-edit').onsubmit=async e=>{
- e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),requestedProtocol=protocol;busy(b,true);
+ e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),requestedProtocol=protocol,requestedModule=moduleEpoch;busy(b,true);
  try{
   const data=Object.fromEntries(new FormData(f));
   if(requestedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
@@ -129,12 +130,12 @@ $('#personal-edit').onsubmit=async e=>{
   // Clear submitted secrets even if the user changed modules while the request was pending.
   if(f.elements.password.value===data.password)f.elements.password.value='';
   // Commit is complete, but a late response must not overwrite a newly selected form.
-  if(!session||requestedProtocol!==protocol||tab!=='nas')return;
+  if(!session||requestedModule!==moduleEpoch||requestedProtocol!==protocol||tab!=='nas')return;
   f.elements.id.value=result.id;
   personalConnection=result.id;directoryPage=0;
   $('#personal-path').value=result.path||'';$('#personal-browser').hidden=false;
   await refreshPersonal();
-  if(!session||requestedProtocol!==protocol||tab!=='nas')return;
+  if(!session||requestedModule!==moduleEpoch||requestedProtocol!==protocol||tab!=='nas')return;
   renderDirectories(result);toast(true,'nas');
  }catch(error){if(!error.stale)toast(false,'nas')}finally{busy(b,false)}
 };
@@ -150,13 +151,13 @@ async function browsePersonal(){
  if(ticket!==directoryBrowseToken||connection!==personalConnection||path!==$('#personal-path').value||tab!=='nas')return;
  renderDirectories(r);
 }
-$('#personal-browse').onclick=()=>browsePersonal().catch(()=>toast(false,'nas'));
+$('#personal-browse').onclick=()=>browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
 $('#personal-parent').onclick=()=>{
  const v=$('#personal-path');v.value=v.value.split('/').filter(Boolean).slice(0,-1).join('/');directoryPage=0;
- browsePersonal().catch(()=>toast(false,'nas'));
+ browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
 };
-$('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(()=>toast(false,'nas'))};
-$('#personal-directory-next').onclick=()=>{directoryPage++;browsePersonal().catch(()=>toast(false,'nas'))};
+$('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
+$('#personal-directory-next').onclick=()=>{directoryPage++;browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
 $('#personal-import').onclick=async()=>{
  try{await personal('/folder',{connection:personalConnection,path:$('#personal-path').value,type:'auto'});
   await refreshPersonal();toast(true,'nas')}catch(error){if(!error.stale)toast(false,'nas')}

@@ -54,7 +54,8 @@ class SettingsModulesTest {
         }
         compose.onNodeWithTag("personal-field-name").assertIsFocused()
         compose.onNodeWithTag("personal-protocol-SMB").performClick()
-        compose.onNodeWithTag("personal-field-name").assertTextEquals("")
+        assertEquals("", compose.onNodeWithTag("personal-field-name").fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
         compose.onNodeWithTag("personal-field-host").assertExists()
         compose.onNodeWithTag("personal-field-address").assertDoesNotExist()
     }
