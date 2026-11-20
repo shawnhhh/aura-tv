@@ -124,9 +124,11 @@ $('#personal-edit').onsubmit=async e=>{
   else {data.protocol='https';delete data.host;delete data.port}
   if(data.id&&!data.password)delete data.password;
   const result=await personal('/save',data);
+  // Clear submitted secrets even if the user changed modules while the request was pending.
+  if(f.elements.password.value===data.password)f.elements.password.value='';
   // Commit is complete, but a late response must not overwrite a newly selected form.
   if(requestedProtocol!==protocol||tab!=='nas')return;
-  f.elements.id.value=result.id;f.elements.password.value='';
+  f.elements.id.value=result.id;
   personalConnection=result.id;directoryPage=0;
   $('#personal-path').value=result.path||'';$('#personal-browser').hidden=false;
   await refreshPersonal();
