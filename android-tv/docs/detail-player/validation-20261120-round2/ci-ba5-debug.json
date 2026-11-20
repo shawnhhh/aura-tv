@@ -1,0 +1,15 @@
+{
+  "source_sha": "ba5cc55faf074bd531d430c6ae63614f5083372f",
+  "run_id": 44708169912,
+  "debug_job_id": 136192859267,
+  "debug_result": "success",
+  "samba_preflight": "success (six unchanged tests)",
+  "jvm": { "tests": 788, "failures": 0, "errors": 0, "skipped": 0 },
+  "lint_and_debug": "success",
+  "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44708169912/artifacts/14616028982",
+  "apk_bytes": 27086538,
+  "apk_sha256_from_ci_log": "d312e6360d03513ccded3c8fb1294b471bb1b22204ebb54891155afebfede055",
+  "diagnostic_only": true,
+  "independently_downloaded": false,
+  "note": "Source binding sidecars are in the artifact. The ZIP digest is different. Kernel adapter, real provider and TCL not accepted."
+}
