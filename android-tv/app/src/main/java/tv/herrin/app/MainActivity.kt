@@ -1432,7 +1432,7 @@ private fun Herrin(startup: StartupPresentation) {
                 (System.nanoTime()-detailStarted)/1_000_000,loaded?.film?.playbackEpisodes?.size ?: 0)
             if(loaded == null || loaded.film.playbackEpisodes.isEmpty()) {
                 tmdbState.tmdbSourceStatus = "${hit.node.name} 已返回搜索条目 · ${detailStage.label()} · ${if(loaded != null) SourceSearchOutcome.NO_EPISODES.label() else detailOutcome.label()}；可重试或选择其他影视点"
-                if (tmdbState.loadedDiscoveryHits[filmId] == hit.key) tmdbState.loadedDiscoveryHits.remove(filmId)
+                tmdbState.invalidateDiscoverySelection(filmId, hit.key)
                 tmdbState.sourceDiscoveries[filmId]?.invalidateLayout(snapshot.revision, hit.key)?.let { tmdbState.discoveredSources[filmId] = it }
                 tmdbState.sourceDiscoveries[filmId]?.spiderPaused = false
                 tmdbState.discoveryLine = null
@@ -1444,7 +1444,7 @@ private fun Herrin(startup: StartupPresentation) {
             val requestedOriginalLine = tmdbState.discoveryLine
             if (requestedOriginalLine != null && detailed.playbackEpisodes.none { ep -> ep.lines.any { it.id == requestedOriginalLine } }) {
                 tmdbState.discoveryLine = null
-                if (tmdbState.loadedDiscoveryHits[filmId] == hit.key) tmdbState.loadedDiscoveryHits.remove(filmId)
+                tmdbState.invalidateDiscoverySelection(filmId, hit.key)
                 tmdbState.sourceDiscoveries[filmId]?.retainEpisodes(snapshot.revision, hit.key, detailed)?.let { tmdbState.discoveredSources[filmId] = it }
                 tmdbState.sourceDiscoveries[filmId]?.spiderPaused = false
                 tmdbState.tmdbSourceStatus = "该线路已变化，请重新选择片源"
@@ -1504,7 +1504,7 @@ private fun Herrin(startup: StartupPresentation) {
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "DISCOVERY_DETAIL_READY", "EPISODES=${detailed.playbackEpisodes.size}")
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled
         } catch (_: Exception) {
-            if (tmdbState.loadedDiscoveryHits[filmId] == hit.key) tmdbState.loadedDiscoveryHits.remove(filmId)
+            tmdbState.invalidateDiscoverySelection(filmId, hit.key)
             tmdbState.sourceDiscoveries[filmId]?.invalidateLayout(snapshot.revision, hit.key)?.let { tmdbState.discoveredSources[filmId] = it }
             tmdbState.sourceDiscoveries[filmId]?.spiderPaused = false
             tmdbState.tmdbSourceStatus = "该片源暂不可用，请选择其他线路或重试"
@@ -5252,7 +5252,7 @@ private fun Herrin(startup: StartupPresentation) {
 
                             if (film.id.startsWith("tmdb-") &&
                                 film.playbackEpisodes.isEmpty() &&
-                                !tmdbState.sourceSelectionReady(film.id)) {
+                                tmdbState.discoveryLoadingFilm == film.id) {
                                 item { Text("正在读取节点线路与集数…", color = Color(0xFFBDC8D6)) }
                             } else if (showGroup != null && groupLayout != null && groupSection != null) {
                                 item {

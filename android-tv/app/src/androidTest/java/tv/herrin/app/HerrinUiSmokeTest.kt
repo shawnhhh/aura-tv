@@ -765,9 +765,12 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithText("请选择片源线路").assertIsDisplayed()
             compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
             failChosenB.set(false)
-            list.performScrollToNode(hasTestTag("source-region"))
-            compose.onNodeWithTag("source-retry-$bNode").performClick()
-            compose.waitUntil(10000) { runCatching { compose.onNodeWithText("线路 1").assertExists() }.isSuccess }
+            list.performScrollToNode(hasTestTag("source-retry-$bNode"))
+            compose.onNodeWithTag("source-retry-$bNode").assertIsDisplayed().performClick()
+            compose.waitUntil(10000) { runCatching {
+                list.performScrollToNode(hasText("线路 1"))
+                compose.onNodeWithText("线路 1").assertIsDisplayed()
+            }.isSuccess }
             compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
             compose.onNodeWithText("线路 1").performClick()
             compose.waitUntil(10000) { runCatching {

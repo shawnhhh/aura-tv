@@ -30,6 +30,17 @@ internal class TmdbScreenState {
     var discoveryLoadingEpoch: Int = 0
     fun sourceSelectionReady(id: String): Boolean = discoveryLoadingFilm != id &&
         (requestedDiscoveryHits[id] == null || requestedDiscoveryHits[id] == loadedDiscoveryHits[id])
+    /** Retire only the failed current selection's UI/media projection, not sibling layouts. */
+    fun invalidateDiscoverySelection(id: String, hitKey: String) {
+        if (requestedDiscoveryHits[id] != hitKey) return
+        loadedDiscoveryHits.remove(id)
+        tmdbResolved[id]?.let { old ->
+            tmdbResolved[id] = old.copy(playbackEpisodes = emptyList(),
+                cmsVodId = null, spiderVodId = null, spiderOrigin = null)
+        }
+        tmdbPersonalPlayback.remove(id)
+        tmdbPlaybackRoutes.forget(id)
+    }
     var discoveryLine: String? by mutableStateOf(null)
     var discoverySelectionEpoch by mutableIntStateOf(0)
     fun discoveryFor(id: String): HerrinSourceDiscovery {
