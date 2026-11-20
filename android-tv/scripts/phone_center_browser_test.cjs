@@ -14,6 +14,7 @@ fs.mkdirSync(evidence,{recursive:true});
   const requests=[],errors=[],connections=[],folders=[];
   let nextId=0,sourceState='ACTIVE',holdSourceStatus=false,releaseSourceStatus=()=>{},notifySourceStatus=()=>{};
   let holdBrowse=false,releaseBrowse=()=>{},notifyBrowse=()=>{};
+  let holdTmdb=false,releaseTmdb=()=>{},notifyTmdb=()=>{};
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://herrin.test/**',async route=>{
    const req=route.request(),url=new URL(req.url());
@@ -26,6 +27,7 @@ fs.mkdirSync(evidence,{recursive:true});
    let response={ok:true};
    if(url.pathname==='/pair')response={session:'mock-management',pending:false};
    if(url.pathname==='/status')response={tvbox:'',m3u:'',epg:''};
+   if(url.pathname==='/tmdb'&&holdTmdb){notifyTmdb();await new Promise(resolve=>{releaseTmdb=resolve});holdTmdb=false}
    if(url.pathname==='/personal')response={ok:true,connections,folders,media:[],progress:''};
    if(url.pathname==='/personal/save'){
     const id=body.id||'fixture-'+(++nextId);
@@ -154,9 +156,19 @@ fs.mkdirSync(evidence,{recursive:true});
   assert(requests.filter(r=>r.path!=='/pair').every(r=>r.headers['x-herrin-session']==='mock-management'));
   assert.deepStrictEqual(errors,[]);
   await page.screenshot({path:path.join(evidence,'phone-center-mobile.png'),fullPage:true});
+  await page.locator('[data-tab=tmdb]').click();
+  holdTmdb=true;
+  const tmdbRequested=new Promise(resolve=>{notifyTmdb=resolve});
+  await page.locator('#tmdb [name=token]').fill('mock-pending-token');
+  await page.locator('#tmdb button[type=submit]').click();
+  await tmdbRequested;
   await page.locator('#end').click();
   await page.locator('#manager').waitFor({state:'hidden'});
   assert.strictEqual(await page.locator('#module-toast').isHidden(),true,'ending the session clears notifications');
+  releaseTmdb();
+  await page.waitForFunction(()=>!document.querySelector('#tmdb button[type=submit]').disabled);
+  assert.strictEqual(await page.locator('#tmdb [name=token]').inputValue(),'mock-pending-token','ended-session response must not mutate the form');
+  assert(await page.locator('#module-toast').isHidden(),'ended-session response must not notify');
   assert.deepStrictEqual(errors,[],'failed end request must not reject an unhandled promise');
   fs.writeFileSync(path.join(evidence,'phone-center-result.json'),JSON.stringify({
    test:'Chromium mobile frontend with mocked API',passed:true,pairings:1,modules:4,requests:requests.length,
