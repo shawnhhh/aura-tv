@@ -62,7 +62,7 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         require(film.playbackEpisodes.any { it.number == number && it.lines.any { choice -> choice.id == line } })
         return requireNotNull(selections[line]) { "Kernel episode selection expired" }
     }
-    suspend fun browse(selected: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = result {
+    suspend fun browse(selected: TvBoxSite, config: TvBoxConfig.Single): SpiderResult<List<Film>> = result("BROWSE") {
         require(warehouse.isNotBlank()) { "Warehouse authorization is missing" }
         // The compile-ready build starts in whole-core mode. Legacy execution
         // is barred before activation; no live legacy worker may coexist.
@@ -96,17 +96,22 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         check(selectedSession == session)
         home.map(::projectMovie)
     }
-    suspend fun search(selected: TvBoxSite, query: String): SpiderResult<List<Film>> = result {
+    suspend fun search(selected: TvBoxSite, query: String): SpiderResult<List<Film>> = result("SEARCH") {
         require(selected.key == site?.key) { "Search site differs from active kernel session" }
         val selectedSession = session
         val found = runtime.gateway.search(selected.key, query).awaitKernel()
         check(selectedSession == session)
         found.map(::projectMovie)
     }
-    suspend fun details(film: Film): SpiderResult<Film> = result {
+    suspend fun details(film: Film): SpiderResult<Film> = result("DETAIL") {
         require(owns(film)) { "Kernel movie session expired" }
         val selectedSession = session
-        val detail = runtime.gateway.details(requireNotNull(film.spiderVodId)).awaitKernel()
+        val handle = requireNotNull(film.spiderVodId)
+        val detail = try { runtime.gateway.details(handle).awaitKernel() }
+        catch (error: Exception) {
+            if (selectedSession == session) retireDetail(handle)
+            throw error
+        }
         check(selectedSession == session)
         // Original VOD publishes the detail through observeDetail *before*
         // its admission future completes. Reuse that exact projection instead
@@ -117,8 +122,8 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         val selected = ticket(film, number, line).copy(replay = lastRequestedEpisode == line, title = "${film.title} · 第${number}集")
         lastRequestedEpisode = line
         PlaybackResult.Ready(PlaybackMedia("kernel-selection:$line", kernelPlayback = selected))
-    } catch (_: IllegalArgumentException) { PlaybackResult.Unavailable("来源会话或选集已变化，请返回详情重新选择") }
-    catch (_: IllegalStateException) { PlaybackResult.Unavailable("原版选集已失效，请返回详情重新选择") }
+    } catch (_: IllegalArgumentException) { PlaybackResult.Unavailable("KERNEL_SELECTION_EXPIRED：来源会话或选集已变化，请返回详情重新选择") }
+    catch (_: IllegalStateException) { PlaybackResult.Unavailable("KERNEL_SELECTION_EXPIRED：原版选集已失效，请返回详情重新选择") }
     fun latest(film: Film): Film? = film.spiderVodId?.let(latest::get)
     private fun projectMovie(movie: Kernel.Movie): Film {
         require(movie.siteKey() == site?.key) { "Movie belongs to a different site session" }
@@ -126,6 +131,13 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         return requireNotNull(authority).sign(Film("kernel-${movie.handle()}", movie.title(), movie.remarks(), TvBoxCategories.topLevel(movie.category()),
             movie.year(), SourceText.synopsis(movie.synopsis()), R.drawable.photofilm_orbit, artworkUrl = TvBoxUrl.normalize(movie.artwork(), true),
             spiderVodId = movie.handle()))
+    }
+    private fun retireDetail(handle: String) {
+        latest.remove(handle)?.playbackEpisodes.orEmpty().flatMap { it.lines }.forEach {
+            selections.remove(it.id); coordinates.remove(it.id)
+        }
+        selectedCoordinate = coordinates[currentEpisode]
+        revision++
     }
     private fun projectDetail(detail: Kernel.Detail): Film {
         val movie = detail.movie()
@@ -135,10 +147,7 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         // netdisk selections, even if their site session remains authorized.
         // Refresh only this movie. Background detail discovery may project
         // another VOD while the selected movie still owns valid episode tickets.
-        latest[movie.handle()]?.playbackEpisodes.orEmpty().flatMap { it.lines }.forEach {
-            selections.remove(it.id)
-            coordinates.remove(it.id)
-        }
+        retireDetail(movie.handle())
         val episodes = linkedMapOf<Int, MutableList<PlaybackLine>>()
         val names = mutableMapOf<Int, String>()
         detail.lines().forEach { line -> line.episodes().forEach { episode ->
@@ -166,7 +175,11 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         revision++
         runtime.gateway.stop()
     }
-    private suspend fun <T> result(block: suspend () -> T): SpiderResult<T> = try { requests.withLock { SpiderResult.Ready(block()) } }
+    private suspend fun <T> result(stage: String, block: suspend () -> T): SpiderResult<T> = try { requests.withLock { SpiderResult.Ready(block()) } }
     catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
-    catch (_: Exception) { SpiderResult.Failure("原版内核请求失败；未回退旧播放系统") }
+    catch (error: Exception) {
+        val code = KernelFailureCode.classify(error)
+        HerrinPlaybackDiagnosticJournal.record("SOURCE", code, "")
+        SpiderResult.Failure("$code：原版内核 $stage 请求失败")
+    }
 }
