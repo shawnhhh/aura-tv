@@ -15,6 +15,7 @@ fs.mkdirSync(evidence,{recursive:true});
   let nextId=0,sourceState='ACTIVE',holdSourceStatus=false,releaseSourceStatus=()=>{},notifySourceStatus=()=>{};
   let holdBrowse=false,releaseBrowse=()=>{},notifyBrowse=()=>{};
   let holdTmdb=false,releaseTmdb=()=>{},notifyTmdb=()=>{};
+  let holdSave=false,releaseSave=()=>{},notifySave=()=>{};
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://herrin.test/**',async route=>{
    const req=route.request(),url=new URL(req.url());
@@ -30,6 +31,7 @@ fs.mkdirSync(evidence,{recursive:true});
    if(url.pathname==='/tmdb'&&holdTmdb){notifyTmdb();await new Promise(resolve=>{releaseTmdb=resolve});holdTmdb=false}
    if(url.pathname==='/personal')response={ok:true,connections,folders,media:[],progress:''};
    if(url.pathname==='/personal/save'){
+    if(holdSave){notifySave();await new Promise(resolve=>{releaseSave=resolve});holdSave=false}
     const id=body.id||'fixture-'+(++nextId);
     const scheme=body.protocol==='smb'?'smb':new URL(body.address).protocol.slice(0,-1);
     const item={id,name:body.name,protocol:scheme,address:body.address||body.host,host:body.host||new URL(body.address).hostname,
@@ -128,6 +130,17 @@ fs.mkdirSync(evidence,{recursive:true});
   await page.waitForFunction(()=>document.querySelector('#personal-edit [name=id]').value==='fixture-3');
   assert(requests.some(r=>r.path==='/personal/save'&&r.body.protocol==='smb'&&r.body.host==='192.168.1.15'&&r.body.port===445));
   assert(!requests.some(r=>r.path==='/cloud'||r.path==='/cloud/test'));
+  holdSave=true;
+  const saveRequested=new Promise(resolve=>{notifySave=resolve});
+  await f.locator('[name=password]').fill('submitted-secret');
+  await f.locator('button[type=submit]').click();await saveRequested;
+  await f.locator('[name=name]').fill('New unsaved connection name');
+  await f.locator('[name=password]').fill('new-secret');
+  releaseSave();
+  await page.waitForFunction(()=>!document.querySelector('#personal-edit button[type=submit]').disabled);
+  assert.strictEqual(await f.locator('[name=name]').inputValue(),'New unsaved connection name');
+  assert.strictEqual(await f.locator('[name=password]').inputValue(),'new-secret');
+
 
   await page.locator('[data-tab=sources]').click();
   await page.locator('#sources [name=url]').fill('http://饭太硬.net/tv');
