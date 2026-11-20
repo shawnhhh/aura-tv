@@ -13,6 +13,7 @@ fs.mkdirSync(evidence,{recursive:true});
   const page=await browser.newPage({viewport:{width:393,height:852},deviceScaleFactor:1});
   const requests=[],errors=[],connections=[],folders=[];
   let nextId=0,sourceState='ACTIVE',holdSourceStatus=false,releaseSourceStatus=()=>{},notifySourceStatus=()=>{};
+  let holdBrowse=false,releaseBrowse=()=>{},notifyBrowse=()=>{};
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://herrin.test/**',async route=>{
    const req=route.request(),url=new URL(req.url());
@@ -35,7 +36,10 @@ fs.mkdirSync(evidence,{recursive:true});
     const i=connections.findIndex(c=>c.id===id);if(i<0)connections.push(item);else connections[i]=item;
     response={ok:true,id,path:item.path,files:[{name:'Movies',path:'Movies'}],total:1};
    }
-   if(url.pathname==='/personal/browse')response={ok:true,files:[{name:'Movies',path:'Movies'}],total:1};
+   if(url.pathname==='/personal/browse'){
+    if(holdBrowse){notifyBrowse();await new Promise(resolve=>{releaseBrowse=resolve});holdBrowse=false}
+    response={ok:true,files:[{name:'Movies',path:'Movies'}],total:1};
+   }
    if(url.pathname==='/personal/folder'){
     folders.push({id:'folder-'+folders.length,connection:body.connection,path:body.path,type:body.type,enabled:true});
     response={ok:true};
@@ -92,6 +96,17 @@ fs.mkdirSync(evidence,{recursive:true});
   assert.strictEqual(await page.locator('#personal-folders .folder').count(),1);
   assert.strictEqual(await page.locator('#personal-folders .folder').first().locator('span').innerText(),'Movies');
   assert(requests.some(r=>r.path==='/personal/folder'&&r.body.path==='Movies'&&r.body.type==='auto'));
+
+  // A delayed directory response must not repopulate the picker after a protocol switch.
+  holdBrowse=true;
+  const browseRequested=new Promise(resolve=>{notifyBrowse=resolve});
+  await page.locator('#personal-browse').click();await browseRequested;
+  await page.locator('[data-personal-tab=SMB]').click();
+  const browseResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/personal/browse');
+  releaseBrowse();await browseResponse;await page.waitForTimeout(50);
+  assert(await page.locator('#personal-browser').isHidden());
+  assert.strictEqual(await page.locator('#personal-directories button').count(),0);
+  await page.locator('[data-personal-tab=WebDAV]').click();
 
   await page.locator('#personal-new').click();
   await f.locator('[name=name]').fill('My HTTPS DAV');
