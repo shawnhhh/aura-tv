@@ -117,16 +117,21 @@ async function refreshPersonal(){
  }
 }
 $('#personal-edit').onsubmit=async e=>{
- e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]');busy(b,true);
+ e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),requestedProtocol=protocol;busy(b,true);
  try{
   const data=Object.fromEntries(new FormData(f));
-  if(protocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
+  if(requestedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
   else {data.protocol='https';delete data.host;delete data.port}
   if(data.id&&!data.password)delete data.password;
-  const result=await personal('/save',data);f.elements.id.value=result.id;f.elements.password.value='';
+  const result=await personal('/save',data);
+  // Commit is complete, but a late response must not overwrite a newly selected form.
+  if(requestedProtocol!==protocol||tab!=='nas')return;
+  f.elements.id.value=result.id;f.elements.password.value='';
   personalConnection=result.id;directoryPage=0;
   $('#personal-path').value=result.path||'';$('#personal-browser').hidden=false;
-  await refreshPersonal();renderDirectories(result);toast(true,'nas');
+  await refreshPersonal();
+  if(requestedProtocol!==protocol||tab!=='nas')return;
+  renderDirectories(result);toast(true,'nas');
  }catch(_){toast(false,'nas')}finally{busy(b,false)}
 };
 function renderDirectories(r){
