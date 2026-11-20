@@ -98,7 +98,7 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
                 "username" to "用户名", "password" to "密码")
         else listOf("name" to "名称", "address" to "地址", "username" to "用户名", "password" to "密码")
         fields.forEach { (key, label) ->
-            OutlinedTextField(input.optString(key), { value -> input = JSONObject(input.toString()).put(key, value.take(if(key == "password") 2048 else 256)) }, modifier = Modifier.testTag("personal-field-$key").then(
+            OutlinedTextField(input.optString(key), { value -> input = JSONObject(input.toString()).put(key, value.take(if(key in setOf("password", "address")) 2048 else 256)) }, modifier = Modifier.testTag("personal-field-$key").then(
                     if(key == "name" && nameFocus != null) Modifier.focusRequester(nameFocus) else Modifier), label = { Text(label) },
                 singleLine = true, visualTransformation = if(key == "password") PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None)
         }

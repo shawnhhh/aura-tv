@@ -201,12 +201,10 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
             return CompletableFuture.completedFuture(latestDetail);
         releaseVodSession();
         releasePlayer();
-        // A new detail navigation retires the previously displayed movie's
-        // episode handles; catalog movie handles remain valid for search.
-        // This blocks stale Compose film cards from reusing another movie's
-        // Spider selections after the original controller changes session.
-        episodes.clear();
-        episodeHandles.clear();
+        // Detail prefetch can visit several movies in one approved site.
+        // Retire only the target movie's replaced layout; play() restores the
+        // exact retained Selection through the original controller.
+        retireMovieSelections(entry.siteKey(), entry.vod().getId());
         currentVod = entry.vod(); currentSite = entry.siteKey(); currentId = currentVod.getId();
         presentationMovieHandle = handle;
         detailAdmission = track(new CompletableFuture<>());
@@ -495,14 +493,19 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         if (playbackAdmission != null && !playbackAdmission.isDone())
             playbackAdmission.completeExceptionally(new IllegalStateException("UPSTREAM_PLAYBACK_ERROR"));
     }
+    private void retireMovieSelections(String site, String vodId) {
+        episodes.entrySet().removeIf(entry -> entry.getValue().siteKey().equals(site)
+            && entry.getValue().vod().getId().equals(vodId));
+        episodeHandles.keySet().removeIf(selection -> selection.siteKey().equals(site)
+            && selection.vod().getId().equals(vodId));
+    }
     private void refreshDetail() {
         if (currentVod == null) return;
         // Every published detail is the complete active selection set. Keep
         // stable opaque handles for selections that survived a source refresh,
         // but retire handles removed by an upstream netdisk/line expansion.
         Map<Selection, String> previousHandles = new HashMap<>(episodeHandles);
-        episodes.clear();
-        episodeHandles.clear();
+        retireMovieSelections(currentSite, currentId);
         List<Line> lines = new ArrayList<>();
         for (Flag flag : currentFlags) {
             List<Episode> values = new ArrayList<>();
@@ -590,8 +593,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         // A failed detail refresh cannot leave an earlier movie/line selectable.
         // The original controller owns error classification; HERRIN only
         // revokes now-invalid opaque selection handles at its host boundary.
-        episodes.clear();
-        episodeHandles.clear();
+        retireMovieSelections(currentSite, currentId);
         selectedEpisodeHandle = "";
         latestDetail = null; emit(Phase.ERROR, "EMPTY_DETAIL"); failAdmission();
         if (detailAdmission != null) detailAdmission.completeExceptionally(new IllegalStateException("EMPTY_DETAIL"));
