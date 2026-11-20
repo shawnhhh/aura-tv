@@ -725,10 +725,27 @@ http://example.org/live/channel.m3u8
                 list.performScrollToNode(hasTestTag("detail-play-cta"))
                 compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
             }.isSuccess }
+            // Selecting an already loaded line reuses its sanitized layout.
+            // Switch A -> B to exercise a real fresh detail rebind failure,
+            // rather than expecting a no-op click to send another request.
+            list.performScrollToNode(hasTestTag("source-region"))
+            val aNode = HerrinDiscoveryNodes.id(root,
+                TvBoxSite("CMS A", false, server.url("/a").toString(), key = "a"), null)
+            val bNode = HerrinDiscoveryNodes.id(root,
+                TvBoxSite("CMS B", false, server.url("/b").toString(), key = "b"), null)
+            compose.onNodeWithTag("source-node-menu").performClick()
+            compose.onNodeWithTag("source-node-$aNode").performClick()
+            compose.waitUntil(10000) { runCatching {
+                list.performScrollToNode(hasTestTag("detail-play-cta"))
+                compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+            }.isSuccess }
             val aReadsBeforeRetry = details.count { it == "a:local-a" }
+            val bReadsBeforeFailure = details.count { it == "b:local-b" }
             failChosenB.set(true)
             list.performScrollToNode(hasTestTag("source-region"))
-            compose.onNodeWithText("线路 1").performClick()
+            compose.onNodeWithTag("source-node-menu").performClick()
+            compose.onNodeWithTag("source-node-$bNode").performClick()
+            compose.waitUntil(10000) { details.count { it == "b:local-b" } > bReadsBeforeFailure }
             compose.waitUntil(10000) { runCatching { compose.onNodeWithText("暂无可用线路").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
             list.performScrollToNode(hasText("请选择片源线路"))
@@ -736,9 +753,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
             failChosenB.set(false)
             list.performScrollToNode(hasTestTag("source-region"))
-            val failedNode = HerrinDiscoveryNodes.id(root,
-                TvBoxSite("CMS B", false, server.url("/b").toString(), key = "b"), null)
-            compose.onNodeWithTag("source-retry-$failedNode").performClick()
+            compose.onNodeWithTag("source-retry-$bNode").performClick()
             compose.waitUntil(10000) { runCatching { compose.onNodeWithText("线路 1").assertExists() }.isSuccess }
             compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
             compose.onNodeWithText("线路 1").performClick()

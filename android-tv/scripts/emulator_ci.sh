@@ -48,6 +48,14 @@ assert 'OK (1 test)' in text and 'INSTRUMENTATION_CODE: -1' in text, text
 assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text, text
 PY
 fi
+# Retest the remaining failure from run 44705015249 before broader gates.
+adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinUiSmokeTest#tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/h-detail-rebind-preflight.txt
+python3 - <<'PYDETAIL'
+from pathlib import Path
+text=Path('build/emulator-evidence/h-detail-rebind-preflight.txt').read_text()
+assert 'OK (1 test)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
+PYDETAIL
 # Verify the failed V13 frame-reference case before the retained 19-test and
 # unfiltered suites; every original pixel/brightness assertion remains active.
 adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinSplashTest#centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/v13-frame-preflight.txt
