@@ -29,7 +29,7 @@ internal fun LazyListScope.herrinDiscoveryItems(
                 it.node.id in snapshot.selectableNodeIds
         }.groupBy { it.node.id }
         var expanded by remember { mutableStateOf(false) }
-        val current = selectedNode?.takeIf { id -> id in groups || snapshot.hits.any {
+        val current = selectedNode?.takeIf { id -> id in groups || snapshot.routes.any { it.nodeId == id } || snapshot.hits.any {
             it.node.id == id && it.key in snapshot.failedDetails
         } }
             ?: snapshot.readyRoutes.firstOrNull { it.nodeId in groups }?.nodeId

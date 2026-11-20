@@ -729,6 +729,7 @@ http://example.org/live/channel.m3u8
             list.performScrollToNode(hasTestTag("source-region"))
             compose.onNodeWithText("线路 1").performClick()
             compose.waitUntil(10000) { runCatching { compose.onNodeWithText("暂无可用线路").assertIsDisplayed() }.isSuccess }
+            compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
             list.performScrollToNode(hasText("请选择片源线路"))
             compose.onNodeWithText("请选择片源线路").assertIsDisplayed()
             compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
@@ -738,6 +739,7 @@ http://example.org/live/channel.m3u8
                 TvBoxSite("CMS B", false, server.url("/b").toString(), key = "b"), null)
             compose.onNodeWithTag("source-retry-$failedNode").performClick()
             compose.waitUntil(10000) { runCatching { compose.onNodeWithText("线路 1").assertExists() }.isSuccess }
+            compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
             compose.onNodeWithText("线路 1").performClick()
             compose.waitUntil(10000) { runCatching {
                 list.performScrollToNode(hasTestTag("detail-play-cta"))
