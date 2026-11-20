@@ -137,7 +137,7 @@ $('#personal-edit').onsubmit=async e=>{
   await refreshPersonal();
   if(!session||requestedModule!==moduleEpoch||requestedProtocol!==protocol||tab!=='nas')return;
   renderDirectories(result);toast(true,'nas');
- }catch(error){if(!error.stale)toast(false,'nas')}finally{busy(b,false)}
+ }catch(error){if(!error.stale&&requestedModule===moduleEpoch)toast(false,'nas')}finally{busy(b,false)}
 };
 function renderDirectories(r){
  const el=$('#personal-directories');el.replaceChildren();
