@@ -130,6 +130,10 @@ fs.mkdirSync(evidence,{recursive:true});
   await page.waitForFunction(()=>document.querySelector('#personal-edit [name=id]').value==='fixture-3');
   assert(requests.some(r=>r.path==='/personal/save'&&r.body.protocol==='smb'&&r.body.host==='192.168.1.15'&&r.body.port===445));
   assert(!requests.some(r=>r.path==='/cloud'||r.path==='/cloud/test'));
+  await page.locator('#personal-new').click();
+  await f.locator('[name=name]').fill('Pending new connection');
+  await f.locator('[name=address]').fill('192.168.1.15');
+  await f.locator('[name=path]').fill('Movies');
   holdSave=true;
   const saveRequested=new Promise(resolve=>{notifySave=resolve});
   await f.locator('[name=password]').fill('submitted-secret');
@@ -140,6 +144,7 @@ fs.mkdirSync(evidence,{recursive:true});
   await page.waitForFunction(()=>!document.querySelector('#personal-edit button[type=submit]').disabled);
   assert.strictEqual(await f.locator('[name=name]').inputValue(),'New unsaved connection name');
   assert.strictEqual(await f.locator('[name=password]').inputValue(),'new-secret');
+  assert.strictEqual(await f.locator('[name=id]').inputValue(),'','late save must not assign an ID to the edited new form');
 
 
   await page.locator('[data-tab=sources]').click();
