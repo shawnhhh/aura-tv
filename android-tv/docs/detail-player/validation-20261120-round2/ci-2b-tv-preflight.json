@@ -1,0 +1,128 @@
+{
+  "source_sha": "2b4738601696097d61ecd94b5def1b4226e78d8b",
+  "run": 44705015249,
+  "unfiltered_suite_started": false,
+  "tests": [
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowsePageTest",
+      "test": "nativeDpadTraversesIndependentRowsAndReturnsToTheSameColumn",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.M438SingleWarehousePerformanceTest",
+      "test": "singleWarehouseLoadsAllSitesAndDpadHasNoSevereStall",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "myPersonalSourcesShortcutOpensStorageManager",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "sourceSiteExplanationIsConsumerFriendlyWithoutRuntimeWords",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests",
+      "code": -2,
+      "status": "failed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "applyingLiveSourcePopulatesLiveTabWithoutHttpToggle",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "homeDpadDownMovesFromNavigationToHeroThenFirstPoster",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "spiderOnlySourceDoesNotSilentlyFallBackToDemoFilms",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "homeHeaderKeepsCompactSettingsAndExactlyTwoSourceInputs",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest",
+      "test": "wrongSelectedMovieIsRejectedAndRetryUsesOnlyRealSelectedFilm",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest",
+      "test": "cmsListingWithHttpFirstAndHttpsSecondPlaysWithoutAnotherDetailRequest",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.M449SettingsNoIdleBurstTest",
+      "test": "rapidSidebarKeysChangeDirectionWithoutOpeningIme",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "advancedPreviewRetainsEmptyInitializedSource",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "sitePickerRetainsEmptyInitializedSourceAndRestoresItOnRecreate",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply",
+      "code": 0,
+      "status": "passed"
+    },
+    {
+      "class": "tv.herrin.app.StartupParallelPreparationTest",
+      "test": "networkStartsBehindCurtainAndSurvivesCurtainRemoval",
+      "code": 0,
+      "status": "passed"
+    }
+  ],
+  "failure_stage": "Already-loaded layout click made no fresh HTTP request; failure trigger corrected to explicit A -> B node rebind without removing assertions."
+}

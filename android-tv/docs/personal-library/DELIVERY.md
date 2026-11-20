@@ -74,3 +74,6 @@ Final documentation commit changes only this ledger and its path manifest. The A
 
 
 中断续跑补充：代码 de2be68e 将合法空 CMS list 与配置/HTTP 失败区分；内联节点使用现有授权激活链路，旧请求不能覆盖新选择。2b473860 为当前测试源码，串行 CI 44705015249 正在执行。f1abdd0f 的受控 TV SMB3 实际完成加密、解码帧和 Seek，但当次 TV 全量仍有 20 项失败；不能把其中协议成功等同整体验收。最新完整结果及诊断 APK 绑定以 H 台账开头为准。
+
+
+当前续跑验证：2b473860 完整 JVM 已增至 788/788，20 项原失败 TV 专项 19/20；手机 HTTPS 提交 HTTP 仓库并刷新 TV、错误配置保留已生效配置、空 Spider 首页等受控场景通过。H-004 余下 fixture 修正及统一旧节点入口/去分类技术文字已进入 ba5cc55f 串行 CI，尚未记为全量通过。物理 Safari/TCL/阿里云盘结果仍为空。

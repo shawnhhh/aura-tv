@@ -1,0 +1,15 @@
+{
+  "source_sha": "2b4738601696097d61ecd94b5def1b4226e78d8b",
+  "run_id": 44705015249,
+  "debug_job_id": 136182436603,
+  "debug_result": "success",
+  "samba_preflight": "success (six unchanged tests)",
+  "jvm": { "tests": 788, "failures": 0, "errors": 0, "skipped": 0 },
+  "lint_and_debug": "success",
+  "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44705015249/artifacts/14615571134",
+  "apk_bytes": 27086538,
+  "apk_sha256_from_ci_log": "e93137ab843bccfa334144abba3054ddacaf820a0620acb2e88bcf8f5b4216bb",
+  "diagnostic_only": true,
+  "independently_downloaded": false,
+  "note": "Intermediate source; TV job pending when recorded. Not a TCL or real provider acceptance."
+}
