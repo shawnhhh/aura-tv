@@ -746,7 +746,20 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("source-node-menu").performClick()
             compose.onNodeWithTag("source-node-$bNode").performClick()
             compose.waitUntil(10000) { details.count { it == "b:local-b" } > bReadsBeforeFailure }
-            compose.waitUntil(10000) { runCatching { compose.onNodeWithText("暂无可用线路").assertIsDisplayed() }.isSuccess }
+            try {
+                compose.waitUntil(10000) { runCatching {
+                    // Retry controls grow this lazy item after the 503. Bring
+                    // the actual message into view, not just the item's top.
+                    list.performScrollToNode(hasText("暂无可用线路"))
+                    compose.onNodeWithText("暂无可用线路").assertIsDisplayed()
+                }.isSuccess }
+            } catch (failure: Throwable) {
+                // This case has only our original local CMS fixture. Export
+                // its public IDs and semantics, never a real provider payload.
+                throw AssertionError("DETAIL_REBIND_FAILURE requests=${details.joinToString()}\n" +
+                    DiscoveryProtocolTrace.summary() + "\n" +
+                    compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12), failure)
+            }
             compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
             list.performScrollToNode(hasText("请选择片源线路"))
             compose.onNodeWithText("请选择片源线路").assertIsDisplayed()
