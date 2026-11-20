@@ -1,9 +1,11 @@
 'use strict';
-let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',personalConnection='',directoryPage=0,sourcePoll=0,toastTimer;
+let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',personalConnection='',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0;
 history.replaceState(null,'',location.pathname);
 const $=s=>document.querySelector(s);
 const status=$('#status');
-function toast(ok){
+function toast(ok,owner){
+ // A background request must never display a result in a different module or ended session.
+ if(!session||$('#manager').hidden||owner!==tab)return;
  const el=$('#module-toast');el.textContent=ok?'成功':'失败';el.hidden=false;
  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true},2400);
 }
@@ -16,16 +18,16 @@ async function call(path,data={}){
 }
 function busy(button,enabled){button.disabled=enabled}
 function button(parent,label,action){
- const b=document.createElement('button');b.type='button';b.textContent=label;
- b.onclick=async()=>{busy(b,true);try{await action()}catch(_){toast(false)}finally{busy(b,false)}};
+ const b=document.createElement('button'),owner=tab;b.type='button';b.textContent=label;
+ b.onclick=async()=>{busy(b,true);try{await action()}catch(_){toast(false,owner)}finally{busy(b,false)}};
  parent.append(b);return b;
 }
 function switchTab(target){
  tab=target;
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===target));
  for(const name of ['sources','nas','tmdb','live'])$('#'+name).hidden=name!==target;
- $('#module-toast').hidden=true;
- if(target==='nas')refreshPersonal().catch(()=>toast(false));
+ clearTimeout(toastTimer);$('#module-toast').hidden=true;
+ if(target==='nas')refreshPersonal().catch(()=>toast(false,'nas'));
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 $('#pair').onclick=async()=>{
@@ -48,42 +50,46 @@ $('#pair').onclick=async()=>{
 async function watchSource(id){
  const ticket=++sourcePoll,started=Date.now();
  while(session&&ticket===sourcePoll){
-  if(Date.now()-started>50000){toast(false);return}
+  if(Date.now()-started>50000){toast(false,'sources');return}
   const r=await call('/sources/status',{importId:id});
-  if(r.state==='ACTIVE'){toast(true);return}
-  if(['FAILED','SUPERSEDED'].includes(r.state)){toast(false);return}
+  if(!session||ticket!==sourcePoll)return;
+  if(r.state==='ACTIVE'){toast(true,'sources');return}
+  if(['FAILED','SUPERSEDED'].includes(r.state)){toast(false,'sources');return}
   await new Promise(r=>setTimeout(r,1100));
  }
 }
 $('#sources').onsubmit=async e=>{
  e.preventDefault();const b=e.target.querySelector('button[type=submit]');busy(b,true);
- try{const r=await call('/sources',{url:e.target.elements.url.value});await watchSource(r.importId)}
- catch(_){toast(false)}finally{busy(b,false)}
+ try{const r=await call('/sources',{url:e.target.elements.url.value});if(!r.importId)throw Error('MISSING_IMPORT_ID');await watchSource(r.importId)}
+ catch(_){toast(false,'sources')}finally{busy(b,false)}
 };
 $('#tmdb').onsubmit=async e=>{
  e.preventDefault();const b=e.target.querySelector('button[type=submit]');busy(b,true);
- try{await call('/tmdb',{token:e.target.elements.token.value});e.target.elements.token.value='';toast(true)}
- catch(_){toast(false)}finally{busy(b,false)}
+ try{await call('/tmdb',{token:e.target.elements.token.value});e.target.elements.token.value='';toast(true,'tmdb')}
+ catch(_){toast(false,'tmdb')}finally{busy(b,false)}
 };
 $('#live').onsubmit=async e=>{
  e.preventDefault();const b=e.target.querySelector('button[type=submit]');busy(b,true);
- try{await call('/live',{m3u:e.target.elements.m3u.value,epg:e.target.elements.epg.value});toast(true)}
- catch(_){toast(false)}finally{busy(b,false)}
+ try{await call('/live',{m3u:e.target.elements.m3u.value,epg:e.target.elements.epg.value});toast(true,'live')}
+ catch(_){toast(false,'live')}finally{busy(b,false)}
 };
 function switchProtocol(next){
  protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
  const f=$('#personal-edit');f.reset();f.elements.id.value='';f.elements.protocol.value=next==='SMB'?'smb':'https';
  f.elements.address.placeholder=next==='SMB'?'IP 或域名':'http:// 或 https://';
  $('#smb-port').hidden=next!=='SMB';f.elements.port.disabled=next!=='SMB';
- $('#personal-browser').hidden=true;
+ directoryBrowseToken++;$('#personal-browser').hidden=true;
 }
-document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(()=>toast(false))});
+document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(()=>toast(false,'nas'))});
 $('#personal-new').onclick=()=>switchProtocol(protocol);
 async function personal(path,data={}){
  const r=await call('/personal'+path,data);if(r.ok===false)throw Error('PERSONAL_FAILED');return r;
 }
 async function refreshPersonal(){
- const data=await personal('',{}),list=$('#personal-connections'),dirs=$('#personal-folders');
+ const ticket=++personalRefreshToken,requestedProtocol=protocol;
+ const data=await personal('',{});
+ if(ticket!==personalRefreshToken||requestedProtocol!==protocol||tab!=='nas')return;
+ const list=$('#personal-connections'),dirs=$('#personal-folders');
  list.replaceChildren();dirs.replaceChildren();
  for(const c of data.connections||[]){
   if((c.protocol==='smb')!==(protocol==='SMB'))continue;
@@ -97,8 +103,8 @@ async function refreshPersonal(){
   });
   button(actions,'浏览目录',async()=>{personalConnection=c.id;directoryPage=0;$('#personal-path').value=c.path||'';
    $('#personal-browser').hidden=false;await browsePersonal()});
-  button(actions,c.enabled?'停用':'启用',async()=>{await personal('/toggle',{id:c.id});await refreshPersonal();toast(true)});
-  button(actions,'删除',async()=>{if(!confirm('确定删除？'))return;await personal('/delete',{id:c.id,confirmed:true});await refreshPersonal();toast(true)});
+  button(actions,c.enabled?'停用':'启用',async()=>{await personal('/toggle',{id:c.id});await refreshPersonal();toast(true,'nas')});
+  button(actions,'删除',async()=>{if(!confirm('确定删除？'))return;await personal('/delete',{id:c.id,confirmed:true});await refreshPersonal();toast(true,'nas')});
   list.append(row);
  }
  for(const f of data.folders||[]){
@@ -106,7 +112,7 @@ async function refreshPersonal(){
   if(!c||(c.protocol==='smb')!==(protocol==='SMB'))continue;
   const row=document.createElement('div');row.className='folder';
   const name=document.createElement('span');name.textContent=f.path;row.append(name);
-  button(row,'移除',async()=>{if(!confirm('移除当前文件夹？'))return;await personal('/folder/delete',{id:f.id,confirmed:true});await refreshPersonal();toast(true)});
+  button(row,'移除',async()=>{if(!confirm('移除当前文件夹？'))return;await personal('/folder/delete',{id:f.id,confirmed:true});await refreshPersonal();toast(true,'nas')});
   dirs.append(row);
  }
 }
@@ -120,8 +126,8 @@ $('#personal-edit').onsubmit=async e=>{
   const result=await personal('/save',data);f.elements.id.value=result.id;f.elements.password.value='';
   personalConnection=result.id;directoryPage=0;
   $('#personal-path').value=result.path||'';$('#personal-browser').hidden=false;
-  await refreshPersonal();renderDirectories(result);toast(true);
- }catch(_){toast(false)}finally{busy(b,false)}
+  await refreshPersonal();renderDirectories(result);toast(true,'nas');
+ }catch(_){toast(false,'nas')}finally{busy(b,false)}
 };
 function renderDirectories(r){
  const el=$('#personal-directories');el.replaceChildren();
@@ -130,20 +136,26 @@ function renderDirectories(r){
  $('#personal-directory-next').disabled=(directoryPage+1)*100>=(r.total||0);
 }
 async function browsePersonal(){
- const r=await personal('/browse',{id:personalConnection,path:$('#personal-path').value,offset:directoryPage*100});
+ const ticket=++directoryBrowseToken,connection=personalConnection,path=$('#personal-path').value,offset=directoryPage*100;
+ const r=await personal('/browse',{id:connection,path,offset});
+ if(ticket!==directoryBrowseToken||connection!==personalConnection||path!==$('#personal-path').value||tab!=='nas')return;
  renderDirectories(r);
 }
-$('#personal-browse').onclick=()=>browsePersonal().catch(()=>toast(false));
+$('#personal-browse').onclick=()=>browsePersonal().catch(()=>toast(false,'nas'));
 $('#personal-parent').onclick=()=>{
  const v=$('#personal-path');v.value=v.value.split('/').filter(Boolean).slice(0,-1).join('/');directoryPage=0;
- browsePersonal().catch(()=>toast(false));
+ browsePersonal().catch(()=>toast(false,'nas'));
 };
-$('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(()=>toast(false))};
-$('#personal-directory-next').onclick=()=>{directoryPage++;browsePersonal().catch(()=>toast(false))};
+$('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(()=>toast(false,'nas'))};
+$('#personal-directory-next').onclick=()=>{directoryPage++;browsePersonal().catch(()=>toast(false,'nas'))};
 $('#personal-import').onclick=async()=>{
  try{await personal('/folder',{connection:personalConnection,path:$('#personal-path').value,type:'auto'});
-  await refreshPersonal();toast(true)}catch(_){toast(false)}
+  await refreshPersonal();toast(true,'nas')}catch(_){toast(false,'nas')}
 };
-$('#end').onclick=async()=>{try{await call('/end')}finally{session='';$('#manager').hidden=true;status.textContent='会话已结束'}};
+$('#end').onclick=async()=>{
+ sourcePoll++;directoryBrowseToken++;personalRefreshToken++;
+ try{await call('/end')}catch(_){/* The local session is closed even if the TV is unreachable. */}
+ finally{session='';clearTimeout(toastTimer);$('#module-toast').hidden=true;$('#manager').hidden=true;status.textContent='会话已结束'}
+};
 setInterval(()=>{if(session)call('/status').catch(()=>{})},45000);
 switchProtocol('WebDAV');
