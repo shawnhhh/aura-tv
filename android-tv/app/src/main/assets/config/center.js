@@ -10,16 +10,18 @@ function toast(ok,owner){
  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true},2400);
 }
 async function call(path,data={}){
+ const requestedSession=session;
  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Herrin-Session':session},
   body:JSON.stringify(data),cache:'no-store',credentials:'omit'});
  const json=await r.json().catch(()=>({}));
+ if(path!=='/pair'&&requestedSession!==session)throw Object.assign(Error('STALE_SESSION'),{stale:true});
  if(!r.ok)throw Error(json.code||('HTTP_'+r.status));
  return json;
 }
 function busy(button,enabled){button.disabled=enabled}
 function button(parent,label,action){
  const b=document.createElement('button'),owner=parent.closest('#nas')?'nas':tab;b.type='button';b.textContent=label;
- b.onclick=async()=>{busy(b,true);try{await action()}catch(_){toast(false,owner)}finally{busy(b,false)}};
+ b.onclick=async()=>{busy(b,true);try{await action()}catch(error){if(!error.stale)toast(false,owner)}finally{busy(b,false)}};
  parent.append(b);return b;
 }
 function switchTab(target){
@@ -61,17 +63,17 @@ async function watchSource(id){
 $('#sources').onsubmit=async e=>{
  e.preventDefault();const b=e.target.querySelector('button[type=submit]');busy(b,true);
  try{const r=await call('/sources',{url:e.target.elements.url.value});if(!r.importId)throw Error('MISSING_IMPORT_ID');await watchSource(r.importId)}
- catch(_){toast(false,'sources')}finally{busy(b,false)}
+ catch(error){if(!error.stale)toast(false,'sources')}finally{busy(b,false)}
 };
 $('#tmdb').onsubmit=async e=>{
  e.preventDefault();const b=e.target.querySelector('button[type=submit]');busy(b,true);
  try{await call('/tmdb',{token:e.target.elements.token.value});e.target.elements.token.value='';toast(true,'tmdb')}
- catch(_){toast(false,'tmdb')}finally{busy(b,false)}
+ catch(error){if(!error.stale)toast(false,'tmdb')}finally{busy(b,false)}
 };
 $('#live').onsubmit=async e=>{
  e.preventDefault();const b=e.target.querySelector('button[type=submit]');busy(b,true);
  try{await call('/live',{m3u:e.target.elements.m3u.value,epg:e.target.elements.epg.value});toast(true,'live')}
- catch(_){toast(false,'live')}finally{busy(b,false)}
+ catch(error){if(!error.stale)toast(false,'live')}finally{busy(b,false)}
 };
 function switchProtocol(next){
  protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
@@ -88,7 +90,7 @@ async function personal(path,data={}){
 async function refreshPersonal(){
  const ticket=++personalRefreshToken,requestedProtocol=protocol;
  const data=await personal('',{});
- if(ticket!==personalRefreshToken||requestedProtocol!==protocol||tab!=='nas')return;
+ if(!session||ticket!==personalRefreshToken||requestedProtocol!==protocol||tab!=='nas')return;
  const list=$('#personal-connections'),dirs=$('#personal-folders');
  list.replaceChildren();dirs.replaceChildren();
  for(const c of data.connections||[]){
@@ -127,14 +129,14 @@ $('#personal-edit').onsubmit=async e=>{
   // Clear submitted secrets even if the user changed modules while the request was pending.
   if(f.elements.password.value===data.password)f.elements.password.value='';
   // Commit is complete, but a late response must not overwrite a newly selected form.
-  if(requestedProtocol!==protocol||tab!=='nas')return;
+  if(!session||requestedProtocol!==protocol||tab!=='nas')return;
   f.elements.id.value=result.id;
   personalConnection=result.id;directoryPage=0;
   $('#personal-path').value=result.path||'';$('#personal-browser').hidden=false;
   await refreshPersonal();
-  if(requestedProtocol!==protocol||tab!=='nas')return;
+  if(!session||requestedProtocol!==protocol||tab!=='nas')return;
   renderDirectories(result);toast(true,'nas');
- }catch(_){toast(false,'nas')}finally{busy(b,false)}
+ }catch(error){if(!error.stale)toast(false,'nas')}finally{busy(b,false)}
 };
 function renderDirectories(r){
  const el=$('#personal-directories');el.replaceChildren();
@@ -157,11 +159,12 @@ $('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,director
 $('#personal-directory-next').onclick=()=>{directoryPage++;browsePersonal().catch(()=>toast(false,'nas'))};
 $('#personal-import').onclick=async()=>{
  try{await personal('/folder',{connection:personalConnection,path:$('#personal-path').value,type:'auto'});
-  await refreshPersonal();toast(true,'nas')}catch(_){toast(false,'nas')}
+  await refreshPersonal();toast(true,'nas')}catch(error){if(!error.stale)toast(false,'nas')}
 };
 $('#end').onclick=async()=>{
  sourcePoll++;directoryBrowseToken++;personalRefreshToken++;
- try{await call('/end')}catch(_){/* The local session is closed even if the TV is unreachable. */}
+ const ending=call('/end');session='';$('#manager').hidden=true;
+ try{await ending}catch(_){/* The local session is closed even if the TV is unreachable. */}
  finally{session='';clearTimeout(toastTimer);$('#module-toast').hidden=true;$('#manager').hidden=true;status.textContent='会话已结束'}
 };
 setInterval(()=>{if(session)call('/status').catch(()=>{})},45000);
