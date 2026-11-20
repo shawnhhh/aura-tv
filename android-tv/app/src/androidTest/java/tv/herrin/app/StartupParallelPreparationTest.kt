@@ -10,9 +10,10 @@ class StartupParallelPreparationTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun networkStartsBehindCurtainAndSurvivesCurtainRemoval() {
+        compose.mainClock.autoAdvance = false
         val startup = StartupPresentation()
         compose.setContent { StartupHost(startup) { /* Home deliberately waits for data. */ } }
-        compose.waitUntil(10_000) { startup.networkReady }
+        compose.waitUntil(10_000) { compose.mainClock.advanceTimeByFrame(); startup.networkReady }
         compose.onNodeWithTag("splash-curtain").assertExists()
         compose.runOnIdle {
             assertTrue(startup.prepareHome)
@@ -20,7 +21,7 @@ class StartupParallelPreparationTest {
             assertTrue(startup.showing)
             startup.homeReady = true
         }
-        compose.waitUntil(10_000) { !startup.showing }
+        compose.waitUntil(10_000) { compose.mainClock.advanceTimeBy(100); !startup.showing }
         compose.onNodeWithTag("splash").assertDoesNotExist()
         compose.runOnIdle { assertTrue(startup.networkReady) }
     }

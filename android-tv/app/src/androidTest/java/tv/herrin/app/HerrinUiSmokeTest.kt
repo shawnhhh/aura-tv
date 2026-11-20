@@ -203,7 +203,8 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings").assertIsDisplayed()
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithText("设置中心").assertIsDisplayed()
+        compose.onNodeWithText("设置中心").assertDoesNotExist()
+        compose.onNodeWithTag("phone-config-main").assertIsDisplayed()
         compose.onNodeWithTag("tvbox-warehouse-url").assertIsDisplayed()
         compose.onNodeWithTag("settings-module-直播源").performClick()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-live-direct-url"))
@@ -289,7 +290,8 @@ class HerrinUiSmokeTest {
     @Test fun homeDpadDownMovesFromNavigationToHeroThenFirstPoster() {
         focus("nav-首页")
         key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("play").assertIsFocused()
+        compose.onNodeWithTag("details").assertIsFocused()
+        compose.onNodeWithTag("play").assertDoesNotExist()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("card-orbit").assertIsFocused()
 
@@ -365,8 +367,8 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("my-manage-personal-sources").performClick()
         compose.onNodeWithTag("settings-list").assertExists()
         compose.onNodeWithTag("settings-list")
-            .performScrollToNode(hasTestTag("personal-field-host"))
-        compose.onNodeWithTag("personal-field-host").assertIsDisplayed()
+            .performScrollToNode(hasTestTag("personal-field-address"))
+        compose.onNodeWithTag("personal-field-address").assertIsDisplayed()
         compose.onNodeWithTag("cloud-webdav-save").assertDoesNotExist()
         capture("personal-storage-shortcut")
     }
@@ -474,11 +476,8 @@ class HerrinUiSmokeTest {
                 .performTextReplacement(server.url("/box.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(15000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
-            assertEquals(1, server.requestCount)
+            compose.awaitAppliedWarehouse()
+            assertEquals(2, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
@@ -516,8 +515,7 @@ http://example.org/live/channel.m3u8
             settings.performScrollToNode(hasTestTag("tvbox-live-direct-load"))
             compose.onNodeWithTag("tvbox-live-direct-load").performClick()
             compose.waitUntil(15000) {
-                runCatching { compose.onNodeWithTag("live-apply-feedback")
-                    .assertTextEquals("成功") }.isSuccess
+                Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxLiveSourceUrl == server.url("/live.m3u").toString()
             }
             key(KeyEvent.KEYCODE_BACK)
             focus("nav-直播"); key(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -545,15 +543,11 @@ http://example.org/live/channel.m3u8
                 .performTextReplacement(server.url("/spider-only.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(10000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
-            // A failed auto-import must show an actionable reason on the compact
-            // TV settings page, not only a status hidden in Advanced Settings.
-            settings.performScrollToNode(hasTestTag("compact-tvbox-status"))
-            compose.onNodeWithTag("compact-tvbox-status")
-                .assertTextContains("无需逐个检测", substring = true)
+            compose.awaitAppliedWarehouse(active = false)
+            // Valid pending authorization stays saved without developer status text.
+            compose.onNodeWithTag("compact-tvbox-status").assertDoesNotExist()
+            assertEquals(server.url("/spider-only.json").toString(),
+                Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
             key(KeyEvent.KEYCODE_BACK)
             compose.onNodeWithTag("source-empty-title").assertIsDisplayed()
             compose.onNodeWithText("蓝色边界").assertDoesNotExist()
@@ -701,7 +695,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(root)
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")}.isSuccess}
+            compose.awaitAppliedWarehouse()
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
@@ -740,7 +734,9 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
             failChosenB.set(false)
             list.performScrollToNode(hasTestTag("source-region"))
-            compose.onNodeWithText("重试").performClick()
+            val failedNode = HerrinDiscoveryNodes.id(root,
+                TvBoxSite("CMS B", false, server.url("/b").toString(), key = "b"), null)
+            compose.onNodeWithTag("source-retry-$failedNode").performClick()
             compose.waitUntil(10000) { runCatching { compose.onNodeWithText("线路 1").assertExists() }.isSuccess }
             compose.onNodeWithText("线路 1").performClick()
             compose.waitUntil(10000) { runCatching {

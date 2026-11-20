@@ -70,12 +70,8 @@ class M454CmsOneTapRecoveryInstrumentedTest {
                 .performTextReplacement(server.url("/config.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(12_000) {
-                runCatching {
-                    compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")
-                }.isSuccess
-            }
-            assertEquals(1, server.requestCount)
+            compose.awaitAppliedWarehouse()
+            assertEquals("Applying a warehouse validates config and activates only its selected CMS", 2, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
@@ -154,10 +150,7 @@ class M454CmsOneTapRecoveryInstrumentedTest {
                 .performTextReplacement(server.url("/warehouse.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(12_000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
+            compose.awaitAppliedWarehouse()
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()

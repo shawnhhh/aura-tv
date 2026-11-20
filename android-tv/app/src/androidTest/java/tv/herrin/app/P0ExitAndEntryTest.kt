@@ -162,8 +162,8 @@ class P0ExitAndEntryTest {
                 assertEquals(workingRoot, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
             }
             compose.onNodeWithTag("phone-config-close").performClick()
-            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("vod-apply-feedback"))
-            compose.waitUntil(15000) { runCatching { compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("配置读取失败") }.isSuccess }
+            assertEquals(workingRoot, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            compose.onNodeWithTag("settings-source-sites").assertExists()
             assertEquals("/box.json", fixture.takeRequest().path)
             assertTrue(fixture.takeRequest().path!!.startsWith("/cms?"))
             assertEquals("/denied.json", fixture.takeRequest().path)

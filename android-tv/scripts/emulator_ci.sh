@@ -64,6 +64,14 @@ text=Path('build/emulator-evidence/p0-regression-preflight.txt').read_text()
 assert 'OK (19 tests)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
 assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
 PY
+# Retest all 20 failures from run 44691313055 before the unchanged full suite.
+adb shell am instrument -w -r -e class 'tv.herrin.app.EmptySpiderHomeSelectionTest#advancedPreviewRetainsEmptyInitializedSource,tv.herrin.app.EmptySpiderHomeSelectionTest#selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken,tv.herrin.app.EmptySpiderHomeSelectionTest#sitePickerRetainsEmptyInitializedSourceAndRestoresItOnRecreate,tv.herrin.app.HerrinUiSmokeTest#myPersonalSourcesShortcutOpensStorageManager,tv.herrin.app.HerrinUiSmokeTest#sourceSiteExplanationIsConsumerFriendlyWithoutRuntimeWords,tv.herrin.app.HerrinUiSmokeTest#tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests,tv.herrin.app.HerrinUiSmokeTest#applyingLiveSourcePopulatesLiveTabWithoutHttpToggle,tv.herrin.app.HerrinUiSmokeTest#applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab,tv.herrin.app.HerrinUiSmokeTest#homeDpadDownMovesFromNavigationToHeroThenFirstPoster,tv.herrin.app.HerrinUiSmokeTest#spiderOnlySourceDoesNotSilentlyFallBackToDemoFilms,tv.herrin.app.HerrinUiSmokeTest#homeHeaderKeepsCompactSettingsAndExactlyTwoSourceInputs,tv.herrin.app.M438SingleWarehousePerformanceTest#singleWarehouseLoadsAllSitesAndDpadHasNoSevereStall,tv.herrin.app.M449SettingsNoIdleBurstTest#rapidSidebarKeysChangeDirectionWithoutOpeningIme,tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest#wrongSelectedMovieIsRejectedAndRetryUsesOnlyRealSelectedFilm,tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest#cmsListingWithHttpFirstAndHttpsSecondPlaysWithoutAnotherDetailRequest,tv.herrin.app.P0ExitAndEntryTest#phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply,tv.herrin.app.P0RecentPlaybackReturnTest#heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus,tv.herrin.app.P0RecentPlaybackReturnTest#failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan,tv.herrin.app.StartupParallelPreparationTest#networkStartsBehindCurtainAndSurvivesCurtainRemoval,tv.herrin.app.TmdbBrowsePageTest#nativeDpadTraversesIndependentRowsAndReturnsToTheSameColumn' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/h-resume-preflight.txt
+python3 - <<'PYRESUME'
+from pathlib import Path
+text=Path('build/emulator-evidence/h-resume-preflight.txt').read_text()
+assert 'OK (20 tests)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
+PYRESUME
 # Shell-owned evidence survives the package uninstall performed by AGP.
 adb shell rm -rf /data/local/tmp/herrin-test-evidence
 gradle :app:connectedDebugAndroidTest --stacktrace 2>&1 | tee build/emulator-evidence/instrumentation.log

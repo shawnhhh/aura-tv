@@ -42,7 +42,7 @@ class M449SettingsNoIdleBurstTest {
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
             KeyEvent.KEYCODE_DPAD_CENTER)
         compose.waitUntil(5_000) {
-            runCatching { compose.onNodeWithTag("screen-first").assertIsFocused() }.isSuccess
+            runCatching { compose.onNodeWithTag("phone-config-main").assertIsFocused() }.isSuccess
         }
 
         compose.onNodeWithTag("settings-module-影视源").performSemanticsAction(SemanticsActions.RequestFocus) { it() }

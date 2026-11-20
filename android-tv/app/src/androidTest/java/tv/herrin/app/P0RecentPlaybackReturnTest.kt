@@ -103,7 +103,7 @@ class P0RecentPlaybackReturnTest {
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(tag).assertIsDisplayed().assertIsFocused() }.isSuccess }
     }
 
-    @Test fun heroDetailsRemainsDetailsAndHeroPlayDirectlyDecodesThenRestoresButtonFocus() {
+    @Test fun heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus() {
         homeReady()
         compose.onNodeWithTag("details").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithTag("details").performClick()
@@ -111,7 +111,20 @@ class P0RecentPlaybackReturnTest {
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("details").assertIsFocused() }.isSuccess }
-        playAndReturnTo("play")
+        compose.onNodeWithTag("play").assertDoesNotExist()
+        compose.onNodeWithTag("details").performClick()
+        compose.waitUntil(10000) { runCatching {
+            compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-play-cta"))
+            compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+        }.isSuccess }
+        compose.onNodeWithTag("detail-play-cta").performClick()
+        compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("player-root-focus").assertIsDisplayed() }.isSuccess }
+        compose.waitUntil(30000) { HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_FIRST_FRAME") }
+        assertResumedPosition()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess }
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("details").assertIsFocused() }.isSuccess }
     }
 
     @Test fun myContinueWatchingDirectlyDecodesAndReturnsToTheSameCard() {
@@ -125,7 +138,8 @@ class P0RecentPlaybackReturnTest {
     @Test fun failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan() {
         discoveryFails.set(true)
         homeReady()
-        compose.onNodeWithTag("play").performClick()
+        compose.onNodeWithTag("play").assertDoesNotExist()
+        compose.onNodeWithTag("details").performClick()
         compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("film-detail-list").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithTag("one-tap-loading").assertDoesNotExist()
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()

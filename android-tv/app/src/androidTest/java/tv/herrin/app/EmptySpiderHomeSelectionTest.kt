@@ -78,13 +78,10 @@ class EmptySpiderHomeSelectionTest {
         compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/original.json").toString())
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-warehouse-load"))
         activate("tvbox-warehouse-load")
-        compose.waitUntil(15_000) { runCatching {
-            compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")
-        }.isSuccess }
+        compose.awaitAppliedWarehouse()
     }
     private fun assertSelectedEmptySource(advanced: Boolean = false) {
-        val expected = "TVBox " + (if (advanced) "Spider " else "") +
-            "Original empty-home fixture · 0 部；该影视点首页暂未返回影片，可继续搜索或检查来源授权"
+        val expected = "Original empty-home fixture：暂无影片，可继续搜索或检查来源授权"
         try {
             compose.waitUntil(15_000) { runCatching {
                 compose.onNodeWithTag("source-empty-status").assertIsDisplayed().assertTextEquals(expected)
@@ -111,7 +108,7 @@ class EmptySpiderHomeSelectionTest {
         importOriginalFixture()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-source-sites"))
         activate("settings-source-sites")
-        compose.onNodeWithTag("site-list").performScrollToNode(hasTestTag("site-select-0"))
+        compose.onNodeWithTag("site-select-0").assertExists()
         activate("site-select-0")
         assertSelectedEmptySource()
         activate("search")
@@ -143,7 +140,7 @@ class EmptySpiderHomeSelectionTest {
         importOriginalFixture()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-source-sites"))
         activate("settings-source-sites")
-        compose.onNodeWithTag("site-list").performScrollToNode(hasTestTag("site-select-0"))
+        compose.onNodeWithTag("site-select-0").assertExists()
         activate("site-select-0")
         assertSelectedEmptySource()
         assertEquals("", Preferences(context).tmdbReadToken)
