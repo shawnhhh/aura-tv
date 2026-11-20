@@ -68,6 +68,8 @@ private fun TmdbBrowsePageRails(
         specs.forEach { s -> add(s.key to state.row(s).entries.map { it.film }) }
     }
     val currentLists by rememberUpdatedState(lists)
+    // Restore once on entering this page, never on every normal focus change.
+    var restorePending by remember { mutableStateOf(restoreFocus) }
     val hasRecent = page == TmdbBrowsePage.HOME && recent.isNotEmpty()
     Column(Modifier.fillMaxWidth().testTag("tmdb-page-" + page.name.lowercase()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         lists.forEachIndexed { rowIndex, (key, films) ->
@@ -94,8 +96,8 @@ private fun TmdbBrowsePageRails(
                         DisposableEffect(tag) {
                             onDispose { state.attachedPosters.remove(tag) }
                         }
-                        LaunchedEffect(tag, restoreFocus) {
-                            if (tag == restoreFocus) {
+                        LaunchedEffect(tag, restorePending) {
+                            if (tag == restorePending) {
                                 // Data/cached IDs can outlive a LazyRow item's focus target.
                                 // Never let a detached requester crash the main UI coroutine.
                                 repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
@@ -164,7 +166,7 @@ private fun TmdbBrowsePageRails(
                                     }
                                     true
                                 } else false
-                            }, reduced, onFocus = { requestedForFocus = null; focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
+                            }, reduced, onFocus = { restorePending = null; requestedForFocus = null; focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
                     }
                     if (spec != null && status != null && (status.error || status.unknown > 0)) item(key = "retry") {
                         TvButton("重试此栏目", Modifier.testTag("tmdb-retry-$key"), reduced = reduced, onFocus = { focusedPoster = null }) {
