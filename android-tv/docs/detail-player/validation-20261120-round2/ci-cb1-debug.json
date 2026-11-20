@@ -1,0 +1,15 @@
+{
+  "source_sha": "cb1d771d6b4b94d21804411772085f033ca13368",
+  "run_id": 44711296805,
+  "debug_job_id": 136203384349,
+  "debug_result": "success",
+  "samba_preflight": "success (six unchanged tests)",
+  "jvm": { "tests": 788, "failures": 0, "errors": 0, "skipped": 0 },
+  "lint_and_debug": "success",
+  "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44711296805/artifacts/14618341123",
+  "apk_bytes": 27086538,
+  "apk_sha256_from_ci_log": "d9d257db489eb0616150097c786f7059e9ca204d0b72af77c7b2e7e1c28d1945",
+  "diagnostic_only": true,
+  "independently_downloaded": false,
+  "note": "Exact checkout SHA and hash sidecars included by CI. No original kernel adapter, real provider or TCL acceptance."
+}

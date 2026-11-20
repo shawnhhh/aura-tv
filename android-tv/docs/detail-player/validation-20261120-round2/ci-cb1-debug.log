@@ -1,0 +1,9 @@
+2026-11-20T09:32:40.2341143Z BUILD SUCCESSFUL in 1m 31s
+2026-11-20T09:32:40.6142886Z ##[group]Run gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx3g -Pkotlin.compiler.execution.strategy=in-process :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+2026-11-20T09:32:40.6144257Z [36;1mgradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx3g -Pkotlin.compiler.execution.strategy=in-process :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace[0m
+2026-11-20T09:36:31.1294237Z > Task :app:lintDebug
+2026-11-20T09:37:40.3090523Z BUILD SUCCESSFUL in 4m 59s
+2026-11-20T09:37:40.7141461Z | JVM | 788 | 0 | 0 | 0 |
+2026-11-20T09:37:40.7156196Z - `app-debug.apk`：27086538 字节；SHA-256 `d9d257db489eb0616150097c786f7059e9ca204d0b72af77c7b2e7e1c28d1945`
+2026-11-20T09:37:42.5147329Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44711296805/artifacts/14618341123
+2026-11-20T09:37:43.7719632Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44711296805/artifacts/14617931850
