@@ -171,7 +171,7 @@ class HerrinSplashTest {
         val zero=pixels(frames.getValue(0));val full=pixels(frames.getValue(3100))
         val partial=pixels(frames.getValue(450));val dim=pixels(frames.getValue(4300));val end=pixels(frames.getValue(6700))
         assertTrue("No dim wordmark prepaint",zero.all{red(it)==0})
-        val width=frames.getValue(3600).width
+        val width=frames.getValue(3100).width // Same captured full-white frame used by the pixel mask.
         fun mean(colors:IntArray,from:Float,to:Float):Double {
             val indices=full.indices.filter{red(full[it])>230 && (it%width)*960f/width in from..to}
             assertTrue(indices.isNotEmpty())

@@ -46,7 +46,7 @@ for label, classes in groups.items():
     skipped=sum(case.find('skipped') is not None for case in cases)
     lines.append(f'| {label} | {len(cases)} | {failed} | {skipped} |')
 lines += ['', 'SMB 正向用例连接受控、认证、签名的真实 Samba SMB2/SMB3 服务；稀疏 5GiB 文件只证明偏移读取，不能冒充真实 5GiB MKV 解码或 4K 吞吐。',
-          '启动 1800ms 显现 + 2400ms 同步呼吸 + 340ms 淡出是正常动画设计；减少动态/用户明确跳过例外。Compose 驱动的 ABBA 不能冒充冷启动实际动画时长。',
+          '启动 2250ms 羽化显影 + 850ms 增亮 + 2400ms 同步呼吸 + 340ms 淡出是正常动画设计；减少动态/用户明确跳过例外。Compose 驱动的 ABBA 不能冒充冷启动实际动画时长。',
           'TLS 自签名身份持久化不等于 Safari 自动信任。真实 TCL / iPhone / 家庭 NAS / 第三方私有节点仍待真机验收。']
 lines += ['', '当前作业未执行的测试组显示 0；完整结论须联合 Debug 和 Emulator 两个作业。', '',
           '## APK 工件', '',

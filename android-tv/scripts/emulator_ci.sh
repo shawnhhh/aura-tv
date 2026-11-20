@@ -48,6 +48,15 @@ assert 'OK (1 test)' in text and 'INSTRUMENTATION_CODE: -1' in text, text
 assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text, text
 PY
 fi
+# Verify the failed V13 frame-reference case before the retained 19-test and
+# unfiltered suites; every original pixel/brightness assertion remains active.
+adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinSplashTest#centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/v13-frame-preflight.txt
+python3 - <<'PYV13'
+from pathlib import Path
+text=Path('build/emulator-evidence/v13-frame-preflight.txt').read_text()
+assert 'OK (1 test)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
+PYV13
 adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinSplashTest,tv.herrin.app.P0CachedHomeHeroTest,tv.herrin.app.P0CmsCandidateParserTest,tv.herrin.app.P0SpiderDeadlineRecoveryTest,tv.herrin.app.P0SourceSearchLifecycleTest,tv.herrin.app.HerrinUiSmokeTest#onlineSearchProtocolEmptyAndRemoteResult,tv.herrin.app.HerrinUiSmokeTest#advancedMetadataFiltersOpenInsideSearchAndWorkWithDpad,tv.herrin.app.HerrinUiSmokeTest#searchCategoryAndSortAreOperableByRemoteWithProtocolFixture' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/p0-regression-preflight.txt
 python3 - <<'PY'
 from pathlib import Path
