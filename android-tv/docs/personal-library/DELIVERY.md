@@ -1,5 +1,7 @@
 # SMB / WebDAV personal library — implementation and verification record
 
+> 最新 H-001～H-009 状态见 [主台账](../detail-player/H-001-H-009-20261120.md)：源码 3e1da724，完整 JVM 790/790、Lint/Debug 通过，TV/API31/ABBA 等待实际结果；本轮 APK 仅供诊断。下方此前里程碑、APK 与测试绑定其注明的历史源码。
+
 Branch: `codex/herrin-p0-live-playback-20261110`; existing PR #85 remains Draft. Base inspected before edits: `f4e3c092b53efaf0b61161fd692d0e3b8ac22177`. No merge; no second player, cloud gateway, platform-specific cloud login or LAN discovery.
 
 ## Implemented
