@@ -29,8 +29,14 @@ if ! grep -q 'HERRIN' "$evidence/home.xml"; then
     echo "FAIL: HERRIN not visible in emulator UI hierarchy"
     exit 1
 fi
-if ! grep -q 'text="详情"' "$evidence/home.xml" || ! grep -q 'text="播放"' "$evidence/home.xml"; then
+if ! grep -q 'text="详情"' "$evidence/home.xml"; then
     echo "FAIL: expected home detail action absent from emulator UI hierarchy"
+    exit 1
+fi
+# H-003: browsing exposes Details only. Real playback remains tested on the
+# detail/player surfaces by the unfiltered instrumentation suite.
+if grep -q 'text="播放"' "$evidence/home.xml"; then
+    echo "FAIL: removed Hero play action unexpectedly returned"
     exit 1
 fi
 
