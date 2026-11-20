@@ -50,7 +50,7 @@ if [[ -z "$samba_root" ]] && ! id herrinfixture >/dev/null 2>&1; then
 fi
 printf '%s = herrinfixture\n' "$fixture_user" > "$fixture_root/users.map"
 for variant in 2 3; do
-  mkdir -p "$fixture_root/state$variant" "$fixture_root/run$variant" "$fixture_root/private$variant" "$fixture_root/cache$variant"
+  mkdir -p "$fixture_root/state$variant" "$fixture_root/run$variant" "$fixture_root/private$variant" "$fixture_root/cache$variant" "$fixture_root/log$variant"
   if [[ "$variant" == 3 ]]; then minimum=SMB3_00; maximum=SMB3_11; port=1445; encryption=required; else minimum=SMB2_02; maximum=SMB2_10; port=1446; encryption=desired; fi
   cat > "$fixture_root/smb$variant.conf" <<CONFIG
 [global]
@@ -92,11 +92,11 @@ CONFIG
 if [[ -n "$samba_root" ]]; then
   python3 - "$fixture_root/auth/smbpasswd" "$fixture_user" <<'PYPASS'
 from pathlib import Path
-import os, subprocess, sys
+import os, subprocess, sys, time
 # Standard Samba fixture passdb; the server performs real NTLM authentication.
 nt = subprocess.check_output(['openssl','dgst','-md4','-provider','legacy','-binary'],
     input='OriginalFixtureOnly123'.encode('utf-16le')).hex().upper()
-p=Path(sys.argv[1]); p.write_text(f'{sys.argv[2]}:{os.getuid()}:{"X"*32}:{nt}:[U          ]:LCT-00000000:\n')
+p=Path(sys.argv[1]); p.write_text(f'{sys.argv[2]}:{os.getuid()}:{"X"*32}:{nt}:[U          ]:LCT-{int(time.time()):08X}:\n')
 p.chmod(0o600)
 PYPASS
 else
