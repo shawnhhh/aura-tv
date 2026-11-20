@@ -18,7 +18,7 @@ async function call(path,data={}){
 }
 function busy(button,enabled){button.disabled=enabled}
 function button(parent,label,action){
- const b=document.createElement('button'),owner=tab;b.type='button';b.textContent=label;
+ const b=document.createElement('button'),owner=parent.closest('#nas')?'nas':tab;b.type='button';b.textContent=label;
  b.onclick=async()=>{busy(b,true);try{await action()}catch(_){toast(false,owner)}finally{busy(b,false)}};
  parent.append(b);return b;
 }
@@ -78,7 +78,7 @@ function switchProtocol(next){
  const f=$('#personal-edit');f.reset();f.elements.id.value='';f.elements.protocol.value=next==='SMB'?'smb':'https';
  f.elements.address.placeholder=next==='SMB'?'IP 或域名':'http:// 或 https://';
  $('#smb-port').hidden=next!=='SMB';f.elements.port.disabled=next!=='SMB';
- directoryBrowseToken++;$('#personal-browser').hidden=true;
+ directoryBrowseToken++;$('#personal-directories').replaceChildren();$('#personal-browser').hidden=true;
 }
 document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(()=>toast(false,'nas'))});
 $('#personal-new').onclick=()=>switchProtocol(protocol);
