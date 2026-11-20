@@ -1,7 +1,8 @@
 package tv.herrin.app
 
 /** Reusable feathered reveal shaders and fixed vector paths; no full-screen bitmap/layer per frame. */
-internal class WordmarkRenderer {
+internal class WordmarkRenderer : AutoCloseable {
+    override fun close() { paint.shader = null; path.reset(); lm.reset(); rm.reset() }
     private val path=requireNotNull(androidx.core.graphics.PathParser.createPathFromPathData(PATH))
     private val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{color=android.graphics.Color.WHITE}
     private val left=android.graphics.LinearGradient(0f,0f,80f,0f,android.graphics.Color.TRANSPARENT,android.graphics.Color.WHITE,android.graphics.Shader.TileMode.CLAMP)

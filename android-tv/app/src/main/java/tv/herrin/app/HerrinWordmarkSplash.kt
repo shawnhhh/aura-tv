@@ -57,6 +57,7 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     val elapsed = remember { mutableFloatStateOf(0f) }
     var skipped by remember { mutableStateOf(false) }
     val renderer=remember{WordmarkRenderer()}
+    DisposableEffect(renderer) { onDispose { renderer.close() } }
     // Input callbacks must complete in the same dispatch, even when a test or
     // the system pauses the animation clock. Effects and held OK share one gate.
     val ready=remember { booleanArrayOf(false) }

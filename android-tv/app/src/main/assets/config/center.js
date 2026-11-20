@@ -1,5 +1,5 @@
 'use strict';
-let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',personalConnection='',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0;
+let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',personalConnection='',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0,formRevision=0;
 history.replaceState(null,'',location.pathname);
 const $=s=>document.querySelector(s);
 const status=$('#status');
@@ -68,7 +68,8 @@ $('#sources').onsubmit=async e=>{
 };
 $('#tmdb').onsubmit=async e=>{
  e.preventDefault();const b=e.target.querySelector('button[type=submit]');busy(b,true);
- try{await call('/tmdb',{token:e.target.elements.token.value});e.target.elements.token.value='';toast(true,'tmdb')}
+ const token=e.target.elements.token,submitted=token.value;
+ try{await call('/tmdb',{token:submitted});if(token.value===submitted)token.value='';toast(true,'tmdb')}
  catch(error){if(!error.stale)toast(false,'tmdb')}finally{busy(b,false)}
 };
 $('#live').onsubmit=async e=>{
@@ -77,7 +78,7 @@ $('#live').onsubmit=async e=>{
  catch(error){if(!error.stale)toast(false,'live')}finally{busy(b,false)}
 };
 function switchProtocol(next){
- moduleEpoch++;protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
+ moduleEpoch++;formRevision++;protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
  const f=$('#personal-edit');f.reset();f.elements.id.value='';f.elements.protocol.value=next==='SMB'?'smb':'https';
  f.elements.address.placeholder=next==='SMB'?'IP 或域名':'http:// 或 https://';
  $('#smb-port').hidden=next!=='SMB';f.elements.port.disabled=next!=='SMB';
@@ -119,8 +120,9 @@ async function refreshPersonal(){
   dirs.append(row);
  }
 }
+$('#personal-edit').addEventListener('input',()=>{formRevision++});
 $('#personal-edit').onsubmit=async e=>{
- e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),requestedProtocol=protocol,requestedModule=moduleEpoch;busy(b,true);
+ e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),requestedProtocol=protocol,requestedModule=moduleEpoch,requestedForm=formRevision;busy(b,true);
  try{
   const data=Object.fromEntries(new FormData(f));
   if(requestedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
@@ -130,12 +132,12 @@ $('#personal-edit').onsubmit=async e=>{
   // Clear submitted secrets even if the user changed modules while the request was pending.
   if(f.elements.password.value===data.password)f.elements.password.value='';
   // Commit is complete, but a late response must not overwrite a newly selected form.
-  if(!session||requestedModule!==moduleEpoch||requestedProtocol!==protocol||tab!=='nas')return;
+  if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
   f.elements.id.value=result.id;
   personalConnection=result.id;directoryPage=0;
   $('#personal-path').value=result.path||'';$('#personal-browser').hidden=false;
   await refreshPersonal();
-  if(!session||requestedModule!==moduleEpoch||requestedProtocol!==protocol||tab!=='nas')return;
+  if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
   renderDirectories(result);toast(true,'nas');
  }catch(error){if(!error.stale&&requestedModule===moduleEpoch)toast(false,'nas')}finally{busy(b,false)}
 };

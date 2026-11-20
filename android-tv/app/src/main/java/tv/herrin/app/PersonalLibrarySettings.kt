@@ -41,17 +41,26 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
         if(busy) return
         busy = true
         val requestedPage = browsePage
+        val requestedInput = input.toString()
+        val requestedPath = path
+        val requestedConnection = selected
         scope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { api.handle(route, if(browse) JSONObject(value.toString()).put("offset", requestedPage * 100) else value) }
                 status = result.optString("error", result.optString("result", "已保存"))
                 toast = if (result.optBoolean("ok", true)) "成功" else "失败"
                 if(result.optBoolean("ok", true)) {
-                    if(browse) browser = result
+                    if(browse && requestedPath == path && requestedConnection == selected) browser = result
                     if(route == "/personal/search") matches = result
                     if(route == "/personal/save") {
-                        selected = result.getString("id"); path = result.getString("path"); browsePage = 0; browser = result
-                        input = JSONObject(input.toString()).put("id", selected).also { it.remove("password") }
+                        val sameForm = input.toString() == requestedInput && path == requestedPath
+                        if(input.optString("password") == value.optString("password")) {
+                            input = JSONObject(input.toString()).also { it.remove("password") }
+                        }
+                        if(sameForm) {
+                            selected = result.getString("id"); path = result.getString("path"); browsePage = 0; browser = result
+                            input = JSONObject(input.toString()).put("id", selected)
+                        }
                     }
                     data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
                     onChanged()
@@ -87,12 +96,12 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
             Text(c.getString("name") + (if(c.optBoolean("enabled")) " · 启用" else " · 停用"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton("编辑") { input = JSONObject(c.toString()); selected = c.getString("id"); path = c.optString("path"); browsePage = 0; browser = JSONObject() }
-                TvButton("浏览目录") { selected = c.getString("id"); browsePage = 0; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+                TvButton("浏览目录") { selected = c.getString("id"); path = c.optString("path"); browser = JSONObject(); browsePage = 0; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
                 TvButton("启用/停用") { execute("/personal/toggle", JSONObject().put("id", c.getString("id"))) }
                 TvButton("删除") { confirm = "/personal/delete" to c.getString("id") }
             }
         }
-        TvButton("新建连接") { input = JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else "443"); selected = ""; path = "" }
+        TvButton("新建连接") { input = JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else "443"); selected = ""; path = ""; browser = JSONObject(); browsePage = 0 }
         val fields = if (tab == "SMB")
             listOf("name" to "名称", "host" to "地址", "port" to "端口",
                 "username" to "用户名", "password" to "密码")
@@ -123,6 +132,9 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
         val folders = data.optJSONArray("folders")
         if(folders != null) for(i in 0 until folders.length()) {
             val f = folders.getJSONObject(i)
+            val owner = (0 until (connections?.length() ?: 0)).map { connections!!.getJSONObject(it) }
+                .firstOrNull { it.optString("id") == f.optString("connection") }
+            if(owner == null || (owner.optString("protocol") == "smb") != (tab == "SMB")) continue
             Text(f.getString("path"))
             Row {
                 TvButton("刷新") { execute("/personal/refresh", JSONObject().put("id", f.getString("id"))) }
