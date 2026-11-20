@@ -61,3 +61,8 @@ Downloaded the artifact, verified its `SOURCE_COMMIT.txt` equals the source SHA 
 The complete path/status manifest from inspected base `f4e3c09` is [changed-files.txt](changed-files.txt). No root Pages assets changed; no entire production source file was deleted. Standalone cloud code was removed from shared files. The legacy acceptance-report sentence about no P0 APK upload predates the explicit diagnostic-artifact upload; use the actual artifact metadata and source/hash binding.
 
 Final documentation commit changes only this ledger and its path manifest. The APK and all executable-code test results remain bound to source `082f1fa7`; documentation changes do not substitute a different APK.
+
+
+## 2026-11-20 H 系列续开发
+
+本轮修复 TV SMB/WebDAV 协议表单与请求 scope 的生命周期隔离，协议按钮 DOWN 到名称输入，完整 URL 输入上限，取消传播与轮询失败收尾；去除连接/文件夹技术状态正文。手机退出即时失效会话，模块离开再返回仍丢弃旧请求反馈，保留已提交密码清理。完整最新提交与测试、环境阻塞见 [H-001～H-009 台账](../detail-player/H-001-H-009-20261120.md)。本节不覆盖上方历史测试绑定，也不将历史 APK 当成本轮验收 APK。

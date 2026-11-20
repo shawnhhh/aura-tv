@@ -86,3 +86,10 @@
 **验证状态：尚未实际运行更新后的 Chromium/Playwright 脚本或 Android CI**。GitHub 文件重新读取的静态锚点检查通过，但不能用来代替 JavaScript 语法、浏览器交互或 Android 验收。此前串行 CI 44288936324 已取消，不再沿用历史“正在执行”文案；基线通过的 JVM/Lint/Debug 结果不能当成此批代码的通过证据。
 
 后续集中验证顺序：先运行 node --check android-tv/app/src/main/assets/config/center.js、node --check android-tv/scripts/phone_center_browser_test.cjs，再执行 Playwright 模拟 API 回归；随后统一 Android JVM/Lint/Debug、完整 TV instrumentation/启动/ABBA，并进行真实 iPhone Safari→TV 扫码与 HTTP/HTTPS 影视仓、个人 NAS 导入验证。真实 FongMi/Media3 节点首帧及 TCL 4K/DV/HDR 仍属独立 P0 未完成事项。
+
+
+## H-001～H-009 · 2026-11-20 本轮串行续开发
+
+本轮以 `60ada070` 为基线核对已有 PR #85，保留已完成 UI 与配置导入修改。最新逐项原始问题、实际修复、文件、提交、测试与阻塞见 [九项问题台账](H-001-H-009-20261120.md)。重点增加选集映射按原 VOD 隔离、V13 首帧后并行网络、Lazy 焦点挂载门槛、失败详情独立重试、手机模块/会话迟到响应隔离及 TV WebDAV 名称焦点/协议状态隔离。没有将代码完成标为已验收。
+
+当前无物理 TV、已连接 Android 测试设备或 `/dev/kvm`。原内核 adapter 编译依赖门禁、真实第三方 Spider 的 playerContent/首帧、阿里云盘 WebDAV 和同设备性能仍需单独验证。历史通过和 mock API 不能证明这些项目通过。PR 保持 Draft。
