@@ -133,8 +133,12 @@ internal class HerrinKernelPages(private val runtime: HerrinKernelRuntime) {
         // A detail refresh replaces the selectable episode set atomically on
         // the main-thread gateway. Old Film objects cannot resurrect removed
         // netdisk selections, even if their site session remains authorized.
-        selections.clear()
-        coordinates.clear()
+        // Refresh only this movie. Background detail discovery may project
+        // another VOD while the selected movie still owns valid episode tickets.
+        latest[movie.handle()]?.playbackEpisodes.orEmpty().flatMap { it.lines }.forEach {
+            selections.remove(it.id)
+            coordinates.remove(it.id)
+        }
         val episodes = linkedMapOf<Int, MutableList<PlaybackLine>>()
         val names = mutableMapOf<Int, String>()
         detail.lines().forEach { line -> line.episodes().forEach { episode ->
