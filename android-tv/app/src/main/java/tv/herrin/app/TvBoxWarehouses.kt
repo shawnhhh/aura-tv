@@ -123,6 +123,17 @@ internal sealed interface TvBoxConfig {
 }
 
 internal object TvBoxUrl {
+    fun resolve(raw: String, origin: String): String? = normalize(raw, true) ?: runCatching {
+        val reference = URI(raw.trim())
+        if (reference.isAbsolute || reference.rawUserInfo != null || reference.rawFragment != null || raw.isBlank()) null
+        else normalize(URI(origin).resolve(reference).toString(), true)
+    }.getOrNull()
+
+    fun resolveJar(raw: String, origin: String): String? {
+        if(raw.isBlank()) return null
+        val target = raw.substringBefore(';')
+        return resolve(target, origin)?.let { it + raw.removePrefix(target) }
+    }
     /** Normalize internationalized domain names (e.g. 饭太硬.net) for HTTP(S). */
     fun normalize(raw: String, allowHttp: Boolean = false): String? {
         return try {
@@ -172,7 +183,7 @@ internal object TvBoxConfigParser {
             for (i in 0 until minOf(urls.length(), MAX_ENTRIES)) {
                 val entry = urls.optJSONObject(i)
                 if (entry == null) { ignored++; continue }
-                val url = TvBoxUrl.normalize(entry.optString("url"), allowHttp = true)
+                val url = TvBoxUrl.resolve(entry.optString("url"), origin)
                 if (url == null || !seen.add(url)) { ignored++; continue }
                 val name = entry.optString("name").trim().take(48).ifBlank { "仓库 ${entries.size + 1}" }
                 entries.add(TvBoxWarehouse(name, url))
@@ -188,7 +199,7 @@ internal object TvBoxConfigParser {
                     val title = site.optString("name").trim().take(64)
                     if (title.isBlank()) null else {
                         val api = site.optString("api").trim()
-                        val direct = TvBoxUrl.normalize(api, allowHttp = true)
+                        val direct = if (api.startsWith("csp_") || api.startsWith("node:")) null else TvBoxUrl.resolve(api, origin)
                         // TVBox drpy/JS rules are script definitions, not JSON CMS endpoints.
                         // Fetching them with ac=detail mislabels a script as a playable catalog.
                         val script = if (api.startsWith("node:") &&
@@ -199,12 +210,14 @@ internal object TvBoxConfigParser {
                             } }.getOrDefault(false)
                         }
                         val cms = direct?.takeUnless { script != null }
-                        val extension = site.opt("ext")?.let { if (it is String) it else it.toString() }.orEmpty()
+                        val rawExtension = site.opt("ext")?.let { if (it is String) it else it.toString() }.orEmpty()
+                        val extension = if(rawExtension.startsWith("./") || rawExtension.startsWith("../") || rawExtension.startsWith('/'))
+                            TvBoxUrl.resolve(rawExtension, origin) ?: rawExtension else rawExtension
                         TvBoxSite(title, api.isNotBlank() && cms == null, cms,
                             key = site.optString("key").take(90).ifBlank { "site_$i" },
                             spiderApi = api.takeIf { it.startsWith("csp_") && it.matches(Regex("csp_[A-Za-z0-9_]{1,64}")) },
                             extension = extension.take(64_000),
-                            jar = site.optString("jar").takeIf { it.isNotBlank() },
+                            jar = TvBoxUrl.resolveJar(site.optString("jar"), origin),
                             scriptApi = script,
                             headers = TvBoxHeaderCodec.decode(site.optJSONObject("header")),
                             click = site.optString("click").take(4_096), apiType = site.optInt("type", 1),
@@ -217,7 +230,7 @@ internal object TvBoxConfigParser {
                 liveJson.optJSONObject(i)?.let { live ->
                     val title = live.optString("name").trim().take(64)
                     if (title.isBlank()) null else {
-                        val address = live.optString("url")
+                        val address = TvBoxUrl.resolve(live.optString("url"), origin).orEmpty()
                         val playlist = TvBoxUrl.normalize(address)?.takeIf {
                             URI(it).path.lowercase().endsWith(".m3u") || URI(it).path.lowercase().endsWith(".m3u8")
                         }
@@ -227,7 +240,7 @@ internal object TvBoxConfigParser {
                     }
                 }
             }
-            val spider = root.optString("spider").takeIf { it.isNotBlank() }
+            val spider = TvBoxUrl.resolveJar(root.optString("spider"), origin)
             val flagsJson = root.optJSONArray("flags") ?: JSONArray()
             val flags = (0 until minOf(flagsJson.length(), 128)).mapNotNull { index ->
                 flagsJson.optString(index).trim().take(80).takeIf { it.isNotBlank() }
@@ -238,7 +251,7 @@ internal object TvBoxConfigParser {
                 val type = item.optInt("type", 0)
                 if (type !in 0..4) return@mapNotNull null
                 // type 4 is an upstream supervisor with no individual URL.
-                val address = TvBoxUrl.normalize(item.optString("url"), allowHttp = true)
+                val address = TvBoxUrl.resolve(item.optString("url"), origin)
                 if (type in 0..1 && address == null) return@mapNotNull null
                 if (type in 2..3 && item.optString("url").isBlank()) return@mapNotNull null
                 val ext = item.optJSONObject("ext")
@@ -316,14 +329,16 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
     private fun cached(url: String): TvBoxConfig? = runCatching {
         val file = cacheFile(url) ?: return@runCatching null
         if (!file.isFile || file.length() !in 1..1_048_576) return@runCatching null
-        when (val parsed = TvBoxConfigParser.parse(file.readText(Charsets.UTF_8), url)) {
+        val origin = File(file.parentFile, file.name + ".origin").takeIf { it.isFile && it.length() <= 2048 }
+            ?.readText(Charsets.UTF_8)?.let { TvBoxUrl.normalize(it, true) } ?: url
+        when (val parsed = TvBoxConfigParser.parse(file.readText(Charsets.UTF_8), origin)) {
             is TvBoxConfig.Single -> parsed.copy(fromCache = true)
             is TvBoxConfig.Warehouses -> parsed.copy(fromCache = true)
             else -> null
         }
     }.getOrNull()
 
-    private fun save(url: String, text: String) {
+    private fun save(url: String, text: String, origin: String = url) {
         val file = cacheFile(url) ?: return
         file.parentFile?.mkdirs()
         val temp = File(file.parentFile, "${file.name}.tmp")
@@ -332,6 +347,7 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
             file.writeText(text, Charsets.UTF_8)
             temp.delete()
         }
+        File(file.parentFile, file.name + ".origin").writeText(origin, Charsets.UTF_8)
     }
 
     /** Explicit import from a user-controlled backup, useful when the original URL has expired. */
@@ -403,7 +419,7 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
                 val finalOrigin = response.request.url.toString()
                 when (val parsed = TvBoxConfigParser.parse(json, finalOrigin)) {
                     is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
-                        runCatching { save(valid, json) }
+                        runCatching { save(valid, json, finalOrigin) }
                         HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_PARSED",
                             "MS=${((System.nanoTime()-started)/1_000_000).coerceAtMost(99999)}")
                         if (parsed is TvBoxConfig.Single && wrapped != null) parsed.copy(wrappedInImage = true) else parsed
