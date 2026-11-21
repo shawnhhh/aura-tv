@@ -29,9 +29,9 @@ class PersonalRedirectPlaybackTest {
             origin.enqueue(MockResponse().setResponseCode(302).setHeader("Location",target))
             cdn.enqueue(MockResponse().setResponseCode(206).setHeader("Content-Type","video/mp4")
                 .setHeader("Content-Range","bytes 0-0/10").setBody("x"))
-            val client = okhttp3.OkHttpClient.Builder().followRedirects(false).dns {
-                listOf(java.net.InetAddress.getByName("127.0.0.1"))
-            }.build()
+            val client = okhttp3.OkHttpClient.Builder().followRedirects(false).dns(object : okhttp3.Dns {
+                override fun lookup(hostname: String) = listOf(java.net.InetAddress.getByName("127.0.0.1"))
+            }).build()
             val result = HerrinPersonalMediaProbe(client).resolve(PlaybackMedia(
                 origin.url("/movie").newBuilder().host("dav.fixture.test").build().toString(),
                 headers=mapOf("Authorization" to "fixture", "Cookie" to "fixture")))

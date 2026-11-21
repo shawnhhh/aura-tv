@@ -40,7 +40,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         if(old == null) writableDatabase.insertOrThrow("folders", null, values)
         else writableDatabase.update("folders", values, "id=?", arrayOf(id))
         if(old != null && old.type != type) writableDatabase.execSQL("UPDATE media SET tmdb=NULL,confidence=0,synopsis=NULL,poster=NULL,metadata=NULL WHERE folder=? AND manual=0", arrayOf(id))
-        writableDatabase.execSQL("UPDATE media SET type=CASE WHEN ?='auto' THEN CASE WHEN episode IS NULL THEN 'movie' ELSE 'tv' END ELSE ? END WHERE folder=? AND manual=0", arrayOf(type, type, id))
+        writableDatabase.execSQL("UPDATE media SET type=CASE WHEN ?='auto' THEN CASE WHEN episode IS NULL THEN 'movie' ELSE 'tv' END ELSE ? END WHERE folder=? AND manual=0 AND (tmdb IS NULL OR ?<>'auto')", arrayOf(type, type, id, type))
         return id
     }
     fun removeFolder(id: String) {
@@ -65,8 +65,16 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         val changed = writableDatabase.compileStatement("UPDATE media SET scanned=?,status='available' WHERE id=? AND size=? AND modified=?").use {
             it.bindLong(1, scan); it.bindString(2, id); it.bindLong(3, file.size); it.bindString(4, file.modified); it.executeUpdateDelete()
         }
-        if(changed > 0) return
         val parsed = PersonalStoragePolicy.parse(file.name, file.path.substringBeforeLast('/', ""))
+        if(changed > 0) {
+            // Old unmatched indexes need the improved parent/season parser
+            // even when the remote file itself did not change. Proven matches
+            // and manual corrections keep all of their existing metadata.
+            writableDatabase.execSQL("UPDATE media SET title=?,year=?,season=?,episode=?,type=? WHERE id=? AND tmdb IS NULL AND manual=0",
+                arrayOf(parsed.title,parsed.year,parsed.season,parsed.episode,
+                    if(f.type == "auto") if(parsed.episode == null) "movie" else "tv" else f.type,id))
+            return
+        }
         val values = ContentValues().apply {
             put("id", id); put("connection", f.connection); put("folder", f.id); put("path", file.path); put("name", file.name)
             put("size", file.size); put("modified", file.modified); put("extension", file.name.substringAfterLast('.').lowercase())

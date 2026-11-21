@@ -6,6 +6,24 @@ import org.junit.Test
 import java.util.UUID
 
 class PersonalMediaIndexTest {
+    @Test fun automaticFolderRefreshDoesNotResetAnIdentifiedAnimeCategory() {
+        val index = PersonalMediaIndex(InstrumentationRegistry.getInstrumentation().targetContext)
+        val connection = UUID.randomUUID().toString()
+        val id = index.folder(connection,"Anime","auto")
+        try {
+            val folder = index.folders(connection).single()
+            val file = PersonalRemoteFile("Anime/Example.2024.mp4",false,100,"v1")
+            index.record(folder,file,1)
+            val mediaId = index.media(id).getJSONObject(0).getString("id")
+            index.matched(mediaId,Film("tmdb-movie-42","Example","","动漫","2024","",R.drawable.photofilm_orbit),42,"movie")
+            index.folder(connection,"Anime","auto")
+            index.record(folder,file,2)
+            val saved = index.media(id).getJSONObject(0)
+            assertEquals("anime",saved.getString("type"))
+            assertEquals(42,saved.getInt("tmdb"))
+            assertEquals("movie",org.json.JSONObject(saved.getString("metadata")).getString("identityType"))
+        } finally { index.removeFolder(id); index.close() }
+    }
     @Test fun scanPersistsUnchangedFilesManualCorrectionsOfflineAndSuccessfulDeletion() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val index = PersonalMediaIndex(context)

@@ -40,6 +40,12 @@ internal class PersonalLibraryApi(context: Context) {
                 catch(error: Exception) { return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
                 library.cancelAndWait()
                 val saved = library.connections.save(normalized)
+                if(old != null && (old.host != saved.host || old.port != saved.port || old.protocol != saved.protocol ||
+                        old.basePath != saved.basePath || old.username != saved.username || old.domain != saved.domain)) {
+                    // The validated new authority cannot inherit file identities
+                    // and metadata that belonged to a different remote root.
+                    library.index.folders(saved.id).forEach { library.index.removeFolder(it.id) }
+                }
                 library.connections.status(saved.id, "connected")
                 // "Add" validates and imports precisely the chosen subtree.
                 // Root enumeration is not implicit consent to scan an entire drive.
