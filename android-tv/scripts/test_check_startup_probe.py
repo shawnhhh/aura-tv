@@ -67,6 +67,10 @@ class StartupProbeTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             check_lifecycle(TRACE + "\nFATAL EXCEPTION: main")
 
+    def test_early_home_cannot_skip_the_full_v13_minimum(self):
+        with self.assertRaises(AssertionError):
+            check_lifecycle(TRACE.replace("activity_to_home_ms=4500", "activity_to_home_ms=3000"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -52,6 +52,9 @@ def check_lifecycle(diagnostics):
     assert 0 <= first <= visible <= metrics["home_init_ms"] < home, "Home preparation preceded visible branding or never completed"
     assert 0 <= metrics["home_init_ms"] <= metrics["network_start_ms"] < home, "Network preparation was deferred until after interactive home"
     assert visible <= metrics["wordmark_complete_ms"] < home, "Interactive home preceded the reveal completion"
+    # Visible marks the first positive-time frame, one vsync after reveal t=0.
+    # Do not pretend two CPU markers measure the exact glyph presentation time.
+    assert home - visible >= 3400, "Interactive home skipped the V13 reveal/brighten minimum"
     return metrics
 
 

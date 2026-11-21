@@ -95,6 +95,11 @@ python3 android-tv/scripts/check_startup_probe.py --stage hot \
 if grep -q 'FATAL EXCEPTION' "$evidence/cold-diagnostics.txt"; then exit 1; fi
 # Separate visual pass: screen recording perturbs timing, so it is never the perf source.
 adb shell am force-stop tv.herrin.app
+# First-data offline visual pass: the old pass only recorded an already warmed
+# second launch, which could never catch the reported installation-only defect.
+adb shell svc wifi disable
+adb shell svc data disable
+adb shell pm clear tv.herrin.app
 # Include the entire 4.54s design plus cold AVD composition/decode overhead.
 adb shell screenrecord --time-limit 12 /sdcard/herrin-startup.mp4 > "$evidence/recording.log" 2>&1 &
 recording_pid=$!
@@ -126,3 +131,45 @@ record={'sampled_frames':len(frames),'samples_per_second':4,'recording_limit_sec
 print('HERRIN_STARTUP_VISUAL='+json.dumps(record))
 PYVISUAL
 cat "$evidence/cold-launch.txt" "$evidence/hot-launch.txt" "$evidence/cold-diagnostics.txt"
+
+# Re-enter after force-stop with first-run completion persisted. Then repeat
+# with a configured but unreachable warehouse; configuration is not home data.
+for scenario in force-stop configured-offline; do
+    adb shell am force-stop tv.herrin.app
+    if [[ "$scenario" == configured-offline ]]; then
+        cat > "$evidence/configured-fixture.xml" <<'PREFS'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map><string name="tvbox_warehouse_url">http://127.0.0.1:1/authorized-config-fixture.json</string><boolean name="startup_v13_completed" value="true" /></map>
+PREFS
+        adb push "$evidence/configured-fixture.xml" /data/local/tmp/herrin-startup-prefs.xml
+        adb shell run-as tv.herrin.app mkdir -p shared_prefs
+        adb shell run-as tv.herrin.app cp /data/local/tmp/herrin-startup-prefs.xml shared_prefs/herrin.xml
+    fi
+    adb logcat -c
+    adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/$scenario-launch.txt"
+    sleep 5
+    adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
+    adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/$scenario-home.xml"
+    adb shell dumpsys window > "$evidence/$scenario-window.txt"
+    adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I AndroidRuntime:E > "$evidence/$scenario-diagnostics.txt"
+    python3 - "$evidence" "$scenario" <<'MATRIX'
+import json,sys,re,xml.etree.ElementTree as ET
+from pathlib import Path
+sys.path.insert(0,'android-tv/scripts')
+from check_startup_probe import check_lifecycle,check_ui
+root=Path(sys.argv[1]);name=sys.argv[2]
+metrics=check_lifecycle((root/f'{name}-diagnostics.txt').read_text())
+xml=(root/f'{name}-home.xml').read_text();window=(root/f'{name}-window.txt').read_text()
+if name=='force-stop': check_ui(xml,window)
+else:
+    # Empty configured catalogs legitimately have no Hero CTA. Require the
+    # real home navigation, input window and completed animation instead.
+    assert re.search(r'mCurrentFocus=.*tv[.]herrin[.]app/[^\n]*MainActivity',window)
+    nodes=list(ET.fromstring(xml).iter('node'))
+    assert any(n.get('text')=='首页' and n.get('enabled')=='true' for n in nodes)
+    assert any(n.get('focused')=='true' and n.get('package')=='tv.herrin.app' for n in nodes)
+result={'scenario':name,'metrics':metrics,'physical_TCL':False,'configured_provider_contacted':False}
+(root/f'{name}-result.json').write_text(json.dumps(result,indent=2))
+print('HERRIN_STARTUP_MATRIX='+json.dumps(result))
+MATRIX
+done

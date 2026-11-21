@@ -19,6 +19,9 @@ internal object PersonalStoragePolicy {
     fun webDavAddress(raw: String, portField: String = ""): WebDavAddress {
         require(raw.length in 1..2048)
         require(raw.trim().startsWith("http://", true) || raw.trim().startsWith("https://", true))
+        // HttpUrl canonicalizes dot segments. Reject traversal before that
+        // normalization so a pasted URL cannot silently change its subtree.
+        path(raw.trim().substringAfter("://").substringAfter('/', ""))
         val url = requireNotNull(raw.trim().toHttpUrlOrNull())
         require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null)
         val explicitPort = Regex(":([0-9]+)$").find(raw.trim().substringAfter("://").substringBefore('/'))
