@@ -775,10 +775,18 @@ http://example.org/live/channel.m3u8
             }.isSuccess }
             compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
             compose.onNodeWithText("线路 1").performClick()
-            compose.waitUntil(10000) { runCatching {
-                list.performScrollToNode(hasTestTag("detail-play-cta"))
-                compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
-            }.isSuccess }
+            try {
+                compose.waitUntil(10000) { runCatching {
+                    list.performScrollToNode(hasTestTag("detail-play-cta"))
+                    compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+                }.isSuccess }
+            } catch (failure: Throwable) {
+                // Original loopback CMS fixture only. Keep the failing assertion
+                // and expose actual requests/state before diagnosing a rebind race.
+                throw AssertionError("DETAIL_RETRY_FAILURE requests=${details.joinToString()}\n" +
+                    DiscoveryProtocolTrace.summary() + "\n" + HerrinPlaybackDiagnosticJournal.export() + "\n" +
+                    compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12), failure)
+            }
             assertEquals("Targeted retry must preserve another provider's detail", aReadsBeforeRetry, details.count { it == "a:local-a" })
             assertEquals(0, mediaCalls.get())
             list.performScrollToNode(hasTestTag("source-region"))

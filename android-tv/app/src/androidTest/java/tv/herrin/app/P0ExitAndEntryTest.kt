@@ -107,8 +107,6 @@ class P0ExitAndEntryTest {
             fixture.start()
             fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
                 .setBody("""{"sites":[{"name":"扫码刷新样本","api":"${fixture.url("/cms")}"}]}"""))
-            fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
-                .setBody("""{"list":[{"vod_id":"phone-fixture","vod_name":"Original phone import"}]}"""))
             compose.onNodeWithTag("settings").performClick()
             compose.onNodeWithTag("phone-config-main").performClick()
             compose.onNodeWithTag("phone-config-http").assertDoesNotExist()
@@ -145,6 +143,7 @@ class P0ExitAndEntryTest {
             }
             assertEquals(fixture.url("/box.json").toString(),
                 Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            assertEquals("Phone config activation must not request the CMS", 1, fixture.requestCount)
             val workingRoot = fixture.url("/box.json").toString()
             for ((path, response, code) in listOf(
                 Triple("/denied.json", okhttp3.mockwebserver.MockResponse().setResponseCode(403), "SOURCE_HTTP_403"),
@@ -165,11 +164,10 @@ class P0ExitAndEntryTest {
             assertEquals(workingRoot, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
             compose.onNodeWithTag("settings-source-sites").assertExists()
             assertEquals("/box.json", fixture.takeRequest().path)
-            assertTrue(fixture.takeRequest().path!!.startsWith("/cms?"))
             assertEquals("/denied.json", fixture.takeRequest().path)
             assertEquals("/invalid.json", fixture.takeRequest().path)
             assertEquals("/warehouses.json", fixture.takeRequest().path)
-            assertEquals(5, fixture.requestCount)
+            assertEquals("Only config plus three explicit invalid candidates", 4, fixture.requestCount)
         }
     }
 }
