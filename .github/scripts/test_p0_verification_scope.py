@@ -1,8 +1,22 @@
 import unittest
-from p0_verification_scope import PROBES, startup_only, abba_only, tv_only
+from p0_verification_scope import PROBES, startup_only, abba_only, tv_only, abba_reusable
 
 
 class VerificationScopeTest(unittest.TestCase):
+    def test_proven_abba_can_be_reused_after_only_the_warehouse_test_and_startup_probe_change(self):
+        self.assertTrue(abba_reusable(list(PROBES) + [
+            "android-tv/app/src/androidTest/java/tv/herrin/app/TvBoxWarehouseIntegrationTest.kt",
+            ".github/workflows/p0-playback.yml"]))
+
+    def test_abba_reuse_rejects_app_build_remote_tests_and_performance_runner_changes(self):
+        for path in ("android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt",
+                     "android-tv/app/build.gradle.kts", "android-tv/fongmi-kernel/dependencies.json",
+                     "android-tv/app/src/androidTest/java/tv/herrin/app/M442RemoteBurstPerformanceTest.kt",
+                     "android-tv/app/src/androidTest/java/tv/herrin/app/HerrinUiSmokeTest.kt",
+                     ".github/workflows/tmdb-browse-performance.yml", ".github/scripts/tmdb_performance_ab.py"):
+            with self.subTest(path=path):
+                self.assertFalse(abba_reusable(list(PROBES) + [path]))
+
     def test_instrumentation_only_reuses_debug_but_not_tv_or_startup(self):
         self.assertTrue(tv_only(["android-tv/app/src/androidTest/java/tv/herrin/app/AppliedWarehouseAssertions.kt",
                                  ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh", "android-tv/scripts/capture_startup_ui.py",
