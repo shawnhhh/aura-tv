@@ -370,6 +370,8 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
             val started = System.nanoTime()
             readSourceResponse(importClient.newBuilder().followSslRedirects(allowHttp).build(), okhttp3.Request.Builder().url(valid)
                 .header("Accept", "application/json, text/plain").header("Accept-Encoding", "identity").build()) { response ->
+                HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_RESPONSE",
+                    "MS=${((System.nanoTime()-started)/1_000_000).coerceAtMost(99999)}")
                 runCatching { onImportHttpStatus(response.code) }
                 if (response.code in 300..399) return@readSourceResponse cached(valid)
                     ?: TvBoxConfig.Error("WAREHOUSE_REDIRECT：配置发生跳转；请检查最终地址后重新输入")

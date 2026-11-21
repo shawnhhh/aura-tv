@@ -34,10 +34,16 @@ class PersonalLibraryImportTest {
             server.start()
             try {
                 val api = PersonalLibraryApi(context)
-                val added = api.handle("/personal/save", JSONObject().put("name", "Controlled DAV").put("protocol", "http")
+                val added = api.handle("/personal/save", JSONObject().put("name", "我的 WebDAV").put("protocol", "http")
                     .put("host", "localhost").put("port", server.port).put("path", "media")
                     .put("username", "fixture-user").put("password", "fixture-secret"))
                 assertTrue(added.getBoolean("ok")); connection = added.getString("id")
+                assertTrue(PersonalLibrary.awaitCurrentScan())
+                assertEquals("我的 WebDAV", library.connections.get(requireNotNull(connection))!!.name)
+                val automaticallyImported = library.index.folders(connection).single()
+                assertEquals("media", automaticallyImported.path)
+                assertEquals("complete", automaticallyImported.state)
+                assertEquals("Add alone starts the selected subtree import", 2, library.index.media(automaticallyImported.id).length())
                 val before = PersonalLibrary.revisions.value
                 api.handle("/personal/folder", JSONObject().put("connection", connection).put("path", "media").put("type", "movie"))
                 val folder = library.index.folders(connection).single()
