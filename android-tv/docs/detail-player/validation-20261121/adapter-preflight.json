@@ -1,0 +1,10 @@
+{
+  "checkout_sha": "ec40e7b988b19a7abe3046186663b7c3a1e7ad8f",
+  "upstream_revision": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+  "upstream_checked_out": false,
+  "upstream_wrapper_available": false,
+  "strict_dependency_exit_code": 2,
+  "adapter_java_compile_started": false,
+  "real_provider_playerContent_or_frame": false,
+  "stage": "BLOCKED_SOURCE_AND_LOCKED_DEPENDENCIES"
+}

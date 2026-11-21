@@ -1,0 +1,86 @@
+{
+  "checkout_sha": "ec40e7b988b19a7abe3046186663b7c3a1e7ad8f",
+  "application_same_as": "3e1da7241b7ec2645cb19450695fe0e23a33bdc2",
+  "run": 44861586714,
+  "api31_job": 136716002212,
+  "result": "success",
+  "checks": [
+    {
+      "stage": "cold",
+      "interactive_ui": true,
+      "details_only_hero": true,
+      "actual_window_and_focus": true,
+      "metrics": {
+        "process_to_activity_ms": 1284,
+        "activity_to_first_draw_ms": 731,
+        "first_draw_to_wordmark_ms": 486,
+        "wordmark_complete_ms": 3661,
+        "activity_to_home_ms": 6146,
+        "home_init_ms": 1439,
+        "artwork_start_ms": 2684,
+        "network_start_ms": 3033,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "measurement": "app_uptime_cpu_events_not_panel_presentation",
+      "performance_source": true
+    },
+    {
+      "stage": "hot",
+      "interactive_ui": true,
+      "details_only_hero": true,
+      "actual_window_and_focus": true,
+      "metrics": {
+        "process_to_activity_ms": 1284,
+        "activity_to_first_draw_ms": 731,
+        "first_draw_to_wordmark_ms": 486,
+        "wordmark_complete_ms": 3661,
+        "activity_to_home_ms": 6146,
+        "home_init_ms": 1439,
+        "artwork_start_ms": 2684,
+        "network_start_ms": 3033,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "measurement": "app_uptime_cpu_events_not_panel_presentation",
+      "performance_source": false
+    },
+    {
+      "stage": "visual",
+      "interactive_ui": true,
+      "details_only_hero": true,
+      "actual_window_and_focus": true,
+      "metrics": {
+        "process_to_activity_ms": 940,
+        "activity_to_first_draw_ms": 404,
+        "first_draw_to_wordmark_ms": 296,
+        "wordmark_complete_ms": 3588,
+        "activity_to_home_ms": 4908,
+        "home_init_ms": 785,
+        "artwork_start_ms": 2492,
+        "network_start_ms": 2487,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "measurement": "app_uptime_cpu_events_not_panel_presentation",
+      "performance_source": false
+    }
+  ],
+  "visual": {
+    "sampled_frames": 24,
+    "samples_per_second": 4,
+    "recording_limit_seconds": 12,
+    "interactive_home_after_recording": true,
+    "performance_source": false,
+    "physical_TCL": false
+  },
+  "visual_frames_independently_viewed": false,
+  "download_limitation": "Signed archive download to workspace blocked by proxy tunnel HTTP 403; no claim of local visual inspection.",
+  "evidence_artifact": "https://github.com/shawnhhh/aura-tv/actions/runs/44861586714/artifacts/14689858423",
+  "diagnostic_apk": {
+    "artifact": "https://github.com/shawnhhh/aura-tv/actions/runs/44861586714/artifacts/14690630062",
+    "sha256_from_ci": "02b5cbcb572ac6248f9593af417a2147e6098e5cd4f0684ebfeb36938f3bbabf",
+    "diagnostic_only": true,
+    "independently_downloaded": false
+  }
+}

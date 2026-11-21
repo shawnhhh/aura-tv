@@ -1,0 +1,26 @@
+{
+  "checkout_sha": "68a76b0405744d4ce4a724aba8b22d71fc016d1d",
+  "app_same_as": "3e1da7241b7ec2645cb19450695fe0e23a33bdc2",
+  "run": 44862275035,
+  "job": 136718128884,
+  "result": "success",
+  "execution": "A1 B1 B2 A2; same AVD, matching app/test APK per leg",
+  "tests_per_leg": 6,
+  "total_tests": 24,
+  "physical_TCL_tested": false,
+  "evidence_artifact": "https://github.com/shawnhhh/aura-tv/actions/runs/44862275035/artifacts/14690746404",
+  "diagnostic_apk": {
+    "source": "68a76b0405744d4ce4a724aba8b22d71fc016d1d",
+    "artifact": "https://github.com/shawnhhh/aura-tv/actions/runs/44862275035/artifacts/14690152957",
+    "apk_sha256_from_ci": "887f48c5fa748e27b95a222f29ff6dab13764d84ad042f2e834fa0641affcb75",
+    "diagnostic_only": true,
+    "independently_downloaded": false
+  },
+  "limitations": [
+    "No universal performance improvement: first draw +43.5ms and 11 transitions +991.5ms; home -309ms.",
+    "Compose instrumentation synchronization and automatic animation clock affect wall time; API31 shell cold probe is separate.",
+    "Baseline A1/A2 cached navigation 4477/2250ms differs substantially; two samples per revision do not establish statistical significance.",
+    "All remote classes identical; cached-home class includes confirmed H-003 assertion updates; not a strict identical-harness microbenchmark.",
+    "AVD CPU/draw events, not physical key-to-photon latency or real provider playback."
+  ]
+}

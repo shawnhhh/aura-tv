@@ -1,0 +1,11 @@
+test_abba_control_changes_reuse_only_the_verified_startup (test_p0_verification_scope.VerificationScopeTest.test_abba_control_changes_reuse_only_the_verified_startup) ... ok
+test_every_application_or_build_change_requires_full_verification (test_p0_verification_scope.VerificationScopeTest.test_every_application_or_build_change_requires_full_verification) ... ok
+test_no_probe_change_cannot_claim_startup_only (test_p0_verification_scope.VerificationScopeTest.test_no_probe_change_cannot_claim_startup_only) ... ok
+test_startup_or_app_change_cannot_skip_api31 (test_p0_verification_scope.VerificationScopeTest.test_startup_or_app_change_cannot_skip_api31) ... ok
+test_startup_probe_and_ledger_changes_reuse_the_validated_app (test_p0_verification_scope.VerificationScopeTest.test_startup_probe_and_ledger_changes_reuse_the_validated_app) ... ok
+test_unknown_paths_fail_closed (test_p0_verification_scope.VerificationScopeTest.test_unknown_paths_fail_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.000s
+
+OK
