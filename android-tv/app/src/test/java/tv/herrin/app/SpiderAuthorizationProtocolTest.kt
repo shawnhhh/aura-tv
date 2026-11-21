@@ -6,6 +6,19 @@ import org.junit.Test
 import java.util.concurrent.CompletableFuture
 
 class SpiderAuthorizationProtocolTest {
+    @Test fun originalSelectAndSourceValuesAreRetainedWithoutInventingAnAuthorizationResult() {
+        val raw = """{"qrcode":"fixture-qr-payload","inputs":[{"name":"provider","type":"select","options":[{"label":"one","value":"a"},"b"],"value":"a"}]}"""
+        val options = SpiderAuthorizationProtocol.parse(SpiderAuthorizationProtocol.publicPayload(raw))
+        assertEquals(listOf("a","b"), options.inputs.single().choices)
+        assertEquals("a", options.inputs.single().initial)
+        assertNull(SpiderAuthorizationProtocol.validatedEvent(options,
+            SpiderAuthorizationProtocol.event("ok", JSONObject().put("provider","unoffered"))))
+        val session = SpiderAuthorizationSession { _, _ -> }
+        val pending = session.show(raw, null)
+        assertFalse(pending.isDone)
+        session.cancel()
+        assertNull(pending.get())
+    }
     private val qr = """{"title":"token=private-token","message":"Cookie: private-cookie","qrcode":"https://example.invalid/original-test-scan","buttons":[{"id":"check","label":"确认","close":false}]}"""
 
     @Test fun documentedQrProtocolPublishesNoCredentialText() {
