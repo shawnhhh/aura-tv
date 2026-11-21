@@ -46,7 +46,9 @@ data class PlaybackMedia(val uri: String, val headers: Map<String, String> = emp
                          /** Set only after verifying every alternate has identical auth and origin. */
                          val safeNotFoundFallback: Boolean = false,
                          val mediaId: String? = null,
-                         val diagnosticSessionId: String? = null)
+                         val diagnosticSessionId: String? = null,
+                         internal val kernelPlayback: KernelPlaybackTicket? = null,
+                         val displayTitle: String = "HERRIN")
 sealed interface PlaybackResult {
     data class Ready(val media: PlaybackMedia) : PlaybackResult
     data class Unavailable(val reason: String) : PlaybackResult

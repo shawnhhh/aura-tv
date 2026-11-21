@@ -20,6 +20,10 @@ else:
     assert data.get('first_frame') and data.get('seek_verified'), 'missing decoded frames or Seek'
     assert any(x.get('continuous_ms_actual', 0) >= 60000 and x.get('continuous_wall_ms_actual', 0) >= 60000 and x.get('continuous_frame_delta', 0) >= 60 for x in data.get('playback_evidence', [])), 'missing 60-second actual playback evidence'
     required = {'first_episode', 'replay_same_episode', 'next_episode', 'return_first_episode', 'replay_after_details'}
+    if data.get('authorized_title') == '蜡笔小新':
+        required.add('third_episode')
+        assert data.get('tv_animation_title_verified') and data.get('tv_animation_category_verified'), 'TV animation identity not verified'
+        assert data.get('selected_source_season') == 9, 'actual source season nine not verified'
     assert required <= {x.get('operation') for x in data.get('playback_evidence', [])}, 'missing mandatory replay/episode/detail-return operations'
     assert data.get('returned_to_details') and data.get('details_ui_verified'), 'missing real player Back/details transition'
     assert all(x.get('pause_resume_verified') and x.get('seek_verified') and x.get('seek_rendered_frame_delta', 0) >= 3 for x in data.get('playback_evidence', [])), 'incomplete controls evidence'

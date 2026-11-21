@@ -42,4 +42,30 @@ class PlaybackHistoryTest {
         history.clear(scope, "film", 1, "source")
         assertNull(history.load(scope, "film", 1, "source"))
     }
+
+    @Test fun stablePersonalFileRestoresAfterPlaylistOrdinalChangesOnlyWithCurrentPersonalAuthority() {
+        val scope = "stable-personal-${System.nanoTime()}"
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val history = PlaybackHistory(context)
+        val prefs = context.getSharedPreferences("herrin-watch-history", 0)
+        val previousIndex = prefs.getString("recent-index", null)
+        try {
+            val line = "personal-file-" + "a".repeat(32)
+            val film = Film("history-stable-file-${System.nanoTime()}", "Fixture", "", "剧集", "2026", "", 1,
+                playbackEpisodes = listOf(PlaybackEpisode(7, "unmarked-file.mkv",
+                    listOf(PlaybackLine(line, "个人媒体", "https://example.invalid/file")))))
+            val ticket = history.begin(scope, film.id, 7, line)
+            history.updateSession(ticket, scope, film.id, 7, line, 30000, 120000, false)
+            history.recordFilm(ticket, scope, film, 7, line, 30000, 120000)
+            val refreshed = film.copy(playbackEpisodes = listOf(film.playbackEpisodes.single().copy(number = 9)))
+            assertNull(history.resolveIndexed(refreshed, scope))
+            val restored = history.resolveIndexed(refreshed, scope, personalFileRoutes = true)!!
+            assertEquals(9, restored.first.episode)
+            assertEquals(line, restored.first.line)
+            assertEquals(30000L, restored.second)
+            assertNull(history.resolveIndexed(refreshed, scope + "-other", personalFileRoutes = true))
+        } finally {
+            prefs.edit().apply { if (previousIndex == null) remove("recent-index") else putString("recent-index", previousIndex) }.commit()
+        }
+    }
 }

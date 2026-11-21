@@ -1,0 +1,14 @@
+{
+  "native_crashes": [
+    {
+      "process": "spider",
+      "signal": 4,
+      "signal_name": "SIGILL",
+      "top_modules": [
+        "libc.so",
+        "PLUGIN_OR_OTHER",
+        "PLUGIN_OR_OTHER"
+      ]
+    }
+  ]
+}

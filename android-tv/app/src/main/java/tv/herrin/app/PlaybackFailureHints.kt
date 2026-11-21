@@ -97,7 +97,7 @@ internal object PlaybackFailureHints {
         Category.NETWORK -> "网络连接失败或超时；核对电视联网、DNS 和影视站点"
         Category.MANIFEST -> "HLS/DASH 播放清单无法解析；核对清单格式和有效性"
         Category.CONTAINER -> "媒体容器格式无法解析；核对合法直链的格式和完整性"
-        Category.DECODER -> "设备解码失败；核对视频/音频编码与 TCL 硬件能力"
+        Category.DECODER -> "媒体解码失败；请检查视频/音频编码、媒体完整性及当前设备解码能力"
         Category.AUDIO_OUTPUT -> "音频轨道初始化失败；核对音频编码与电视音频输出能力"
         Category.LIVE_WINDOW -> "直播窗口已变化；重试获取最新直播片段"
         Category.UNKNOWN -> "播放暂时失败；可记录此错误代码并核对授权来源"

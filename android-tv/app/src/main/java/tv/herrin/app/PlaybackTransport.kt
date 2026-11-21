@@ -43,7 +43,7 @@ object PlaybackTransport {
                         val language = format.language?.takeUnless { it == "und" || it.isBlank() }
                         Option(groupIndex, trackIndex,
                             format.label?.takeIf { it.isNotBlank() }
-                                ?: language ?: "音轨 " + (trackIndex + 1),
+                                ?: language ?: (if (trackType == C.TRACK_TYPE_TEXT) "字幕 " else "音轨 ") + (trackIndex + 1),
                             group.isTrackSelected(trackIndex))
                     }
                 }
@@ -79,6 +79,21 @@ object PlaybackTransport {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(trackType, false).build()
         return TrackUtil.setTrackSelection(player, track)
+    }
+
+    fun select(player: Player, type: Int, groupIndex: Int, trackIndex: Int,
+               select: (Track) -> Boolean): Boolean {
+        if (!player.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)) return false
+        if (type == C.TRACK_TYPE_TEXT && groupIndex == -1 && trackIndex == -1)
+            return select(Track(type, "", "").apply { isSelected = false })
+        val option = options(player, type).firstOrNull {
+            it.groupIndex == groupIndex && it.trackIndex == trackIndex
+        } ?: return false
+        val group = player.currentTracks.groups[groupIndex]
+        val ordinal = player.currentTracks.groups.take(groupIndex).filter { it.type == type }
+            .sumOf { it.length } + trackIndex
+        return select(TrackUtil.createTrack(type, option.label, group.getTrackFormat(trackIndex), ordinal)
+            .apply { isSelected = true })
     }
 
     fun currentLabel(player: Player, type: Int): String {

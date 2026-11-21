@@ -1,0 +1,119 @@
+{
+  "source_sha": "f1abdd0f30c13f59f8cc8a5fdcbccf48c1a1364b",
+  "run": 44691313055,
+  "exit_code": 1,
+  "device": "Android TV API 30 x86 / tv_1080p",
+  "fatal_exception_present": false,
+  "physical_TCL_tested": false,
+  "remote_HTTPS_stream_tested": false,
+  "remote_performance": {
+    "horizontal": {
+      "events": 40,
+      "focus_success": 40,
+      "focus_draw_samples": 40,
+      "key_to_draw_p50_ms": 14.23,
+      "key_to_draw_p95_ms": 49.55,
+      "key_to_draw_p99_ms": 60.81,
+      "key_to_focus_p99_ms": 48.69,
+      "key_to_focus_p50_ms": 2.54,
+      "key_to_focus_p95_ms": 14.02,
+      "end_to_idle_p95_ms": 212,
+      "frame_p95_ms": 161.55,
+      "frames_total": 79,
+      "frames_over_16_67ms": 79,
+      "frames_over_33_33ms": 79,
+      "long_frame_pct": 100
+    },
+    "vertical": {
+      "events": 32,
+      "focus_success": 32,
+      "focus_draw_samples": 32,
+      "key_to_draw_p50_ms": 10.32,
+      "key_to_draw_p95_ms": 19.5,
+      "key_to_draw_p99_ms": 20.02,
+      "key_to_focus_p99_ms": 9.24,
+      "key_to_focus_p50_ms": 2.77,
+      "key_to_focus_p95_ms": 7.81,
+      "end_to_idle_p95_ms": 194
+    },
+    "burst": {
+      "events": 120,
+      "last_focus_correct": 1,
+      "burst_to_final_focus_ms": 3414
+    },
+    "frame_baseline": {
+      "redraw_frames": 24,
+      "navigation_frames": 47,
+      "redraw_p95_ms": 163.91,
+      "navigation_p95_ms": 188.72,
+      "navigation_to_redraw_ratio": 1.15
+    }
+  },
+  "startup_samples": [
+    {
+      "process_to_activity_ms": 799,
+      "activity_to_first_draw_ms": 266,
+      "first_draw_to_wordmark_ms": 132,
+      "wordmark_complete_ms": 2623,
+      "activity_to_home_ms": 4480,
+      "home_init_ms": 438,
+      "artwork_start_ms": 998,
+      "network_start_ms": 1097,
+      "system_brand_exit_ms": -1
+    },
+    {
+      "process_to_activity_ms": 26487,
+      "activity_to_first_draw_ms": 78,
+      "first_draw_to_wordmark_ms": 96,
+      "wordmark_complete_ms": 2427,
+      "activity_to_home_ms": 4233,
+      "home_init_ms": 200,
+      "artwork_start_ms": 392,
+      "network_start_ms": 448,
+      "system_brand_exit_ms": -1
+    }
+  ],
+  "startup_window_probes": [
+    {
+      "version": "0.4.68-alpha",
+      "refresh_hz": 60.000003814697266,
+      "warm_process_activity_start": true,
+      "physical_tcl": false,
+      "reveal": {
+        "count": 34,
+        "p50_ms": 41.330809,
+        "p95_ms": 183.621019,
+        "p99_ms": 202.916602,
+        "over_budget": 32
+      },
+      "breathing": {
+        "count": 53,
+        "p50_ms": 42.066118,
+        "p95_ms": 58.904954,
+        "p99_ms": 68.745129,
+        "over_budget": 50
+      },
+      "handoff": {
+        "count": 77,
+        "p50_ms": 49.956328,
+        "p95_ms": 218.007682,
+        "p99_ms": 229.972564,
+        "over_budget": 77
+      }
+    }
+  ],
+  "source_recovery_evidence": [
+    "HerrinSourceRecovery: blocked_child_main_reaped_by_host=1 main_callback_alive=1 pending=0 cancel_to_exit_ms=667 physical_tcl=0",
+    "HerrinSourceRecovery: uninterruptible_fixture_reaped=1 fresh_media_verified=1 old_proof_rejected=1 main_process_preserved=1 pending=0 child_after_cancel=1 child_after_recovery=0 cancel_to_exit_ms=279 physical_tcl=0",
+    "HerrinSourceRecovery: blocked_child_main_reaped_by_host=1 main_callback_alive=1 pending=0 cancel_to_exit_ms=665 physical_tcl=0",
+    "HerrinSourceRecovery: uninterruptible_fixture_reaped=1 fresh_media_verified=1 old_proof_rejected=1 main_process_preserved=1 pending=0 child_after_cancel=1 child_after_recovery=0 cancel_to_exit_ms=279 physical_tcl=0"
+  ],
+  "smb_evidence": [
+    "HerrinSmbEvidence: real_smb3=1 encryption=1 decoded_frames=1 seek=1 physical_nas=0 physical_tcl=0"
+  ],
+  "wordmark_evidence": [
+    "HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0",
+    "HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0",
+    "HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0"
+  ]
+}

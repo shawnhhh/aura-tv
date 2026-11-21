@@ -1,0 +1,40 @@
+{
+  "provenance": {
+    "run_id": 42863215516,
+    "job_id": 129994561737,
+    "url": "https://github.com/shawnhhh/aura-tv/actions/runs/42863215516",
+    "retrieved": "2026-11-11",
+    "new_run": false
+  },
+  "report": {
+    "scope": "OFFICIAL_REFERENCE_SEARCH_UI_ONLY_NO_MEDIA",
+    "herrin_acceptance": false,
+    "verdict": "REFERENCE_BLOCKED",
+    "release": "FongMi/Release 5.8.7",
+    "warehouse": "http://www.饭太硬.net/tv",
+    "targets": [],
+    "stages": [
+      {
+        "stage": "open_settings",
+        "at_ms": 14437
+      }
+    ],
+    "apk_sha256": "f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9",
+    "apk_modified_or_resigned": false,
+    "package_primary_abi": "armeabi-v7a",
+    "device_abis": "x86_64,x86,arm64-v8a,armeabi-v7a,armeabi",
+    "last_ui_shape": {
+      "known_controls": [
+        "text",
+        "title"
+      ],
+      "known_labels": [
+        "Setting"
+      ]
+    },
+    "failure_stage": "open_settings",
+    "failure_code": "REFERENCE_UI_TARGET_NOT_REACHED",
+    "elapsed_ms": 38788,
+    "official_app_process_alive": true
+  }
+}

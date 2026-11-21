@@ -1,0 +1,87 @@
+{
+  "scope": "ORIGINAL_FIXTURE_PLAYER_CAPABILITY_ONLY",
+  "source_sha": "ae5f698e9f66a405f4e67269e221e1ed076d1d70",
+  "tv_run": 43455281378,
+  "artifact_id": 14056220331,
+  "artifact_zip_sha256": "98ad5503a82193c616db6a15e7ce3229f843f3a9d7a50e207abbf08aec5d1a89",
+  "full_tv": {
+    "tests": 261,
+    "mandatory_classes": 69,
+    "failures": 0,
+    "skipped": 0
+  },
+  "jvm_run": 43455281416,
+  "jvm": {
+    "tests": 730,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint_debug_build": "PASS",
+  "api31_regression": "PASS",
+  "real_nodes_retested": false,
+  "real_node_acceptance": false,
+  "report": {
+    "scope": "ORIGINAL_FIXTURE_PLAYER_CAPABILITY_ONLY",
+    "real_node_acceptance": false,
+    "whole_fongmi_kernel": false,
+    "sdk": 30,
+    "device_abis": [
+      "x86"
+    ],
+    "formats": [
+      {
+        "format": "mp4",
+        "original_fixture_timeline_seconds": 72,
+        "media_item_repeat": false,
+        "verdict": "PASS",
+        "first_frame": true,
+        "compositor_frame": true,
+        "continuous_wall_ms": 60211,
+        "rendered_frames": 1459,
+        "playing_samples": 240,
+        "continuous_media_position_ms": 61072,
+        "pause_resume": true,
+        "seek_and_frames": true,
+        "seek_acknowledged_position_ms": 3000,
+        "released_on_back": true
+      },
+      {
+        "format": "hls",
+        "original_fixture_timeline_seconds": 72,
+        "media_item_repeat": false,
+        "verdict": "PASS",
+        "first_frame": true,
+        "compositor_frame": true,
+        "continuous_wall_ms": 60155,
+        "rendered_frames": 1442,
+        "playing_samples": 240,
+        "continuous_media_position_ms": 60908,
+        "pause_resume": true,
+        "seek_and_frames": true,
+        "seek_acknowledged_position_ms": 3000,
+        "released_on_back": true
+      }
+    ],
+    "verdict": "PLAYER_CAPABILITY_PASS_NOT_REAL_NODE_PASS"
+  },
+  "frame_images": [
+    {
+      "file": "p0-baseline-hls-first-frame.png",
+      "width_height": [
+        1920,
+        1080
+      ],
+      "sha256": "8e5388530d73008be4d2d2e9f60c5535b3dc9b3379d78eefb8c6a6f4d711146d"
+    },
+    {
+      "file": "p0-baseline-mp4-first-frame.png",
+      "width_height": [
+        1920,
+        1080
+      ],
+      "sha256": "8d31d37e8062badcaeef715b2a21a0c915806ee6d72248cb6b5eb0e99592b074"
+    }
+  ],
+  "artifact_junit": []
+}

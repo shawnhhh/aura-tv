@@ -1,0 +1,5 @@
+PASS: XML, TV manifest, official wrapper integrity, Gradle files, native-only source
+PASS: 43 exact pinned upstream FongMi files; not a playback test
+PASS: no legacy playback implementation/reference in production source sets
+PASS: one Exo builder, production adapter owns preparation and release
+PASS: Sardine v0.9 90 exact source files, license and upstream build contract

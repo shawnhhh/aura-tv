@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tv.herrin.app.SpiderManifestReferenceTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-20T03:35:28" hostname="5a86a02e2909" time="0.017">
+  <properties/>
+  <testcase name="nonManifestAndPrivateAddressesCannotBecomeAuthorizedHls" classname="tv.herrin.app.SpiderManifestReferenceTest" time="0.012"/>
+  <testcase name="foreignRedirectAndCredentialsAreRejectedWithoutFetchingForeignOrigin" classname="tv.herrin.app.SpiderManifestReferenceTest" time="0.002"/>
+  <testcase name="deniedReferenceReportsOnlyFixedReasonWithoutCredentials" classname="tv.herrin.app.SpiderManifestReferenceTest" time="0.0"/>
+  <testcase name="resolvesRealResponseBytesAndRelativeManifestReferencesWithoutInjectedRange" classname="tv.herrin.app.SpiderManifestReferenceTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

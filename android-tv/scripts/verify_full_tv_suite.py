@@ -10,8 +10,12 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 REQUIRED_CLASSES = (
+    "SpiderAuthorizationInstrumentedTest",
+    "SpiderAuthorizationPlaybackTest",
+    "SpiderPasswordAuthorizationTest",
     "HerrinSplashTest",
     "LanConfigurationTest",
+    "LanSourceImportTest",
     "LanHttpConfigurationTest",
     "LanTlsIdentityTest",
     "SmbRealPlaybackTest",
@@ -32,6 +36,8 @@ REQUIRED_CLASSES = (
     "M445FrameBaselineTest",
     "M449SettingsNoIdleBurstTest",
     "M453BufferingRemoteFocusInstrumentedTest",
+    "MinimalPlayerGeometryTest",
+    "PlaybackHistoryTest",
     "M454CmsOneTapRecoveryInstrumentedTest",
     "M456NativeFullscreenPlayerTest",
     "P0PlayerDeadlineTest",
@@ -53,6 +59,7 @@ REQUIRED_CLASSES = (
     "TmdbBrowsePageTest",
     "TmdbBrowseRefreshTest",
     "TmdbBrowsePaginationTest",
+    "TmdbBrowseLoadingNavigationTest",
     "P0Top250NavigationTest",
     "HeroArtworkRetentionTest",
     "M467FongMiTrackRestoreTest",
@@ -77,6 +84,7 @@ REQUIRED_CLASSES = (
     "PlaybackTransportTest",
     "PlaybackButtonsTest",
     "PlaybackSessionIsolationTest",
+    "PlaybackDiagnosticsIntegrationTest",
     "MediaDecoderTest",
     "PosterArtworkTest",
 )

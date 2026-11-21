@@ -24,6 +24,9 @@ internal class RemoteHoldSeek {
         const val MAX_BATCH_MS = 30_000L
     }
 
+    private var heldSinceMs = 0L
+    var acceleration: Int = 1
+        private set
     private var heldDirection = 0
     private var pendingMs = 0L
     private var lastCommitAtMs = 0L
@@ -39,11 +42,19 @@ internal class RemoteHoldSeek {
         require(repeatCount >= 0)
         if (repeatCount == 0 || heldDirection != direction) {
             heldDirection = direction
+            heldSinceMs = eventTimeMs
+            acceleration = 1
             pendingMs = 0L
             lastCommitAtMs = eventTimeMs
             return INITIAL_STEP_MS * direction
         }
-        pendingMs = (pendingMs + REPEAT_STEP_MS).coerceAtMost(MAX_BATCH_MS)
+        acceleration = when ((eventTimeMs - heldSinceMs).coerceAtLeast(0)) {
+            in 0..999 -> 1
+            in 1000..1999 -> 2
+            in 2000..2999 -> 4
+            else -> 8
+        }
+        pendingMs = (pendingMs + REPEAT_STEP_MS * acceleration).coerceAtMost(MAX_BATCH_MS)
         if (eventTimeMs < lastCommitAtMs ||
             eventTimeMs - lastCommitAtMs < REPEAT_COMMIT_MS) return null
 
@@ -63,6 +74,8 @@ internal class RemoteHoldSeek {
 
     fun reset() {
         heldDirection = 0
+        acceleration = 1
+        heldSinceMs = 0
         pendingMs = 0L
         lastCommitAtMs = 0L
     }

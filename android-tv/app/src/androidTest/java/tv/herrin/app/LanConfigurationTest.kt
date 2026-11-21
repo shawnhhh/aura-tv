@@ -12,7 +12,8 @@ import java.util.concurrent.TimeUnit
 /** HTTPS startup/transport check; no trust-all client and no live credentials. */
 class LanConfigurationTest {
     @Test fun confirmedTrustedSessionCanSwitchModulesAndEnd() {
-        val server = LanConfigServer(InstrumentationRegistry.getInstrumentation().targetContext, "127.0.0.1") { }
+        val applied = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val server = LanConfigServer(InstrumentationRegistry.getInstrumentation().targetContext, "127.0.0.1") { applied.add(it) }
         try {
             server.start(5000, true)
             val trust = okhttp3.tls.HandshakeCertificates.Builder()
@@ -40,12 +41,25 @@ class LanConfigurationTest {
             val trustedRoot=prefs.tvBoxTrustedSpiderRootUrl
             val trustedJar=prefs.tvBoxTrustedSpiderJarSpec
             try {
-                assertEquals(200, post("/sources", org.json.JSONObject().put("url", "http://饭太硬.net/tv").toString(), session).first)
-                assertEquals(TvBoxUrl.normalize("http://饭太硬.net/tv", true), prefs.tvBoxWarehouseUrl)
+                assertEquals(200, post("/sources", org.json.JSONObject().put("url", "http://www.饭太硬.net/tv").toString(), session).first)
+                assertEquals(previous, prefs.tvBoxWarehouseUrl)
+                assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), LanSourceImport(InstrumentationRegistry.getInstrumentation().targetContext).current()!!.url)
+                val invalid = post("/sources", org.json.JSONObject()
+                    .put("url", "ftp://example.invalid/file").toString(), session)
+                assertEquals(400, invalid.first)
+                assertEquals("SOURCE_URL_INVALID", org.json.JSONObject(invalid.second).getString("code"))
+                assertEquals(previous, prefs.tvBoxWarehouseUrl)
+                assertEquals(TvBoxUrl.normalize("http://www.饭太硬.net/tv", true), LanSourceImport(InstrumentationRegistry.getInstrumentation().targetContext).current()!!.url)
+                assertEquals(listOf("sources"), applied.toList())
+                assertEquals(prefs.tvBoxWarehouseUrl, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
                 assertEquals(trustedRoot,prefs.tvBoxTrustedSpiderRootUrl)
                 assertEquals(trustedJar,prefs.tvBoxTrustedSpiderJarSpec)
                 assertFalse(TvBoxSpiderPolicy.mayRun(false,prefs.tvBoxWarehouseUrl,"new.jar",trustedRoot,trustedJar))
-            } finally { prefs.tvBoxWarehouseUrl = previous }
+            } finally {
+                prefs.tvBoxWarehouseUrl = previous
+                InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("herrin",0)
+                    .edit().remove("phone_source_import").commit()
+            }
             assertEquals(200, post("/end", "{}", session).first)
             try { assertEquals(403, post("/status", "{}", session).first) }
             catch (_: java.io.IOException) { assertTrue(server.pairing.expired()) }

@@ -8,14 +8,49 @@ import java.util.concurrent.atomic.AtomicLong
 @Stable
 internal class TmdbScreenState {
     val sourceDiscoveries = mutableMapOf<String, HerrinSourceDiscovery>()
+    val selectedDiscoveryNode = mutableStateMapOf<String, String>()
+    val autoLayoutSelected = mutableMapOf<String, String>()
     val discoveredSources = mutableStateMapOf<String, HerrinSourceDiscovery.Snapshot>()
     val discoverySpiderLock = kotlinx.coroutines.sync.Mutex()
     var discoverySelection by mutableStateOf<Pair<String, String>?>(null)
+    var directPlayFilm: String? = null
+    var discoveryRecovery: HerrinAutomaticPlayback.Search? = null
+    val rejectedDiscoveryHits = mutableSetOf<String>()
+    fun nextDiscoveryHit(id: String, failed: String? = null): HerrinSourceDiscovery.Hit? {
+        failed?.let { rejectedDiscoveryHits += it }
+        if (rejectedDiscoveryHits.size >= 12) return null
+        val hits = discoveredSources[id]?.hits.orEmpty().filter {
+            it.relevance == SourceRelevance.CONFIRMED && it.key !in rejectedDiscoveryHits
+        }
+        return hits.firstOrNull { it.episodes.isNotEmpty() } ?: hits.firstOrNull()
+    }
+    val requestedDiscoveryHits = mutableStateMapOf<String, String>()
+    val loadedDiscoveryHits = mutableStateMapOf<String, String>()
+    var discoveryLoadingFilm by mutableStateOf<String?>(null)
+    var discoveryLoadingEpoch: Int = 0
+    fun sourceSelectionReady(id: String): Boolean = discoveryLoadingFilm != id &&
+        (requestedDiscoveryHits[id] == null || requestedDiscoveryHits[id] == loadedDiscoveryHits[id])
+    /** Retire only the failed current selection's UI/media projection, not sibling layouts. */
+    fun invalidateDiscoverySelection(id: String, hitKey: String) {
+        if (requestedDiscoveryHits[id] != hitKey) return
+        loadedDiscoveryHits.remove(id)
+        tmdbResolved[id]?.let { old ->
+            tmdbResolved[id] = old.copy(playbackEpisodes = emptyList(),
+                cmsVodId = null, spiderVodId = null, spiderOrigin = null)
+        }
+        tmdbPersonalPlayback.remove(id)
+        tmdbPlaybackRoutes.forget(id)
+    }
+    var discoveryLine: String? by mutableStateOf(null)
     var discoverySelectionEpoch by mutableIntStateOf(0)
     fun discoveryFor(id: String): HerrinSourceDiscovery {
         sourceDiscoveries[id]?.let { return it }
         if(sourceDiscoveries.size >= 24) {
-            sourceDiscoveries.keys.first().let { old -> sourceDiscoveries.remove(old); discoveredSources.remove(old) }
+            sourceDiscoveries.keys.first().let { old -> sourceDiscoveries.remove(old); discoveredSources.remove(old)
+                selectedDiscoveryNode.remove(old); requestedDiscoveryHits.remove(old); loadedDiscoveryHits.remove(old)
+                autoLayoutSelected.remove(old)
+                tmdbResolved[old]?.let { tmdbResolved[old] = it.copy(playbackEpisodes = emptyList(), cmsVodId = null, spiderVodId = null) }
+                tmdbPersonalPlayback.remove(old); tmdbPlaybackRoutes.forget(old) }
         }
         return HerrinSourceDiscovery().also { sourceDiscoveries[id] = it }
     }

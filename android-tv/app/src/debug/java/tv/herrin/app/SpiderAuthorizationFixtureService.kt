@@ -15,6 +15,9 @@ class SpiderAuthorizationFixtureService : Service() {
     private val worker = Executors.newSingleThreadExecutor()
     private var caller: Messenger? = null
     private var operation = 0
+    private var playbackSite: TvBoxSite? = null
+    private var playbackAuthority: SpiderFilmAuthority? = null
+    private var privateSession = ""
     private val session = SpiderAuthorizationSession { id, payload ->
         caller?.send(Message.obtain(null, if (payload == null) SpiderIpc.AUTH_CLOSE else SpiderIpc.AUTH_SHOW).apply {
             arg1 = operation; arg2 = id; replyTo = incoming
@@ -32,6 +35,16 @@ class SpiderAuthorizationFixtureService : Service() {
             operation = operationId
             val payload = message.data.getString("payload").orEmpty()
             worker.execute {
+                if (operationCode == SpiderIpc.BROWSE &&
+                    JSONObject(payload).getJSONObject("site").optString("key") == "auth-playback-fixture" ||
+                    operationCode == SpiderIpc.PLAY && playbackSite != null) {
+                    val response = playbackFixture(operationCode, JSONObject(payload))
+                    callerForOperation?.send(Message.obtain(null, operationCode).apply {
+                        arg1 = operationId
+                        data = Bundle().apply { putString("payload", response.toString()) }
+                    })
+                    return@execute
+                }
                 // Only test loopback is allowed. The caller embeds an original mock endpoint in extension.
                 val endpoint = JSONObject(payload).getJSONObject("site").getString("ext")
                 require(URL(endpoint).host == "127.0.0.1")
@@ -55,6 +68,47 @@ class SpiderAuthorizationFixtureService : Service() {
         }
         true
     })
+    /** Original mock platform: granted sessions stay inside its owning plugin process. */
+    private fun playbackFixture(code: Int, request: JSONObject): JSONObject {
+        if (code == SpiderIpc.BROWSE) {
+            val site = SpiderIpc.readSite(request.getJSONObject("site"))
+            require(URL(site.extension).host == "127.0.0.1")
+            playbackSite = site
+            privateSession = ""
+            val authority = SpiderFilmAuthority(site.key, SpiderRuntimeCompat.sessionKey("", site), request.getString("originSecret"))
+            playbackAuthority = authority
+            val film = authority.sign(Film("original-auth-film", "Original authorized fixture", "", "电影", "2026", "", 1,
+                spiderVodId = "original-ref", playbackEpisodes = listOf(PlaybackEpisode(1, "Original episode",
+                    listOf(PlaybackLine("original-line", "Original platform", "original-ref"))))))
+            return JSONObject().put("ok", true).put("films", org.json.JSONArray().put(SpiderIpc.film(film)))
+        }
+        val site = requireNotNull(playbackSite)
+        requireNotNull(playbackAuthority).requireFilm(SpiderIpc.readFilm(request.getJSONObject("film")))
+        fun read(path: String): JSONObject = URL(site.extension + path).openConnection().apply {
+            connectTimeout = 2000; readTimeout = 2000
+        }.getInputStream().bufferedReader().use { JSONObject(it.readText()) }
+        val valid = read("/session").optBoolean("authorized") && privateSession.isNotBlank()
+        if (!valid) {
+            privateSession = ""
+            CatVodRuntime.set(applicationContext)
+            CatVodRuntime.setDialog { options, callback -> session.show(options, callback) }
+            val result = CatVodDialog().use { dialog ->
+                dialog.show(JSONObject().put("qrcode", "https://example.invalid/original-fixture-login")
+                    .put("buttons", org.json.JSONArray().put(JSONObject().put("id", "check").put("label", "确认").put("close", false)))) {
+                    val grant = read("/grant")
+                    if (grant.optBoolean("authorized")) privateSession = grant.optString("token")
+                    JSONObject().put("close", privateSession.isNotBlank())
+                }
+            }
+            if (result == null) return SpiderIpc.error("mock-cancelled")
+        }
+        // Continue the original resolve operation after the callback, then use production decoding.
+        return when (val media = SpiderVodCodec.player(read("/resolve").toString(), allowHttp = true)) {
+            is PlaybackResult.Ready -> SpiderIpc.playback(media.media)
+            is PlaybackResult.Unavailable -> SpiderIpc.error(media.reason)
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder = incoming.binder
     override fun onDestroy() { session.cancel(); worker.shutdownNow(); super.onDestroy() }
 }

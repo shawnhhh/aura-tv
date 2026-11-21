@@ -1,0 +1,9 @@
+plugins {
+    alias libs.plugins.android.library apply false
+}
+// An independent build: no classpath mixing with HERRIN's partial, same-package
+// adaptations or stock Media3. The upstream version catalog remains authoritative.
+allprojects {
+    group = 'tv.herrin.fongmi'
+    version = '305dff2-integration'
+}

@@ -1,0 +1,32 @@
+{
+  "purpose": "Review an actual published Media3 candidate. Not an approved replacement for TV@305dff2.",
+  "repository": "webhtv/webhtv",
+  "commit": "4e30ffaf219b1db15fe5662aeff6f9820e2b32bf",
+  "media3_version": "1.11.0-alpha01-fongmi",
+  "upstream_tv_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+  "modules": [
+    {
+      "artifact": "media3-common",
+      "sha256": "4826fe94891fb584951c813a8e67a63aafe0816d6adf836317ed895c7eee9cfd"
+    },
+    {
+      "artifact": "media3-exoplayer",
+      "sha256": "47f90bd4fc52567738847ceb59c435ddeb6d35b987866d6899de87de3170bdf6"
+    },
+    {
+      "artifact": "media3-ui",
+      "sha256": "1091bb833e29ce3fcc55dfd2d6c30ad4cd18c68414f0957a4e3b0e695db2a088"
+    }
+  ],
+  "required_classes": {
+    "media3-common": [
+      "androidx/media3/common/DecoderMode",
+      "androidx/media3/common/DiscMenuController",
+      "androidx/media3/common/text/SubtitleSelectionState"
+    ],
+    "media3-exoplayer": [
+      "androidx/media3/exoplayer/iso/IsoDiscPreparation"
+    ]
+  },
+  "required_ui_method": "setBackendPlayer"
+}

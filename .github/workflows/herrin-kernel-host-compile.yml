@@ -1,0 +1,75 @@
+name: HERRIN kernel host compile only
+on:
+  # 2026-11-13 batch: validate original-session minimal chrome, bounded remote seeks and exact media admission
+  # after all source changes, once. Complete original engine remains blocked.
+  # Developer batches intentionally do not trigger full compilation on every
+  # source commit. A workflow edit at the END of a batch triggers exactly one
+  # host/contract validation for the current branch HEAD.
+  # Final batch includes the nullable-audio inspection correction.
+  push:
+    branches: ['codex/herrin-p0-live-playback-20261110']
+    paths:
+      - '.github/workflows/herrin-kernel-host-compile.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: herrin-kernel-host-compile-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Start controlled real SMB2 and SMB3 fixture
+        run: bash .github/scripts/start_smb_fixture.sh
+      - name: Compile, lint and assemble stable host and contract
+        working-directory: android-tv
+        run: gradle --continue --build-cache --max-workers=2 :kernel-contract:check :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:lintDebug :app:assembleDebug
+      - name: Run all stable host JVM tests after compiler and lint workers finish
+        if: ${{ !cancelled() }}
+        working-directory: android-tv
+        run: gradle --build-cache --max-workers=2 :app:testDebugUnitTest
+      - name: Preserve validation reports, never an acceptance APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-stable-host-reports
+          path: |
+            android-tv/app/build/reports/
+            android-tv/app/build/test-results/
+          if-no-files-found: ignore
+      - name: Audit approved-site search guard in uncompiled upstream adapter
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('android-tv/fongmi-kernel/adapter/src/main/java/tv/herrin/kernel/android/OriginalVodSession.java').read_text()
+          assert 'if (allowed.isEmpty()) throw new SecurityException("No approved site for VOD search")' in source
+          assert 'model.searchContent(allowed, keyword, quick)' in source
+          assert 'model.searchContent(sites.stream()' not in source
+          print('Original VOD adapter authorized-site source check PASS; not an Android type/link test')
+          PY
+      - name: Verify original binary build gate remains explicit
+        working-directory: android-tv
+        run: |
+          python3 -m py_compile fongmi-kernel/verify_dependencies.py \
+            fongmi-kernel/stage_dependencies.py \
+            fongmi-kernel/audit_media3_candidate.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          deps = json.loads(Path('fongmi-kernel/dependencies.json').read_text())
+          reviews = deps.get('media_candidate_audits', [])
+          assert any(x['status'] == 'REJECTED_INCOMPATIBLE_API'
+                     and x['must_not_be_staged'] for x in reviews)
+          assert not deps['artifacts'], 'Unverified binaries must never be put on the actual classpath'
+          print('Custom-media3 source not yet compatible; original dependency gate remains closed')
+          PY

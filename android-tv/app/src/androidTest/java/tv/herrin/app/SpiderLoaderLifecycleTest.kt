@@ -36,9 +36,17 @@ class SpiderLoaderLifecycleTest {
         val pending = async(dispatcher) {
             bridge.browse(site, TvBoxConfig.Single(listOf(site), emptyList(), true))
         }
+        val mainBlocked = CountDownLatch(1)
+        val releaseMain = CountDownLatch(1)
+        Handler(Looper.getMainLooper()).post {
+            mainBlocked.countDown()
+            releaseMain.await(4, TimeUnit.SECONDS)
+        }
         try {
+            assertTrue("fixture must hold the first main dispatch", mainBlocked.await(3, TimeUnit.SECONDS))
             dispatcher.runNext() // browse entered, first main-thread dispatch still pending
             bridge.close()
+            releaseMain.countDown()
             inst.waitForIdleSync()
             while (!pending.isCompleted) {
                 dispatcher.runNext()
@@ -49,6 +57,7 @@ class SpiderLoaderLifecycleTest {
             assertEquals("revoked queued apply must not bind a loader service", 0, fixture.binds)
             assertEquals(0, fixture.calls)
         } finally {
+            releaseMain.countDown()
             pending.cancel(); bridge.close(); dispatcher.release(); pending.join()
             inst.waitForIdleSync()
         }

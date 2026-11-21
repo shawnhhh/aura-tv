@@ -1,0 +1,29 @@
+{
+  "baseline": "0a0623ed424d187fad78b8127b5f51d28f909700",
+  "compileDebugKotlin": "passed",
+  "compileDebugAndroidTestKotlin": "passed",
+  "TmdbBrowseRepositoryTest": {
+    "name": "tv.herrin.app.TmdbBrowseRepositoryTest",
+    "tests": "21",
+    "skipped": "0",
+    "failures": "0",
+    "errors": "0",
+    "timestamp": "2026-11-18T01:30:42",
+    "hostname": "d2eb86fe8491",
+    "time": "6.081"
+  },
+  "static_check": "passed",
+  "playback_boundary_tests": {
+    "tests": 4,
+    "failures": 0
+  },
+  "device_targeted": {
+    "selected": 13,
+    "executed": 0,
+    "status": "blocked",
+    "reason": "No emulator/KVM; adb initialization also blocked by read-only user home."
+  },
+  "full_regression": "not rerun manually",
+  "ABBA": "not run",
+  "apk": "not generated"
+}

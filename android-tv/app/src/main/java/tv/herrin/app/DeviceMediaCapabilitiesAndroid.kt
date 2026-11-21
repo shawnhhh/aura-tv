@@ -63,17 +63,28 @@ internal object DeviceMediaCapabilitiesAndroid {
     }
 
     @Suppress("DEPRECATION")
-    private fun directPlayback(mime: String): MediaSupport {
+    fun directPlayback(mime: String, sampleRateHz: Int = 48_000, channelCount: Int = 6): MediaSupport {
+        if (sampleRateHz <= 0 || channelCount !in 1..8) return MediaSupport.UNKNOWN
         if (Build.VERSION.SDK_INT < 29) return MediaSupport.UNKNOWN
         return runCatching {
             val encoding = when (mime) {
                 "audio/ac3" -> AudioFormat.ENCODING_AC3
                 "audio/eac3" -> AudioFormat.ENCODING_E_AC3
                 "audio/eac3-joc" -> AudioFormat.ENCODING_E_AC3_JOC
+                "audio/true-hd" -> AudioFormat.ENCODING_DOLBY_TRUEHD
+                "audio/vnd.dts" -> AudioFormat.ENCODING_DTS
+                "audio/vnd.dts.hd" -> AudioFormat.ENCODING_DTS_HD
                 else -> return MediaSupport.UNKNOWN
             }
-            val format = AudioFormat.Builder().setEncoding(encoding).setSampleRate(48_000)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_5POINT1).build()
+            val mask = when (channelCount) {
+                1 -> AudioFormat.CHANNEL_OUT_MONO
+                2 -> AudioFormat.CHANNEL_OUT_STEREO
+                6 -> AudioFormat.CHANNEL_OUT_5POINT1
+                8 -> AudioFormat.CHANNEL_OUT_7POINT1_SURROUND
+                else -> return MediaSupport.UNKNOWN
+            }
+            val format = AudioFormat.Builder().setEncoding(encoding).setSampleRate(sampleRateHz)
+                .setChannelMask(mask).build()
             val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build()
             if (AudioTrack.isDirectPlaybackSupported(format, attributes)) MediaSupport.SUPPORTED

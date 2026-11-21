@@ -1,6 +1,5 @@
 package tv.herrin.app
 
-import android.os.SystemClock
 import android.util.Log
 import java.util.ArrayDeque
 
@@ -12,16 +11,19 @@ internal object HerrinPlaybackDiagnosticJournal {
     private val events = ArrayDeque<String>(256)
     private val stageCodes = setOf("LOOKUP", "SOURCE", "SPIDER", "PROXY", "MEDIA3", "RECOVERY", "CONFIG")
     private val eventCode = Regex("[A-Z][A-Z0-9_]{1,63}")
-    private val detailCode = Regex("[A-Z][A-Z0-9_]{1,31}(?:=[0-9]{1,5})?")
+    private val detailCode = Regex("[A-Z][A-Z0-9_]{1,31}(?:=[0-9]{1,12})?")
     @Synchronized fun record(stage: String, event: String, detail: String = "", session: String? = PlaybackDiagnosticSession.id()) {
         if (stage !in stageCodes || !eventCode.matches(event)) return
         val safe = detail.takeIf { it.isNotBlank() && detailCode.matches(it) }
         val safeSession = session?.takeIf { it.matches(Regex("[a-f0-9-]{36}")) }
-        val line = "T+${SystemClock.elapsedRealtime()}ms " + (safeSession?.let { "SID=$it " } ?: "") + "$stage $event" +
+        val line = "T+${(System.nanoTime() / 1_000_000)}ms " + (safeSession?.let { "SID=$it " } ?: "") + "$stage $event" +
             (safe?.let { " $it" } ?: "")
         if (events.size == 256) events.removeFirst()
         events.addLast(line)
-        Log.i("HerrinPlaybackDiag", line)
+        // Diagnostics must not turn an accepted source result into a failure.
+        // The bounded ring remains available if Android logging is unavailable
+        // (including plain JVM discovery tests).
+        runCatching { Log.i("HerrinPlaybackDiag", line) }
     }
     @Synchronized fun export(): String =
         "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\n" +

@@ -1,0 +1,22 @@
+{
+  "checkout_sha": "68a76b0405744d4ce4a724aba8b22d71fc016d1d",
+  "application_source_same_as": "3e1da7241b7ec2645cb19450695fe0e23a33bdc2",
+  "contract_check": "PASS",
+  "contract_java_compile": "UP-TO-DATE (unchanged sources)",
+  "cutover_check_executed": "PASS",
+  "dispatch_check_executed": "PASS",
+  "native_validator_unit_tests": 5,
+  "native_validator_unit_failures": 0,
+  "default_application": "HerrinApplication : android.app.Application",
+  "whole_kernel_installer_in_default_application": false,
+  "app_dependency": "project(:kernel-contract), not project(:adapter)",
+  "inspection_files": [
+    "app/src/main/java/tv/herrin/app/CrashJournal.kt",
+    "app/src/main/java/tv/herrin/app/HerrinKernelRuntime.kt",
+    "app/build.gradle.kts",
+    "settings.gradle.kts"
+  ],
+  "adapter_java_compiled": false,
+  "real_provider_frame_tested": false,
+  "note": "Contract and synthetic validator fixtures do not establish original kernel build or playback."
+}

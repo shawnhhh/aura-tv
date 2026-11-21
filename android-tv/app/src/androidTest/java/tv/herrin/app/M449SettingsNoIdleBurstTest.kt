@@ -29,7 +29,7 @@ class M449SettingsNoIdleBurstTest {
     }
     @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
 
-    @Test fun fourRapidDownKeysReachTmdbTokenAndReturnWithoutOpeningIme() {
+    @Test fun rapidSidebarKeysChangeDirectionWithoutOpeningIme() {
         compose.waitUntil(12_000) {
             runCatching {
                 compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
@@ -42,21 +42,22 @@ class M449SettingsNoIdleBurstTest {
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
             KeyEvent.KEYCODE_DPAD_CENTER)
         compose.waitUntil(5_000) {
-            runCatching { compose.onNodeWithTag("screen-first").assertIsFocused() }.isSuccess
+            runCatching { compose.onNodeWithTag("phone-config-main").assertIsFocused() }.isSuccess
         }
 
+        compose.onNodeWithTag("settings-module-影视源").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         val started = SystemClock.elapsedRealtime()
-        repeat(4) {
+        repeat(3) {
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(
                 KeyEvent.KEYCODE_DPAD_DOWN)
         }
         compose.waitUntil(8_000) {
             runCatching {
-                compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
+                compose.onNodeWithTag("settings-module-直播源").assertIsFocused()
             }.isSuccess
         }
         val downMs = SystemClock.elapsedRealtime() - started
-        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
+        compose.onNodeWithTag("settings-module-直播源").assertIsFocused()
 
         // Move back up three rows without intermediate idle waits. The
         // navigation intent must reverse the requested target, not the
@@ -67,11 +68,11 @@ class M449SettingsNoIdleBurstTest {
         }
         compose.waitUntil(8_000) {
             runCatching {
-                compose.onNodeWithTag("tvbox-warehouse-nav").assertIsFocused()
+                compose.onNodeWithTag("settings-module-影视源").assertIsFocused()
             }.isSuccess
         }
         val totalMs = SystemClock.elapsedRealtime() - started
-        Log.i("HerrinPerf", "m449_settings_burst_events=7 final_focus_correct=1 " +
+        Log.i("HerrinPerf", "m449_settings_burst_events=6 final_focus_correct=1 " +
             "four_down_ms=$downMs total_ms=$totalMs")
         assertTrue("Settings no-idle D-pad burst severe stall", totalMs < 15_000)
     }

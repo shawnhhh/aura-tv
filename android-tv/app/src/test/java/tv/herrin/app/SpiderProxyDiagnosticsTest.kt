@@ -4,6 +4,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SpiderProxyDiagnosticsTest {
+    @Test fun callbackDiagnosticsNeverConsumeOrCloseTheOriginalStream() {
+        var read=false
+        var closed=false
+        val input=object:java.io.InputStream(){
+            override fun read():Int { read=true; error("Diagnostics consumed a private stream") }
+            override fun close(){closed=true}
+        }
+        val response=arrayOf<Any>(200,"application/vnd.apple.mpegurl",input)
+        assertSame(response,SpiderProxyDiagnostics.observe({ value,error -> SpiderProxyDiagnostics.shape(value,error) }){response})
+        assertFalse(read)
+        assertFalse(closed)
+    }
     @Test fun recorderFailureCannotChangeOriginalProxyResponse() {
         val response = arrayOf<Any>(200, "video/mp4", java.io.ByteArrayInputStream(byteArrayOf(1)))
         val returned = SpiderProxyDiagnostics.observe({ _, _ -> error("recorder failed") }) { response }

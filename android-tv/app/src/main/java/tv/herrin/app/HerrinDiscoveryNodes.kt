@@ -18,10 +18,11 @@ internal object HerrinDiscoveryNodes {
             nodes += HerrinSourceDiscovery.Node(source.id, if(source.type == HerrinSourceType.NAS) "NAS" else "云盘", source.type,
                 search = { source.search(identity).also { offers = it } },
                 details = { offer ->
-                    val playlist = HerrinPersonalPlaylistBuilder.create(offers.ifEmpty { listOf(offer) }, source::playback)
+                    if (offers.isEmpty()) offers = source.search(identity)
+                    val playlist = HerrinPersonalPlaylistBuilder.createStable(offers.ifEmpty { listOf(offer) }, source::playback)
                     HerrinSourceDiscovery.Detail(offer.film.copy(playbackEpisodes = playlist.episodes,
                         episodes = playlist.episodes.size), playlist.mediaByLine)
-                }, timeoutMs = 1_500, identity = identity)
+                }, timeoutMs = 1_500, identity = identity, bundledPersonalLayout = true)
         }
         cms.forEach { (origin, site, owner) ->
             val source = HerrinTvBoxCmsSource(site, repo, allowHttp)

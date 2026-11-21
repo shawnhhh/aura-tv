@@ -58,6 +58,9 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
+    // Shared UI boundary only. Original engine classes are isolated until the
+    // complete kernel build and host classpath migration have passed.
+    implementation(project(":kernel-contract"))
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
     // GPL-3.0 CatVod SDK is source-compiled in this app module to avoid
     // AGP 8.7/D8 cross-module dexing failures; source stays in its own packages.

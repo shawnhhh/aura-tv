@@ -3,7 +3,6 @@ package tv.herrin.app
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -11,6 +10,7 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.After
 import org.junit.rules.ExternalResource
 import java.io.File
 import java.security.MessageDigest
@@ -22,6 +22,7 @@ class EmptySpiderHomeSelectionTest {
     private val server = MockWebServer()
     private lateinit var jarSpec: String
     private lateinit var cachedJar: File
+    private var inputUsed = false
     @get:Rule(order = 0) val fixture = object : ExternalResource() {
         override fun before() {
             context.getSharedPreferences("herrin", 0).edit().clear().commit()
@@ -44,12 +45,28 @@ class EmptySpiderHomeSelectionTest {
             context.getSharedPreferences("herrin", 0).edit().clear().commit()
         }
     }
-    @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 1) val compose = mainActivityComposeRule()
 
     private fun activate(tag: String) {
         compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag(tag).assertIsFocused()
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+    }
+    private fun awaitIme(shown: Boolean) {
+        compose.waitUntil(5_000) {
+            val state = inst.uiAutomation.executeShellCommand("dumpsys input_method").use { fd ->
+                java.io.FileInputStream(fd.fileDescriptor).bufferedReader().use { it.readText() }
+            }.substringAfter("Input method service state for ", "")
+            state.contains("mInputViewStarted=$shown") && state.contains("mWindowVisible=$shown")
+        }
+    }
+    @After fun dismissOwnedInput() {
+        if (inputUsed) {
+            compose.runOnUiThread {
+                compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+            }
+            awaitIme(false)
+        }
     }
     private fun importOriginalFixture() {
         compose.waitUntil(10_000) { runCatching {
@@ -61,13 +78,10 @@ class EmptySpiderHomeSelectionTest {
         compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/original.json").toString())
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-warehouse-load"))
         activate("tvbox-warehouse-load")
-        compose.waitUntil(15_000) { runCatching {
-            compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")
-        }.isSuccess }
+        compose.awaitAppliedWarehouse()
     }
     private fun assertSelectedEmptySource(advanced: Boolean = false) {
-        val expected = "TVBox " + (if (advanced) "Spider " else "") +
-            "Original empty-home fixture · 0 部；该影视点首页暂未返回影片，可继续搜索或检查来源授权"
+        val expected = "Original empty-home fixture：暂无影片，可继续搜索或检查来源授权"
         try {
             compose.waitUntil(15_000) { runCatching {
                 compose.onNodeWithTag("source-empty-status").assertIsDisplayed().assertTextEquals(expected)
@@ -94,7 +108,7 @@ class EmptySpiderHomeSelectionTest {
         importOriginalFixture()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-source-sites"))
         activate("settings-source-sites")
-        compose.onNodeWithTag("site-list").performScrollToNode(hasTestTag("site-select-0"))
+        compose.onNodeWithTag("site-select-0").assertExists()
         activate("site-select-0")
         assertSelectedEmptySource()
         activate("search")
@@ -107,12 +121,67 @@ class EmptySpiderHomeSelectionTest {
     }
     @Test fun advancedPreviewRetainsEmptyInitializedSource() {
         importOriginalFixture()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
-        activate("settings-advanced")
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-spider-0"))
+        compose.activityRule.openDiagnostics()
+        // A new diagnostic Activity restores the imported preview asynchronously.
+        // The curtain disappearing alone does not prove that its lazy items exist.
+        // Keep the same readiness budget and all original authority/selection checks.
+        compose.waitUntil(12_000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-spider-0"))
+            compose.onNodeWithTag("tvbox-spider-0").assertIsDisplayed()
+        }.isSuccess }
         activate("tvbox-spider-0")
         assertSelectedEmptySource(advanced = true)
         activate("search")
         compose.onNodeWithTag("search-input").assertIsDisplayed()
+    }
+
+    @Test fun selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken() {
+        importOriginalFixture()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-source-sites"))
+        activate("settings-source-sites")
+        compose.onNodeWithTag("site-select-0").assertExists()
+        activate("site-select-0")
+        assertSelectedEmptySource()
+        assertEquals("", Preferences(context).tmdbReadToken)
+        activate("search")
+        inputUsed = true
+        compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        awaitIme(true)
+        compose.onNodeWithTag("search-input").performTextReplacement("Original synthetic fixture")
+        val resultCard = SemanticsMatcher("actual result card") {
+            it.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { "" }.startsWith("card-")
+        } and hasText("Original synthetic fixture") and hasClickAction()
+        compose.waitUntil(10_000) { runCatching {
+            compose.onNode(resultCard).assertExists()
+        }.isSuccess }
+        val result = compose.onNode(resultCard)
+        result.performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.runOnUiThread {
+            compose.activity.window.decorView.windowInsetsController?.hide(android.view.WindowInsets.Type.ime())
+        }
+        compose.waitUntil(5_000) {
+            !compose.activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
+        }
+        awaitIme(false)
+        result.performSemanticsAction(SemanticsActions.RequestFocus)
+        result.assertIsFocused()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        // The detail surface is composed before the asynchronous worker reply.
+        // Wait for the actual required episode inside the ORIGINAL 10s budget,
+        // not merely for the loading container. Keep the final assertions below.
+        compose.waitUntil(10_000) { runCatching {
+            compose.onNodeWithTag("film-detail-list").assertIsDisplayed()
+                .performScrollToNode(hasTestTag("episode-2"))
+            compose.onNodeWithTag("episode-2").assertIsDisplayed()
+        }.isSuccess }
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("episode-2"))
+        compose.onNodeWithTag("episode-2").assertIsDisplayed()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5_000) { runCatching {
+            compose.onNodeWithTag("search-input").assertIsDisplayed()
+                .assertTextContains("Original synthetic fixture", substring = true)
+        }.isSuccess }
     }
 }

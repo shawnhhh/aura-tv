@@ -1,5 +1,10 @@
 # FongMi/TV 集成决策
 
+> 2026-11-11：以下为历史决策。当前方向已改为完整原版内核独立集成，
+> 不再以独立重写播放链路为目标。实际阶段、源码锁、调用差异、依赖及真实测试缺口见
+> [整体内核第一阶段检查点](../../docs/live-spider/20261111-fongmi-core-baseline.zh-CN.md)。
+> 当前尚未完成整体移植或真实出帧验收。
+
 2026-10-25 通过 GitHub 读取 FongMi/TV 的 `fongmi` 分支目录及 app/build.gradle：
 - `app/src/main` 为共享逻辑；`app/src/leanback` 为电视 UI；`app/src/mobile` 为移动端 UI。
 - 当前构建使用 leanback/mobile product flavors、catvod 模块及 `app/libs/*.aar` fileTree。

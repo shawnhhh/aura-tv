@@ -32,10 +32,12 @@ internal data class TmdbRailSpec(val page: TmdbBrowsePage, val kind: TmdbRailKin
         val country = region?.let { "&with_origin_country=$it" }.orEmpty()
         val discover = "/discover/$type?include_adult=false$genre$country"
         return when (kind) {
-            TmdbRailKind.HOT -> listOf("/trending/$type/week", "$discover&sort_by=popularity.desc")
+            TmdbRailKind.HOT -> if (page == TmdbBrowsePage.HOME)
+                listOf("/trending/$type/week", "$discover&sort_by=popularity.desc")
+                else listOf("$discover&sort_by=popularity.desc", "/trending/$type/week")
             TmdbRailKind.DOMESTIC -> listOf("$discover&sort_by=popularity.desc")
             TmdbRailKind.LATEST -> listOf(if (type == "movie")
-                "$discover&with_release_type=4%7C6&release_date.lte=$today&sort_by=primary_release_date.desc"
+                "$discover&with_release_type=4%7C5%7C6&region=${region ?: "US"}&release_date.gte=${today.minusYears(1)}&release_date.lte=$today&sort_by=primary_release_date.desc"
                 else "$discover&first_air_date.lte=$today&air_date.lte=$today&include_null_first_air_dates=false&sort_by=first_air_date.desc")
             TmdbRailKind.RATED -> listOf("$discover&vote_count.gte=" + minVotes(type) + "&sort_by=vote_average.desc")
         }
@@ -43,7 +45,7 @@ internal data class TmdbRailSpec(val page: TmdbBrowsePage, val kind: TmdbRailKin
     fun minVotes(type: String) = if (type == "movie") 300 else 100
     companion object {
         fun forPage(page: TmdbBrowsePage) = (if (page == TmdbBrowsePage.HOME)
-            listOf(TmdbRailKind.HOT, TmdbRailKind.DOMESTIC) else TmdbRailKind.entries).map { TmdbRailSpec(page, it) }
+            listOf(TmdbRailKind.HOT, TmdbRailKind.DOMESTIC, TmdbRailKind.LATEST) else TmdbRailKind.entries).map { TmdbRailSpec(page, it) }
     }
 }
 
@@ -51,33 +53,37 @@ internal enum class TmdbAvailability { AVAILABLE, UPCOMING, THEATRICAL_ONLY, UNK
 internal data class TmdbReleaseProof(val state: TmdbAvailability, val date: LocalDate? = null)
 internal object TmdbReleaseEvidence {
     private fun date(text: String) = runCatching { LocalDate.parse(text.take(10)) }.getOrNull()
-    fun evaluate(type: String, detail: JSONObject, today: LocalDate): TmdbReleaseProof {
+    fun evaluate(type: String, detail: JSONObject, today: LocalDate, releaseRegions: Set<String>? = null): TmdbReleaseProof {
+        if (type !in setOf("movie", "tv")) return TmdbReleaseProof(TmdbAvailability.UNKNOWN)
         if (type == "tv") {
             val first = date(detail.optString("first_air_date")) ?: return TmdbReleaseProof(TmdbAvailability.UNKNOWN)
             if (first > today) return TmdbReleaseProof(TmdbAvailability.UPCOMING, first)
-            val last = date(detail.optString("last_air_date"))
-                ?: detail.optJSONObject("last_episode_to_air")?.let { date(it.optString("air_date")) }
+            val last = detail.optJSONObject("last_episode_to_air")?.let { date(it.optString("air_date")) }
+                ?: date(detail.optString("last_air_date"))
             val actual = last != null && last >= first && last <= today && detail.optInt("number_of_episodes") > 0
             val status = detail.optString("status")
             return if (actual && status in setOf("Returning Series", "Ended", "Canceled", "In Production"))
-                TmdbReleaseProof(TmdbAvailability.AVAILABLE, first) else TmdbReleaseProof(TmdbAvailability.UNKNOWN)
+                TmdbReleaseProof(TmdbAvailability.AVAILABLE, last) else TmdbReleaseProof(TmdbAvailability.UNKNOWN)
         }
+        val digital = mutableListOf<LocalDate>()
         val dates = mutableListOf<LocalDate>()
         var theatre = false
         var future = false
         val regions = detail.optJSONObject("release_dates")?.optJSONArray("results")
         if (regions != null) for (i in 0 until minOf(regions.length(), 100)) {
-            val rows = regions.optJSONObject(i)?.optJSONArray("release_dates") ?: continue
+            val country = regions.optJSONObject(i) ?: continue
+            if (releaseRegions != null && country.optString("iso_3166_1") !in releaseRegions) continue
+            val rows = country.optJSONArray("release_dates") ?: continue
             for (j in 0 until minOf(rows.length(), 100)) {
                 val row = rows.optJSONObject(j) ?: continue
                 val day = date(row.optString("release_date")) ?: continue
-                if (row.optInt("type") in setOf(4, 6)) {
-                    if (day <= today) dates += day else future = true
+                if (row.optInt("type") in setOf(4, 5, 6)) {
+                    if (day <= today) { dates += day; if (row.optInt("type") == 4) digital += day } else future = true
                 } else if (row.optInt("type") in 1..3 && day <= today) theatre = true
             }
         }
         return when {
-            dates.isNotEmpty() -> TmdbReleaseProof(TmdbAvailability.AVAILABLE, dates.minOrNull())
+            dates.isNotEmpty() -> TmdbReleaseProof(TmdbAvailability.AVAILABLE, (digital.ifEmpty { dates }).minOrNull())
             future -> TmdbReleaseProof(TmdbAvailability.UPCOMING)
             theatre -> TmdbReleaseProof(TmdbAvailability.THEATRICAL_ONLY)
             date(detail.optString("release_date"))?.let { it > today } == true -> TmdbReleaseProof(TmdbAvailability.UPCOMING)
@@ -146,5 +152,33 @@ internal object TmdbDomesticAllocator {
             result += block.sortedWith(compareBy<TmdbBrowseEntry> { slots.indexOf(it.domesticRegion) }.thenBy { rank.getValue(it.film.id) })
         }
         return result
+    }
+}
+
+/** Origin is independent of the market in which a movie was released. Never infer it from language. */
+internal object TmdbLatestPolicy {
+    val chinese = setOf("CN", "HK", "MO", "TW")
+    fun releaseMarkets(page: TmdbBrowsePage) = pools(page).flatten().toSet()
+    fun pools(page: TmdbBrowsePage): List<Set<String>> = when(page) {
+        TmdbBrowsePage.ANIME -> listOf(setOf("JP"), chinese)
+        TmdbBrowsePage.VARIETY -> listOf(chinese, setOf("KR"))
+        TmdbBrowsePage.DOCUMENTARY -> listOf(emptySet())
+        else -> listOf(setOf("US"), chinese)
+    }
+    fun matches(entry: TmdbBrowseEntry, pool: Set<String>): Boolean {
+        if (pool.isEmpty() || entry.countries.any(pool::contains)) return true
+        val query = entry.raw.optJSONArray("query_origin_country") ?: return false
+        val constrained = (0 until query.length()).map { query.optString(it) }.toSet()
+        return constrained.isNotEmpty() && pool.containsAll(constrained)
+    }
+    fun allocate(page: TmdbBrowsePage, items: List<TmdbBrowseEntry>, limit: Int = 20): List<TmdbBrowseEntry> {
+        val sorted = items.distinctBy { it.film.id }.sortedByDescending { it.availability.date }
+        val pools = pools(page)
+        if (pools.size == 1) return sorted.take(limit)
+        val first = sorted.filter { matches(it, pools[0]) }.take(limit / 2)
+        val second = sorted.filter { it.film.id !in first.map { f -> f.film.id } && matches(it, pools[1]) }.take(limit / 2)
+        val selected = (first + second).toMutableList()
+        selected += sorted.filter { e -> selected.none { it.film.id == e.film.id } }.take(limit - selected.size)
+        return selected.sortedByDescending { it.availability.date }
     }
 }

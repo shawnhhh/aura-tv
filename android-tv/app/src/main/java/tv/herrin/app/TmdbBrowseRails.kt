@@ -10,12 +10,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 internal object TmdbBrowseFocus {
     fun tag(page: TmdbBrowsePage, key: String, id: String, recent: Boolean): String = when {
@@ -37,14 +41,35 @@ internal fun TmdbBrowseRails(
     state: TmdbBrowseState, page: TmdbBrowsePage, recent: List<Film>, reduced: Boolean,
     requester: (String) -> FocusRequester, onFocus: (Film, String) -> Unit, onOpen: (Film, String) -> Unit, restoreFocus: String? = null
 ) {
+    // The page owns pagination, observers and focus jobs together. Cancelling only
+    // navigation left requests from the previous category alive in this scope.
+    key(page) { TmdbBrowsePageRails(state, page, recent, reduced, requester, onFocus, onOpen, restoreFocus) }
+}
+
+@Composable
+private fun TmdbBrowsePageRails(
+    state: TmdbBrowseState, page: TmdbBrowsePage, recent: List<Film>, reduced: Boolean,
+    requester: (String) -> FocusRequester, onFocus: (Film, String) -> Unit, onOpen: (Film, String) -> Unit,
+    restoreFocus: String?
+) {
     val scope = rememberCoroutineScope()
     val navigation = remember { arrayOfNulls<Job>(1) }
-    DisposableEffect(page) { onDispose { navigation[0]?.cancel(); navigation[0] = null } }
+    val pendingRow = remember { arrayOfNulls<String>(1) }
+    DisposableEffect(page) {
+        onDispose {
+            navigation[0]?.cancel()
+            navigation[0] = null
+            pendingRow[0] = null
+        }
+    }
     val specs = TmdbRailSpec.forPage(page)
     val lists = buildList<Pair<String, List<Film>>> {
         if (page == TmdbBrowsePage.HOME) add("recent" to recent)
         specs.forEach { s -> add(s.key to state.row(s).entries.map { it.film }) }
     }
+    val currentLists by rememberUpdatedState(lists)
+    // Restore once on entering this page, never on every normal focus change.
+    var restorePending by remember { mutableStateOf(restoreFocus) }
     val hasRecent = page == TmdbBrowsePage.HOME && recent.isNotEmpty()
     Column(Modifier.fillMaxWidth().testTag("tmdb-page-" + page.name.lowercase()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         lists.forEachIndexed { rowIndex, (key, films) ->
@@ -68,33 +93,80 @@ internal fun TmdbBrowseRails(
                     contentPadding = PaddingValues(10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     itemsIndexed(films, key = { _, f -> f.id }) { index, film ->
                         val tag = TmdbBrowseFocus.tag(page, key, film.id, hasRecent)
-                        LaunchedEffect(tag) {
-                            if (tag == restoreFocus) {
-                                withFrameNanos { }
-                                runCatching { requester(tag).requestFocus() }
+                        DisposableEffect(tag) {
+                            onDispose { state.attachedPosters.remove(tag) }
+                        }
+                        LaunchedEffect(tag, restorePending) {
+                            if (tag == restorePending) {
+                                // Data/cached IDs can outlive a LazyRow item's focus target.
+                                // Never let a detached requester crash the main UI coroutine.
+                                repeat(RemoteMotionPolicy.FOCUS_RETRY_FRAMES) {
+                                    snapshotFlow { state.isPosterAttached(tag) }.first { it }
+                                    if (runCatching { requester(tag).requestFocus() }.isSuccess)
+                                        return@LaunchedEffect
+                                    withFrameNanos { }
+                                }
+                                CrashJournal.browseFocus(page.name, "restore-missed", false, films.size)
                             }
                         }
                         Poster(film, Modifier.testTag(tag).focusRequester(requester(tag))
+                            .onGloballyPositioned { state.attachedPosters[tag] = true }
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     event.nativeKeyEvent.keyCode in setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)) {
                                     val up = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP
-                                    val targetIndex = if (up) (rowIndex - 1 downTo 0).firstOrNull { lists[it].second.isNotEmpty() }
-                                        else (rowIndex + 1 until lists.size).firstOrNull { lists[it].second.isNotEmpty() }
+                                    // Key repeats can arrive before scroll/requestFocus commits on the
+                                    // next frame. Route from that pending destination, not the old
+                                    // poster still receiving input, or Down/Up escapes to the hero.
+                                    val live = currentLists
+                                    val fromKey = if (navigation[0]?.isActive == true) pendingRow[0] ?: key else key
+                                    val fromRow = live.indexOfFirst { it.first == fromKey }.takeIf { it >= 0 } ?: rowIndex
+                                    val targetIndex = if (up) (fromRow - 1 downTo 0).firstOrNull { live[it].second.isNotEmpty() }
+                                        else (fromRow + 1 until live.size).firstOrNull { live[it].second.isNotEmpty() }
+                                    val targetKey = targetIndex?.let { live[it].first }
                                     navigation[0]?.cancel()
+                                    pendingRow[0] = targetKey ?: fromKey
+                                    CrashJournal.browseFocus(page.name, if (up) "up" else "down",
+                                        status?.loading == true, films.size)
                                     navigation[0] = scope.launch {
-                                        if (targetIndex == null) { if (up) requester("play").requestFocus() }
-                                        else {
-                                            val (targetKey, targetFilms) = lists[targetIndex]
-                                            val n = index.coerceAtMost(targetFilms.lastIndex)
-                                            state.scrolls.getOrPut(targetKey) { LazyListState() }.scrollToItem(n)
-                                            withFrameNanos { }
-                                            runCatching { requester(TmdbBrowseFocus.tag(page, targetKey, targetFilms[n].id, hasRecent)).requestFocus() }
+                                        if (targetKey == null) {
+                                            // A missing next shelf is normal while TMDB loads or fails.
+                                            // Never send focus to a detached button.
+                                            if (up && runCatching { requester("details").requestFocus() }.isFailure)
+                                                CrashJournal.browseFocus(page.name, "hero-missed", false, films.size)
+                                            return@launch
                                         }
+                                        // A row can be replaced/emptied after the key event and
+                                        // before scroll/layout completes. Retry boundedly using the
+                                        // CURRENT entry ID, not a captured stale requester.
+                                        repeat(12) {
+                                            currentCoroutineContext().ensureActive()
+                                            val targetFilms = currentLists.firstOrNull { it.first == targetKey }?.second.orEmpty()
+                                            if (targetFilms.isEmpty()) return@launch
+                                            val n = index.coerceAtMost(targetFilms.lastIndex)
+                                            val id = targetFilms[n].id
+                                            val targetTag = TmdbBrowseFocus.tag(page, targetKey, id,
+                                                page == TmdbBrowsePage.HOME &&
+                                                    currentLists.firstOrNull { it.first == "recent" }?.second?.isNotEmpty() == true)
+                                            val targetRail = state.scrolls.getOrPut(targetKey) { LazyListState() }
+                                            // scrollToItem can suspend or be cancelled on category change.
+                                            targetRail.scrollToItem(n)
+                                            withFrameNanos { }
+                                            val sameTarget = currentLists.firstOrNull { it.first == targetKey }
+                                                ?.second?.getOrNull(n)?.id == id
+                                            if (sameTarget && state.isPosterAttached(targetTag) &&
+                                                targetRail.layoutInfo.visibleItemsInfo.any { it.key == id } &&
+                                                runCatching { requester(targetTag).requestFocus() }.isSuccess)
+                                                return@launch
+                                        }
+                                        CrashJournal.browseFocus(page.name, "target-missed",
+                                            status?.loading == true, currentLists.firstOrNull {
+                                                it.first == targetKey
+                                            }?.second?.size ?: 0)
                                     }
                                     true
                                 } else false
-                            }, reduced, onFocus = { requestedForFocus = null; focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
+                            }, reduced, onFocus = { restorePending = null; requestedForFocus = null; focusedPoster = film.id; state.focus(key); onFocus(film, tag) }, onClick = { onOpen(film, tag) })
                     }
                     if (spec != null && status != null && (status.error || status.unknown > 0)) item(key = "retry") {
                         TvButton("重试此栏目", Modifier.testTag("tmdb-retry-$key"), reduced = reduced, onFocus = { focusedPoster = null }) {

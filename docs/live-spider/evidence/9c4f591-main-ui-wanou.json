@@ -1,0 +1,64 @@
+{
+  "node": "玩偶哥哥",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 3063
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 4135
+    },
+    {
+      "stage": "search",
+      "result": "FAILED",
+      "failure_code": "STAGE_TIMEOUT",
+      "elapsed_ms": 30049
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": false,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "玩偶",
+  "spider_api": "csp_WoGGGuard",
+  "node_count": 48,
+  "config_saved": true,
+  "declared_jar_md5": "9d5f341aa5f3353b50cc3bc16b4f3e8a",
+  "failure_stage": "search",
+  "failure_code": "STAGE_TIMEOUT",
+  "worker_exit": "系统记录的其他退出原因",
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+118719ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+119406ms SPIDER INITIALIZE_STARTED\nT+122965ms SPIDER INITIALIZE_RETURNED MS=3559",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 37943,
+  "evidence_review": {
+    "source_commit": "9c4f591",
+    "run_id": 42876168824,
+    "job_id": 130039922318,
+    "controlled_empty_home_tests": "3/3 PASS; original fixture, not real-source evidence",
+    "spider_search_observed": false,
+    "interpretation": "MainActivity search timeout with no IPC SEARCH_STARTED. Not a provider search verdict; investigate route/input/foreground."
+  }
+}

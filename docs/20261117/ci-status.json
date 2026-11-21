@@ -1,0 +1,63 @@
+{
+  "checked_at": "2026-11-17 10:27:34 UTC",
+  "code_checkpoint": "18cd46e1",
+  "production_source_identical_to": "7ad7cd96bae0e3adb28fe2c0bcb42a5ba1b53b6d",
+  "last_remote_debug_job": {
+    "url": "https://github.com/shawnhhh/aura-tv/actions/runs/44061553509/job/133964588804",
+    "result": "success",
+    "jvm_tests": 738,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "runs": [
+    {
+      "id": 44063653234,
+      "name": "HERRIN TMDB Same Device ABBA",
+      "sha": "419f1d6abcf145516ff6d938808715f53213590c",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/shawnhhh/aura-tv/actions/runs/44063653234"
+    },
+    {
+      "id": 44063653347,
+      "name": "HERRIN Android TV Emulator",
+      "sha": "419f1d6abcf145516ff6d938808715f53213590c",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/shawnhhh/aura-tv/actions/runs/44063653347"
+    },
+    {
+      "id": 44063653383,
+      "name": "HERRIN Android Debug",
+      "sha": "419f1d6abcf145516ff6d938808715f53213590c",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/shawnhhh/aura-tv/actions/runs/44063653383"
+    },
+    {
+      "id": 44061553509,
+      "name": "HERRIN Android Debug",
+      "sha": "7ad7cd96bae0e3adb28fe2c0bcb42a5ba1b53b6d",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "url": "https://github.com/shawnhhh/aura-tv/actions/runs/44061553509"
+    },
+    {
+      "id": 44061553360,
+      "name": "HERRIN Android TV Emulator",
+      "sha": "7ad7cd96bae0e3adb28fe2c0bcb42a5ba1b53b6d",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/shawnhhh/aura-tv/actions/runs/44061553360"
+    },
+    {
+      "id": 44061553422,
+      "name": "HERRIN TMDB Same Device ABBA",
+      "sha": "7ad7cd96bae0e3adb28fe2c0bcb42a5ba1b53b6d",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/shawnhhh/aura-tv/actions/runs/44061553422"
+    }
+  ]
+}

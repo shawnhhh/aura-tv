@@ -1,0 +1,102 @@
+{
+  "node": "奶酪",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 5029
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 7004
+    },
+    {
+      "stage": "search",
+      "result": "PASS",
+      "elapsed_ms": 774
+    },
+    {
+      "stage": "details_and_episodes",
+      "result": "PASS",
+      "elapsed_ms": 1138
+    },
+    {
+      "stage": "first_frame_0",
+      "result": "FAILED",
+      "failure_code": "MEDIA_PROBE_NETWORK_ERROR",
+      "elapsed_ms": 3171
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": true,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "奶酪",
+  "spider_api": "csp_T4Guard",
+  "node_count": 48,
+  "config_saved": true,
+  "declared_jar_md5": "9d5f341aa5f3353b50cc3bc16b4f3e8a",
+  "film_identity_verified": true,
+  "episode_count": 29,
+  "alternate_line_available": false,
+  "episode_selection_attempt": 1,
+  "episode_driver_action": "ACTIVATE_EPISODE_BUTTON",
+  "episode_ui_kind": "SOURCE_EPISODE_BUTTON",
+  "pipeline_failure_component": "MEDIA_VALIDATION_BEFORE_MEDIA3",
+  "failure_stage": "first_frame_0",
+  "failure_code": "MEDIA_PROBE_NETWORK_ERROR",
+  "driver_failure_structure": "CAUSE tv.herrin.app.FanTaiYingRealMainUiTest$Stop\ntv.herrin.app.FanTaiYingRealMainUiTest.failProductionGate:173\ntv.herrin.app.FanTaiYingRealMainUiTest.node$lambda$44:315\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$hC4RDiwBynsYb-IGIxaaU9WxsKM:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda31.invoke:0\ntv.herrin.app.FanTaiYingRealMainUiTest.step$lambda$15:126\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$TahwOK8H7DSJHpX_brCSlLbL-0g:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda16.invoke:0\nandroidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil:434\nandroidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil:306\ntv.herrin.app.FanTaiYingRealMainUiTest.step:113\ntv.herrin.app.FanTaiYingRealMainUiTest.node:314\ntv.herrin.app.FanTaiYingRealMainUiTest.cheeseRealNode:220",
+  "main_activity_lifecycle": "RESUMED",
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 4160
+      }
+    ],
+    "response_chars": 4160,
+    "shape": "JSON_LIST"
+  },
+  "sdk_network_scope": "PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+48513ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+49801ms SPIDER INITIALIZE_STARTED\nT+55869ms SPIDER INITIALIZE_RETURNED MS=6068\nT+58297ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+58710ms SPIDER SEARCH_STARTED\nT+58939ms SPIDER SEARCH_RETURNED MS=229\nT+60012ms SPIDER DETAILS_EPISODES_STARTED\nT+60259ms SPIDER DETAILS_EPISODES_RETURNED MS=246\nT+60260ms SPIDER DETAILS_RETURNED COUNT=29\nT+60260ms SPIDER DETAIL_LINES_RETURNED COUNT=1\nT+61023ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SOURCE SELECTION_STARTED\nT+61403ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESOLVE_STARTED\nT+62018ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESOLVE_RETURNED MS=615\nT+62018ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER PARSER_DIRECT\nT+62018ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESPONSE_URL_STRING\nT+62018ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESPONSE_PARSE VALUE=0\nT+62018ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESPONSE_JX VALUE=0\nT+62019ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER HEADER_FALLBACK\nT+62019ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER PARSER_DIRECT\nT+62019ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESPONSE_URL_STRING\nT+62019ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESPONSE_PARSE VALUE=0\nT+62019ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER RESPONSE_JX VALUE=0\nT+62019ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER HEADER_FALLBACK\nT+62020ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER PLAYER_CONTENT_RETURNED\nT+62020ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 PROXY HEALTH_STARTED\nT+62073ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 PROXY HEALTH_READY\nT+62093ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SOURCE MEDIA_REQUEST HOP=0\nT+62093ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SOURCE MEDIA_TARGET_PROXY\nT+63601ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SOURCE MEDIA_CALL_FAILED\nT+63601ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SOURCE MEDIA_CONNECT_IO_TIMEOUT\nT+63601ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SOURCE MEDIA_IO_TIMEOUT\nT+63601ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SOURCE MEDIA_PROBE_NETWORK_ERROR\nT+63612ms SID=2a26c345-570e-4ea3-9588-36fdc5a29a03 SPIDER PLAYER_CONTENT_REJECTED",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 19760,
+  "evidence_review": {
+    "source_commit": "0ada209d5451ce42a05646681e27c236de1a412d",
+    "run_id": 42880188825,
+    "job_id": 130054061906,
+    "interpretation": "Real MainActivity source episode button and playerContent reached; Health READY, probe timed out~1500ms before HTTP headers, no Media3 created. Legacy MEDIA_CONNECT_IO_TIMEOUT does not prove connect phase; new passive phases needed. No new HTTP502/403 observed in this report."
+  }
+}

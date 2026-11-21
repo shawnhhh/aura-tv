@@ -65,4 +65,17 @@ class M452RemoteHoldSeekTest {
         assertNull(seek.down(1, 1, 900L))
         assertEquals(5_000L, seek.up(1))
     }
+    @Test fun sustainedHoldAcceleratesWithoutChangingDecoderSpeedAndResetsOnRelease() {
+        val seek = RemoteHoldSeek()
+        seek.down(1, 0, 0)
+        assertEquals(10000L, seek.down(1, 1, 1000))
+        assertEquals(2, seek.acceleration)
+        assertEquals(20000L, seek.down(1, 2, 2000))
+        assertEquals(4, seek.acceleration)
+        assertEquals(RemoteHoldSeek.MAX_BATCH_MS, seek.down(1, 3, 3000))
+        assertEquals(8, seek.acceleration)
+        seek.up(1)
+        assertEquals(1, seek.acceleration)
+        assertNull(seek.up(1))
+    }
 }

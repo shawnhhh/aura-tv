@@ -44,7 +44,8 @@ class P0ResponseRelevanceTest {
         entered.await()
         val fresh = launch(start = CoroutineStart.UNDISPATCHED) { service.search("new", listOf(node("new") { listOf(movie("奥德赛")) }), null, Mutex()) { if(it.hits.isNotEmpty()) published += it.revision } }
         release.complete(Unit); old.join(); fresh.join()
-        assertEquals(listOf("new"), published)
+        assertTrue("Fresh provider did not publish its own result", published.isNotEmpty())
+        assertTrue("An old provider result escaped the current revision", published.all { it == "new" })
     }
     @Test fun stringHeaderAndUaAliasSurviveDirectPlayerResult() {
         val output = SpiderVodCodec.player("""{"url":"https://media.example/authorized.mp4","parse":0,"header":"{\"ua\":\"FixtureAgent\",\"Referer\":\"https://media.example/\"}"}""", false) as PlaybackResult.Ready

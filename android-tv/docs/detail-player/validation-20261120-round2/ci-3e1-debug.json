@@ -1,0 +1,15 @@
+{
+  "source_sha": "3e1da7241b7ec2645cb19450695fe0e23a33bdc2",
+  "run_id": 44714558232,
+  "debug_job_id": 136214658649,
+  "debug_result": "success",
+  "samba_preflight": "success (six unchanged tests)",
+  "jvm": { "tests": 790, "failures": 0, "errors": 0, "skipped": 0 },
+  "lint_and_debug": "success",
+  "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44714558232/artifacts/14619317602",
+  "apk_bytes": 27070154,
+  "apk_sha256_from_ci_log": "7e59814bed4476abed5ff8b716a42e6d3d87faab5eeb1e4a4fe80b133d05ad91",
+  "diagnostic_only": true,
+  "independently_downloaded": false,
+  "note": "Source/hash sidecars included; hash is APK, not artifact ZIP. Original adapter and real provider/TCL acceptance remain blocked."
+}

@@ -1,0 +1,18 @@
+{
+  "application_source_identical_to": "7ad7cd96bae0e3adb28fe2c0bcb42a5ba1b53b6d",
+  "workspace_head": "18cd46e11b3ff91fafb6e37d1baa97ec7aace047",
+  "debug_only": true,
+  "real_device_accepted": false,
+  "artifacts": [
+    {
+      "path": "android-tv/app/build/outputs/apk/debug/app-debug.apk",
+      "bytes": 28842490,
+      "sha256": "48f3b93c222b8281fbb7080593f0c065554e782cadafab8f0d284a57512b8cd9"
+    },
+    {
+      "path": "android-tv/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
+      "bytes": 7347257,
+      "sha256": "3e2a9c4014736b596ec2b7eecf8121791d4ced7a00eb7ead02ed86f833c981ff"
+    }
+  ]
+}

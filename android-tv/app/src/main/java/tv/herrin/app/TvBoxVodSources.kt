@@ -223,8 +223,9 @@ internal class TvBoxVodRepository {
             ?: return@withContext TvBoxVodResult.Error("该站点不是可识别的 HTTP(S) CMS，或尚未授权 HTTP")
         try {
             val films = TvBoxVodCodec.decode(responseJson(fetchJson(endpoint,site.headers),site), allowHttp, allowOpaque = site.apiType == 4)
-            if (films.isEmpty()) TvBoxVodResult.Error("接口没有返回可识别的影视条目")
-            else TvBoxVodResult.Ready(films)
+            // A parsed CMS list may legitimately be empty before login or
+            // before catalog publication. Parsing/auth/HTTP failures still fail.
+            TvBoxVodResult.Ready(films)
         } catch (error: Exception) {
             if(error is kotlinx.coroutines.CancellationException)throw error
             TvBoxVodResult.Error("CMS 列表读取失败：${error.message.orEmpty().take(110)}")

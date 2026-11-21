@@ -1,0 +1,112 @@
+.............................
+----------------------------------------------------------------------
+Ran 29 tests in 0.069s
+
+OK
+{
+  "head": null,
+  "run_id": null,
+  "event": null,
+  "jobs": {
+    "VALIDATION_RESULT": null,
+    "BUILD_RESULT": null,
+    "NODES_RESULT": null,
+    "TV_RESULT": null
+  },
+  "nodes": {
+    "cheese": {
+      "environment": {},
+      "real_playback_accepted": false,
+      "verdict": "TEST_INFRASTRUCTURE_FAILED",
+      "failure_stage": null,
+      "failure_code": null
+    },
+    "wanou": {
+      "environment": {},
+      "real_playback_accepted": false,
+      "verdict": "TEST_INFRASTRUCTURE_FAILED",
+      "failure_stage": null,
+      "failure_code": null
+    }
+  },
+  "android_toolchain_available": false,
+  "all_requested_nodes_accepted": false,
+  "p0_complete": false
+}
+{
+  "head": null,
+  "run_id": null,
+  "event": null,
+  "jobs": {
+    "VALIDATION_RESULT": null,
+    "BUILD_RESULT": null,
+    "NODES_RESULT": null,
+    "TV_RESULT": null
+  },
+  "nodes": {
+    "cheese/xiaocheng": {
+      "environment": {},
+      "real_playback_accepted": false,
+      "verdict": "TEST_INFRASTRUCTURE_FAILED",
+      "failure_stage": null,
+      "failure_code": null
+    },
+    "cheese/shinchan": {
+      "environment": {
+        "kvm_ready": true,
+        "emulator_booted": true,
+        "apks_installed": true,
+        "instrumentation_started": true,
+        "instrumentation_completed": true
+      },
+      "real_playback_accepted": false,
+      "verdict": "REAL_PLAYBACK_PASS",
+      "failure_stage": null,
+      "failure_code": null
+    }
+  },
+  "android_toolchain_available": false,
+  "all_requested_nodes_accepted": false,
+  "p0_complete": false
+}
+{
+  "head": null,
+  "run_id": null,
+  "event": null,
+  "jobs": {
+    "VALIDATION_RESULT": null,
+    "BUILD_RESULT": null,
+    "NODES_RESULT": null,
+    "TV_RESULT": null
+  },
+  "nodes": {
+    "cheese": {
+      "environment": {
+        "head": null,
+        "run_id": null,
+        "automatic_push_trigger": false,
+        "node": "cheese",
+        "kvm_ready": true,
+        "emulator_booted": true,
+        "apks_installed": true,
+        "instrumentation_started": true,
+        "instrumentation_completed": false,
+        "last_infrastructure_stage": "instrumentation-started",
+        "provider_report_present": true,
+        "provider_verdict": "REAL_PLAYBACK_PASS",
+        "provider_failure_stage": null,
+        "provider_failure_code": null,
+        "first_frame": false,
+        "seek_verified": false,
+        "next_condition": "Inspect the first failed provider stage and compare original behavior; change code, network or legitimate authorization before another request."
+      },
+      "real_playback_accepted": false,
+      "verdict": "REAL_PLAYBACK_PASS",
+      "failure_stage": null,
+      "failure_code": null
+    }
+  },
+  "android_toolchain_available": false,
+  "all_requested_nodes_accepted": false,
+  "p0_complete": false
+}

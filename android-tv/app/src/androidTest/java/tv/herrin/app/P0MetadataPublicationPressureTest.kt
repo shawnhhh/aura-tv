@@ -19,6 +19,7 @@ import org.junit.rules.ExternalResource
 class P0MetadataPublicationPressureTest {
     private val token="SyntheticReadAccessForPressure".repeat(4)
     private val requests=AtomicInteger()
+    private val requestUrls=java.util.concurrent.ConcurrentLinkedQueue<String>()
     private val offline=AtomicBoolean()
     @get:Rule(order=0) val setup=object:ExternalResource(){
         override fun before(){
@@ -30,6 +31,7 @@ class P0MetadataPublicationPressureTest {
             Preferences(c).tmdbReadToken=token
             MetadataFetchers.overrideForTests=ArtworkJsonFetcher { url,_ ->
                 requests.incrementAndGet()
+                requestUrls.add(url)
                 if(offline.get()) throw java.net.UnknownHostException()
                 val uri=URI(url)
                 when {
@@ -78,17 +80,25 @@ class P0MetadataPublicationPressureTest {
         compose.waitUntil(5000){runCatching{compose.onNodeWithTag("catalog-film-rail").performScrollToIndex(249)}.isSuccess}
         compose.onNodeWithTag("card-tmdb-movie-1250").assertExists()
         assertFalse(compose.activity.isFinishing)
-        assertTrue("Requests must stay bounded, including cancelled/restarted pages",requests.get()<70)
+        val counts = requestUrls.groupingBy { URI(it).path }.eachCount().toSortedMap()
+        val duplicates = requestUrls.groupingBy { it }.eachCount().filterValues { it > 1 }
+        android.util.Log.i("HerrinMetadataBudget", "total=${requests.get()} paths=$counts duplicates=$duplicates")
+        assertTrue("Requests must stay bounded, including cancelled/restarted pages: total=${requests.get()} paths=$counts duplicates=$duplicates",requests.get()<70)
     }
     @Test fun malformedDetailAndActivityRecreationRetainCachedHomeDuringNetworkLoss(){
         ready();compose.waitUntil(15000){cachedTmdbBrowseTestFilms(InstrumentationRegistry.getInstrumentation().targetContext, token).size>=100}
         compose.onNodeWithTag("nav-电影").performClick()
         compose.onNodeWithTag("tmdb-rail-movie-hot").performScrollToIndex(0)
         val posters=compose.onAllNodes(SemanticsMatcher("source card"){it.config.getOrElse(SemanticsProperties.TestTag){""}.startsWith("card-tmdb-movie-")})
+        // A cached home no longer hydrates the movie rail at startup. Wait for
+        // the first actual movie card after entering the category; do not click
+        // an empty placeholder while the selected rail restores asynchronously.
+        compose.waitUntil(10000) { runCatching { posters.onFirst().assertExists() }.isSuccess }
         val previousSearch=SourceSearchDiagnostics.currentStart()
         posters.onFirst().performClick()
         compose.onNodeWithTag("film-detail-list").assertExists()
-        compose.onNodeWithTag("tmdb-source-lookup-status").assertIsDisplayed()
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("source-region"))
+        compose.onNodeWithTag("source-region").assertIsDisplayed()
         compose.waitUntil(3000){SourceSearchDiagnostics.currentStart()!=previousSearch &&SourceSearchDiagnostics.firstFeedbackMs()>=0}
         android.util.Log.i("HerrinSourceFeedbackTest","controlled_metadata_no_private_provider_first_status_cpu_draw_ms=${SourceSearchDiagnostics.firstFeedbackMs()} physical_tcl=0")
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)

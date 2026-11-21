@@ -39,12 +39,12 @@ class M468TmdbFirstRouterTest {
 
     @Test fun tvboxFallbackOnlyWhenNoMatchingNasOrCloudMedia() = runBlocking {
         val calls = mutableListOf<String>()
-        val mismatched = HerrinSourceMovie("cloud", HerrinSourceType.CLOUD,
+        val mismatched = HerrinSourceMovie("cloud", HerrinSourceType.NAS,
             item("星际穿越", "2019", "cloud"), "movie")
         val usable = HerrinSourceMovie("cms", HerrinSourceType.TVBOX_CMS,
             item("Interstellar", "2014", "cms"), "movie")
         val result = HerrinFilmRouter(listOf(
-            source("cloud", HerrinSourceType.CLOUD, listOf(mismatched), calls),
+            source("cloud", HerrinSourceType.NAS, listOf(mismatched), calls),
             source("cms", HerrinSourceType.TVBOX_CMS, listOf(usable), calls)
         )).find(interstellar)
         assertEquals(listOf("cloud", "cms"), calls)

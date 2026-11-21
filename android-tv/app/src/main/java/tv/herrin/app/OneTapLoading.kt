@@ -1,0 +1,33 @@
+package tv.herrin.app
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.delay
+
+/** Only an explicit play intent mounts this effect. Focused posters never discover media. */
+@Composable
+internal fun OneTapDeadline(screen: String, film: String, foreground: Boolean, onTimeout: () -> Unit) {
+    val timeout by rememberUpdatedState(onTimeout)
+    LaunchedEffect(screen, film, foreground) {
+        if (screen == "play-intent" && foreground) { delay(20_000); timeout() }
+    }
+}
+
+@Composable
+internal fun OneTapLoading(onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    Box(Modifier.fillMaxSize().testTag("one-tap-loading"), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+internal fun OneTapFailureFallback(failed: Boolean, attempt: String, onFailure: () -> Unit) {
+    val failure by rememberUpdatedState(onFailure)
+    LaunchedEffect(failed, attempt) { if (failed) failure() }
+}

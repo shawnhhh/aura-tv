@@ -1,0 +1,21 @@
+{
+  "scope": "additional latest anime movie/series metadata test; synthetic metadata, not playback",
+  "totals": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "name": "tv.herrin.app.LatestReleasePolicyTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-17T10:21:41",
+      "hostname": "d1ee0d07b894",
+      "time": "0.405"
+    }
+  ]
+}

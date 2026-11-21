@@ -1,0 +1,38 @@
+{
+  "source_sha": "cb1d771d6b4b94d21804411772085f033ca13368",
+  "run": 44711296805,
+  "debug": {
+    "tests": 788,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "tv_preflight": {
+    "tests": 1,
+    "failures": 1,
+    "line": 764,
+    "passed_before_failure": [
+      "fresh B detail request",
+      "no-routes message displayed after scrolling",
+      "selected node remains CMS B"
+    ],
+    "failed_assertion": "Choose source line prompt missing"
+  },
+  "failure_excerpt": [
+    "2026-11-20T09:43:09.6039944Z INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: No node found that matches Text + EditableText contains '请选择片源线路' (ignoreCase: false) in scrollable container",
+    "2026-11-20T09:43:09.6040844Z Semantics of the node:",
+    "2026-11-20T09:43:09.6041329Z Node #467 at (l=0.0, t=0.0, r=1920.0, b=1080.0)px, Tag: 'film-detail-list'",
+    "2026-11-20T09:43:09.6041850Z IsTraversalGroup = 'true'",
+    "2026-11-20T09:43:09.6042442Z VerticalScrollAxisRange = 'ScrollAxisRange(value=60.0, maxValue=60.0, reverseScrolling=false)'",
+    "2026-11-20T09:43:09.6043215Z CollectionInfo = 'androidx.compose.ui.semantics.CollectionInfo@1a59763'",
+    "2026-11-20T09:43:09.6043852Z Actions = [ScrollBy, ScrollByOffset, IndexForKey, ScrollToIndex, GetScrollViewportLength]",
+    "2026-11-20T09:43:09.6044366Z Has 9 children",
+    "2026-11-20T09:43:09.6044968Z Selector used: (TestTag = 'film-detail-list')",
+    "2026-11-20T09:43:09.6045238Z ",
+    "2026-11-20T09:43:09.6045542Z \tat androidx.compose.ui.test.ActionsKt.performScrollToNode(Actions.kt:264)",
+    "2026-11-20T09:43:09.6046777Z \tat tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:764)",
+    "2026-11-20T09:43:09.6047488Z "
+  ],
+  "unfiltered_suite_started": false,
+  "diagnosis": "Failed detail invalidated discovery cache but kept the stale episode UI projection. Clear only the current failed selection's projection/media provenance; use the real loading lifecycle for the loading hint."
+}

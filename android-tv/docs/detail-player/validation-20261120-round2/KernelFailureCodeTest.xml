@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tv.herrin.app.KernelFailureCodeTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-20T06:15:06" hostname="5a86a02e2909" time="0.003">
+  <properties/>
+  <testcase name="wrappedDenialsAndTransportFailuresKeepTheirActualStage" classname="tv.herrin.app.KernelFailureCodeTest" time="0.001"/>
+  <testcase name="denialAndExpiredAuthorityNeverEnterAutomaticAlternateSourceRecovery" classname="tv.herrin.app.KernelFailureCodeTest" time="0.001"/>
+  <testcase name="unknownErrorsRemainUnknownWithoutLeakingTheirMessages" classname="tv.herrin.app.KernelFailureCodeTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

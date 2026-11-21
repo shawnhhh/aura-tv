@@ -1,0 +1,93 @@
+{
+  "node": "奶酪",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "蜡笔小新",
+  "authorized_year": null,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 4624
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 7284
+    },
+    {
+      "stage": "search",
+      "result": "PASS",
+      "elapsed_ms": 1414
+    },
+    {
+      "stage": "tv_candidate_details_0",
+      "result": "PASS",
+      "elapsed_ms": 1165
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": false,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "armv7l",
+    "process_64bit": false,
+    "production_selected_abi": "armeabi-v7a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "奶酪",
+  "spider_api": "csp_T4Guard",
+  "node_count": 49,
+  "config_saved": true,
+  "declared_jar_md5": "6d10a60af6c0976836933c5f3cf9e8a7",
+  "tv_candidates_inspected": [
+    {
+      "title": "蜡笔小新：灼热的春日部舞者们",
+      "episode_count": 2,
+      "tv_title_verified": false,
+      "tv_category_verified": true
+    }
+  ],
+  "failure_stage": "tv_candidate_details_0",
+  "failure_code": "ComposeTimeoutException",
+  "driver_failure_structure": "CAUSE androidx.compose.ui.test.ComposeTimeoutException\nandroidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil:441\nandroidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil:306\ntv.herrin.app.FanTaiYingRealMainUiTest.selectTvCandidate:241\ntv.herrin.app.FanTaiYingRealMainUiTest.node:338\ntv.herrin.app.FanTaiYingRealMainUiTest.cheeseRealNode:266\njava.lang.reflect.Method.invoke:-1\norg.junit.runners.model.FrameworkMethod$1.runReflectiveCall:59\norg.junit.internal.runners.model.ReflectiveCallable.run:12\norg.junit.runners.model.FrameworkMethod.invokeExplosively:56\norg.junit.internal.runners.statements.InvokeMethod.evaluate:17\norg.junit.rules.ExternalResource$1.evaluate:54\nandroidx.compose.ui.test.junit4.AndroidComposeTestRule$apply$1$evaluate$1.invoke:272",
+  "search_input_length": 4,
+  "search_input_matches_authorized_title": true,
+  "main_activity_lifecycle": "RESUMED",
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 217805
+      }
+    ],
+    "response_chars": 217805,
+    "shape": "JSON_LIST"
+  },
+  "sdk_network_scope": "PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+46308ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+47658ms SPIDER INITIALIZE_STARTED\nT+53969ms SPIDER INITIALIZE_RETURNED MS=6310\nT+56306ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+56838ms SPIDER SEARCH_STARTED\nT+57604ms SPIDER SEARCH_RETURNED MS=766\nT+59221ms SPIDER DETAILS_EPISODES_STARTED\nT+59390ms SPIDER DETAILS_EPISODES_RETURNED MS=169\nT+59391ms SPIDER DETAILS_RETURNED COUNT=2\nT+59391ms SPIDER DETAIL_LINES_RETURNED COUNT=1\nT+59675ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+60042ms SPIDER SEARCH_STARTED\nT+60324ms SPIDER SEARCH_RETURNED MS=281",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 27560
+}

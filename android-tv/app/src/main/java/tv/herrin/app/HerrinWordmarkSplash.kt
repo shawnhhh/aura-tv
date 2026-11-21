@@ -22,13 +22,28 @@ import androidx.compose.ui.semantics.contentDescription
 import kotlin.math.cos
 
 internal object WordmarkMotion {
-    const val REVEAL_MS = 1800f
+    const val REVEAL_MS = 2250f
+    const val BRIGHTEN_MS = 850f
     const val BREATH_MS = 2400f
-    const val MIN_READY_MS = REVEAL_MS + BREATH_MS
-    fun brightness(elapsedMs: Float): Float = if (elapsedMs < REVEAL_MS) 1f else
-        (0.85 + 0.15 * cos((elapsedMs - REVEAL_MS) / BREATH_MS * 2 * Math.PI)).toFloat()
-    fun glow(elapsedMs: Float): Float = if(elapsedMs<REVEAL_MS)0f else
-        ((1-cos((elapsedMs-REVEAL_MS)/BREATH_MS*2*Math.PI))*.5).toFloat()
+    const val BREATH_START_MS = REVEAL_MS + BRIGHTEN_MS
+    const val REVEAL_BRIGHTNESS = 0.58f
+    const val MIN_READY_MS = BREATH_START_MS + 300f
+    // V13 revised: the *entire* wordmark first feathers in at a comfortable
+    // brightness; only after 2250ms may any letter begin to grow brighter.
+    // Smoothly brighten to white, then keep the 2400ms breathing wave alive.
+    fun brightness(elapsedMs: Float): Float {
+        if (elapsedMs <= REVEAL_MS) return REVEAL_BRIGHTNESS
+        if (elapsedMs < BREATH_START_MS) {
+            val x = ((elapsedMs - REVEAL_MS) / BRIGHTEN_MS).coerceIn(0f, 1f)
+            val eased = x * x * (3f - 2f * x)
+            return REVEAL_BRIGHTNESS + (1f - REVEAL_BRIGHTNESS) * eased
+        }
+        return (0.79 + 0.21 * cos((elapsedMs - BREATH_START_MS) / BREATH_MS * 2 * Math.PI)).toFloat()
+    }
+    // Confine the subtle, synchronized glow to the six glyph outlines.
+    fun glow(elapsedMs: Float): Float =
+        if (elapsedMs <= REVEAL_MS) 0f
+        else ((brightness(elapsedMs) - REVEAL_BRIGHTNESS) / (1f - REVEAL_BRIGHTNESS)).coerceIn(0f, 1f)
     fun ready(elapsedMs: Float) = elapsedMs >= MIN_READY_MS
     fun reveal(elapsedMs: Float): Float = (elapsedMs / REVEAL_MS).coerceIn(0f, 1f)
 }
@@ -42,16 +57,19 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     val elapsed = remember { mutableFloatStateOf(0f) }
     var skipped by remember { mutableStateOf(false) }
     val renderer=remember{WordmarkRenderer()}
+    DisposableEffect(renderer) { onDispose { renderer.close() } }
     // Input callbacks must complete in the same dispatch, even when a test or
     // the system pauses the animation clock. Effects and held OK share one gate.
     val ready=remember { booleanArrayOf(false) }
+    val prepared=remember { booleanArrayOf(false) }
+    fun prepareOnce() { if (!prepared[0]) { prepared[0]=true; visible() } }
     val announced=remember { booleanArrayOf(false) }
     fun revealOnce() {
         if(announced[0])return
         announced[0]=true
         StartupTiming.wordmarkVisible()
         StartupTiming.wordmarkComplete()
-        visible() // Construct the home behind the curtain while one full breath runs.
+        prepareOnce()
     }
     fun completeOnce() {
         if(ready[0])return
@@ -71,8 +89,11 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
         var reportedReady = false
         while (true) {
             val now = withFrameNanos { it }
+            // The previous positive-time frame has now had a draw opportunity.
+            // Mounting the large home before that frame can stall first reveal.
+            if (reportedVisible) prepareOnce()
             elapsed.floatValue = (now - start) / 1_000_000f
-            if (!reportedVisible && elapsed.floatValue >= WordmarkMotion.REVEAL_MS * 0.08f) {
+            if (!reportedVisible && elapsed.floatValue > 0f) {
                 reportedVisible = true
                 StartupTiming.wordmarkVisible()
             }

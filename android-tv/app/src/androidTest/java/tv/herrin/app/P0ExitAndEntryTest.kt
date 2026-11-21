@@ -83,8 +83,8 @@ class P0ExitAndEntryTest {
         compose.onNodeWithTag("phone-config-close").assertIsDisplayed()
         back();compose.onNodeWithTag("phone-config-dialog").assertDoesNotExist()
         compose.onNodeWithTag("exit-dialog").assertDoesNotExist()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tmdb-phone-config"))
-        compose.onNodeWithTag("tmdb-phone-config").performClick()
+        compose.onNodeWithTag("settings-module-海报与资料").performClick()
+        compose.onNodeWithTag("phone-config-main").performClick()
         compose.onAllNodesWithTag("phone-config-dialog").assertCountEquals(1)
         back();compose.onNodeWithTag("settings-list").assertExists()
     }
@@ -107,6 +107,8 @@ class P0ExitAndEntryTest {
             fixture.start()
             fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
                 .setBody("""{"sites":[{"name":"扫码刷新样本","api":"${fixture.url("/cms")}"}]}"""))
+            fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"list":[{"vod_id":"phone-fixture","vod_name":"Original phone import"}]}"""))
             compose.onNodeWithTag("settings").performClick()
             compose.onNodeWithTag("phone-config-main").performClick()
             compose.onNodeWithTag("phone-config-http").assertDoesNotExist()
@@ -135,12 +137,39 @@ class P0ExitAndEntryTest {
             compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("phone-config-approve").assertIsDisplayed() }.isSuccess }
             compose.onNodeWithTag("phone-config-approve").performClick()
             val key = post("/pair", pair).getString("session")
-            post("/sources", org.json.JSONObject().put("url", fixture.url("/box.json").toString()), key)
-            compose.waitUntil(15000) { fixture.requestCount > 0 }
+            val submitted = post("/sources", org.json.JSONObject().put("url", fixture.url("/box.json").toString()), key)
+            assertEquals("SAVED", submitted.getString("state"))
+            val importId = submitted.getString("importId")
+            compose.waitUntil(15000) {
+                post("/sources/status", org.json.JSONObject().put("importId", importId), key).getString("state") == "ACTIVE"
+            }
+            assertEquals(fixture.url("/box.json").toString(),
+                Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            val workingRoot = fixture.url("/box.json").toString()
+            for ((path, response, code) in listOf(
+                Triple("/denied.json", okhttp3.mockwebserver.MockResponse().setResponseCode(403), "SOURCE_HTTP_403"),
+                Triple("/invalid.json", okhttp3.mockwebserver.MockResponse().setBody("not-json"), "SOURCE_BODY_INVALID"),
+                Triple("/warehouses.json", okhttp3.mockwebserver.MockResponse().setBody("""{"urls":[]}"""), "SOURCE_WAREHOUSE_PARSE_FAILED")
+            )) {
+                fixture.enqueue(response)
+                val failed = post("/sources", org.json.JSONObject().put("url", fixture.url(path).toString()), key)
+                var result = org.json.JSONObject()
+                compose.waitUntil(15000) {
+                    result = post("/sources/status", org.json.JSONObject().put("importId", failed.getString("importId")), key)
+                    result.optString("state") == "FAILED"
+                }
+                assertEquals(code, result.getString("code"))
+                assertEquals(workingRoot, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            }
             compose.onNodeWithTag("phone-config-close").performClick()
-            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("vod-apply-feedback"))
-            compose.waitUntil(15000) { runCatching { compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置") }.isSuccess }
+            assertEquals(workingRoot, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            compose.onNodeWithTag("settings-source-sites").assertExists()
             assertEquals("/box.json", fixture.takeRequest().path)
+            assertTrue(fixture.takeRequest().path!!.startsWith("/cms?"))
+            assertEquals("/denied.json", fixture.takeRequest().path)
+            assertEquals("/invalid.json", fixture.takeRequest().path)
+            assertEquals("/warehouses.json", fixture.takeRequest().path)
+            assertEquals(5, fixture.requestCount)
         }
     }
 }

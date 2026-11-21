@@ -35,6 +35,13 @@ internal object CrashJournal {
     @Volatile private var phase = "IDLE"
     @Volatile private var location = "browse/首页"
     @Volatile private var memory = "memory=not_sampled"
+    @Volatile private var lastBrowseFocus = "browse_focus=none"
+    /** Constant labels only; no movie names, source links, tokens or user text. */
+    fun browseFocus(page: String, step: String, loading: Boolean, count: Int) {
+        if (page !in setOf("HOME", "MOVIE", "SERIES", "ANIME", "VARIETY", "DOCUMENTARY")) return
+        if (step !in setOf("up", "down", "restore-missed", "hero-missed", "target-missed")) return
+        lastBrowseFocus = "browse_focus=$page/$step loading=$loading visible_count=${count.coerceIn(0, 999)}"
+    }
     @Volatile var previous: String = "上次 Java 异常：尚无脱敏记录"
         private set
     @Volatile private var imageFailures = 0
@@ -62,7 +69,7 @@ internal object CrashJournal {
             try {
                 // Bounded local write only. Snapshot was collected before the exception.
                 val text = "JAVA_UNCAUGHT time=${System.currentTimeMillis()} process=$process\n" +
-                    "stage=$phase location=$location $memory\n" + SafeCrashSummary.format(error)
+                    "stage=$phase location=$location $memory $lastBrowseFocus\n" + SafeCrashSummary.format(error)
                 file.outputStream().use { it.write(text.toByteArray(Charsets.UTF_8)) }
             } catch (_: Throwable) { /* Preserve Android's original fatal handling, including OOM. */ }
             finally { previousHandler.uncaughtException(thread, error) }
@@ -73,7 +80,7 @@ internal object CrashJournal {
         val file = File(context.filesDir, "last-safe-stage.txt")
         runCatching {
             val tmp = File(context.filesDir, "last-safe-stage.tmp")
-            tmp.writeText("CHECKPOINT time=${System.currentTimeMillis()} stage=$phase location=$location $memory")
+            tmp.writeText("CHECKPOINT time=${System.currentTimeMillis()} stage=$phase location=$location $memory $lastBrowseFocus")
             if (!tmp.renameTo(file)) tmp.delete()
         }
     }
@@ -89,5 +96,9 @@ internal object CrashJournal {
 }
 
 class HerrinApplication : android.app.Application() {
-    override fun onCreate() { super.onCreate(); CrashJournal.install(this) }
+    override fun onCreate() {
+        super.onCreate()
+        CrashJournal.install(this)
+        HerrinKernelRuntime.attach(this)
+    }
 }

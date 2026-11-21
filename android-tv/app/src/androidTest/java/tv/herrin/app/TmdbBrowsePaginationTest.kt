@@ -26,7 +26,7 @@ class TmdbBrowsePaginationTest {
         val nextRequests=AtomicInteger()
         val repository=TmdbBrowseRepository(ArtworkJsonFetcher{url,key->
             val uri=URI(url)
-            if(uri.path.endsWith("/trending/movie/week")) {
+            if((uri.path.endsWith("/discover/movie") && url.contains("sort_by=popularity.desc") && !url.contains("with_origin_country"))) {
                 val page=Regex("(?:[?&])page=([0-9]+)").find(url)!!.groupValues[1].toInt()
                 if(page>1)nextRequests.incrementAndGet()
                 val payload=JSONObject(fixture.load(url.replace("page=$page","page=1"),key))

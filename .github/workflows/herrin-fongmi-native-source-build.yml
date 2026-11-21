@@ -1,0 +1,95 @@
+name: HERRIN pinned FongMi native candidate source build
+
+on:
+  # The locked FongMi/media candidate has been built and proven ABI-incompatible
+  # with the original TV@305dff2. Do not waste an expensive native build on
+  # every workflow edit; opt in only after the source revision actually changes.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Validate native artifact collector and compatibility fixture tests
+        run: |
+          PYTHONPATH=android-tv/fongmi-kernel python3 -m unittest discover \
+            -s android-tv/fongmi-kernel/tests -p 'test_native_candidate.py' -v
+          python3 -m py_compile android-tv/fongmi-kernel/collect_native_candidate.py \
+            android-tv/fongmi-kernel/verify_native_candidate.py
+      - name: Checkout exact public FongMi/media native source
+        uses: actions/checkout@v4
+        with:
+          repository: FongMi/media
+          ref: 3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d
+          path: vendor-media
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      # Cache only: the checked-out upstream wrapper selects Gradle 9.1.0.
+      # Do not hand-code an abbreviated version unsupported by setup-gradle.
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Prove native source identity and real ARM32/ARM64 inputs
+        run: |
+          test "$(git -C vendor-media rev-parse HEAD)" = 3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d
+          for abi in arm64-v8a armeabi-v7a; do
+            test -s "vendor-media/libraries/mpvplayer/src/main/jniLibs/$abi/libmpv.so"
+            test -s "vendor-media/libraries/mpvplayer/src/main/jniLibs/$abi/libplayer.so"
+            test -s "vendor-media/libraries/decoder_ffmpeg/src/main/jniLibs/$abi/libavcodec.so"
+            test -s "vendor-media/libraries/decoder_ffmpeg/src/main/jniLibs/$abi/libavformat.so"
+          done
+      - name: Build upstream MPV and FFmpeg release AAR candidates (no Herrin APK)
+        working-directory: vendor-media
+        run: |
+          ./gradlew :lib-decoder-ffmpeg:assembleRelease :lib-mpvplayer:assembleRelease \
+            --no-daemon --max-workers=2 --console=plain
+      - name: Collect real MPV and FFmpeg AARs from all upstream Gradle outputs
+        run: |
+          python3 android-tv/fongmi-kernel/collect_native_candidate.py \
+            --source vendor-media --directory native-candidate
+      - name: Check source-built ARM32/ARM64 ELF and exact original TV Java API
+        run: |
+          python3 android-tv/fongmi-kernel/verify_native_candidate.py \
+            --directory native-candidate \
+            --upstream android-tv/vendor/fongmi-core/upstream \
+            --output native-candidate/provenance.json
+      - name: Publish exact native candidate result (not playback acceptance)
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report_path = Path('native-candidate/provenance.json')
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as f:
+              f.write('## Pinned FongMi native build — not playback acceptance\n\n')
+              f.write('FongMi/media@3c2cbe8a was compiled from genuine source.\n\n')
+              if report_path.is_file():
+                  report = json.loads(report_path.read_text())
+                  f.write('**Audit status:** ' + report['status'] + '\n\n')
+                  for item in report['artifacts']:
+                      f.write(item['module'] + ': SHA-256 ' + item['sha256'] + '\n\n')
+                  if report['missing_original_tv_classes']:
+                      f.write('**Missing original TV native classes:**\n\n')
+                      for name in report['missing_original_tv_classes']:
+                          f.write('- ' + name + '\n')
+                      f.write('\n')
+              else:
+                  f.write('Native packaging/collection did not reach a completed audit.\n\n')
+              f.write('Never install these candidates in Herrin until original TV API, license, and binary compatibility are proven.\n')
+          PY
+      - name: Preserve authentic native candidates for compatibility review only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-built-fongmi-native-candidate-not-validated-for-herrin
+          path: native-candidate/
+          retention-days: 5

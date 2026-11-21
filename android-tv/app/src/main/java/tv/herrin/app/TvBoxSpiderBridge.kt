@@ -461,6 +461,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         checkOpen(ticket)
         proxy.setDiagnostic(object : NativeFongMiProxy.Diagnostic {
             override fun httpResponse(status: Int, range: Boolean) {
+                SpiderProxyDiagnostics.response(context, status, range)
                 HerrinPlaybackDiagnosticJournal.record("PROXY", "HTTP_RESPONSE", "STATUS=$status")
                 if (range) HerrinPlaybackDiagnosticJournal.record("PROXY", "RANGE_REQUEST")
             }

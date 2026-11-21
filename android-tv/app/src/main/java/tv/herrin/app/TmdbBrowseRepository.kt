@@ -25,6 +25,9 @@ internal class TmdbBrowseRepository(
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     private val network = Semaphore(3)
+    // Reserve one of the three network slots for visible browse lists.
+    // Slow per-title release proofs may use at most two slots.
+    private val proofNetwork = Semaphore(2)
     private val proofMemory = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, Pair<Long, JSONObject>>(512, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, JSONObject>>?) = size > 512
@@ -34,7 +37,7 @@ internal class TmdbBrowseRepository(
     private val ambiguous = ConcurrentHashMap<String, Set<Int>>()
     private val parser = HerrinTmdbDiscovery()
     private fun prefix(token: String) = MessageDigest.getInstance("SHA-256")
-        .digest(("browse-v2|zh-CN|$token").toByteArray()).joinToString("") { "%02x".format(it) }
+        .digest(("browse-v3|zh-CN|$token").toByteArray()).joinToString("") { "%02x".format(it) }
     private fun today() = Instant.ofEpochMilli(clock()).atZone(ZoneOffset.UTC).toLocalDate()
     private fun file(key: String) = directory?.let { File(it, "$key.json") }
     private fun read(key: String): JSONObject? = file(key)?.takeIf { it.isFile && it.length() in 1..1_000_000 }
@@ -53,20 +56,46 @@ internal class TmdbBrowseRepository(
                 ?.sortedByDescending(File::lastModified)?.drop(if (group == "-proof-") 512 else 64)?.forEach(File::delete)
         } finally { temporary.delete() }
     }
-    private suspend fun get(path: String, token: String): JSONObject = network.withPermit {
-        if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
-        runInterruptible(Dispatchers.IO) {
-            val endpoint = TmdbEndpoints.PRIMARY + path + (if ('?' in path) "&" else "?") + "language=zh-CN"
-            val raw = fetcher.load(endpoint, token) ?: throw IOException("TMDB_EMPTY_RESPONSE")
-            if (raw.length > 1_000_000) throw IOException("TMDB_RESPONSE_LIMIT")
-            val json = JSONObject(raw)
-            if (json.optBoolean("success", true).not()) throw IOException("TMDB_REJECTED")
-            json
+    // A stalled release proof must never hold a request stripe needed by browse lists.
+    // Cache deduplication remains per request type while the network still caps proofs at two.
+    private val listRequestLocks = Array(64) { Mutex() }
+    private val proofRequestLocks = Array(64) { Mutex() }
+    private val responses = java.util.Collections.synchronizedMap(
+        object : LinkedHashMap<String, Pair<Long, String>>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?) = size > 64
+        })
+    private suspend fun get(path: String, token: String, force: Boolean = false): JSONObject {
+        val key = prefix(token) + path
+        val previousResponse = responses[key]
+        val proofRequest = Regex("^/(movie|tv)/[0-9]+(?:/|\\?|$)").containsMatchIn(path)
+        val locks = if (proofRequest) proofRequestLocks else listRequestLocks
+        return locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
+            responses[key]?.takeIf { (!force || it !== previousResponse) && clock() - it.first in 0..30_000L }?.let { return@withLock JSONObject(it.second) }
+            val request: suspend () -> JSONObject = {
+                network.withPermit {
+                    if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
+                    runInterruptible(Dispatchers.IO) {
+                        val endpoint = TmdbEndpoints.PRIMARY + path + (if ('?' in path) "&" else "?") + "language=zh-CN"
+                        val raw = fetcher.load(endpoint, token) ?: throw IOException("TMDB_EMPTY_RESPONSE")
+                        if (raw.length > 1_000_000) throw IOException("TMDB_RESPONSE_LIMIT")
+                        val json = JSONObject(raw)
+                        if (json.optBoolean("success", true).not()) throw IOException("TMDB_REJECTED")
+                        responses[key] = clock() to raw
+                        json
+                    }
+                }
+            }
+            // Release/episode proof calls are individually slow or rate-limited.
+            // They must not occupy all three slots while HOT/DOMESTIC lists wait.
+            if (proofRequest) {
+                proofNetwork.withPermit { request() }
+            } else request()
         }
     }
+
     private val rowFields = setOf("id", "title", "name", "original_title", "original_name", "release_date",
         "first_air_date", "overview", "poster_path", "backdrop_path", "vote_average", "vote_count",
-        "genre_ids", "adult", "popularity", "media_type")
+        "genre_ids", "adult", "popularity", "media_type", "origin_country", "query_origin_country")
     private fun safeRow(row: JSONObject) = JSONObject().apply {
         rowFields.forEach { if (row.has(it)) put(it, row.get(it)) }
     }
@@ -93,18 +122,14 @@ internal class TmdbBrowseRepository(
             put("last_episode_to_air", JSONObject().put("air_date", it.optString("air_date").take(10)))
         }
         raw.optJSONObject("release_dates")?.optJSONArray("results")?.let { countries ->
-            val earliest = mutableMapOf<Int, String>()
-            for (i in 0 until minOf(100, countries.length())) {
-                val rows = countries.optJSONObject(i)?.optJSONArray("release_dates") ?: continue
-                for (j in 0 until minOf(100, rows.length())) rows.optJSONObject(j)?.let {
-                    val type = it.optInt("type")
-                    val day = it.optString("release_date").take(10)
-                    if (type in 1..6 && runCatching { java.time.LocalDate.parse(day) }.isSuccess &&
-                        (earliest[type] == null || day < earliest.getValue(type))) earliest[type] = day
+            // Keep country and type: collapsing worldwide dates destroys release-market evidence.
+            put("release_dates", JSONObject().put("results", JSONArray().apply {
+                for (i in 0 until minOf(100, countries.length())) {
+                    val country = countries.optJSONObject(i) ?: continue
+                    put(JSONObject().put("iso_3166_1", country.optString("iso_3166_1"))
+                        .put("release_dates", country.optJSONArray("release_dates") ?: JSONArray()))
                 }
-            }
-            put("release_dates", JSONObject().put("results", JSONArray().put(JSONObject().put("release_dates",
-                JSONArray().apply { earliest.forEach { (type, date) -> put(JSONObject().put("type", type).put("release_date", date)) } }))))
+            }))
         }
     }
 
@@ -141,7 +166,10 @@ internal class TmdbBrowseRepository(
     /** Learn series identity from reviewed serial-film IDs in the background, never from title words. */
     suspend fun warmAnimeRelations(token: String) = withContext(Dispatchers.IO) { coroutineScope {
         TmdbAnimeIp.serialMovies.keys.map { id -> async {
-            try { proof("movie", id, token) }
+            try {
+                val detail = safeProof(get("/movie/$id?append_to_response=release_dates", token))
+                learn("movie", id, detail, token)
+            }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { /* Unknown stays a movie; next refresh may retry. */ }
         } }.awaitAll()
@@ -150,13 +178,16 @@ internal class TmdbBrowseRepository(
     private suspend fun proof(type: String, id: Int, token: String, force: Boolean = false): JSONObject {
         val key = prefix(token) + "-proof-$type-$id"
         return proofLocks[(key.hashCode() and Int.MAX_VALUE) % proofLocks.size].withLock {
-            proofMemory[key]?.takeIf { clock() - it.first in 0..86_400_000L }?.let {
+            proofMemory[key]?.takeIf { !force && clock() - it.first in 0..86_400_000L }?.let {
                 return@withLock it.second
             }
             val disk = read(key)
             val recent = disk?.takeIf { !force && clock() - it.optLong("saved") in 0..86_400_000L }?.optJSONObject("proof")
             if (recent != null) { proofMemory[key] = disk.optLong("saved") to recent; learn(type, id, recent, token); return@withLock recent }
-            val fresh = get("/$type/$id" + if (type == "movie") "?append_to_response=release_dates" else "", token)
+            val fresh = if (type == "movie") {
+                val releases = get("/movie/$id/release_dates", token)
+                JSONObject().put("id", id).put("release_dates", releases)
+            } else get("/$type/$id", token)
             if (fresh.optInt("id") != id) throw IOException("TMDB_ID_MISMATCH")
             safeProof(fresh).also {
                 proofMemory[key] = clock() to it
@@ -175,7 +206,7 @@ internal class TmdbBrowseRepository(
         val category = TmdbAnimeIp.category(type, id, genres,
             proof.optJSONObject("belongs_to_collection")?.optInt("id"), collectionMap(token))
         val countries = buildSet {
-            proof.optJSONArray("origin_country")?.let { a -> for (i in 0 until minOf(8, a.length())) add(a.optString(i)) }
+            (row.optJSONArray("origin_country") ?: proof.optJSONArray("origin_country"))?.let { a -> for (i in 0 until minOf(8, a.length())) add(a.optString(i)) }
             proof.optJSONArray("production_countries")?.let { a -> for (i in 0 until minOf(20, a.length()))
                 a.optJSONObject(i)?.optString("iso_3166_1")?.let(::add) }
         }.filter { it.matches(Regex("[A-Z]{2}")) }.toSet()
@@ -198,26 +229,34 @@ internal class TmdbBrowseRepository(
         val rows = json.optJSONArray("entries") ?: JSONArray()
         val items = (0 until minOf(100, rows.length())).mapNotNull { i ->
             val r = rows.optJSONObject(i) ?: return@mapNotNull null
-            entry(r.getJSONObject("row"), r.getString("type"), r.getJSONObject("proof"), token)?.takeIf { eligible(spec, it) }
+            entry(r.getJSONObject("row"), r.getString("type"), r.getJSONObject("proof"), token)?.let { e ->
+                if (spec.kind == TmdbRailKind.LATEST) e.copy(availability = TmdbReleaseEvidence.evaluate(e.type, e.proof, today(),
+                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets(spec.page))) else e
+            }?.takeIf { eligible(spec, it) }
         }
         return TmdbBrowseBatch(select(spec, items), page, json.optBoolean("more"), json.optInt("unknown"))
     }
     private fun select(spec: TmdbRailSpec, entries: List<TmdbBrowseEntry>): List<TmdbBrowseEntry> = when (spec.kind) {
         TmdbRailKind.DOMESTIC -> TmdbDomesticAllocator.allocate(entries, 12)
         TmdbRailKind.RATED -> entries.sortedByDescending { it.film.ratingValue ?: 0.0 }.distinctBy { it.film.id }.take(20)
-        TmdbRailKind.LATEST -> entries.sortedByDescending { it.availability.date }.distinctBy { it.film.id }.take(20)
+        TmdbRailKind.LATEST -> TmdbLatestPolicy.allocate(spec.page, entries)
         else -> entries.distinctBy { it.film.id }.take(20)
     }
 
     fun eligible(spec: TmdbRailSpec, entry: TmdbBrowseEntry): Boolean =
-        entry.availability.state == TmdbAvailability.AVAILABLE &&
-            (spec.page == TmdbBrowsePage.HOME || entry.film.category == spec.page.label) &&
+        (spec.kind != TmdbRailKind.LATEST || entry.availability.state == TmdbAvailability.AVAILABLE) &&
+            (spec.page == TmdbBrowsePage.HOME || entry.film.category == spec.page.label ||
+                (spec.page == TmdbBrowsePage.ANIME && spec.kind == TmdbRailKind.LATEST &&
+                    entry.raw.optJSONArray("genre_ids")?.let { a -> (0 until a.length()).any { a.optInt(it) == 16 } } == true)) &&
+            (spec.kind != TmdbRailKind.LATEST || TmdbLatestPolicy.pools(spec.page).any { pool ->
+                pool.isEmpty() || TmdbLatestPolicy.matches(entry, pool) }) &&
             (spec.kind != TmdbRailKind.RATED || entry.votes >= spec.minVotes(entry.type)) &&
             (spec.kind != TmdbRailKind.DOMESTIC || entry.countries.any { it in setOf("CN", "HK", "TW") })
 
     suspend fun load(spec: TmdbRailSpec, page: Int, token: String, force: Boolean = false,
         onPreview: suspend (TmdbBrowseBatch) -> Unit = {}): TmdbBrowseBatch = withContext(Dispatchers.IO) {
         require(page in 1..50)
+        if (spec.kind == TmdbRailKind.LATEST) return@withContext loadLatest(spec, page, token, force, onPreview)
         val key = prefix(token) + "-page-" + spec.key + "-$page"
         val old = read(key)
         if (!force && old != null && clock() - old.optLong("saved") in 0..21_600_000L)
@@ -228,15 +267,20 @@ internal class TmdbBrowseRepository(
         val observed = mutableListOf<TmdbBrowseEntry>()
         val seen = hashSetOf<String>()
         suspend fun rows(path: String, fallbackType: String): List<Pair<JSONObject, String>> {
-            val root = get(path + (if ('?' in path) "&" else "?") + "page=$page", token)
+            val root = get(path + (if ('?' in path) "&" else "?") + "page=$page", token, force)
             if (root.optInt("page") != page || !root.has("results")) throw IOException("TMDB_PAGE_MISMATCH")
             more = more || root.optInt("total_pages", 1) > page
             val array = root.getJSONArray("results")
             return (0 until minOf(20, array.length())).mapNotNull { i ->
                 val row = array.optJSONObject(i) ?: return@mapNotNull null
                 val type = row.optString("media_type").takeIf { it in setOf("movie", "tv") } ?: fallbackType
-                if (type !in setOf("movie", "tv") || row.optBoolean("adult") || row.optInt("id") <= 0) null
-                else safeRow(row) to type
+                val released = row.optString(if (type == "movie") "release_date" else "first_air_date")
+                val future = runCatching { java.time.LocalDate.parse(released) > today() }.getOrDefault(false)
+                if (future || type !in setOf("movie", "tv") || row.optBoolean("adult") || row.optInt("id") <= 0) null
+                else safeRow(row).apply {
+                    val country = Regex("with_origin_country=([A-Z]{2})(?:&|$)").find(path)?.groupValues?.get(1)
+                    if (!has("origin_country") && country != null) put("origin_country", JSONArray().put(country))
+                } to type
             }
         }
         suspend fun enrich(candidates: List<Pair<JSONObject, String>>, limit: Int): List<TmdbBrowseEntry> = coroutineScope {
@@ -250,10 +294,14 @@ internal class TmdbBrowseRepository(
                         spec.page == TmdbBrowsePage.HOME || it.film.category == spec.page.label
                     }
                 }
-                if (previews.isNotEmpty()) onPreview(TmdbBrowseBatch(previews.take(20), page, more, previews.count { it.availability.state == TmdbAvailability.UNKNOWN }))
+                if (previews.isNotEmpty()) onPreview(TmdbBrowseBatch(previews.distinctBy { it.film.id }.take(20), page, more, previews.count { it.availability.state == TmdbAvailability.UNKNOWN }))
             }
             candidates.asSequence().filter { seen.add(it.second + "-" + it.first.optInt("id")) }.take(limit).toList().map { (row, type) -> async {
-                try { entry(row, type, proof(type, row.getInt("id"), token), token) }
+                try {
+                    // Lists already contain artwork, votes, genres and dates. Expand only on detail entry.
+                    val evidence = JSONObject().put("origin_country", row.optJSONArray("origin_country") ?: JSONArray())
+                    entry(row, type, evidence, token)
+                }
                 catch (cancel: CancellationException) { throw cancel }
                 catch (_: Exception) { null }
             } }.awaitAll().also { results ->
@@ -294,4 +342,100 @@ internal class TmdbBrowseRepository(
             } }))
         batch
     }
+    private val nextPages = ConcurrentHashMap<String, Int>()
+    private val pageLocks = Array(32) { Mutex() }
+    private suspend fun loadLatest(spec: TmdbRailSpec, page: Int, token: String, force: Boolean,
+        onPreview: suspend (TmdbBrowseBatch) -> Unit): TmdbBrowseBatch =
+        pageLocks[(spec.key.hashCode() and Int.MAX_VALUE) % pageLocks.size].withLock {
+        val key = prefix(token) + "-page-" + spec.key + "-$page"
+        val old = read(key)
+        if (!force && old != null && clock() - old.optLong("saved") in 0..3_600_000L)
+            return@withLock decodeBatch(spec, page, token, old)
+        val previousKey = prefix(token) + "-page-" + spec.key + "-${page-1}"
+        val previous = if (page > 1) read(previousKey) else null
+        val accepted = mutableListOf<TmdbBrowseEntry>()
+        val seen = hashSetOf<String>()
+        // Carry verified surplus into the next UI page instead of dropping it at the 20-card boundary.
+        if (previous != null) {
+            val displayed = decodeBatch(spec, page-1, token, previous).entries.map { it.film.id }.toSet()
+            val surplus = previous.optJSONArray("entries") ?: JSONArray()
+            for (i in 0 until surplus.length()) {
+                val wrapper = JSONObject().put("entries", JSONArray().put(surplus.getJSONObject(i)))
+                decodeBatch(spec, page, token, wrapper).entries.firstOrNull()?.let {
+                    seen.add(it.type + "-" + it.raw.optInt("id"))
+                    if (it.film.id !in displayed) accepted += it
+                }
+            }
+        }
+        var more = false
+        var checked = 0
+        val proofErrors = java.util.concurrent.atomic.AtomicInteger()
+        var failed = 0
+        val day = today()
+        val startPage = previous?.optInt("next", (page-1)*5+1) ?: nextPages[previousKey] ?: ((page-1)*5+1)
+        var nextSource = startPage
+        // Up to five source pages per UI page; fixed mapping prevents skipping candidates at pagination.
+        // Maximum 40 candidate proofs, three HTTP requests in flight, shared proof cache.
+        val completed = withTimeoutOrNull(15_000L) {
+        for (offset in 0 until 5) {
+            val sourcePage = startPage + offset
+            nextSource = sourcePage + 1
+            more = false
+            if (sourcePage > 500) break
+            for (pool in TmdbLatestPolicy.pools(spec.page)) for (type in spec.types) {
+                val market = if (spec.page == TmdbBrowsePage.DOCUMENTARY) null
+                    else TmdbLatestPolicy.releaseMarkets(spec.page).toList().let { it[offset % it.size] }
+                var path = spec.endpoints(type, day).first()
+                if (type == "movie") {
+                    path = path.replace("&region=US", market?.let { "&region=$it" }.orEmpty())
+                }
+                if (pool.isNotEmpty()) path += "&with_origin_country=" + pool.sorted().joinToString("%7C")
+                val root = try { get("$path&page=$sourcePage", token, force) }
+                    catch (cancel: CancellationException) { throw cancel }
+                    catch (_: Exception) { failed++; continue }
+                more = more || root.optInt("total_pages", 1) > sourcePage
+                val rows = root.optJSONArray("results") ?: continue
+                val candidates = (0 until minOf(20, rows.length())).mapNotNull { i ->
+                    val row = rows.optJSONObject(i) ?: return@mapNotNull null
+                    if (row.optInt("id") <= 0 || row.optBoolean("adult") ||
+                        row.optString("media_type", type) != type || !seen.add("$type-${row.optInt("id")}")) null else row
+                }
+                // Production origin is constrained by the official query, not inferred from dialogue.
+                // Cache the query constraint separately; never label it as all actual production countries.
+                val results = coroutineScope { candidates.take(minOf((40-checked).coerceAtLeast(0), 40 / (TmdbLatestPolicy.pools(spec.page).size * spec.types.size))).map { row ->
+                    checked++
+                    async {
+                        try {
+                            val evidence = proof(type, row.getInt("id"), token)
+                            val enriched = safeRow(row)
+                            if (pool.isNotEmpty()) enriched.put("query_origin_country", JSONArray(pool.toList()))
+                            entry(enriched, type, evidence, token)?.let { e ->
+                                val release = TmdbReleaseEvidence.evaluate(type, evidence, day,
+                                    if (spec.page == TmdbBrowsePage.DOCUMENTARY) null else TmdbLatestPolicy.releaseMarkets(spec.page))
+                                e.copy(availability = release)
+                            }?.takeIf { eligible(spec, it) }
+                        } catch (cancel: CancellationException) { throw cancel }
+                        catch (_: Exception) { proofErrors.incrementAndGet(); null }
+                    }
+                }.awaitAll().filterNotNull() }
+                accepted += results
+                if (accepted.isNotEmpty()) onPreview(TmdbBrowseBatch(select(spec, accepted), page, true))
+            }
+            val pools = TmdbLatestPolicy.pools(spec.page)
+            if (checked >= 40) break
+            if (accepted.size >= 20 && pools.all { p -> p.isEmpty() || accepted.count { e -> TmdbLatestPolicy.matches(e, p) } >= 10 }) break
+        }
+        true
+        }
+        if (completed == null) { nextSource = (nextSource - 1).coerceAtLeast(startPage); more = true }
+        if (accepted.isEmpty() && (failed > 0 || proofErrors.get() > 0 || completed == null)) throw IOException("TMDB_LATEST_UNAVAILABLE")
+        nextPages[key] = nextSource
+        val batch = TmdbBrowseBatch(select(spec, accepted), page, (more || accepted.size > 20) && page < 50)
+        write(key, JSONObject().put("saved", clock()).put("more", batch.hasMore).put("next", nextSource)
+            .put("entries", JSONArray().apply { accepted.forEach {
+                put(JSONObject().put("type", it.type).put("row", it.raw).put("proof", it.proof))
+            } }))
+        batch
+    }
+
 }

@@ -27,6 +27,17 @@ def violations(source_root):
     return found
 
 
+def verify_manager_route(panel, session):
+    # The committed UI now owns HerrinPlayerSession. Keep the sole-adapter
+    # boundary through that wrapper; requiring its constructor in the panel
+    # would incorrectly demand the removed direct ownership path.
+    assert panel.count('HerrinPlayerSession(') == 1, 'Panel must own exactly one player session'
+    assert 'HerrinPlaybackAdapter(' not in panel, 'Panel bypasses session ownership'
+    assert session.count('HerrinPlaybackAdapter(') == 1, 'Session must contain exactly one current-player adapter'
+    assert re.search(r'private\s+val\s+legacy\s*=\s*if\s*\(\s*original\s*==\s*null\s*\)\s*\{[^}]*HerrinPlaybackAdapter\(', session), \
+        'Current-player adapter must be exclusive with the original-core lease'
+
+
 def verify():
     source = Path(__file__).resolve().parents[1] / "app/src"
     found = violations(source)
@@ -41,7 +52,8 @@ def verify():
             creators.append(path.name)
     assert creators == ["FongMiExoPlayerFactory.kt"], f"Competing Exo creation paths: {creators}"
     panel = without_comments((source / "main/java/tv/herrin/app/AuthorizedPlaybackPanel.kt").read_text())
-    assert "HerrinPlaybackAdapter(" in panel
+    session = without_comments((source / "main/java/tv/herrin/app/HerrinPlayerSession.kt").read_text())
+    verify_manager_route(panel, session)
     assert not re.search(r"\bplayer\s*\.\s*(?:setMediaItem|prepare|release|setPlaybackSpeed)\s*\(", panel), \
         "Player preparation/release bypasses the sole production manager"
     assert "PlaybackTransport.cycle(player" not in panel, "Track choices bypass manager restoration"

@@ -77,12 +77,9 @@ class M438SingleWarehousePerformanceTest {
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             val started = SystemClock.elapsedRealtime()
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(15_000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
+            compose.awaitAppliedWarehouse()
             val importMs = SystemClock.elapsedRealtime() - started
-            assertEquals("Import must not run eleven third-party Spider plugins", 1, server.requestCount)
+            assertEquals("Import loads only the selected CMS, not eleven third-party Spider plugins", 2, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             val catalogStart = SystemClock.elapsedRealtime()

@@ -1,0 +1,7 @@
+2026-11-20T10:33:00.1250188Z AssertionError: Interactive offline home was not reached
+2026-11-20T10:33:00.2009357Z 11-20 10:32:51.421  2776  2776 I HerrinStartupPhase: phase=first_cpu_draw activity_to_phase_ms=636
+2026-11-20T10:33:00.2012173Z 11-20 10:32:51.641  2776  2776 I HerrinStartupPhase: phase=wordmark_visible activity_to_phase_ms=857
+2026-11-20T10:33:00.2013328Z 11-20 10:32:52.298  2776  2776 I HerrinStartupPhase: phase=home_init activity_to_phase_ms=1513
+2026-11-20T10:33:00.2048123Z 11-20 10:32:53.818  2776  2776 I HerrinStartupPhase: phase=network activity_to_phase_ms=3034
+2026-11-20T10:33:00.2049664Z 11-20 10:32:54.001  2776  2776 I HerrinStartupPhase: phase=wordmark_complete activity_to_phase_ms=3216
+2026-11-20T10:33:00.2055391Z 11-20 10:32:56.780  2776  2776 I HerrinStartup: process_to_activity_ms=1098 activity_to_first_draw_ms=636 first_draw_to_wordmark_ms=221 wordmark_complete_ms=3216 activity_to_home_ms=5996 home_init_ms=1513 artwork_start_ms=3034 network_start_ms=3034 system_brand_exit_ms=-1

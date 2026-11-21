@@ -92,7 +92,9 @@ internal object PlaybackErrorReport {
             .find(raw)?.groupValues?.get(1)
         val mediaProbe = Regex("MEDIA_PROBE_(?:INVALID_URL|UNAUTHORIZED_LOCAL|HTTP_ERROR|LOGIN_OR_TEXT|INVALID_RANGE|EMPTY_BODY|INVALID_MANIFEST|NETWORK_ERROR|PROBE_TIMEOUT)(?![A-Z_])").find(raw)?.value
         val parserCode = Regex("PARSE_(?:WEB_REQUIRED|NO_MEDIA_URL|INVALID_JSON|INVALID_RESULT_URL|INVALID_RESULT|INVALID_URL|TIMEOUT|DNS|CONNECT|TLS|JAR_CLASS|JAR_ABI|HTTP|FAILED)(?![A-Z_])").find(raw)?.value
+        val kernelCode = Regex("KERNEL_(?:AUTH_REQUIRED|TLS_FAILED|TIMEOUT|DNS_FAILED|CONNECT_FAILED|EMPTY_DETAIL|PLAYBACK_FAILED|SESSION_EXPIRED|SELECTION_EXPIRED|REQUEST_FAILED)(?![A-Z_])").find(raw)?.value
         val kind = when {
+            kernelCode != null -> "SOURCE_$kernelCode"
             mediaProbe != null -> "SOURCE_$mediaProbe"
             parserCode != null -> "SOURCE_$parserCode"
             proxyHealth != null -> "SOURCE_$proxyHealth"

@@ -7,7 +7,7 @@ import org.junit.Test
 class PlaybackExperiencePersistenceTest {
     @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
     @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
-    @Test fun realEndedMediaNotifiesNextOnceAndConsumerBackClosesOverlayFirst() {
+    @Test fun realEndedMediaNotifiesNextOnceAndConsumerBackReturnsDirectly() {
         val inst = InstrumentationRegistry.getInstrumentation()
         val f = java.io.File(inst.targetContext.cacheDir, "experience-original.mp4")
         inst.context.assets.open("synthetic.mp4").use { input -> f.outputStream().use { input.copyTo(it) } }
@@ -19,8 +19,6 @@ class PlaybackExperiencePersistenceTest {
                 scenario.onActivity { it.player.seekTo((it.player.duration-100).coerceAtLeast(0)) }
                 compose.waitUntil(10000) { var ended=false;scenario.onActivity { ended=it.nextEpisodeRequests==1 };ended }
                 inst.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_CENTER)
-                inst.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-                scenario.onActivity { assertFalse(it.player.isReleased);assertEquals(1,it.nextEpisodeRequests) }
                 inst.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
                 compose.waitUntil(10000) { var closed=false;scenario.onActivity { closed=it.player.isReleased };closed }
             }

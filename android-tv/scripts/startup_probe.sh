@@ -29,14 +29,15 @@ tracing=0
 if adb shell atrace --async_start -b 16384 gfx view wm am sched freq dalvik binder_driver > "$evidence/atrace-start.txt" 2>&1; then tracing=1; fi
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/cold-launch.txt"
 sleep 5
-adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/cold-diagnostics.txt"
 adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
 adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/home.xml"
-python3 - "$evidence/home.xml" <<'PY'
-import pathlib,sys
-text=pathlib.Path(sys.argv[1]).read_text()
-assert 'HERRIN' in text and '影片详情' in text, 'Interactive offline home was not reached'
-PY
+adb shell dumpsys window > "$evidence/cold-window.txt"
+# Observe lifecycle completion with the same UI snapshot. The old log capture
+# preceded uiautomator's idle/dump work and could miss the handoff it observed.
+adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/cold-diagnostics.txt"
+python3 android-tv/scripts/check_startup_probe.py --stage cold \
+    --xml "$evidence/home.xml" --window "$evidence/cold-window.txt" \
+    --diagnostics "$evidence/cold-diagnostics.txt" --report "$evidence/interactive-home.json"
 if [[ "$tracing" == 1 ]]; then adb shell atrace --async_stop -z > "$evidence/startup.atrace"; fi
 adb shell input keyevent KEYCODE_HOME
 # The HOME key is asynchronous. Starting Herrin before the launcher actually
@@ -85,10 +86,12 @@ adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 1
 adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
 adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/hot-remote.xml"
-python3 - "$evidence/hot-remote.xml" <<'PY'
-import pathlib,sys
-assert '精选电影' in pathlib.Path(sys.argv[1]).read_text(), 'Remote lost after startup/hot resume'
-PY
+adb shell dumpsys window > "$evidence/hot-remote-window.txt"
+adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/hot-diagnostics.txt"
+python3 android-tv/scripts/check_startup_probe.py --stage hot \
+    --xml "$evidence/hot-remote.xml" --window "$evidence/hot-remote-window.txt" \
+    --diagnostics "$evidence/hot-diagnostics.txt" --cold-diagnostics "$evidence/cold-diagnostics.txt" \
+    --report "$evidence/hot-resume.json"
 if grep -q 'FATAL EXCEPTION' "$evidence/cold-diagnostics.txt"; then exit 1; fi
 # Separate visual pass: screen recording perturbs timing, so it is never the perf source.
 adb shell am force-stop tv.herrin.app
@@ -105,14 +108,18 @@ mkdir -p "$evidence/visual-frames"
 ffmpeg -v error -i "$evidence/visual-only-startup.mp4" -vf fps=4 "$evidence/visual-frames/frame-%03d.png"
 adb shell uiautomator dump /sdcard/herrin-visual-home.xml >/dev/null
 adb exec-out cat /sdcard/herrin-visual-home.xml > "$evidence/visual-home.xml"
+adb shell dumpsys window > "$evidence/visual-window.txt"
+adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/visual-diagnostics.txt"
+python3 android-tv/scripts/check_startup_probe.py --stage visual \
+    --xml "$evidence/visual-home.xml" --window "$evidence/visual-window.txt" \
+    --diagnostics "$evidence/visual-diagnostics.txt" --report "$evidence/visual-home.json"
 python3 - "$evidence" <<'PYVISUAL'
 from pathlib import Path
 import json,sys
 root=Path(sys.argv[1])
 frames=list((root/'visual-frames').glob('frame-*.png'))
 assert len(frames)>=24, 'Startup visual evidence must contain at least six seconds at four samples/sec'
-text=(root/'visual-home.xml').read_text()
-assert 'HERRIN' in text and '影片详情' in text, 'Visual startup did not finish on the interactive home'
+assert json.loads((root/'visual-home.json').read_text())['interactive_ui'], 'Visual startup did not finish on the interactive home'
 record={'sampled_frames':len(frames),'samples_per_second':4,'recording_limit_seconds':12,
         'interactive_home_after_recording':True,'performance_source':False,'physical_TCL':False}
 (root/'visual-evidence.json').write_text(json.dumps(record,indent=2))

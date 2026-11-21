@@ -6,17 +6,21 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Function
 
 /** Documented subset of CatVod Runtime.dialog, matching FongMi SpiderDialog's QR/button wire format.
- * No URL polling, cookie/token extraction, input forms, browser injection or platform login bypass.
+ * No URL polling, cookie/token extraction, browser injection or platform login bypass.
  */
 internal object SpiderAuthorizationProtocol {
     const val MAX_CHARS = 350_000
     const val TIMEOUT_MS = 120_000L
-    class Button(val id: String, val label: String, val close: Boolean, val enabled: Boolean, val skipValidation: Boolean = false)
+    class Button(val id: String, val label: String, val close: Boolean, val enabled: Boolean,
+                 val validate: Set<String>? = null) {
+        val skipValidation: Boolean get() = validate?.isEmpty() == true
+        fun validates(name: String): Boolean = validate?.contains(name) ?: true
+    }
     // Deliberately not data classes: toString must never expose the QR payload.
     class Input(val name: String, val label: String, val type: String,
                 val required: Boolean, val maxLength: Int, val enabled: Boolean)
     class Options(val qr: String?, val image: String?, val buttons: List<Button>,
-                  val inputs: List<Input> = emptyList(), val busy: Boolean = false)
+                  val inputs: List<Input> = emptyList(), val busy: Boolean = false, val invalid: Boolean = false)
 
     fun parse(raw: String): Options {
         require(raw.length <= MAX_CHARS) { "Authorization payload too large" }
@@ -54,10 +58,15 @@ internal object SpiderAuthorizationProtocol {
                 "取消", "cancel", "关闭", "close" -> "取消"
                 else -> if (index == 0) "确认" else "操作 ${index + 1}"
             }
-            Button(id, label, button.optBoolean("close", true), button.optBoolean("enabled", true), button.optJSONArray("validate")?.length() == 0)
+            val validate = if (button.has("validate")) button.getJSONArray("validate").let { names ->
+                (0 until names.length()).map { names.getString(it) }.toSet().also { selected ->
+                    require(selected.all { name -> inputs.any { it.name == name } }) { "Unknown validation field" }
+                }
+            } else null
+            Button(id, label, button.optBoolean("close", true), button.optBoolean("enabled", true), validate)
         }
         require(buttons.map { it.id }.distinct().size == buttons.size) { "Duplicate authorization action" }
-        return Options(qr, image, buttons, inputs)
+        return Options(qr, image, buttons, inputs, invalid = json.optBoolean("invalid"))
     }
 
     fun publicPayload(raw: String): String {
@@ -65,6 +74,7 @@ internal object SpiderAuthorizationProtocol {
         return JSONObject().apply {
             options.qr?.let { put("qrcode", it) }
             options.image?.let { put("image", it) }
+            put("invalid", options.invalid)
             put("inputs", JSONArray().apply { options.inputs.forEach { field ->
                 put(JSONObject().put("name", field.name).put("label", field.label)
                     .put("type", field.type).put("required", field.required)
@@ -72,8 +82,9 @@ internal object SpiderAuthorizationProtocol {
             } })
             put("buttons", JSONArray().apply { options.buttons.forEach { button ->
                 put(JSONObject().put("id", button.id).put("label", button.label)
-                    .put("close", button.close).put("enabled", button.enabled)
-                    .put("skipValidation", button.skipValidation))
+                    .put("close", button.close).put("enabled", button.enabled).apply {
+                        button.validate?.let { put("validate", JSONArray(it.toList())) }
+                    })
             } })
         }.toString()
     }
@@ -96,7 +107,7 @@ internal object SpiderAuthorizationProtocol {
         for (input in options.inputs) {
             val value = values.optString(input.name)
             if (value.length > input.maxLength || (!input.enabled && value.isNotEmpty())) return null
-            if (!selected.skipValidation && input.required && input.enabled && value.isBlank()) return null
+            if (selected.validates(input.name) && input.required && input.enabled && value.isBlank()) return null
             clean.put(input.name, value)
         }
         return event(id, clean)
@@ -150,8 +161,30 @@ internal class SpiderAuthorizationSession(private val publish: (Int, String?) ->
                 val update = patch?.let(::JSONObject) ?: JSONObject()
                 val merged = JSONObject(current.raw)
                 for (field in listOf("qrcode", "image", "message")) if (update.has(field)) merged.put(field, update.get(field))
-                // Forms/returned credentials stay in the plugin callback; the UI never receives them.
-                val invalid = (update.optJSONObject("errors")?.length() ?: 0) > 0
+                // Apply source-declared states by identity, as SpiderDialog does.
+                // Returned values/credentials and arbitrary error text never reach the UI.
+                fun applyStates(field: String, identity: String) {
+                    val patches = update.optJSONArray(field) ?: return
+                    val entries = merged.optJSONArray(field) ?: JSONArray()
+                    val seen = hashSetOf<String>()
+                    for (i in 0 until patches.length()) {
+                        val patch = patches.getJSONObject(i)
+                        val name = patch.getString(identity)
+                        require(seen.add(name)) { "Duplicate authorization state" }
+                        val entry = (0 until entries.length()).map { entries.getJSONObject(it) }
+                            .firstOrNull { it.getString(identity) == name }
+                            ?: error("Unknown authorization state")
+                        if (patch.has("enabled")) entry.put("enabled", patch.getBoolean("enabled"))
+                    }
+                }
+                applyStates("buttons", "id")
+                applyStates("inputs", "name")
+                val errors = update.optJSONObject("errors")
+                require(errors == null || errors.keys().asSequence().all { name -> current.options.inputs.any { it.name == name } })
+                val invalid = errors?.let { fields -> fields.keys().asSequence().any {
+                    !fields.isNull(it) && fields.getString(it).isNotEmpty()
+                } } == true
+                merged.put("invalid", invalid)
                 if (update.optBoolean("close", button.close) && !invalid) current.result.complete(event)
                 else {
                     current.raw = merged.toString()
