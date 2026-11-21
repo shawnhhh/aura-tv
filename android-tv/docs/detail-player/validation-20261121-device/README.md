@@ -11,3 +11,7 @@
 - `adapter-preflight.json` / `adapter-build.log`：依赖门禁与独立构建的实际阻塞。
 - `real-warehouse.json`：真实第三方配置获取403，仅该阶段，无插件执行或首帧。
 - `phone-source-binding.json` / `phone-browser/`：当前前端文件摘要和Chromium mock API回归，非真实Safari/TV端到端。
+
+- `ci-4c7a-results.json` / `ci-4c7a-tv-summary.json`：292项实际291通过1失败；H-004间歇超时未定位，不因本批通过判定已修复。
+- `ci-4c7a-api31-failure.log`：null root / 无效XML，日志完成事件不能替代有效界面观察。
+- `ci-4c7a-abba.json`：四轮各6项真实模拟器数据；缓存导航回退，不是全面提速。
