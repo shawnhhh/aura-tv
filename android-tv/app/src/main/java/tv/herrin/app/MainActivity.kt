@@ -827,7 +827,7 @@ private fun Herrin(startup: StartupPresentation) {
         }
         // Cache-first on startup, refresh in the background for the next
         // launch. Never replace the active browsing state mid-remote action.
-        if (preferCache && ((loadedConfig is TvBoxConfig.Single && loadedConfig.fromCache) ||
+        if (((loadedConfig is TvBoxConfig.Single && loadedConfig.fromCache) ||
                 (loadedConfig is TvBoxConfig.Warehouses && loadedConfig.fromCache))) {
             launch(Dispatchers.IO) { tvBoxRepository.loadUserWarehouse(address) }
         }
@@ -3331,24 +3331,14 @@ private fun Herrin(startup: StartupPresentation) {
                     myRecent=if(!isSearch &&category=="我的")withContext(Dispatchers.Default){watchHistory.recent(catalogScope,films)} else emptyList()
                 }
                 var myPersonal by remember { mutableStateOf<List<Film>>(emptyList()) }
-                LaunchedEffect(isSearch, category, screen, personalIndexRevision) {
-                    myPersonal = if (!isSearch && category == "我的" && screen == "browse") withContext(Dispatchers.IO) {
+                LaunchedEffect(isSearch, screen, personalIndexRevision) {
+                    myPersonal = if (!isSearch && screen == "browse") withContext(Dispatchers.IO) {
                         val library = PersonalLibrary(context)
                         val enabled = library.connections.list().filter { it.enabled }.map { it.id }.toSet()
                         val folders = library.index.folders().filter { it.enabled && it.connection in enabled }.map { it.id }.toSet()
                         val rows = library.index.media(limit = 500)
-                        (0 until rows.length()).mapNotNull { index ->
-                            val row = rows.optJSONObject(index) ?: return@mapNotNull null
-                            if (row.optString("folder") !in folders) return@mapNotNull null
-                            val type = row.optString("type")
-                            Film("personal-index:" + row.getString("id"),
-                                row.optString("title").ifBlank { row.optString("name") },
-                                row.optString("name"), when (type) {
-                                    "tv" -> "剧集"; "anime" -> "动漫"; "video" -> "其他"
-                                    else -> "电影"
-                                }, row.optString("year"), row.optString("synopsis"), R.drawable.photofilm_orbit,
-                                artworkUrl = row.optString("poster").takeIf { it.isNotBlank() })
-                        }
+                        PersonalMediaProjection.films((0 until rows.length()).map { rows.getJSONObject(it) }
+                            .filter { it.optString("folder") in folders })
                     } else emptyList()
                 }
                 // Focus color animations can recompose every frame: searching,
@@ -3376,7 +3366,7 @@ private fun Herrin(startup: StartupPresentation) {
                         val saved = (showCatalog.favorites(favorites) + tmdbState.tmdbResolved.values.filter { it.id in favorites }).distinctBy(Film::id)
                         showCatalog.collapse(HerrinMyLibrary.combine(recent + myPersonal, saved))
                     }
-                    else showCatalog.collapse(catalogFilms.filter {
+                    else showCatalog.collapse((catalogFilms + myPersonal.filter { it.metadataSource == "TMDB" }).filter {
                         category == "首页" || it.category == category ||
                             (category in setOf("科幻", "动作", "悬疑", "喜剧") &&
                                 category in it.genres)
@@ -4028,22 +4018,19 @@ private fun Herrin(startup: StartupPresentation) {
                                 }
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
                                 onFocus = { filmId = item.id; heroSelections[category] = item.id; focusId = "card-${displayKey(item)}" }, onClick = {
-                                    if (!isSearch && category == "我的" && item.id.startsWith("personal-index:")) {
+                                    if (!isSearch && item.id.startsWith("personal-index:")) {
                                         val mediaId = item.id.removePrefix("personal-index:")
                                         uiScope.launch {
                                             val result = withContext(Dispatchers.IO) { PersonalLibrary(context).play(mediaId, smbSessions) }
                                             if (result is PlaybackResult.Ready) {
                                                 val target = "personal-$mediaId"
-                                                val entry = Film(target, item.title, item.subtitle, item.category,
-                                                    item.year, item.synopsis, R.drawable.photofilm_orbit,
-                                                    artworkUrl = item.artworkUrl,
-                                                    playbackEpisodes = listOf(PlaybackEpisode(1, "正片",
-                                                        listOf(PlaybackLine("personal-file", "个人媒体", result.media.uri)))))
+                                                val entry = item.copy(id = target)
                                                 tmdbState.tmdbResolved[target] = entry
-                                                tmdbState.tmdbPersonalPlayback[target] = mapOf("personal-file" to result.media)
+                                                val firstLine = entry.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "personal-file"
+                                                tmdbState.tmdbPersonalPlayback[target] = mapOf(firstLine to result.media)
                                                 tmdbState.tmdbPlaybackRoutes.personal(target)
                                                 activeCmsSite = null; spiderActive = false
-                                                filmId = target; episode = 1; line = "personal-file"; screen = "player"
+                                                filmId = target; episode = entry.playbackEpisodes.firstOrNull()?.number ?: 1; line = firstLine; screen = "player"
                                             } else HerrinPlaybackDiagnosticJournal.record("SOURCE", "PERSONAL_MEDIA_UNAVAILABLE")
                                         }
                                     } else {
@@ -4261,10 +4248,15 @@ private fun Herrin(startup: StartupPresentation) {
                 val personalMedia = if (screen == "player" && film.playbackEpisodes.any { ep ->
                     ep.number == episode && ep.lines.any { it.id == line } })
                     tmdbState.tmdbPersonalPlayback[film.id]?.get(line) else null
-                val personalPlayback = personalMedia?.let { SelectedPersonalPlayback(it,playerRetryEpoch) }
-                val personalWaiting = personalMedia != null && personalPlayback == null
+                val indexedPersonalId = if (personalRoute && film.id.startsWith("personal-"))
+                    line.takeIf { it.startsWith("personal-file:") }?.removePrefix("personal-file:")
+                        ?: film.id.removePrefix("personal-") else null
+                val personalPlayback = if (indexedPersonalId != null)
+                    SelectedIndexedPersonalPlayback(indexedPersonalId, playerRetryEpoch, smbSessions)
+                    else personalMedia?.let { SelectedPersonalPlayback(it,playerRetryEpoch) }
+                val personalWaiting = (personalMedia != null || indexedPersonalId != null) && personalPlayback == null
                 val licensed = if (personalRoute || personalMedia != null) personalPlayback ?:
-                    if (personalMedia == null) PlaybackResult.Unavailable("PERSONAL_SELECTION_EXPIRED") else null
+                    if (!personalWaiting) PlaybackResult.Unavailable("PERSONAL_SELECTION_EXPIRED") else null
                     else if (spiderActive && screen == "player") currentSpiderResult
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
@@ -4376,7 +4368,7 @@ private fun Herrin(startup: StartupPresentation) {
                         loading = !playbackUnavailable,
                         offlineDemonstration = offlineDemonstration,
                         cmsFailed = cmsFailed,
-                        retryAvailable = spiderActive || cmsFailed || cmsHttpSpider || personalMedia != null || cmsJsonParser != null || cmsBrowserParser != null,
+                        retryAvailable = personalRoute || spiderActive || cmsFailed || cmsHttpSpider || personalMedia != null || cmsJsonParser != null || cmsBrowserParser != null,
                         reducedMotion = reduceMotion,
                         personal = personalRoute,
                         failureHint = if (personalRoute) (licensed as? PlaybackResult.Unavailable)?.reason?.let(PlayerStartupHints::forPersonalFailure)

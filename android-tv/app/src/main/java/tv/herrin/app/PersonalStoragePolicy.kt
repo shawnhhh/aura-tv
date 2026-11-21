@@ -48,11 +48,26 @@ internal object PersonalStoragePolicy {
     }
     fun contains(parent: String, child: String) = parent.isEmpty() || child == parent || child.startsWith("$parent/")
     data class Name(val title: String, val year: Int?, val season: Int?, val episode: Int?)
-    fun parse(name: String): Name {
+    fun parse(name: String, parentPath: String = ""): Name {
         val raw = name.substringBeforeLast('.')
         val episodic = episodePattern.find(raw)
-        val year = yearPattern.find(raw)?.value?.toIntOrNull()
-        return Name(ArtworkTitle.searchQuery(raw.replace(episodic?.value.orEmpty().ifEmpty { "\u0000" }, " ")), year,
-            episodic?.groupValues?.get(1)?.toIntOrNull(), episodic?.groupValues?.get(2)?.toIntOrNull())
+        val chineseEpisode = Regex("第\\s*(\\d{1,3})\\s*[集话話]").find(raw)
+        val bracketEpisode = Regex("(?:^|[ \\[._-])(\\d{2,3})(?:v\\d)?(?=]|[ ._-]|$)", RegexOption.IGNORE_CASE).find(raw)
+        val seasonFolder = Regex("(?i)^(?:season[ ._-]*|S)(\\d{1,2})$")
+        val parents = parentPath.split('/').filter(String::isNotBlank)
+        val parent = parents.asReversed().firstOrNull { !seasonFolder.matches(it) }.orEmpty()
+        val parentSeason = parents.asReversed().firstNotNullOfOrNull { seasonFolder.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
+        val claim = episodic?.groupValues?.get(2)?.toIntOrNull() ?: chineseEpisode?.groupValues?.get(1)?.toIntOrNull()
+            ?: bracketEpisode?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 1..999 && parent.isNotBlank() }
+        var title = raw.replace(episodic?.value.orEmpty().ifEmpty { "\u0000" }, " ")
+            .replace(chineseEpisode?.value.orEmpty().ifEmpty { "\u0000" }, " ")
+        title = title.replace(Regex("(?i)\\[[^]]*(?:字幕|sub|rip|web|x26|hevc|4k|1080|2160)[^]]*]"), " ")
+        title = title.replace(Regex("(?i)\\b(?:bluray|remux|uhd|proper|repack|10bit|8bit|ddp?[ .]?\\d(?:[.]\\d)?|flac|truehd)\\b"), " ")
+        title = ArtworkTitle.searchQuery(title).trim()
+        if (title.isBlank() || title.matches(Regex("(?i)(?:ep?[ ._-]*)?\\d{1,3}")) ||
+            raw.matches(Regex("(?i)^(?:S\\d+E\\d+|第\\d+[集话話]).*"))) title = ArtworkTitle.searchQuery(parent)
+        val year = yearPattern.find(raw)?.value?.toIntOrNull() ?: yearPattern.find(parent)?.value?.toIntOrNull()
+        return Name(title.ifBlank { raw }, year,
+            episodic?.groupValues?.get(1)?.toIntOrNull() ?: parentSeason ?: if (claim != null) 1 else null, claim)
     }
 }

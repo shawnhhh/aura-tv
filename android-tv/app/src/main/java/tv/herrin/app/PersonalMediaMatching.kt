@@ -5,6 +5,7 @@ internal object PersonalMediaMatching {
     fun choose(expected: HerrinFilmIdentity, films: List<Film>, discovery: HerrinTmdbDiscovery): Film? =
         films.filter { film ->
             val identity = discovery.identity(film) ?: return@filter false
+            if (expected.year != null && film.year.toIntOrNull() != expected.year) return@filter false
             val aliases = listOfNotNull(film.originalDisplay?.title,
                 film.subtitle.takeIf { film.metadataSource == "TMDB" && it.isNotBlank() })
             HerrinFilmIdentityMatch.matches(expected,

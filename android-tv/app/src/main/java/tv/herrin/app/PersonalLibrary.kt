@@ -118,7 +118,11 @@ internal class PersonalLibrary(context: Context) {
     private suspend fun scrape(folder: PersonalMediaIndex.Folder) {
         if(folder.type == "video") return // Explicit "other videos" remain raw unless the user matches them.
         val token = Preferences(app).tmdbReadToken
-        if(token.isBlank()) return
+        if(token.isBlank()) {
+            index.unmatched(folder.id).forEach { index.scrapeStatus(it.getString("id"), "TOKEN_MISSING") }
+            HerrinPlaybackDiagnosticJournal.record("PERSONAL", "SCRAPE_TOKEN_MISSING")
+            return
+        }
         val discovery = HerrinTmdbDiscovery(cacheDir = app.cacheDir)
         // At most 200 unmatched files per explicit refresh, serial requests; failures retain raw files.
         val cache = LinkedHashMap<String, Film?>()
@@ -130,13 +134,14 @@ internal class PersonalLibrary(context: Context) {
                 val result = try {
                     val expected = HerrinFilmIdentity(1, if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie",
                         listOf(title), row.optInt("year").takeIf { it > 0 })
-                    PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)
+                    PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)?.let { discovery.detail(it, token) }
                 } catch(cancel: CancellationException) { throw cancel }
                 catch(_: Exception) { null }
                 cache[key] = result
                 result
             }
             if(film != null) discovery.identity(film)?.let { (type, id) -> index.matched(row.getString("id"), film, id, type) }
+            else index.scrapeStatus(row.getString("id"), "NO_UNAMBIGUOUS_MATCH_OR_NETWORK_FAILURE")
         }
     }
     fun cancelAndWait() { runBlocking { active?.cancelAndJoin() } }

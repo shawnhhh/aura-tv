@@ -4,15 +4,19 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.*
 import androidx.compose.ui.platform.LocalContext
 
-/** Previously authorized legacy roots need their first index before normal index-only lookups. */
+/** Incremental scans reuse the persistent index and only previously imported enabled roots. */
 @Composable
 internal fun PersonalLibraryStartupImport() {
     val context = LocalContext.current.applicationContext
     LaunchedEffect(context) {
         val library = withContext(Dispatchers.IO) { PersonalLibrary(context) }
+        while (isActive) {
         val pending = withContext(Dispatchers.IO) {
             val enabled = library.connections.list().filter { it.enabled }.map { it.id }.toSet()
-            library.index.folders().filter { it.enabled && it.connection in enabled && it.state == "pending" && it.scanned == 0L }
+            library.index.folders().filter { it.enabled && it.connection in enabled &&
+                PersonalSyncPolicy.due(it.scanned, System.currentTimeMillis()) }
+        }
+        delay(PersonalSyncPolicy.INTERVAL_MS)
         }
         for(folder in pending) {
             ensureActive()

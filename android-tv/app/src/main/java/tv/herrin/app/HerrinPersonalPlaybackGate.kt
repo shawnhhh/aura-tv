@@ -30,3 +30,18 @@ internal fun SelectedPersonalPlayback(media: PlaybackMedia, retry: Int): Playbac
     }
     return result
 }
+
+/** Reopen the saved connection per playback attempt, including process restart and line changes. */
+@Composable
+internal fun SelectedIndexedPersonalPlayback(id: String, retry: Int, streams: HerrinSmbSessions): PlaybackResult? {
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var result by remember(id, retry) { mutableStateOf<PlaybackResult?>(null) }
+    LaunchedEffect(id, retry) {
+        result = try {
+            val source = withContext(Dispatchers.IO) { PersonalLibrary(context).play(id, streams) }
+            if (source is PlaybackResult.Ready) verifySelectedPersonalMedia(source.media) else source
+        } catch (cancel: CancellationException) { throw cancel }
+        catch (_: Exception) { PlaybackResult.Unavailable("PERSONAL_CONNECTION_FAILED") }
+    }
+    return result
+}

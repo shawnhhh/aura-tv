@@ -9,14 +9,21 @@ import org.json.JSONObject
 import java.util.UUID
 
 /** No credentials, request headers or authorized URLs enter this database. */
-internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.applicationContext, "personal-media.db", null, 1) {
+internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.applicationContext, "personal-media.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE folders(id TEXT PRIMARY KEY, connection TEXT NOT NULL, path TEXT NOT NULL, type TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT 'pending', scanned INTEGER NOT NULL DEFAULT 0, UNIQUE(connection,path))")
         db.execSQL("CREATE TABLE media(id TEXT PRIMARY KEY, connection TEXT NOT NULL, folder TEXT NOT NULL, path TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, modified TEXT NOT NULL, extension TEXT NOT NULL, type TEXT NOT NULL, title TEXT NOT NULL, year INTEGER, season INTEGER, episode INTEGER, tmdb INTEGER, confidence REAL NOT NULL DEFAULT 0, manual INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'available', scanned INTEGER NOT NULL, synopsis TEXT, poster TEXT)")
         db.execSQL("CREATE INDEX media_folder ON media(folder,status)")
         db.execSQL("CREATE INDEX media_tmdb ON media(tmdb,type,status)")
+        addMetadataColumns(db)
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    private fun addMetadataColumns(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE media ADD COLUMN metadata TEXT")
+        db.execSQL("ALTER TABLE media ADD COLUMN scrape_code TEXT")
+    }
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) addMetadataColumns(db)
+    }
     data class Folder(val id: String, val connection: String, val path: String, val type: String, val enabled: Boolean, val state: String, val scanned: Long)
     fun folders(connection: String? = null): List<Folder> = readableDatabase.query("folders", null,
         connection?.let { "connection=?" }, connection?.let { arrayOf(it) }, null, null, "path").use { c ->
@@ -59,7 +66,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
             it.bindLong(1, scan); it.bindString(2, id); it.bindLong(3, file.size); it.bindString(4, file.modified); it.executeUpdateDelete()
         }
         if(changed > 0) return
-        val parsed = PersonalStoragePolicy.parse(file.name)
+        val parsed = PersonalStoragePolicy.parse(file.name, file.path.substringBeforeLast('/', ""))
         val values = ContentValues().apply {
             put("id", id); put("connection", f.connection); put("folder", f.id); put("path", file.path); put("name", file.name)
             put("size", file.size); put("modified", file.modified); put("extension", file.name.substringAfterLast('.').lowercase())
@@ -101,8 +108,12 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
     }
     fun unmatched(folder: String): List<JSONObject> = rows("SELECT * FROM media WHERE folder=? AND status='available' AND tmdb IS NULL AND manual=0 LIMIT 200", arrayOf(folder))
     fun matched(id: String, film: Film, tmdb: Int, type: String) {
-        writableDatabase.execSQL("UPDATE media SET tmdb=?,type=?,title=?,year=?,synopsis=?,poster=?,confidence=0.95 WHERE id=? AND manual=0",
-            arrayOf(tmdb, type, film.title, film.year, film.synopsis, film.artworkUrl, id))
+        val category = when(film.category) { "动漫" -> "anime"; "纪录片" -> "documentary"; else -> type }
+        writableDatabase.execSQL("UPDATE media SET tmdb=?,type=?,title=?,year=?,synopsis=?,poster=?,metadata=?,scrape_code='MATCHED',confidence=0.95 WHERE id=? AND manual=0",
+            arrayOf(tmdb, category, film.title, film.year, film.synopsis, film.artworkUrl, PersonalMediaProjection.metadata(film, type).toString(), id))
+    }
+    fun scrapeStatus(id: String, code: String) {
+        writableDatabase.execSQL("UPDATE media SET scrape_code=? WHERE id=? AND manual=0", arrayOf(code, id))
     }
     companion object {
         @Volatile private var shared: PersonalMediaIndex? = null
