@@ -1,0 +1,19 @@
+{
+  "test": "Chromium mobile frontend with mocked API",
+  "passed": true,
+  "pairings": 1,
+  "modules": 4,
+  "requests": 25,
+  "imports": [
+    "http",
+    "https",
+    "smb"
+  ],
+  "sourceResults": [
+    "ACTIVE",
+    "FAILED",
+    "background ACTIVE"
+  ],
+  "real_android_server": false,
+  "real_mobile_safari": false
+}

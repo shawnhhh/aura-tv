@@ -1,0 +1,19 @@
+{
+  "source_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+  "source_repository": "https://github.com/FongMi/TV",
+  "license": "GPL-3.0",
+  "source_checked_out": true,
+  "source_files_sha256": {
+    "app/src/main/java/com/fongmi/android/tv/App.java": "a73587b7864d191175a9a6601b1ff40449ba870e19fba2e595a1879202852cb3",
+    "app/src/main/java/com/fongmi/android/tv/api/SiteApi.java": "740acec7c9890b9fedef51b928bda440dbf96c565b7d5eb0da4f5244d992de21",
+    "app/src/main/java/com/fongmi/android/tv/model/VideoViewModel.java": "6983a78b36ae922bf7b3a9d094e6550d0d405c20f967bdf4bae93d05737644b7",
+    "app/src/main/java/com/fongmi/android/tv/player/extractor/Source.java": "6eccbbf50dafd373b789eb7fd67983e2debd6958f2190d2db4d04028decad0f3",
+    "app/src/main/java/com/fongmi/android/tv/ui/dialog/SpiderDialog.java": "fda500b7675ef02234179172909c65529a359958daee86421266d8c910831a35",
+    "catvod/src/main/java/com/github/catvod/Runtime.java": "059b7fe7f0685b6bc8e3a33acbf04236578427024f9fa663570ec9af7ce165f7",
+    "catvod/src/main/java/com/github/catvod/utils/Dialog.java": "378bf0e216cce80317007bff07d4394e3dff4e7500e217742d74203ebe9fd343"
+  },
+  "adapter_compiled": false,
+  "original_kernel_integrated": false,
+  "real_provider_qr_tested": false,
+  "real_provider_first_frame_tested": false
+}

@@ -1,0 +1,12 @@
+{
+  "source_commit": "7045e9aad3820370b9303dede414304df9a9f789",
+  "app_debug_build": "PASS",
+  "android_test_apk_build": "PASS",
+  "apk_sha256": "15eff94c40c675c4e173e51ac5be62544cc469559f1786380e7fc6f05d008d27",
+  "apk_bytes": 29152665,
+  "diagnostic_only": true,
+  "formal_acceptance": false,
+  "lint_final": "PENDING_CI",
+  "instrumentation_final": "PENDING_CI",
+  "note": "Local build only; the downloadable CI artifact will have its own source binding and digest."
+}
