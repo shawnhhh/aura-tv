@@ -51,7 +51,7 @@ internal object WordmarkMotion {
 /** VSync clock. Draw state stays in this small layer, never recomposes the home per frame. */
 @Composable
 internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}, widthDp: Float = 420f,
-                                  surfaceReady: Boolean = true) {
+                                  surfaceReady: Boolean = true, allowSkip: Boolean = true) {
     val focus = remember { FocusRequester() }
     val onDone by rememberUpdatedState(done)
     val visible by rememberUpdatedState(onVisible)
@@ -110,6 +110,9 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("splash")
         .focusRequester(focus).onPreviewKeyEvent {
             if (it.type == KeyEventType.KeyDown && it.key in listOf(Key.Enter, Key.DirectionCenter, Key.Back)) {
+                // The installer's held OK can repeat into the newly opened
+                // Activity. First-run V13 must not be skipped by that key.
+                if (!allowSkip || it.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent true
                 skipped=true
                 elapsed.floatValue=WordmarkMotion.REVEAL_MS
                 completeOnce()
@@ -131,7 +134,7 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit,
                                homeReady: Boolean = true, onVisible: () -> Unit = {}, wordmarkWidthDp: Float = 420f,
-                               surfaceReady: Boolean = true) {
+                               surfaceReady: Boolean = true, allowSkip: Boolean = true) {
     val opacity = remember { Animatable(1f) }
     var revealed by remember { mutableStateOf(false) }
     LaunchedEffect(revealed, homeReady) {
@@ -147,7 +150,7 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
         .testTag("splash-curtain")) {
         HerrinWordmarkSplash(reduced, done = { revealed = true }, onVisible = onVisible,widthDp=wordmarkWidthDp,
-            surfaceReady = surfaceReady)
+            surfaceReady = surfaceReady, allowSkip = allowSkip)
     }
 }
 

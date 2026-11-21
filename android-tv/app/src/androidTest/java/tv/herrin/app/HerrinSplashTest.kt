@@ -94,6 +94,16 @@ class HerrinSplashTest {
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.runOnIdle { assertTrue(completed) }
     }
+    @Test fun firstInstallDoesNotConsumeLaunchOkAsAnAnimationSkip() {
+        compose.mainClock.autoAdvance = false
+        var completed = false
+        compose.setContent { HerrinWordmarkSplash(false, done = { completed = true }, allowSkip = false) }
+        compose.onNodeWithTag("splash").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.runOnIdle { assertFalse(completed) }
+        compose.mainClock.advanceTimeBy(3600)
+        compose.runOnIdle { assertTrue(completed) }
+    }
     @Test fun reducedMotionCompletesWithoutWaitingForAnimation() {
         var completed = false
         compose.setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface { Splash(true) { completed = true } } } }

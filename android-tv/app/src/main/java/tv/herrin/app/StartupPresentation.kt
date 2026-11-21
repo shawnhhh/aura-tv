@@ -22,6 +22,7 @@ internal class StartupPresentation {
     var prepareHome by mutableStateOf(false)
     var reduced by mutableStateOf(false)
     var surfaceReady by mutableStateOf(true)
+    var allowSkip by mutableStateOf(false)
     var preferences by mutableStateOf<Preferences?>(null)
     var profiles:CatalogProfiles?=null
     var initialProfiles:List<CatalogProfile> = emptyList()
@@ -55,6 +56,7 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
                     // to zero by default, unintentionally replacing V13 with a
                     // static wordmark. Honor the explicit Herrin preference only.
                     state.reduced = reducedMotion
+                    state.allowSkip = context.getSharedPreferences("herrin", 0).getBoolean("startup_v13_completed", false)
                 }
             }
             profiles.await()
@@ -97,8 +99,11 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
         }
         if (state.showing) SplashExitCurtain(state.reduced, state.exiting,
             onReady = { state.exiting = true },
-            onFinished = { state.showing = false }, homeReady = state.homeReady,
+            onFinished = {
+                state.showing = false
+                context.getSharedPreferences("herrin", 0).edit().putBoolean("startup_v13_completed", true).apply()
+            }, homeReady = state.homeReady,
             onVisible = { state.prepareHome = true },wordmarkWidthDp=state.wordmarkWidthDp,
-            surfaceReady = state.surfaceReady)
+            surfaceReady = state.surfaceReady, allowSkip = state.allowSkip)
     }
 }
