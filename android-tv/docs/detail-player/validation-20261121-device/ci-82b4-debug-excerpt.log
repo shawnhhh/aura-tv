@@ -1,0 +1,12 @@
+2026-11-21T15:51:12.8042937Z   ref: 82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e
+2026-11-21T15:51:13.2392331Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin 82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e
+2026-11-21T15:51:13.8555134Z [command]/usr/bin/git checkout --progress --force 82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e
+2026-11-21T15:51:13.9875290Z 82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e
+2026-11-21T15:54:08.1017290Z BUILD SUCCESSFUL in 2m 30s
+2026-11-21T16:01:57.3181483Z BUILD SUCCESSFUL in 7m 48s
+2026-11-21T16:01:57.8044530Z | JVM | 807 | 0 | 0 | 0 |
+2026-11-21T16:01:57.8060585Z - `app-debug.apk`：27119346 字节；SHA-256 `22909f4752c0e598009318a065fa473d5c1deb5d152b3fb30b43b5ac73ff2844`
+2026-11-21T16:01:57.8528795Z 82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e
+2026-11-21T16:01:57.8529898Z 22909f4752c0e598009318a065fa473d5c1deb5d152b3fb30b43b5ac73ff2844  app/build/outputs/apk/debug/app-debug.apk
+2026-11-21T16:01:59.7089280Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44921354185/artifacts/14714680455
+2026-11-21T16:02:00.7690570Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44921354185/artifacts/14713754093

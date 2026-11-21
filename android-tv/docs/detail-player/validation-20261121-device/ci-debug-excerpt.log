@@ -1,0 +1,17 @@
+2026-11-21T15:32:17.6513393Z   ref: 11c3f731eac785d8434b5fb264d3b10db2e31161
+2026-11-21T15:32:18.0227317Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin 11c3f731eac785d8434b5fb264d3b10db2e31161
+2026-11-21T15:32:18.8817817Z [command]/usr/bin/git checkout --progress --force 11c3f731eac785d8434b5fb264d3b10db2e31161
+2026-11-21T15:32:18.9786719Z 11c3f731eac785d8434b5fb264d3b10db2e31161
+2026-11-21T15:32:47.4215741Z SMB fixture ready: authenticated read-only encryption-required SMB3 on 1445, SMB2 on 1446, original MP4 and sparse >5GiB file
+2026-11-21T15:34:47.8315310Z BUILD SUCCESSFUL in 2m
+2026-11-21T15:41:57.5709595Z BUILD SUCCESSFUL in 7m 9s
+2026-11-21T15:41:57.9451695Z | JVM | 806 | 0 | 0 | 0 |
+2026-11-21T15:41:57.9452054Z | Android TV | 0 | 0 | 0 | 0 |
+2026-11-21T15:41:57.9453907Z | HTTPS/证书/配对 | 1 | 0 | 0 |
+2026-11-21T15:41:57.9454317Z | 启动显现/呼吸/过渡 | 2 | 0 | 0 |
+2026-11-21T15:41:57.9454809Z | SMB策略/真实协议/加密/Seek/解码 | 12 | 0 | 0 |
+2026-11-21T15:41:57.9473226Z - `app-debug.apk`：27119346 字节；SHA-256 `d5afa7669d9d3a6fbefc5eac940e8240eae4069ae5efbbf6736b9c3e98fbdf54`
+2026-11-21T15:41:57.9888478Z 11c3f731eac785d8434b5fb264d3b10db2e31161
+2026-11-21T15:41:57.9889030Z d5afa7669d9d3a6fbefc5eac940e8240eae4069ae5efbbf6736b9c3e98fbdf54  app/build/outputs/apk/debug/app-debug.apk
+2026-11-21T15:41:59.9494819Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44919655632/artifacts/14713328766
+2026-11-21T15:42:01.2842657Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44919655632/artifacts/14713553065

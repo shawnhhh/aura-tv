@@ -1,0 +1,12 @@
+{
+  "scope": "Chromium mock API; no real Safari or Android HTTP server claim",
+  "source_files_sha256": {
+    "android-tv/app/src/main/assets/config/center.html": "385bd03e45deafefbe5cd5a440dfd9ac6ce405f9b0409eac7c8b411c49b178c7",
+    "android-tv/app/src/main/assets/config/center.js": "915e4fb2e4df89d5b869f3a4668c1b1e630fa31538c5ebb78ab8d457ca6f1338",
+    "android-tv/scripts/phone_center_browser_test.cjs": "798e6ca80be05c0f95dd40923535d8beb971ce7f6e0c7160635062a9252b7189"
+  },
+  "same_at_current_checkout": true,
+  "browser_result": "PASS",
+  "node_syntax": "PASS",
+  "source_readonly_during_ci": true
+}

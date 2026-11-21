@@ -1,0 +1,21 @@
+2026-11-21T16:06:18.3091969Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:06:20.3159345Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:06:22.3247186Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:06:24.3321538Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:06:26.3396395Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:06:28.3505140Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:06:30.3600489Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:06:32.3813401Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-11-21T16:10:48.2141777Z OK (1 test)
+2026-11-21T16:10:48.2142802Z INSTRUMENTATION_CODE: -1
+2026-11-21T16:10:55.4231779Z OK (1 test)
+2026-11-21T16:10:55.4233505Z INSTRUMENTATION_CODE: -1
+2026-11-21T16:11:49.8748184Z OK (20 tests)
+2026-11-21T16:11:49.8748645Z INSTRUMENTATION_CODE: -1
+2026-11-21T16:11:50.6453757Z Traceback (most recent call last):
+2026-11-21T16:11:50.6483568Z   File "<stdin>", line 3, in <module>
+2026-11-21T16:11:50.6485115Z AssertionError: INSTRUMENTATION_STATUS: class=tv.herrin.app.P0CachedHomeHeroTest
+2026-11-21T16:11:50.6997514Z OK (20 tests)
+2026-11-21T16:11:50.6997901Z INSTRUMENTATION_CODE: -1
+2026-11-21T16:11:55.1895959Z {"exit_code": 1, "device": "Android TV API 30 x86 / tv_1080p", "instrumentation": [], "fatal_exception_present": false, "physical_TCL_tested": false, "decoder_evidence": [], "catalog_evidence": [], "remote_HTTPS_stream_tested": false, "remote_performance": {}, "startup_samples": [{"process_to_activity_ms": 841, "activity_to_first_draw_ms": 312, "first_draw_to_wordmark_ms": 156, "wordmark_complete_ms": 4423, "activity_to_home_ms": 6351, "home_init_ms": 550, "artwork_start_ms": 1143, "network_start_ms": 1309, "system_brand_exit_ms": -1}, {"process_to_activity_ms": 27590, "activity_to_first_draw_ms": 178, "first_draw_to_wordmark_ms": 255, "wordmark_complete_ms": 2885, "activity_to_home_ms": 4766, "home_init_ms": 505, "artwork_start_ms": 746, "network_start_ms": 809, "system_brand_exit_ms": -1}], "startup_phases": [{"phase": "first_cpu_draw", "activity_to_phase_ms": 312}, {"phase": "wordmark_visible", "activity_to_phase_ms": 468}, {"phase": "home_init", "activity_to_phase_ms": 550}, {"phase": "artwork", "activity_to_phase_ms": 1143}, {"phase": "network", "activity_to_phase_ms": 1309}, {"phase": "wordmark_complete", "activity_to_phase_ms": 4423}, {"phase": "first_cpu_draw", "activity_to_phase_ms": 178}, {"phase": "wordmark_visible", "activity_to_phase_ms": 433}, {"phase": "home_init", "activity_to_phase_ms": 505}, {"phase": "artwork", "activity_to_phase_ms": 746}, {"phase": "network", "activity_to_phase_ms": 809}, {"phase": "wordmark_complete", "activity_to_phase_ms": 2885}], "startup_window_probes": [], "source_recovery_evidence": ["HerrinSourceRecovery: blocked_child_main_reaped_by_host=1 main_callback_alive=1 pending=0 cancel_to_exit_ms=662 physical_tcl=0", "HerrinSourceRecovery: uninterruptible_fixture_reaped=1 fresh_media_verified=1 old_proof_rejected=1 main_process_preserved=1 pending=0 child_after_cancel=1 child_after_recovery=0 cancel_to_exit_ms=255 physical_tcl=0"], "smb_evidence": [], "wordmark_evidence": ["HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0", "HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0"], "source_feedback_evidence": ["HerrinSourceFeedback: first_status_cpu_draw_ms=42 measurement=cpu_draw_not_screen_presentation", "HerrinSourceFeedback: first_status_cpu_draw_ms=5 measurement=cpu_draw_not_screen_presentation", "HerrinSourceFeedback: first_status_cpu_draw_ms=39 measurement=cpu_draw_not_screen_presentation"]}
+2026-11-21T16:11:55.1943606Z ##[error]The process '/usr/bin/sh' failed with exit code 1

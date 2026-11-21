@@ -2,7 +2,7 @@
 
 > 2026-11-21 用户真机反馈与新增 H-010～H-013 见 [实机续修台账](../detail-player/H-001-H-013-DEVICE-20261121.md)。个人WebDAV播放、表单/目录、刮削与自动同步正在修复；历史自动化不代表本轮已验收。
 
-> 最新 H-001～H-009 状态见 [主台账](../detail-player/H-001-H-009-20261120.md)：应用源码 3e1da724 的 JVM 790/790、TV 289/289、Lint/Debug 通过；ec40e7b9 的 API31 冷/热/取帧通过，68a76b04 的 ABBA 四轮各6项通过，性能有升有降；APK 仅供诊断。下方此前里程碑、APK 与测试绑定其注明的历史源码。
+> 实机反馈前的 H-001～H-009 自动化汇总见 [主台账](../detail-player/H-001-H-009-20261120.md)：应用源码 3e1da724 的 JVM 790/790、TV 289/289、Lint/Debug 通过；ec40e7b9 的 API31 冷/热/取帧通过，68a76b04 的 ABBA 四轮各6项通过，性能有升有降；APK 仅供诊断。下方此前里程碑、APK 与测试绑定其注明的历史源码。
 
 Branch: `codex/herrin-p0-live-playback-20261110`; existing PR #85 remains Draft. Base inspected before edits: `f4e3c092b53efaf0b61161fd692d0e3b8ac22177`. No merge; no second player, cloud gateway, platform-specific cloud login or LAN discovery.
 
