@@ -19,7 +19,8 @@ internal object SpiderAuthorizationProtocol {
     // Deliberately not data classes: toString must never expose the QR payload.
     class Input(val name: String, val label: String, val type: String,
                 val required: Boolean, val maxLength: Int, val enabled: Boolean,
-                val initial: String = "", val choices: List<String> = emptyList())
+                val initial: String = "", val choices: List<String> = emptyList(),
+                val choiceLabels: List<String> = emptyList())
     class Options(val qr: String?, val image: String?, val buttons: List<Button>,
                   val inputs: List<Input> = emptyList(), val busy: Boolean = false, val invalid: Boolean = false)
 
@@ -45,12 +46,19 @@ internal object SpiderAuthorizationProtocol {
                         .also { require(it.length in 1..512) }
                 }.also { require(it.distinct().size == it.size) }
             } else emptyList()
+            val labels = choices.indices.map { i ->
+                val item = entry.getJSONArray("options").get(i)
+                val label = (if(item is JSONObject) item.optString("label") else item as String)
+                    .filterNot(Char::isISOControl).trim().take(64)
+                label.takeIf { it.isNotBlank() && !Regex("(?i)https?://|[?&](?:token|ticket|sign|auth)=").containsMatchIn(it) }
+                    ?: "选项 ${i + 1}"
+            }
             val initial = entry.optString("value")
             require(initial.length <= maximum && (choices.isEmpty() || initial.isEmpty() || initial in choices))
             Input(name, if (type == "password" || name.contains("pass", true) ||
                 name.contains("pwd", true) || name.contains("code", true)) "网盘访问码 / 密码"
                 else "授权内容", type, entry.optBoolean("required", false),
-                maximum, entry.optBoolean("enabled", true), initial, choices)
+                maximum, entry.optBoolean("enabled", true), initial, choices, labels)
         }
         require(inputs.map { it.name }.distinct().size == inputs.size) { "Duplicate authorization fields" }
         val qr = json.optString("qrcode").takeIf { it.isNotEmpty() }
@@ -91,7 +99,9 @@ internal object SpiderAuthorizationProtocol {
                 put(JSONObject().put("name", field.name).put("label", field.label)
                     .put("type", field.type).put("required", field.required)
                     .put("maxLength", field.maxLength).put("enabled", field.enabled).put("value", field.initial)
-                    .apply { if(field.choices.isNotEmpty()) put("options", JSONArray(field.choices)) })
+                    .apply { if(field.choices.isNotEmpty()) put("options", JSONArray().apply {
+                        field.choices.forEachIndexed { i, value -> put(JSONObject().put("value",value).put("label",field.choiceLabels[i])) }
+                    }) })
             } })
             put("buttons", JSONArray().apply { options.buttons.forEach { button ->
                 put(JSONObject().put("id", button.id).put("label", button.label)

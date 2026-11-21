@@ -10,6 +10,7 @@ class SpiderAuthorizationProtocolTest {
         val raw = """{"qrcode":"fixture-qr-payload","inputs":[{"name":"provider","type":"select","options":[{"label":"one","value":"a"},"b"],"value":"a"}]}"""
         val options = SpiderAuthorizationProtocol.parse(SpiderAuthorizationProtocol.publicPayload(raw))
         assertEquals(listOf("a","b"), options.inputs.single().choices)
+        assertEquals(listOf("one","b"), options.inputs.single().choiceLabels)
         assertEquals("a", options.inputs.single().initial)
         assertNull(SpiderAuthorizationProtocol.validatedEvent(options,
             SpiderAuthorizationProtocol.event("ok", JSONObject().put("provider","unoffered"))))

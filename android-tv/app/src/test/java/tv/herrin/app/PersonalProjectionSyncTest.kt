@@ -5,6 +5,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PersonalProjectionSyncTest {
+    @Test fun animatedMovieAndSeriesWithSameTmdbNumberCannotBecomeVersionsOfOneWork() {
+        fun row(id: String, type: String) = JSONObject().put("id",id).put("name","$id.mkv")
+            .put("title",id).put("tmdb",42).put("type","anime")
+            .put("metadata",JSONObject().put("identityType",type).toString())
+        val films = PersonalMediaProjection.films(listOf(row("film","movie"),row("series","tv")))
+        assertEquals(2, films.size)
+        assertEquals(setOf("personal-index:film","personal-index:series"),films.map { it.id }.toSet())
+        assertTrue(films.all { it.playbackEpisodes.single().lines.size == 1 })
+    }
     @Test fun versionsShareOneFilmButKeepEveryOriginalFileIdAndEpisode() {
         fun row(id: String, episode: Int) = JSONObject().put("id", id).put("name", "$id.mkv")
             .put("title", "Example").put("tmdb", 42).put("type", "tv").put("season", 2).put("episode", episode)

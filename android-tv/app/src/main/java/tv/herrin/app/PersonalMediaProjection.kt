@@ -11,7 +11,9 @@ internal object PersonalMediaProjection {
         .put("rating", film.ratingValue).put("release", film.releaseDate).put("runtime", film.runtimeMinutes)
 
     fun films(rows: List<JSONObject>): List<Film> = rows.groupBy { row ->
-        if (row.optInt("tmdb") > 0) "${row.optString("type")}:${row.optInt("tmdb")}:S${row.optInt("season")}"
+        val identityType = runCatching { JSONObject(row.optString("metadata")).optString("identityType") }
+            .getOrNull()?.takeIf { it in setOf("movie", "tv") } ?: row.optString("type")
+        if (row.optInt("tmdb") > 0) "$identityType:${row.optString("type")}:${row.optInt("tmdb")}:S${row.optInt("season")}"
         else row.getString("id")
     }.values.map { versions ->
         val row = versions.first()

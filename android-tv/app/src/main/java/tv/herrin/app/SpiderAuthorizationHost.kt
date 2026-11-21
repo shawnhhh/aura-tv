@@ -124,12 +124,12 @@ internal fun SpiderAuthorizationHost() {
                     color = Color.White)
             current.options.inputs.forEachIndexed { index, input ->
                 if(input.type == "select") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         input.choices.forEachIndexed { choiceIndex, value ->
                             Button(onClick = { formValues = formValues + (input.name to value) },
                                 enabled = input.enabled && !busy,
                                 modifier = if(index == inputIndex && choiceIndex == 0) Modifier.focusRequester(inputFocus) else Modifier) {
-                                Text("选项 ${choiceIndex + 1}" + if(formValues[input.name] == value) " ✓" else "")
+                                Text(input.choiceLabels[choiceIndex] + if(formValues[input.name] == value) " ✓" else "")
                             }
                         }
                     }
