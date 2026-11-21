@@ -15,13 +15,13 @@ class PhoneWarehouseActivationTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private lateinit var server: MockWebServer
     private lateinit var importId: String
-    private var before = emptyMap<String, *>()
+    private var beforeValues: Map<String, *> = emptyMap<String, Any?>()
     private val cmsRequests = AtomicInteger()
     private val received = AtomicLong()
     @get:Rule(order=0) val fixture = object : ExternalResource() {
         override fun before() {
             val prefs = context.getSharedPreferences("herrin",0)
-            before = prefs.all
+            beforeValues = prefs.all
             prefs.edit().clear().commit()
             server = MockWebServer()
             server.dispatcher = object : Dispatcher() {
@@ -40,7 +40,7 @@ class PhoneWarehouseActivationTest {
         override fun after() {
             server.shutdown()
             val edit = context.getSharedPreferences("herrin",0).edit().clear()
-            before.forEach { (k,v) -> when(v) {
+            beforeValues.forEach { (k,v) -> when(v) {
                 is String -> edit.putString(k,v); is Boolean -> edit.putBoolean(k,v)
                 is Int -> edit.putInt(k,v); is Long -> edit.putLong(k,v); is Float -> edit.putFloat(k,v)
                 is Set<*> -> { @Suppress("UNCHECKED_CAST") edit.putStringSet(k,v as Set<String>) }
