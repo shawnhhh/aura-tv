@@ -16,14 +16,35 @@ concurrency:
   group: p0-playback-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
   cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110' || github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' || github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' }}
 jobs:
+  verification-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      startup_only: ${{ steps.scope.outputs.startup_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check verification reuse boundaries
+        run: |
+          python3 -m unittest discover -s .github/scripts -p test_p0_verification_scope.py -v
+          python3 -m unittest discover -s android-tv/scripts -p test_check_startup_probe.py -v
+      - id: scope
+        run: python3 .github/scripts/p0_verification_scope.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-verification-scope
+          path: verification-scope.json
   debug:
+    needs: verification-scope
+    if: needs['verification-scope'].outputs.startup_only != 'true'
     uses: ./.github/workflows/android-debug.yml
   emulator:
-    needs: debug
+    needs: [verification-scope, debug]
+    if: ${{ !cancelled() && needs['verification-scope'].outputs.startup_only != 'true' && needs.debug.result == 'success' }}
     uses: ./.github/workflows/android-emulator.yml
   startup-api31:
-    if: github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110'
-    needs: emulator
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110') && (needs.emulator.result == 'success' || (needs['verification-scope'].outputs.startup_only == 'true' && needs.emulator.result == 'skipped')) }}
+    needs: [verification-scope, emulator]
     uses: ./.github/workflows/android-startup.yml
   tmdb-abba:
     if: github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110'
