@@ -354,7 +354,7 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
         load(input, allowHttp = true, preferCached = preferCached)
 
     private val importClient by lazy { okhttp3.OkHttpClient.Builder()
-        .followRedirects(false).followSslRedirects(false)
+        .followRedirects(true).followSslRedirects(true)
         .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(16, java.util.concurrent.TimeUnit.SECONDS).build() }
@@ -367,7 +367,8 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
             "WAREHOUSE_HTTP_NOT_ALLOWED：HTTP 访问未获用户许可")
         if (preferCached) cached(valid)?.let { return@withContext it }
         try {
-            readSourceResponse(importClient, okhttp3.Request.Builder().url(valid)
+            val started = System.nanoTime()
+            readSourceResponse(importClient.newBuilder().followSslRedirects(allowHttp).build(), okhttp3.Request.Builder().url(valid)
                 .header("Accept", "application/json, text/plain").header("Accept-Encoding", "identity").build()) { response ->
                 runCatching { onImportHttpStatus(response.code) }
                 if (response.code in 300..399) return@readSourceResponse cached(valid)
@@ -393,9 +394,12 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
                 if (wrapped == null && contentType.startsWith("image/")) return@readSourceResponse cached(valid)
                     ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：图片中没有有效的影视仓配置")
                 val json = TvBoxWrappedConfig.stripComments(wrapped ?: bytes.toString(Charsets.UTF_8.name()))
-                when (val parsed = TvBoxConfigParser.parse(json, valid)) {
+                val finalOrigin = response.request.url.toString()
+                when (val parsed = TvBoxConfigParser.parse(json, finalOrigin)) {
                     is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
                         runCatching { save(valid, json) }
+                        HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_PARSED",
+                            "MS=${((System.nanoTime()-started)/1_000_000).coerceAtMost(99999)}")
                         if (parsed is TvBoxConfig.Single && wrapped != null) parsed.copy(wrappedInImage = true) else parsed
                     }
                     is TvBoxConfig.Error -> cached(valid) ?: TvBoxConfig.Error(

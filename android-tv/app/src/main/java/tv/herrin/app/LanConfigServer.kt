@@ -28,7 +28,7 @@ internal class LanConfigServer(
         }, 250L, 250L)
     }
     override fun serve(session: IHTTPSession): Response {
-        fun response(code: Response.Status, body: String, type: String = "application/json",
+        fun response(code: Response.Status, body: String, type: String = "application/json; charset=utf-8",
                      closeAfterSend: Boolean = false): Response {
             val bytes = body.toByteArray(Charsets.UTF_8)
             val result = if (closeAfterSend) object : Response(code, type,
@@ -59,9 +59,9 @@ internal class LanConfigServer(
         val length = session.headers["content-length"]?.toLongOrNull()
         if (length == null || length !in 1..32768) return response(Response.Status.BAD_REQUEST, "{}")
         return try {
-            val body = HashMap<String, String>()
-            session.parseBody(body)
-            val input = JSONObject(body["postData"].orEmpty())
+            // NanoHTTPD defaults JSON without a charset to US-ASCII. Read the
+            // bounded entity explicitly as UTF-8, including Chinese names/IDN.
+            val input = JSONObject(LanJsonBody.read(session.inputStream, length.toInt()))
             if (session.uri == "/pair") {
                 val key = input.optString("pairing")
                 if (!pairing.request(key)) return response(Response.Status.FORBIDDEN, "{}")

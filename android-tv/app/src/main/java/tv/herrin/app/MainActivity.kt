@@ -751,7 +751,7 @@ private fun Herrin(startup: StartupPresentation) {
         tvBoxImportJsonRequest = null
         val loadedConfig = if (imported != null)
             tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
-            else tvBoxRepository.loadUserWarehouse(address, preferCached = preferCache)
+            else tvBoxRepository.loadUserWarehouse(address, preferCached = preferCache || !isRoot)
         if (loadedConfig is TvBoxConfig.Error) {
             HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_FAILED")
             tvBoxStatus = loadedConfig.reason
@@ -806,6 +806,16 @@ private fun Herrin(startup: StartupPresentation) {
                 tvBoxStatus = result.reason
             }
         }
+        // Configuration success is terminal before optional catalog/live work.
+        // A phone poll must never wait for a Spider login or an empty CMS home.
+        if (pendingImportId != null && (loadedConfig is TvBoxConfig.Single || loadedConfig is TvBoxConfig.Warehouses)) {
+            if (!finishPhoneSource(pendingImportId)) return@LaunchedEffect
+            configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
+            spiderActive = false; activeCmsSite = null
+            spiderBridge.close()
+            providerFilms = null
+            vodImportFeedback = "影视仓配置已保存"
+        }
         if (phoneSourceId == null && isRoot && (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty())) {
             if (prefs.tvBoxWarehouseUrl != address) {
                 // A different root can never inherit approval of the old binary.
@@ -831,13 +841,8 @@ private fun Herrin(startup: StartupPresentation) {
             }.orEmpty()
             // TVBox-style import must not probe all third-party plugins.
             // Restore at most the previously selected site on startup.
-            val candidates = if (phoneSourceId != null)
-                config.sites.filter { it.apiUrl != null }.take(1)
-                else TvBoxAutoSites.resumeOnly(config, savedSite).ifEmpty {
-                    if (runSpiderAfterApply) config.sites.filter {
-                        it.apiUrl != null || it.spiderApi != null || it.scriptApi != null
-                    }.take(1) else emptyList()
-                }
+            val candidates = if (preferCache && pendingImportId == null)
+                TvBoxAutoSites.resumeOnly(config, savedSite) else emptyList()
             var chosen: Pair<TvBoxSite, List<Film>>? = null
             var chosenSpider = false
             var spiderFailure = ""

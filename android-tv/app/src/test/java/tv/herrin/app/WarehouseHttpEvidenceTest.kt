@@ -10,6 +10,18 @@ import org.junit.Test
 class WarehouseHttpEvidenceTest {
     private val original = """{"sites":[{"key":"original","name":"Original metadata","api":"csp_Fixture"}]}"""
 
+    @Test fun legalShortRedirectLoadsTheActualConfigurationWithoutStartingSpider() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/actual.json"))
+            server.enqueue(MockResponse().setBody(original))
+            val parsed = TvBoxConfigRepository().loadUserWarehouse(server.url("/short").toString())
+            assertTrue(parsed is TvBoxConfig.Single)
+            assertEquals("original", (parsed as TvBoxConfig.Single).sites.single().key)
+            assertEquals(2, server.requestCount)
+        }
+    }
+
     @Test fun deniedTransportCannotProduceAnHttpResponseObservation() = runBlocking {
         MockWebServer().use { server ->
             server.start()
