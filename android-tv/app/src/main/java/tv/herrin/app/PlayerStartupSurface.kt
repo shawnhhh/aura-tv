@@ -42,6 +42,7 @@ internal fun PlayerStartupSurface(
     failureHint: String? = null,
     failureDiagnostic: String? = null,
     diagnosticsForTest: Boolean = false,
+    personal: Boolean = false,
     onRetry: () -> Unit,
     onBack: () -> Unit,
     onTryOtherSource: (() -> Unit)? = null
@@ -104,7 +105,7 @@ internal fun PlayerStartupSurface(
                     }
                 }
                 if (retryAvailable) {
-                    TvButton(if (failureHint != null) "重新向来源解析" else "重新播放",
+                    TvButton(if (!personal && failureHint != null) "重新向来源解析" else "重新播放",
                         modifier = Modifier.testTag("player-startup-retry"),
                         reduced = reducedMotion, onClick = onRetry)
                 }

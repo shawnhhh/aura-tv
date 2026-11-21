@@ -4172,7 +4172,11 @@ private fun Herrin(startup: StartupPresentation) {
                     tmdbState.tmdbFallbackIndex.selected(film.id) ?: catalogScope)
                 val recoveryConfigEpoch = personalSourceConfigEpoch
                 val recoveryTvBox = tvBoxSingle
+                val personalRoute = tmdbState.tmdbPlaybackRoutes.forFilm(film.id) is HerrinTmdbPlaybackRouteStore.Route.Personal ||
+                    film.id.startsWith("personal-") || film.id.startsWith("personal-index:")
                 val recoverPlayback: (FongMiPlaybackRecovery.Failure, Long) -> Boolean = recover@{ failure, position ->
+                    // A private file is never recovered through a warehouse/Spider.
+                    if (personalRoute) return@recover false
                     if (screen != "player" || tmdbState.automaticSearch != null || filmId != recoveryAttempt.film ||
                         episode != recoveryAttempt.episode || line != recoveryAttempt.line ||
                         playerRetryEpoch != recoveryAttempt.retry || personalSourceConfigEpoch != recoveryConfigEpoch ||
@@ -4224,7 +4228,7 @@ private fun Herrin(startup: StartupPresentation) {
                 }
                 val cmsWaiting = screen == "player" && cmsPlaybackPendingId == film.id
                 val cmsFailed = screen == "player" && cmsPlaybackFailedId == film.id
-                val cmsLine = if (screen == "player" && !playbackNeedsRefresh &&activeCmsSite != null &&
+                val cmsLine = if (!personalRoute && screen == "player" && !playbackNeedsRefresh &&activeCmsSite != null &&
                     film.cmsVodId != null && !spiderActive)
                     film.playbackEpisodes.firstOrNull { it.number == episode }
                         ?.lines?.firstOrNull { it.id == line } else null
@@ -4248,13 +4252,14 @@ private fun Herrin(startup: StartupPresentation) {
                     CmsBrowserPlayback(cmsLine.uri, cmsBrowserParser, tvBoxAllowHttp, playerRetryEpoch)
                 else null
                 val cmsParseWaiting = (cmsHttpSpider || cmsJsonParser != null || cmsBrowserParser != null) && parsedCms == null
-                val currentSpiderResult = spiderResolved.takeIf { spiderResolvedFor == recoveryAttempt }
+                val currentSpiderResult = spiderResolved.takeIf { !personalRoute && spiderResolvedFor == recoveryAttempt }
                 val personalMedia = if (screen == "player" && film.playbackEpisodes.any { ep ->
                     ep.number == episode && ep.lines.any { it.id == line } })
                     tmdbState.tmdbPersonalPlayback[film.id]?.get(line) else null
                 val personalPlayback = personalMedia?.let { SelectedPersonalPlayback(it,playerRetryEpoch) }
                 val personalWaiting = personalMedia != null && personalPlayback == null
-                val licensed = if (personalMedia != null) personalPlayback
+                val licensed = if (personalRoute || personalMedia != null) personalPlayback ?:
+                    if (personalMedia == null) PlaybackResult.Unavailable("PERSONAL_SELECTION_EXPIRED") else null
                     else if (spiderActive && screen == "player") currentSpiderResult
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
                         if (activeCmsSite != null && film.cmsVodId != null) {
@@ -4277,7 +4282,7 @@ private fun Herrin(startup: StartupPresentation) {
                 // selected CMS film is still resolving its real licensed source.
                 val testMedia = if (screen == "player" && !spiderActive &&
                     !film.id.startsWith("tmdb-") &&
-                    activeCmsSite == null) AuthorizedUrls.https(prefs.testMediaUrl) else null
+                    activeCmsSite == null && !personalRoute) AuthorizedUrls.https(prefs.testMediaUrl) else null
                 val chosenMedia = if (tmdbState.automaticSearch != null ||playbackNeedsRefresh) null
                     else licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
@@ -4317,8 +4322,8 @@ private fun Herrin(startup: StartupPresentation) {
                         externalPanelOpen = playbackPicker != null,
                         onLineSelection = if (film.playbackEpisodes.isNotEmpty()) ({ playbackPicker = "lines" }) else null,
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty() && (film.category != "电影" || film.playbackEpisodes.size > 1)) ({ playbackPicker = "episodes" }) else null,
-                        onRefreshSource = if (spiderActive || cmsJsonParser != null || cmsBrowserParser != null) ({ playerRetryEpoch++ }) else null,
-                        onTryOtherSource = tryOtherTmdbSource,
+                        onRefreshSource = if (!personalRoute && (spiderActive || cmsJsonParser != null || cmsBrowserParser != null)) ({ playerRetryEpoch++ }) else null,
+                        onTryOtherSource = tryOtherTmdbSource.takeUnless { personalRoute },
                         onSourceExhausted = recoverPlayback,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->
@@ -4368,7 +4373,9 @@ private fun Herrin(startup: StartupPresentation) {
                         cmsFailed = cmsFailed,
                         retryAvailable = spiderActive || cmsFailed || cmsHttpSpider || personalMedia != null || cmsJsonParser != null || cmsBrowserParser != null,
                         reducedMotion = reduceMotion,
-                        failureHint = (parsedCms as? PlaybackResult.Unavailable)
+                        personal = personalRoute,
+                        failureHint = if (personalRoute) (licensed as? PlaybackResult.Unavailable)?.reason?.let(PlayerStartupHints::forPersonalFailure)
+                            else (parsedCms as? PlaybackResult.Unavailable)
                                 ?.reason?.let(PlayerStartupHints::forSpiderFailure)
                             ?: (currentSpiderResult as? PlaybackResult.Unavailable)
                                 ?.reason?.let(PlayerStartupHints::forSpiderFailure)
@@ -4377,6 +4384,7 @@ private fun Herrin(startup: StartupPresentation) {
                         // Before Media3 starts, the parser/CMS/Spider error must
                         // be visible rather than presenting a fake decoder failure.
                         failureDiagnostic = when {
+                            personalRoute -> (licensed as? PlaybackResult.Unavailable)?.let { PlaybackErrorReport.source("PERSONAL", it.reason) }
                             parsedCms is PlaybackResult.Unavailable ->
                                 PlaybackErrorReport.source(
                                     if (cmsJsonParser != null) "JSON" else "BROWSER",
@@ -4397,7 +4405,7 @@ private fun Herrin(startup: StartupPresentation) {
                             }
                             playerRetryEpoch++
                         },
-                        onTryOtherSource = tryOtherTmdbSource,
+                        onTryOtherSource = tryOtherTmdbSource.takeUnless { personalRoute },
                         onBack = {
                             if (screen == "player") {
                                 if (cmsFailed) { cmsPlaybackPendingId = null; cmsPlaybackFailedId = null }
