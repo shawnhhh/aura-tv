@@ -10,6 +10,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import kotlinx.coroutines.*
 import org.json.JSONObject
 
@@ -20,6 +24,8 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val api = remember { PersonalLibraryApi(context) }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var data by remember { mutableStateOf(JSONObject()) }
     var status by remember { mutableStateOf("") }
     var toast by remember { mutableStateOf("") }
@@ -105,24 +111,31 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
         }
         TvButton("新建连接") { input = JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else ""); selected = ""; path = ""; browser = JSONObject(); browsePage = 0 }
         val fields = if (tab == "SMB")
-            listOf("name" to "名称", "host" to "地址", "port" to "端口",
+            listOf("name" to "连接名称", "host" to "服务器地址", "port" to "端口", "path" to "路径",
                 "username" to "用户名", "password" to "密码")
         else listOf("name" to "连接名称", "address" to "服务器地址", "port" to "端口", "path" to "路径", "username" to "用户名", "password" to "密码")
         fields.forEach { (key, label) ->
             OutlinedTextField(if(key == "path") path else input.optString(key), { value ->
                 if(key == "path") path = value.take(2048)
                 else input = JSONObject(input.toString()).put(key, value.take(if(key in setOf("password", "address")) 2048 else 256))
-            }, modifier = Modifier.testTag("personal-field-$key").then(
+            }, modifier = Modifier.testTag("personal-field-$key").onPreviewKeyEvent { event ->
+                if(event.type != KeyEventType.KeyDown) false else when(event.key) {
+                    Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Previous)
+                    Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Next)
+                    Key.Enter, Key.DirectionCenter -> { keyboard?.show(); true }
+                    else -> false
+                }
+            }.then(
                     if(key == "name" && nameFocus != null) Modifier.focusRequester(nameFocus) else Modifier), label = { Text(label) },
                 singleLine = true, visualTransformation = if(key == "password") PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None)
         }
         if(tab == "SMB") TvButton("SMB3 加密：${input.optBoolean("encryption")}") { input = JSONObject(input.toString()).put("encryption", !input.optBoolean("encryption")) }
-        if(tab == "SMB") OutlinedTextField(path, { path = it.take(2048) }, label = { Text("路径") })
         TvButton(if(busy) "处理中…" else "添加") { if(!busy) execute("/personal/save", JSONObject(input.toString()).put("path", path)) }
         if(selected.isNotEmpty()) {
             TvButton("测试 / 浏览当前目录") { execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
             TvButton("上级目录") { browsePage = 0; path = path.substringBeforeLast('/', ""); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
             val files = browser.optJSONArray("files")
+            if (browser.optBoolean("ok") && files?.length() == 0) Text("此目录下暂无文件夹")
             if(files != null) for(i in 0 until minOf(100, files.length())) {
                 val f = files.getJSONObject(i)
                 TvButton(f.getString("name")) { browsePage = 0; path = f.getString("path"); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
@@ -140,7 +153,7 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
             val owner = (0 until (connections?.length() ?: 0)).map { connections!!.getJSONObject(it) }
                 .firstOrNull { it.optString("id") == f.optString("connection") }
             if(owner == null || (owner.optString("protocol") == "smb") != (tab == "SMB")) continue
-            Text(f.getString("path"))
+            Text(f.getString("path").ifBlank { owner.optString("basePath").ifBlank { owner.getString("name") } })
             Row {
                 TvButton("刷新") { execute("/personal/refresh", JSONObject().put("id", f.getString("id"))) }
                 TvButton("类型设为 $kind") { execute("/personal/folder", JSONObject(f.toString()).put("type", kind).put("scan", false)) }

@@ -22,7 +22,15 @@ class LanConfigurationTest {
             fun post(path: String, json: String, session: String = ""): Pair<Int, String> {
                 val request = Request.Builder().url(server.origin + path)
                     .header("Origin", server.origin).header("X-Herrin-Session", session)
-                    .post(json.toRequestBody("application/json".toMediaType())).build()
+                    // Browser fetch sends application/json without a charset.
+                    // OkHttp's String.toRequestBody would silently add UTF-8
+                    // and hide NanoHTTPD's old ASCII decoding defect.
+                    .post(object : okhttp3.RequestBody() {
+                        private val bytes = json.toByteArray(Charsets.UTF_8)
+                        override fun contentType() = "application/json".toMediaType()
+                        override fun contentLength() = bytes.size.toLong()
+                        override fun writeTo(sink: okio.BufferedSink) { sink.write(bytes) }
+                    }).build()
                 return client.newCall(request).execute().use { it.code to it.body!!.string() }
             }
             assertEquals(403, post("/status", "{}").first)

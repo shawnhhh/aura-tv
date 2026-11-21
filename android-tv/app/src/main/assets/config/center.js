@@ -115,7 +115,7 @@ async function refreshPersonal(){
   const c=(data.connections||[]).find(c=>c.id===f.connection);
   if(!c||(c.protocol==='smb')!==(protocol==='SMB'))continue;
   const row=document.createElement('div');row.className='folder';
-  const name=document.createElement('span');name.textContent=f.path;row.append(name);
+  const name=document.createElement('span');name.textContent=f.path||c.basePath||c.name;row.append(name);
   button(row,'移除',async()=>{if(!confirm('移除当前文件夹？'))return;await personal('/folder/delete',{id:f.id,confirmed:true});await refreshPersonal();toast(true,'nas')});
   dirs.append(row);
  }

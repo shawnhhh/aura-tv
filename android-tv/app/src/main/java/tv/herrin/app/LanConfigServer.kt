@@ -50,7 +50,7 @@ internal class LanConfigServer(
             return response(Response.Status.FORBIDDEN, "{}")
         if (session.method == Method.GET && session.uri in setOf("/", "/center.js", "/center.css")) {
             val file = when (session.uri) { "/" -> "center.html"; else -> session.uri.drop(1) }
-            val type = when (file) { "center.html" -> "text/html; charset=utf-8"; "center.js" -> "application/javascript"; else -> "text/css" }
+            val type = when (file) { "center.html" -> "text/html; charset=utf-8"; "center.js" -> "application/javascript; charset=utf-8"; else -> "text/css; charset=utf-8" }
             return response(Response.Status.OK, context.assets.open("config/$file").bufferedReader().use { it.readText() }, type)
         }
         if (session.method != Method.POST || session.headers["origin"] != origin ||
