@@ -50,11 +50,14 @@ internal object WordmarkMotion {
 
 /** VSync clock. Draw state stays in this small layer, never recomposes the home per frame. */
 @Composable
-internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}, widthDp: Float = 420f) {
+internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}, widthDp: Float = 420f,
+                                  surfaceReady: Boolean = true) {
     val focus = remember { FocusRequester() }
     val onDone by rememberUpdatedState(done)
     val visible by rememberUpdatedState(onVisible)
     val elapsed = remember { mutableFloatStateOf(0f) }
+    val exposed by rememberUpdatedState(surfaceReady)
+    val drawn = remember { booleanArrayOf(false) }
     var skipped by remember { mutableStateOf(false) }
     val renderer=remember{WordmarkRenderer()}
     DisposableEffect(renderer) { onDispose { renderer.close() } }
@@ -84,7 +87,7 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             completeOnce()
             return@LaunchedEffect
         }
-        val start = withFrameNanos { it }
+        val clock = WordmarkFrameClock()
         var reportedVisible = false
         var reportedReady = false
         while (true) {
@@ -92,7 +95,7 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             // The previous positive-time frame has now had a draw opportunity.
             // Mounting the large home before that frame can stall first reveal.
             if (reportedVisible) prepareOnce()
-            elapsed.floatValue = (now - start) / 1_000_000f
+            elapsed.floatValue = clock.frame(now, exposed && drawn[0])
             if (!reportedVisible && elapsed.floatValue > 0f) {
                 reportedVisible = true
                 StartupTiming.wordmarkVisible()
@@ -117,6 +120,7 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             .testTag("splash-wordmark").semantics { contentDescription="HERRIN" }) {
             renderer.draw(drawContext.canvas.nativeCanvas,size.width,size.height,
                 if(reduced ||skipped)WordmarkMotion.REVEAL_MS else elapsed.floatValue)
+            drawn[0] = true
         }
     }
 }
@@ -126,7 +130,8 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
 @Composable
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit,
-                               homeReady: Boolean = true, onVisible: () -> Unit = {}, wordmarkWidthDp: Float = 420f) {
+                               homeReady: Boolean = true, onVisible: () -> Unit = {}, wordmarkWidthDp: Float = 420f,
+                               surfaceReady: Boolean = true) {
     val opacity = remember { Animatable(1f) }
     var revealed by remember { mutableStateOf(false) }
     LaunchedEffect(revealed, homeReady) {
@@ -141,7 +146,8 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
     }
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
         .testTag("splash-curtain")) {
-        HerrinWordmarkSplash(reduced, done = { revealed = true }, onVisible = onVisible,widthDp=wordmarkWidthDp)
+        HerrinWordmarkSplash(reduced, done = { revealed = true }, onVisible = onVisible,widthDp=wordmarkWidthDp,
+            surfaceReady = surfaceReady)
     }
 }
 

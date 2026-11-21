@@ -160,6 +160,7 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus:Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if(hasFocus) {
+            presentation?.surfaceReady = true
             val requested=presentation?.restoreBrowseFocus?.invoke()==true
             RemoteTrace.event { "WINDOW_FOCUS_READY browse_request_issued=$requested" }
         }
@@ -175,6 +176,7 @@ class MainActivity : ComponentActivity() {
         StartupTiming.start()
         super.onCreate(savedInstanceState)
         val startup=StartupPresentation().apply {
+            surfaceReady = false
             // Explicit debug-only diagnostics; no consumer navigation entry.
             diagnostics = intent.action == "tv.herrin.app.DIAGNOSTICS" &&
                 applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
@@ -182,9 +184,11 @@ class MainActivity : ComponentActivity() {
         presentation=startup
         if(android.os.Build.VERSION.SDK_INT>=31) {
             splashScreen.setOnExitAnimationListener { native ->
-                window.decorView.postOnAnimation {
-                    androidx.core.view.OneShotPreDrawListener.add(window.decorView){StartupTiming.brandExit();native.remove()}
-                }
+                // Do not leave an opaque native layer over an already-running
+                // Compose clock while waiting for another pre-draw callback.
+                native.remove()
+                StartupTiming.brandExit()
+                startup.surfaceReady = true
             }
         }
         // Observe through the public Window.Callback contract without calling AndroidX restricted APIs.

@@ -21,6 +21,7 @@ internal class StartupPresentation {
     var homeReady by mutableStateOf(false)
     var prepareHome by mutableStateOf(false)
     var reduced by mutableStateOf(false)
+    var surfaceReady by mutableStateOf(true)
     var preferences by mutableStateOf<Preferences?>(null)
     var profiles:CatalogProfiles?=null
     var initialProfiles:List<CatalogProfile> = emptyList()
@@ -97,6 +98,7 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
         if (state.showing) SplashExitCurtain(state.reduced, state.exiting,
             onReady = { state.exiting = true },
             onFinished = { state.showing = false }, homeReady = state.homeReady,
-            onVisible = { state.prepareHome = true },wordmarkWidthDp=state.wordmarkWidthDp)
+            onVisible = { state.prepareHome = true },wordmarkWidthDp=state.wordmarkWidthDp,
+            surfaceReady = state.surfaceReady)
     }
 }
