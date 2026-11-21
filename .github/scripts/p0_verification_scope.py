@@ -27,7 +27,7 @@ ALLOWED = PROBES | {
 }
 ABBA_ONLY = ALLOWED - PROBES - {".github/workflows/android-startup.yml"}
 TV_CONTROL = {".github/scripts/p0_verification_scope.py", ".github/scripts/test_p0_verification_scope.py",
-              ".github/workflows/p0-playback.yml"}
+              ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh"}
 
 
 def tv_only(paths):

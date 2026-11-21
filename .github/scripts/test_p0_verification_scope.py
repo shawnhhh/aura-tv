@@ -5,13 +5,15 @@ from p0_verification_scope import PROBES, startup_only, abba_only, tv_only
 class VerificationScopeTest(unittest.TestCase):
     def test_instrumentation_only_reuses_debug_but_not_tv_or_startup(self):
         self.assertTrue(tv_only(["android-tv/app/src/androidTest/java/tv/herrin/app/AppliedWarehouseAssertions.kt",
-                                 ".github/workflows/p0-playback.yml", "android-tv/docs/detail-player/PROGRESS.md"]))
+                                 ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh",
+                                 "android-tv/docs/detail-player/PROGRESS.md"]))
 
     def test_any_app_jvm_fixture_or_build_change_forbids_debug_reuse(self):
         for path in ("android-tv/app/src/main/java/tv/herrin/app/PersonalLibrary.kt",
                      "android-tv/app/src/test/java/tv/herrin/app/PersonalProjectionSyncTest.kt",
                      "android-tv/app/build.gradle.kts", "android-tv/fongmi-kernel/contract/build.gradle",
-                     ".github/workflows/android-debug.yml", ".github/scripts/start_smb_fixture.sh"):
+                     ".github/workflows/android-debug.yml", ".github/scripts/start_smb_fixture.sh",
+                     "android-tv/scripts/unreviewed.sh"):
             with self.subTest(path=path):
                 self.assertFalse(tv_only(["android-tv/app/src/androidTest/java/tv/herrin/app/HerrinUiSmokeTest.kt",path]))
 
