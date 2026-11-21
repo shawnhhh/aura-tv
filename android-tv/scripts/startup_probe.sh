@@ -29,8 +29,7 @@ tracing=0
 if adb shell atrace --async_start -b 16384 gfx view wm am sched freq dalvik binder_driver > "$evidence/atrace-start.txt" 2>&1; then tracing=1; fi
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/cold-launch.txt"
 sleep 5
-adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
-adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/home.xml"
+python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-cold "$evidence/home.xml"
 adb shell dumpsys window > "$evidence/cold-window.txt"
 # Observe lifecycle completion with the same UI snapshot. The old log capture
 # preceded uiautomator's idle/dump work and could miss the handoff it observed.
@@ -84,8 +83,7 @@ adb shell dumpsys input > "$evidence/hot-input-before.txt"
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 1
-adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
-adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/hot-remote.xml"
+python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-hot "$evidence/hot-remote.xml"
 adb shell dumpsys window > "$evidence/hot-remote-window.txt"
 adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/hot-diagnostics.txt"
 python3 android-tv/scripts/check_startup_probe.py --stage hot \
@@ -111,8 +109,7 @@ test -s "$evidence/visual-only-startup.mp4"
 # A missing recording/decoder is a failed evidence check, never a silent pass.
 mkdir -p "$evidence/visual-frames"
 ffmpeg -v error -i "$evidence/visual-only-startup.mp4" -vf fps=4 "$evidence/visual-frames/frame-%03d.png"
-adb shell uiautomator dump /sdcard/herrin-visual-home.xml >/dev/null
-adb exec-out cat /sdcard/herrin-visual-home.xml > "$evidence/visual-home.xml"
+python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-visual "$evidence/visual-home.xml"
 adb shell dumpsys window > "$evidence/visual-window.txt"
 adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/visual-diagnostics.txt"
 python3 android-tv/scripts/check_startup_probe.py --stage visual \
@@ -148,8 +145,7 @@ PREFS
     adb logcat -c
     adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/$scenario-launch.txt"
     sleep 5
-    adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
-    adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/$scenario-home.xml"
+    python3 android-tv/scripts/capture_startup_ui.py "/sdcard/herrin-$scenario" "$evidence/$scenario-home.xml"
     adb shell dumpsys window > "$evidence/$scenario-window.txt"
     adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I AndroidRuntime:E > "$evidence/$scenario-diagnostics.txt"
     python3 - "$evidence" "$scenario" <<'MATRIX'

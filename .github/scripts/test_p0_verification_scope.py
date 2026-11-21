@@ -5,7 +5,7 @@ from p0_verification_scope import PROBES, startup_only, abba_only, tv_only
 class VerificationScopeTest(unittest.TestCase):
     def test_instrumentation_only_reuses_debug_but_not_tv_or_startup(self):
         self.assertTrue(tv_only(["android-tv/app/src/androidTest/java/tv/herrin/app/AppliedWarehouseAssertions.kt",
-                                 ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh",
+                                 ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh", "android-tv/scripts/capture_startup_ui.py",
                                  "android-tv/docs/detail-player/PROGRESS.md"]))
 
     def test_any_app_jvm_fixture_or_build_change_forbids_debug_reuse(self):

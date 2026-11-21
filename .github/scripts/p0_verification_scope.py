@@ -15,6 +15,8 @@ PROBES = {
     "android-tv/scripts/startup_probe.sh",
     "android-tv/scripts/check_startup_probe.py",
     "android-tv/scripts/test_check_startup_probe.py",
+    "android-tv/scripts/capture_startup_ui.py",
+    "android-tv/scripts/test_capture_startup_ui.py",
 }
 ALLOWED = PROBES | {
     ".github/scripts/p0_verification_scope.py",
@@ -33,7 +35,7 @@ TV_CONTROL = {".github/scripts/p0_verification_scope.py", ".github/scripts/test_
 def tv_only(paths):
     """Only instrumentation changed; app/JVM/fixtures/build inputs must match the verified debug."""
     return any(p.startswith("android-tv/app/src/androidTest/") for p in paths) and all(
-        p.startswith("android-tv/app/src/androidTest/") or p.startswith("android-tv/docs/") or p in TV_CONTROL
+        p.startswith("android-tv/app/src/androidTest/") or p.startswith("android-tv/docs/") or p in TV_CONTROL or p in PROBES
         for p in paths)
 
 

@@ -48,6 +48,15 @@ assert 'OK (1 test)' in text and 'INSTRUMENTATION_CODE: -1' in text, text
 assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text, text
 PY
 fi
+# Retest the sole full-suite failure from run44924819337 before the retained
+# preflights and unfiltered suite. Valid short links are now an explicit requirement.
+adb shell am instrument -w -r -e class 'tv.herrin.app.TvBoxWarehouseIntegrationTest#followsValidShortLinksButRefusesUnsafeRedirectsImagesHtmlAndOversizedPayloads' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/warehouse-redirect-preflight.txt
+python3 - <<'PYWAREHOUSE'
+from pathlib import Path
+text=Path('build/emulator-evidence/warehouse-redirect-preflight.txt').read_text()
+assert 'OK (1 test)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
+PYWAREHOUSE
 # Retest the remaining failure from run 44705015249 before broader gates.
 adb shell am instrument -w -r -e class 'tv.herrin.app.HerrinUiSmokeTest#tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/h-detail-rebind-preflight.txt
 python3 - <<'PYDETAIL'
