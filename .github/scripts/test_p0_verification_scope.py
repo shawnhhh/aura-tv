@@ -1,5 +1,5 @@
 import unittest
-from p0_verification_scope import PROBES, startup_only
+from p0_verification_scope import PROBES, startup_only, abba_only
 
 
 class VerificationScopeTest(unittest.TestCase):
@@ -14,7 +14,7 @@ class VerificationScopeTest(unittest.TestCase):
                      "android-tv/app/src/androidTest/java/tv/herrin/app/HerrinSplashTest.kt",
                      "android-tv/app/src/test/java/tv/herrin/app/DiscoveryInvalidationTest.kt",
                      ".github/workflows/android-debug.yml", ".github/scripts/start_smb_fixture.sh",
-                     "android-tv/scripts/emulator_ci.sh", ".github/scripts/tmdb_performance_ab.sh"):
+                     "android-tv/scripts/emulator_ci.sh"):
             with self.subTest(path=path):
                 self.assertFalse(startup_only(list(PROBES) + [path]))
 
@@ -25,6 +25,16 @@ class VerificationScopeTest(unittest.TestCase):
 
     def test_unknown_paths_fail_closed(self):
         self.assertFalse(startup_only(list(PROBES) + ["android-tv/scripts/unreviewed.py"]))
+
+    def test_abba_control_changes_reuse_only_the_verified_startup(self):
+        paths = [".github/workflows/p0-playback.yml", ".github/workflows/tmdb-browse-performance.yml"]
+        self.assertTrue(abba_only(list(PROBES) + paths, paths))
+
+    def test_startup_or_app_change_cannot_skip_api31(self):
+        for path in list(PROBES) + [".github/workflows/android-startup.yml",
+                                   "android-tv/app/src/main/java/tv/herrin/app/StartupPresentation.kt"]:
+            with self.subTest(path=path):
+                self.assertFalse(abba_only(list(PROBES) + [path], [path]))
 
 
 if __name__ == "__main__":
