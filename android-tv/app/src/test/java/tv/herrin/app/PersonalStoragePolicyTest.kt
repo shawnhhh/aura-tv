@@ -33,6 +33,12 @@ class PersonalStoragePolicyTest {
         assertEquals("Movies/电影", PersonalStoragePolicy.path("/Movies/电影/"))
     }
     @Test fun fullWebDavUrlsPreserveProtocolPortAndBaseDirectory() {
+        assertEquals(5244, PersonalStoragePolicy.webDavAddress("http://nas.example/dav", "5244").port)
+        assertEquals("xn--bcher-kva.example", PersonalStoragePolicy.webDavAddress("https://bücher.example/电影").host)
+        assertEquals("电影", PersonalStoragePolicy.webDavAddress("https://bücher.example/电影").basePath)
+        assertThrows(IllegalArgumentException::class.java) {
+            PersonalStoragePolicy.webDavAddress("http://nas.example:5244/dav", "8080")
+        }
         val https = PersonalStoragePolicy.webDavAddress("https://nas.example:8443/dav/")
         assertEquals("https", https.scheme)
         assertEquals(8443, https.port)

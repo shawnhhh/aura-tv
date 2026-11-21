@@ -17,9 +17,11 @@ internal class PersonalLibraryApi(context: Context) {
                 val address = input.optString("address").trim()
                 val normalized = JSONObject(input.toString())
                 if (input.optString("protocol") != "smb" && address.isNotBlank()) {
-                    val parsed = PersonalStoragePolicy.webDavAddress(address)
+                    val parsed = PersonalStoragePolicy.webDavAddress(address, input.optString("port"))
                     normalized.put("protocol", parsed.scheme).put("host", parsed.host)
                         .put("port", parsed.port).put("basePath", parsed.basePath)
+                    if (PersonalStoragePolicy.path(normalized.optString("path")) == parsed.basePath && parsed.basePath.isNotEmpty())
+                        normalized.put("path", "")
                 }
                 val protocol = normalized.getString("protocol")
                 val old = id.takeIf { it.isNotBlank() }?.let { library.connections.get(it) }
@@ -33,13 +35,18 @@ internal class PersonalLibraryApi(context: Context) {
                     PersonalStoragePolicy.path(normalized.optString("path")),
                     PersonalStoragePolicy.path(normalized.optString("basePath")))
                 val folder = PersonalStoragePolicy.path(normalized.optString("path"))
+                require(folder.isNotEmpty() || candidate.basePath.isNotEmpty()) { "MEDIA_FOLDER_REQUIRED" }
                 val available = try { runBlocking { PersonalRemoteFiles.list(candidate, folder) } }
                 catch(error: Exception) { return JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error)) }
                 library.cancelAndWait()
                 val saved = library.connections.save(normalized)
                 library.connections.status(saved.id, "connected")
+                // "Add" validates and imports precisely the chosen subtree.
+                // Root enumeration is not implicit consent to scan an entire drive.
+                val folderId = library.index.folder(saved.id, folder, "auto")
+                library.refresh(folderId)
                 val directories = available.filter { it.directory }.sortedBy { it.path }
-                return JSONObject().put("ok", true).put("id", saved.id).put("path", folder).put("total", directories.size)
+                return JSONObject().put("ok", true).put("id", saved.id).put("path", folder).put("folderId", folderId).put("total", directories.size)
                     .put("files", JSONArray().apply { directories.take(100).forEach { put(JSONObject().put("name", it.name).put("path", it.path)) } })
             }
             "/personal/delete" -> {

@@ -81,7 +81,7 @@ function switchProtocol(next){
  moduleEpoch++;formRevision++;protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
  const f=$('#personal-edit');f.reset();f.elements.id.value='';f.elements.protocol.value=next==='SMB'?'smb':'https';
  f.elements.address.placeholder=next==='SMB'?'IP 或域名':'http:// 或 https://';
- $('#smb-port').hidden=next!=='SMB';f.elements.port.disabled=next!=='SMB';
+ $('#smb-port').hidden=false;f.elements.port.disabled=false;f.elements.port.value=next==='SMB'?'445':'';
  directoryBrowseToken++;$('#personal-directories').replaceChildren();$('#personal-browser').hidden=true;
 }
 document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(error=>{if(!error.stale)toast(false,'nas')})});
@@ -103,7 +103,7 @@ async function refreshPersonal(){
   button(actions,'编辑',()=>{const f=$('#personal-edit');switchProtocol(protocol);
    for(const key of ['id','name','username','path'])f.elements[key].value=c[key]||'';
    f.elements.address.value=protocol==='SMB'?c.host:(c.address||'');
-   if(protocol==='SMB')f.elements.port.value=c.port||445;
+   f.elements.port.value=c.port||'';
   });
   button(actions,'浏览目录',async()=>{personalConnection=c.id;directoryPage=0;$('#personal-path').value=c.path||'';
    $('#personal-browser').hidden=false;await browsePersonal()});
@@ -126,7 +126,7 @@ $('#personal-edit').onsubmit=async e=>{
  try{
   const data=Object.fromEntries(new FormData(f));
   if(requestedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
-  else {data.protocol='https';delete data.host;delete data.port}
+  else {data.protocol='https';delete data.host;data.port=Number(data.port)||''}
   if(data.id&&!data.password)delete data.password;
   const result=await personal('/save',data);
   // Clear submitted secrets even if the user changed modules while the request was pending.

@@ -39,12 +39,12 @@
     <input name="host" type="hidden">
     <input name="domain" type="hidden">
     <input name="encryption" type="hidden" value="false">
-    <label>名称<input name="name" maxlength="64" autocomplete="off" required></label>
-    <label>地址<input name="address" maxlength="2048" placeholder="http:// 或 https://" autocomplete="url" required></label>
-    <label id="smb-port" hidden>端口<input name="port" type="number" min="1" max="65535" value="445"></label>
+    <label>连接名称<input name="name" maxlength="64" autocomplete="off" required></label>
+    <label>服务器地址<input name="address" maxlength="2048" placeholder="http:// 或 https://" autocomplete="url" required></label>
+    <label id="smb-port">端口<input name="port" type="number" min="1" max="65535" placeholder="自动"></label>
+    <label>路径<input name="path" maxlength="2048" placeholder="选择要添加的媒体目录"></label>
     <label>用户名<input name="username" maxlength="256" autocomplete="off"></label>
     <label>密码<input name="password" type="password" maxlength="2048" autocomplete="off"></label>
-    <label>路径<input name="path" maxlength="2048"></label>
     <button type="submit">添加</button>
    </form>
    <div id="personal-browser" hidden>

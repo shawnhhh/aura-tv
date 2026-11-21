@@ -1,6 +1,7 @@
 package tv.herrin.app
 
 import java.net.URI
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** Manual form fields only. No pasted configuration inference or LAN discovery. */
 internal object PersonalStoragePolicy {
@@ -15,16 +16,18 @@ internal object PersonalStoragePolicy {
         return if(':' in value) value.lowercase() else java.net.IDN.toASCII(value, java.net.IDN.USE_STD3_ASCII_RULES).lowercase()
     }
     data class WebDavAddress(val scheme: String, val host: String, val port: Int, val basePath: String)
-    fun webDavAddress(raw: String): WebDavAddress {
+    fun webDavAddress(raw: String, portField: String = ""): WebDavAddress {
         require(raw.length in 1..2048)
-        val url = URI(raw.trim())
-        val scheme = requireNotNull(url.scheme) { "WebDAV 地址必须包含协议" }.lowercase(java.util.Locale.ROOT)
-        require(scheme in setOf("http", "https") && url.host != null &&
-            url.rawUserInfo == null && url.rawQuery == null && url.rawFragment == null)
-        val host = host(requireNotNull(url.host))
-        val port = if (url.port < 0) { if (scheme == "https") 443 else 80 } else url.port
-        endpoint(requireNotNull(scheme), host, port)
-        return WebDavAddress(scheme, host, port, path(url.path.orEmpty()))
+        require(raw.trim().startsWith("http://", true) || raw.trim().startsWith("https://", true))
+        val url = requireNotNull(raw.trim().toHttpUrlOrNull())
+        require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null)
+        val explicitPort = Regex(":([0-9]+)$").find(raw.trim().substringAfter("://").substringBefore('/'))
+            ?.groupValues?.get(1)?.toIntOrNull()
+        val supplied = portField.trim().takeIf(String::isNotEmpty)?.let { requireNotNull(it.toIntOrNull()) }
+        require(supplied == null || explicitPort == null || supplied == explicitPort) { "WEBDAV_PORT_CONFLICT" }
+        val port = supplied ?: url.port
+        endpoint(url.scheme, url.host, port)
+        return WebDavAddress(url.scheme, url.host, port, path(URI(url.toString()).path.orEmpty()))
     }
     fun endpoint(protocol: String, host: String, port: Int): String {
         require(protocol in setOf("https", "http", "smb"))

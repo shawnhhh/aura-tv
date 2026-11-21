@@ -24,7 +24,7 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
     var status by remember { mutableStateOf("") }
     var toast by remember { mutableStateOf("") }
     LaunchedEffect(toast) { if (toast.isNotBlank()) { delay(2400); toast = "" } }
-    var input by remember(tab) { mutableStateOf(JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else "443")) }
+    var input by remember(tab) { mutableStateOf(JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else "")) }
     var selected by remember { mutableStateOf("") }
     var path by remember { mutableStateOf("") }
     var browsePage by remember { mutableStateOf(0) }
@@ -42,8 +42,10 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
         busy = true
         val requestedPage = browsePage
         val requestedInput = input.toString()
-        val requestedPath = path
-        val requestedConnection = selected
+        // The passed request owns its path/connection; click state writes can
+        // be observed by Compose on the next frame rather than this closure.
+        val requestedPath = if(browse) value.optString("path") else path
+        val requestedConnection = if(browse) value.optString("id") else selected
         scope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { api.handle(route, if(browse) JSONObject(value.toString()).put("offset", requestedPage * 100) else value) }
@@ -101,22 +103,25 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
                 TvButton("删除") { confirm = "/personal/delete" to c.getString("id") }
             }
         }
-        TvButton("新建连接") { input = JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else "443"); selected = ""; path = ""; browser = JSONObject(); browsePage = 0 }
+        TvButton("新建连接") { input = JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else ""); selected = ""; path = ""; browser = JSONObject(); browsePage = 0 }
         val fields = if (tab == "SMB")
             listOf("name" to "名称", "host" to "地址", "port" to "端口",
                 "username" to "用户名", "password" to "密码")
-        else listOf("name" to "名称", "address" to "地址", "username" to "用户名", "password" to "密码")
+        else listOf("name" to "连接名称", "address" to "服务器地址", "port" to "端口", "path" to "路径", "username" to "用户名", "password" to "密码")
         fields.forEach { (key, label) ->
-            OutlinedTextField(input.optString(key), { value -> input = JSONObject(input.toString()).put(key, value.take(if(key in setOf("password", "address")) 2048 else 256)) }, modifier = Modifier.testTag("personal-field-$key").then(
+            OutlinedTextField(if(key == "path") path else input.optString(key), { value ->
+                if(key == "path") path = value.take(2048)
+                else input = JSONObject(input.toString()).put(key, value.take(if(key in setOf("password", "address")) 2048 else 256))
+            }, modifier = Modifier.testTag("personal-field-$key").then(
                     if(key == "name" && nameFocus != null) Modifier.focusRequester(nameFocus) else Modifier), label = { Text(label) },
                 singleLine = true, visualTransformation = if(key == "password") PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None)
         }
         if(tab == "SMB") TvButton("SMB3 加密：${input.optBoolean("encryption")}") { input = JSONObject(input.toString()).put("encryption", !input.optBoolean("encryption")) }
-        OutlinedTextField(path, { path = it.take(2048) }, label = { Text("路径") })
+        if(tab == "SMB") OutlinedTextField(path, { path = it.take(2048) }, label = { Text("路径") })
         TvButton(if(busy) "处理中…" else "添加") { if(!busy) execute("/personal/save", JSONObject(input.toString()).put("path", path)) }
         if(selected.isNotEmpty()) {
             TvButton("测试 / 浏览当前目录") { execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
-            TvButton("返回上级") { browsePage = 0; path = path.substringBeforeLast('/', ""); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+            TvButton("上级目录") { browsePage = 0; path = path.substringBeforeLast('/', ""); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
             val files = browser.optJSONArray("files")
             if(files != null) for(i in 0 until minOf(100, files.length())) {
                 val f = files.getJSONObject(i)
