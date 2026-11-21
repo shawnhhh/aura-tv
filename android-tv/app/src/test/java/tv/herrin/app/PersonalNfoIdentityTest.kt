@@ -10,5 +10,7 @@ class PersonalNfoIdentityTest {
         assertNull(PersonalNfoIdentity.parse("<movie><uniqueid type='imdb'>42</uniqueid></movie>"))
         assertNull(PersonalNfoIdentity.parse("<!DOCTYPE x SYSTEM 'https://example.invalid'><movie><tmdbid>42</tmdbid></movie>"))
         assertNull(PersonalNfoIdentity.parse("<movie><tmdbid>0</tmdbid></movie>"))
+        assertNull(PersonalNfoIdentity.parse("<episodedetails><uniqueid type='tmdb'>123</uniqueid></episodedetails>"))
+        assertNull(PersonalNfoIdentity.parse("<movie><tmdbid>1</tmdbid><uniqueid type='tmdb'>2</uniqueid></movie>"))
     }
 }

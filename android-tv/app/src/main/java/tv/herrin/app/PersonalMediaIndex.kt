@@ -120,7 +120,8 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         val stem = nfo.substringAfterLast('/').substringBeforeLast('.')
         for(row in unmatched(folder)) {
             val path = row.getString("path")
-            if (path.substringBeforeLast('/', "") != parent) continue
+            val fileParent = path.substringBeforeLast('/', "")
+            if (if(stem == "tvshow" && hint.type == "tv") !PersonalStoragePolicy.contains(parent,fileParent) else fileParent != parent) continue
             if (stem !in setOf("movie", "tvshow") && path.substringAfterLast('/').substringBeforeLast('.') != stem) continue
             val metadata = JSONObject().put("nfoTmdb", hint.tmdb).put("nfoType", hint.type)
             writableDatabase.execSQL("UPDATE media SET metadata=? WHERE id=? AND tmdb IS NULL AND manual=0",
