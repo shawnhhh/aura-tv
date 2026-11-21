@@ -476,11 +476,12 @@ class HerrinUiSmokeTest {
                 .performTextReplacement(server.url("/box.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.awaitAppliedWarehouse()
-            assertEquals(2, server.requestCount)
+            compose.awaitAppliedWarehouse(active = false)
+            assertEquals(1, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             compose.waitUntil(15000) {
                 runCatching { compose.onAllNodesWithText("远端电影")
                     .onFirst().assertIsDisplayed() }.isSuccess
@@ -696,10 +697,11 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(root)
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.awaitAppliedWarehouse()
+            compose.awaitAppliedWarehouse(active = false)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             compose.waitUntil(15000){runCatching{compose.onAllNodesWithText("协议测试1").onFirst().assertIsDisplayed()}.isSuccess}
             protocolSearch("Protocol 1")
             focus("card-tmdb-movie-9001");key(KeyEvent.KEYCODE_DPAD_CENTER)

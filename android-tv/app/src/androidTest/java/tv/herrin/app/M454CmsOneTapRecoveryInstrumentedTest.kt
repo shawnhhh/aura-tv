@@ -70,11 +70,12 @@ class M454CmsOneTapRecoveryInstrumentedTest {
                 .performTextReplacement(server.url("/config.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.awaitAppliedWarehouse()
-            assertEquals("Applying a warehouse validates config and activates only its selected CMS", 2, server.requestCount)
+            compose.awaitAppliedWarehouse(active = false)
+            assertEquals("Applying a warehouse validates config without initializing its CMS", 1, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             val tag = "card-tvbox-0-" + "film-A".hashCode().toUInt().toString(16)
             compose.waitUntil(12_000) {
                 runCatching { compose.onNodeWithTag(tag).assertExists() }.isSuccess
@@ -150,10 +151,11 @@ class M454CmsOneTapRecoveryInstrumentedTest {
                 .performTextReplacement(server.url("/warehouse.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.awaitAppliedWarehouse()
+            compose.awaitAppliedWarehouse(active = false)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             val tag = "card-tvbox-0-" + "film-A".hashCode().toUInt().toString(16)
             compose.waitUntil(12_000) {
                 runCatching { compose.onNodeWithTag(tag).assertExists() }.isSuccess

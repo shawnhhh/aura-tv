@@ -18,3 +18,15 @@ internal fun ComposeContentTestRule.awaitAppliedWarehouse(timeoutMs: Long = 15_0
     }
     onNodeWithTag("settings-source-sites").assertExists()
 }
+
+/** Node activation follows an explicit UI selection, independently of config validation. */
+internal fun ComposeContentTestRule.awaitSelectedWarehouse(timeoutMs: Long = 15_000) {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val expected = Preferences(context).tvBoxWarehouseUrl
+    assertTrue("A selected node needs a persisted warehouse", expected.isNotBlank())
+    waitUntil(timeoutMs) {
+        val prefs = Preferences(context)
+        prefs.tvBoxWarehouseUrl == expected && prefs.tvBoxLastWorkingRootUrl == expected &&
+            prefs.tvBoxLastWorkingSiteId.isNotBlank()
+    }
+}

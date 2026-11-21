@@ -78,7 +78,7 @@ class EmptySpiderHomeSelectionTest {
         compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/original.json").toString())
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-warehouse-load"))
         activate("tvbox-warehouse-load")
-        compose.awaitAppliedWarehouse()
+        compose.awaitAppliedWarehouse(active = false)
     }
     private fun assertSelectedEmptySource(advanced: Boolean = false) {
         val expected = "Original empty-home fixture：暂无影片，可继续搜索或检查来源授权"
