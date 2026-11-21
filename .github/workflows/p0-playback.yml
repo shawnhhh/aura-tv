@@ -21,6 +21,7 @@ jobs:
     outputs:
       startup_only: ${{ steps.scope.outputs.startup_only }}
       abba_only: ${{ steps.scope.outputs.abba_only }}
+      tv_only: ${{ steps.scope.outputs.tv_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,11 +38,11 @@ jobs:
           path: verification-scope.json
   debug:
     needs: verification-scope
-    if: needs['verification-scope'].outputs.startup_only != 'true'
+    if: needs['verification-scope'].outputs.startup_only != 'true' && needs['verification-scope'].outputs.tv_only != 'true'
     uses: ./.github/workflows/android-debug.yml
   emulator:
     needs: [verification-scope, debug]
-    if: ${{ !cancelled() && needs['verification-scope'].outputs.startup_only != 'true' && needs.debug.result == 'success' }}
+    if: ${{ !cancelled() && needs['verification-scope'].outputs.startup_only != 'true' && (needs.debug.result == 'success' || (needs['verification-scope'].outputs.tv_only == 'true' && needs.debug.result == 'skipped')) }}
     uses: ./.github/workflows/android-emulator.yml
   startup-api31:
     if: ${{ !cancelled() && needs['verification-scope'].outputs.abba_only != 'true' && (github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110') && (needs.emulator.result == 'success' || (needs['verification-scope'].outputs.startup_only == 'true' && needs.emulator.result == 'skipped')) }}
