@@ -38,7 +38,8 @@ fs.mkdirSync(evidence,{recursive:true});
       port:body.port|| (scheme==='https'?443:80),username:body.username||'',domain:body.domain||'',
       encryption:body.encryption==='true'||body.encryption===true,path:body.path||'',enabled:true};
     const i=connections.findIndex(c=>c.id===id);if(i<0)connections.push(item);else connections[i]=item;
-    response={ok:true,id,path:item.path,files:[{name:'Movies',path:'Movies'}],total:1};
+    if(!folders.some(f=>f.connection===id&&f.path===item.path))folders.push({id:'folder-'+folders.length,connection:id,path:item.path,type:'auto',enabled:true});
+    response={ok:true,id,path:item.path,folderId:folders.find(f=>f.connection===id&&f.path===item.path).id,files:[{name:'Movies',path:'Movies'}],total:1};
    }
    if(url.pathname==='/personal/browse'){
     if(holdBrowse){notifyBrowse();await new Promise(resolve=>{releaseBrowse=resolve});holdBrowse=false}
@@ -85,7 +86,10 @@ fs.mkdirSync(evidence,{recursive:true});
   await page.locator('[data-tab=nas]').click();
   assert.strictEqual(await page.locator('#cloud,#smb,#batch-urls,#batch-save').count(),0,'old cloud/batch forms must remain removed');
   const f=page.locator('#personal-edit');
-  await f.locator('[name=name]').fill('My HTTP DAV');
+  await f.locator('[name=name]').fill('我的阿里云盘');
+  assert.deepStrictEqual(await f.locator('label input').evaluateAll(nodes=>nodes.map(n=>n.name)),['name','address','port','path','username','password']);
+  await f.locator('[name=port]').fill('8080');
+  await f.locator('[name=path]').fill('Movies');
   await f.locator('[name=address]').fill('http://nas.example:8080/dav');
   await f.locator('[name=username]').fill('test');
   await f.locator('[name=password]').fill('mock-only-password');
@@ -93,13 +97,11 @@ fs.mkdirSync(evidence,{recursive:true});
   assert.strictEqual(await f.locator('[name=password]').inputValue(),'');
   assert.strictEqual(await f.locator('[name=id]').inputValue(),'fixture-1');
   assert(requests.some(r=>r.path==='/personal/save'&&r.body.address==='http://nas.example:8080/dav'));
-  await page.locator('#personal-directories button').first().click();
-  await page.waitForFunction(()=>document.querySelector('#personal-path').value==='Movies');
-  await page.locator('#personal-import').click();
   await page.locator('#personal-folders .folder').first().waitFor({state:'visible'});
   assert.strictEqual(await page.locator('#personal-folders .folder').count(),1);
   assert.strictEqual(await page.locator('#personal-folders .folder').first().locator('span').innerText(),'Movies');
-  assert(requests.some(r=>r.path==='/personal/folder'&&r.body.path==='Movies'&&r.body.type==='auto'));
+  assert(!requests.some(r=>r.path==='/personal/folder'),'Add must not require a second import request');
+  assert(requests.some(r=>r.path==='/personal/save'&&r.body.name==='我的阿里云盘'&&r.body.port===8080&&r.body.path==='Movies'));
 
   // A delayed directory response must not repopulate the picker after a protocol switch.
   holdBrowse=true;
