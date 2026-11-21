@@ -373,10 +373,14 @@ internal class TvBoxConfigRepository(private val context: Context? = null,
                 HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_RESPONSE",
                     "MS=${((System.nanoTime()-started)/1_000_000).coerceAtMost(99999)}")
                 runCatching { onImportHttpStatus(response.code) }
-                if (response.code in 300..399) return@readSourceResponse cached(valid)
-                    ?: TvBoxConfig.Error("WAREHOUSE_REDIRECT：配置发生跳转；请检查最终地址后重新输入")
-                if (!response.isSuccessful) return@readSourceResponse cached(valid)
-                    ?: TvBoxConfig.Error("WAREHOUSE_HTTP_ERROR：配置读取 HTTP ${response.code}")
+                if (response.code in 300..399) {
+                    return@readSourceResponse cached(valid)
+                        ?: TvBoxConfig.Error("WAREHOUSE_REDIRECT：配置发生跳转；请检查最终地址后重新输入")
+                }
+                if (!response.isSuccessful) {
+                    return@readSourceResponse cached(valid)
+                        ?: TvBoxConfig.Error("WAREHOUSE_HTTP_ERROR：配置读取 HTTP ${response.code}")
+                }
                 val contentType = response.header("Content-Type").orEmpty().lowercase()
                 if (contentType.startsWith("video/") || contentType.startsWith("text/html"))
                     return@readSourceResponse cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：地址返回网页或视频")

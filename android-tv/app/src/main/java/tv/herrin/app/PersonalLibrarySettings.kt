@@ -104,7 +104,10 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
             Text(c.getString("name") + (if(c.optBoolean("enabled")) " · 启用" else " · 停用"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton("编辑") { input = JSONObject(c.toString()); selected = c.getString("id"); path = c.optString("path"); browsePage = 0; browser = JSONObject() }
-                TvButton("浏览目录") { selected = c.getString("id"); path = c.optString("path"); browser = JSONObject(); browsePage = 0; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+                TvButton(if(busy) "读取中…" else "浏览目录") { if(!busy) {
+                    selected = c.getString("id"); path = c.optString("path"); browser = JSONObject(); browsePage = 0
+                    execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true)
+                } }
                 TvButton("启用/停用") { execute("/personal/toggle", JSONObject().put("id", c.getString("id"))) }
                 TvButton("删除") { confirm = "/personal/delete" to c.getString("id") }
             }
