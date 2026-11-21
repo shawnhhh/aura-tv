@@ -3331,6 +3331,8 @@ private fun Herrin(startup: StartupPresentation) {
                     myRecent=if(!isSearch &&category=="我的")withContext(Dispatchers.Default){watchHistory.recent(catalogScope,films)} else emptyList()
                 }
                 var myPersonal by remember { mutableStateOf<List<Film>>(emptyList()) }
+                var personalMatch by remember { mutableStateOf<Film?>(null) }
+                personalMatch?.let { target -> PersonalMatchDialog(target) { personalMatch = null } }
                 LaunchedEffect(isSearch, screen, personalIndexRevision) {
                     myPersonal = if (!isSearch && screen == "browse") withContext(Dispatchers.IO) {
                         val library = PersonalLibrary(context)
@@ -4009,7 +4011,11 @@ private fun Herrin(startup: StartupPresentation) {
                                     down = if (homeRail) FocusRequester.Default else FocusRequester.Cancel
                                 }
                                 .onPreviewKeyEvent { event ->
-                                    if (homeRail && event.type == KeyEventType.KeyDown &&
+                                    if (item.id.startsWith("personal-index:") && event.type == KeyEventType.KeyDown &&
+                                        event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_MENU) {
+                                        personalMatch = item
+                                        true
+                                    } else if (homeRail && event.type == KeyEventType.KeyDown &&
                                         event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
                                         transferPosterFocus(railState, recommendState, index,
                                             recommendedFilms, "recommend-", browseScroll, true)

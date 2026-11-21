@@ -94,7 +94,10 @@ internal class PersonalLibraryApi(context: Context) {
                     } }
                 })
             }
-            "/personal/match" -> library.index.correct(id, input.getInt("tmdb"), input.getString("type"), input.getString("title"), input.optString("year").toIntOrNull(), input.optString("poster"), input.optString("synopsis"))
+            "/personal/match" -> {
+                library.index.correct(id, input.getInt("tmdb"), input.getString("type"), input.getString("title"), input.optString("year").toIntOrNull(), input.optString("poster"), input.optString("synopsis"))
+                PersonalLibrary.metadataChanged()
+            }
             "/personal" -> Unit
             else -> error("UNKNOWN_PERSONAL_OPERATION")
         }

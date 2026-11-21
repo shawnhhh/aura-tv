@@ -162,6 +162,7 @@ internal class PersonalLibrary(context: Context) {
         private val revision = MutableStateFlow(0L)
         val revisions = revision.asStateFlow()
         private fun publishIndexChange() { revision.update { it + 1 } }
+        fun metadataChanged() = publishIndexChange()
         private val scanLock = Any()
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
         @Volatile private var active: Job? = null
