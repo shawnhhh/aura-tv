@@ -22,6 +22,9 @@ class PersonalMediaIndexTest {
             assertEquals("anime",saved.getString("type"))
             assertEquals(42,saved.getInt("tmdb"))
             assertEquals("movie",org.json.JSONObject(saved.getString("metadata")).getString("identityType"))
+            index.correct(mediaId,99,"movie","Different work")
+            assertFalse(index.media(id).getJSONObject(0).has("metadata"))
+            assertEquals(99,index.media(id).getJSONObject(0).getInt("tmdb"))
         } finally { index.removeFolder(id); index.close() }
     }
     @Test fun scanPersistsUnchangedFilesManualCorrectionsOfflineAndSuccessfulDeletion() {

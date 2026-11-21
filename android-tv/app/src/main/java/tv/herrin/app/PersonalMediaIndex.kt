@@ -149,6 +149,9 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         require(poster.isEmpty() || Regex("^https://image\\.tmdb\\.org/t/p/(?:w500|original)/[A-Za-z0-9_.-]{1,140}\\.(?:jpg|jpeg|png|webp)$").matches(poster))
         val values = ContentValues().apply {
             put("tmdb", tmdb); put("type", type); put("title", title); put("manual", 1); put("confidence", 1)
+            // A manual reassignment cannot retain the previous work's cast,
+            // backdrop or original media-type namespace.
+            putNull("metadata"); put("scrape_code", "MANUAL_MATCH")
             if(year != null) put("year", year)
             if(poster.isEmpty()) putNull("poster") else put("poster", poster)
             put("synopsis", synopsis.take(2000))
