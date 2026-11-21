@@ -4327,6 +4327,7 @@ private fun Herrin(startup: StartupPresentation) {
                         onEpisodeSelection = if (film.playbackEpisodes.isNotEmpty() && (film.category != "电影" || film.playbackEpisodes.size > 1)) ({ playbackPicker = "episodes" }) else null,
                         onRefreshSource = if (!personalRoute && (spiderActive || cmsJsonParser != null || cmsBrowserParser != null)) ({ playerRetryEpoch++ }) else null,
                         onTryOtherSource = tryOtherTmdbSource.takeUnless { personalRoute },
+                        onRetryMedia = if(personalRoute) ({ playerRetryEpoch++ }) else null,
                         onSourceExhausted = recoverPlayback,
                         onMediaSpecDetected = { verifiedStreams[streamEvidenceKey] = it },
                         onPlaybackProgress = { position, duration, finished ->

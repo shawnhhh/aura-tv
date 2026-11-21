@@ -86,7 +86,9 @@ fun AuthorizedPlaybackPanel(
     testDiagnostics: Boolean = false,
     /** Budget belongs to the selected episode/line, including refreshed media URLs. */
     recoverySession: FongMiPlaybackRecovery.Session = remember(media) { FongMiPlaybackRecovery.Session() },
-    externalPanelOpen: Boolean = false
+    externalPanelOpen: Boolean = false,
+    /** Private indexed media must reacquire its saved connection, not replay a signed CDN URL. */
+    onRetryMedia: (() -> Unit)? = null
 ) {
     // A media replacement owns a fresh composition, including callbacks,
     // effects, focus nodes and native surfaces. No outgoing resource can be
@@ -95,7 +97,7 @@ fun AuthorizedPlaybackPanel(
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
             onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onSourceExhausted, onBack,
-            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode, externalPanelOpen)
+            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode, externalPanelOpen, onRetryMedia)
     }
 }
 
@@ -120,7 +122,8 @@ private fun AuthorizedPlaybackSession(
     recoverySession: FongMiPlaybackRecovery.Session,
     onNextEpisode: (() -> Unit)?,
     onPreviousEpisode: (() -> Unit)?,
-    externalPanelOpen: Boolean
+    externalPanelOpen: Boolean,
+    onRetryMedia: (() -> Unit)?
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -356,6 +359,12 @@ private fun AuthorizedPlaybackSession(
     fun retryPlayback() {
         pendingRecovery?.cancel()
         recoverySession.userRetry()
+        if(onRetryMedia != null) {
+            reportProgress()
+            playback.manager.stop()
+            onRetryMedia()
+            return
+        }
         val resumePosition = player.currentPosition.coerceAtLeast(0L)
         val first = retries.restart()
         journey.clearPreviousFailure()

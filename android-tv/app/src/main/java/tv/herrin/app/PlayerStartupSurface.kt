@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 /**
  * Full-screen playback-first loading, failure and recovery.
@@ -57,8 +58,16 @@ internal fun PlayerStartupSurface(
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     var showJournal by remember { mutableStateOf(false) }
+    var personalNotice by remember { mutableStateOf(false) }
+    LaunchedEffect(loading, personal, failureHint) {
+        personalNotice = personal && !loading
+        if(personalNotice) { delay(2400); personalNotice = false }
+    }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
         .testTag("player-startup-surface"), contentAlignment = Alignment.Center) {
+        if(personalNotice) Text(failureHint ?: "个人媒体连接失败",
+            color = Color.White, modifier = Modifier.align(Alignment.TopEnd).padding(24.dp)
+                .testTag("personal-playback-result"))
         Column(horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (loading) {
@@ -67,12 +76,12 @@ internal fun PlayerStartupSurface(
                 Text("正在打开影片…", fontSize = 21.sp,
                     modifier = Modifier.testTag("player-startup-label"))
             } else {
-                Text(if (offlineDemonstration) "播放演示" else "暂时无法播放",
+                Text(if(personal) "个人媒体" else if (offlineDemonstration) "播放演示" else "暂时无法播放",
                     fontSize = 24.sp,
                     modifier = Modifier.testTag(
                         if (offlineDemonstration) "player-demo-status"
                         else "player-startup-error"))
-                Text(when {
+                if(!personal) Text(when {
                     offlineDemonstration ->
                         "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
                     cmsFailed ->
