@@ -16,8 +16,6 @@ internal fun PersonalLibraryStartupImport() {
             library.index.folders().filter { it.enabled && it.connection in enabled &&
                 PersonalSyncPolicy.due(it.scanned, System.currentTimeMillis()) }
         }
-        delay(PersonalSyncPolicy.INTERVAL_MS)
-        }
         for(folder in pending) {
             ensureActive()
             val started = withContext(Dispatchers.IO) {
@@ -25,6 +23,8 @@ internal fun PersonalLibraryStartupImport() {
             }
             if(!started) continue // An explicit user import/refresh already owns the scanner.
             if(!PersonalLibrary.awaitCurrentScan()) break // User cancellation also stops queued legacy imports.
+        }
+        delay(PersonalSyncPolicy.INTERVAL_MS)
         }
     }
 }

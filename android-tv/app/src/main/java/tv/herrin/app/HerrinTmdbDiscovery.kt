@@ -195,13 +195,29 @@ internal class HerrinTmdbDiscovery(
         val json = fetcher.load(url, token) ?: return@withContext film
         val obj = try { JSONObject(json) } catch (_: org.json.JSONException) { return@withContext film }
         if (obj.optInt("id") != id) return@withContext film
+        applyDetailed(film, type, obj, json)
+    }
+
+    suspend fun identified(type: String, id: Int, token: String): Film? = withContext(Dispatchers.IO) {
+        require(type in setOf("movie", "tv") && id > 0)
+        if(token.isBlank()) return@withContext null
+        val json = fetcher.load("$base/$type/$id?language=zh-CN&append_to_response=credits,external_ids", token) ?: return@withContext null
+        val obj = JSONObject(json)
+        if(obj.optInt("id") != id) return@withContext null
+        obj.put("genre_ids", JSONArray().apply { val genres = obj.optJSONArray("genres") ?: JSONArray()
+            for(i in 0 until genres.length()) put(genres.getJSONObject(i).getInt("id")) })
+        val film = parsePage(JSONObject().put("results", JSONArray().put(obj)).toString(), type).singleOrNull() ?: return@withContext null
+        applyDetailed(film, type, obj, json)
+    }
+
+    private fun applyDetailed(film: Film, type: String, obj: JSONObject, json: String): Film {
         val credits = TmdbCreditsParser.parse(json, type)
         val imdbId = obj.optJSONObject("external_ids")?.optString("imdb_id")
             ?.takeIf { it.matches(Regex("""tt\d{7,10}""")) }
             ?: obj.optString("imdb_id").takeIf {
                 it.matches(Regex("""tt\d{7,10}"""))
             }
-        film.copy(
+        return film.copy(
             imdbId = imdbId ?: film.imdbId,
             synopsis = obj.optString("overview").take(2_000).ifBlank { film.synopsis },
             actors = credits.actors.ifEmpty { film.actors },

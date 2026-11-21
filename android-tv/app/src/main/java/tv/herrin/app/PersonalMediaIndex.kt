@@ -39,7 +39,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         val values = ContentValues().apply { put("id", id); put("connection", connection); put("path", path); put("type", type); put("enabled", if(enabled) 1 else 0) }
         if(old == null) writableDatabase.insertOrThrow("folders", null, values)
         else writableDatabase.update("folders", values, "id=?", arrayOf(id))
-        if(old != null && old.type != type) writableDatabase.execSQL("UPDATE media SET tmdb=NULL,confidence=0,synopsis=NULL,poster=NULL WHERE folder=? AND manual=0", arrayOf(id))
+        if(old != null && old.type != type) writableDatabase.execSQL("UPDATE media SET tmdb=NULL,confidence=0,synopsis=NULL,poster=NULL,metadata=NULL WHERE folder=? AND manual=0", arrayOf(id))
         writableDatabase.execSQL("UPDATE media SET type=CASE WHEN ?='auto' THEN CASE WHEN episode IS NULL THEN 'movie' ELSE 'tv' END ELSE ? END WHERE folder=? AND manual=0", arrayOf(type, type, id))
         return id
     }
@@ -76,7 +76,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         }
         if(rows("SELECT manual FROM media WHERE id=?", arrayOf(id)).firstOrNull()?.optInt("manual") == 1) {
             values.remove("title"); values.remove("year"); values.remove("type")
-        } else { values.putNull("tmdb"); values.put("confidence", 0); values.putNull("synopsis"); values.putNull("poster") }
+        } else { values.putNull("tmdb"); values.put("confidence", 0); values.putNull("synopsis"); values.putNull("poster"); values.putNull("metadata") }
         if(writableDatabase.update("media", values, "id=?", arrayOf(id)) == 0) writableDatabase.insertOrThrow("media", null, values)
     }
     fun finish(id: String, scan: Long) {
@@ -114,6 +114,18 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
     }
     fun scrapeStatus(id: String, code: String) {
         writableDatabase.execSQL("UPDATE media SET scrape_code=? WHERE id=? AND manual=0", arrayOf(code, id))
+    }
+    fun nfoHint(folder: String, nfo: String, hint: PersonalNfoIdentity.Hint) {
+        val parent = nfo.substringBeforeLast('/', "")
+        val stem = nfo.substringAfterLast('/').substringBeforeLast('.')
+        for(row in unmatched(folder)) {
+            val path = row.getString("path")
+            if (path.substringBeforeLast('/', "") != parent) continue
+            if (stem !in setOf("movie", "tvshow") && path.substringAfterLast('/').substringBeforeLast('.') != stem) continue
+            val metadata = JSONObject().put("nfoTmdb", hint.tmdb).put("nfoType", hint.type)
+            writableDatabase.execSQL("UPDATE media SET metadata=? WHERE id=? AND tmdb IS NULL AND manual=0",
+                arrayOf(metadata.toString(), row.getString("id")))
+        }
     }
     companion object {
         @Volatile private var shared: PersonalMediaIndex? = null

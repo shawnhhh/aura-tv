@@ -69,6 +69,39 @@ internal object PersonalRemoteFiles {
                 }
             } catch(error: Exception) { job.ensureActive(); throw error }
         }
+        suspend fun text(path: String): String = withContext(Dispatchers.IO) {
+            val clean = PersonalStoragePolicy.path(path)
+            require(PersonalStoragePolicy.contains(base, clean) && clean.endsWith(".nfo", true))
+            if (client != null) {
+                val request = okhttp3.Request.Builder().url(c.address(clean)).apply {
+                    if (c.username.isNotEmpty() || c.password.isNotEmpty())
+                        header("Authorization", okhttp3.Credentials.basic(c.username,c.password))
+                }.build()
+                readSourceResponse(client, request) { response ->
+                    check(response.code == 200)
+                    val body = requireNotNull(response.body)
+                    require(body.contentLength() <= 65536)
+                    val bytes = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(4096)
+                    val stream = body.byteStream()
+                    while(true) { val n = stream.read(buffer); if(n < 0) break
+                        require(bytes.size() + n <= 65536); bytes.write(buffer,0,n) }
+                    bytes.toString(Charsets.UTF_8.name())
+                }
+            } else runInterruptible {
+                val location = SmbLocation.parse(c.address(clean))
+                requireNotNull(smb).share().openFile(location.root, EnumSet.of(AccessMask.GENERIC_READ),
+                    EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL), SMB2ShareAccess.ALL,
+                    SMB2CreateDisposition.FILE_OPEN, EnumSet.of(SMB2CreateOptions.FILE_NON_DIRECTORY_FILE)).use { file ->
+                    val size = file.fileInformation.standardInformation.endOfFile
+                    require(size in 0..65536)
+                    val bytes = ByteArray(size.toInt())
+                    var offset = 0
+                    while(offset < bytes.size) { val n = file.read(bytes,offset.toLong(),offset,bytes.size-offset); check(n > 0); offset += n }
+                    bytes.toString(Charsets.UTF_8)
+                }
+            }
+        }
         override fun close() {
             smb?.close()
             client?.dispatcher?.cancelAll()

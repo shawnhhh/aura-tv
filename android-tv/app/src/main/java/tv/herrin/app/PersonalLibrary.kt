@@ -40,7 +40,8 @@ internal class PersonalLibrary(context: Context) {
     }
     private fun offer(c: PersonalConnections.Connection, row: JSONObject, sourceId: String): HerrinSourceMovie {
         val episode = row.optInt("episode").takeIf { it > 0 }
-        val type = if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie"
+        val type = runCatching { JSONObject(row.optString("metadata")).optString("identityType") }.getOrNull()
+            ?.takeIf { it in setOf("movie", "tv") } ?: if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie"
         val film = Film(row.getString("id"), row.getString("title"), row.getString("name"),
             if(type == "tv") "剧集" else "电影", row.optString("year"), row.optString("synopsis"), R.drawable.photofilm_orbit, artworkUrl = row.optString("poster").takeIf { it.isNotBlank() },
             playbackEpisodes = listOf(PlaybackEpisode(episode ?: 1, row.getString("name"),
@@ -80,6 +81,7 @@ internal class PersonalLibrary(context: Context) {
                 queue.add(f.path to 0)
                 progress = "正在读取媒体目录…"
                 PersonalRemoteFiles.Session(c, f.path).use { remote ->
+                val sidecars = ArrayList<PersonalRemoteFile>()
                 while(queue.isNotEmpty()) {
                     ensureActive()
                     val (path, depth) = queue.removeFirst()
@@ -91,12 +93,20 @@ internal class PersonalLibrary(context: Context) {
                         if(file.directory) {
                             check(depth < 16 && queue.size < 10000) { "DEPTH_LIMIT" }
                             queue.add(file.path to depth + 1)
+                        } else if(file.name.endsWith(".nfo", true) && file.size <= 65536 && sidecars.size < 100) {
+                            sidecars += file
                         } else if(file.name.substringAfterLast('.').lowercase() in PersonalStoragePolicy.extensions) {
                             check(count < 100000) { "MEDIA_LIMIT" }
                             index.record(f, file, stamp); count++
                             progress = "已扫描 $count 个视频 · ${visited.size} 个目录"
                         }
                     }
+                }
+                for (sidecar in sidecars) {
+                    ensureActive()
+                    try { PersonalNfoIdentity.parse(remote.text(sidecar.path))?.let { index.nfoHint(f.id, sidecar.path, it) } }
+                    catch(cancel: CancellationException) { throw cancel }
+                    catch(_: Exception) { HerrinPlaybackDiagnosticJournal.record("PERSONAL", "NFO_READ_FAILED") }
                 }
                 }
                 index.finish(f.id, stamp)
@@ -129,12 +139,14 @@ internal class PersonalLibrary(context: Context) {
         for(row in index.unmatched(folder.id)) {
             currentCoroutineContext().ensureActive()
             val title = row.getString("title")
-            val key = title + "|" + row.optString("year") + "|" + row.getString("type")
+            val key = title + "|" + row.optString("year") + "|" + row.getString("type") + "|" + row.optString("metadata")
             val film = if(cache.containsKey(key)) cache[key] else {
                 val result = try {
                     val expected = HerrinFilmIdentity(1, if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie",
                         listOf(title), row.optInt("year").takeIf { it > 0 })
-                    PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)?.let { discovery.detail(it, token) }
+                    val hint = runCatching { JSONObject(row.optString("metadata")) }.getOrDefault(JSONObject())
+                    if (hint.optInt("nfoTmdb") > 0) discovery.identified(hint.getString("nfoType"), hint.getInt("nfoTmdb"), token)
+                    else PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)?.let { discovery.detail(it, token) }
                 } catch(cancel: CancellationException) { throw cancel }
                 catch(_: Exception) { null }
                 cache[key] = result
