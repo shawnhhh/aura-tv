@@ -522,8 +522,9 @@ private fun AuthorizedPlaybackSession(
             }
         }
     }
-    val backGate = remember { PlaybackBackGate() }
+    val backGate = remember(playback) { PlaybackBackGate() }
     fun requestBack(source: String, physicalKey: Long? = null) {
+        if (playback.isClosed) return
         if (!backGate.accept(physicalKey, android.os.SystemClock.uptimeMillis())) return
         android.util.Log.i("HerrinPlayerBack",
             "source=$source focus=${context.javaClass.simpleName} released=${playback.isClosed}")

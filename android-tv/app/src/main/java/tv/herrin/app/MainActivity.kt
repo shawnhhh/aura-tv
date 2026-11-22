@@ -3086,15 +3086,14 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     var lastNonPlayback by remember { mutableStateOf(PlaybackReturnContext("detail", category, focusId, filmId)) }
-    var playbackReturn by remember { mutableStateOf(lastNonPlayback) }
+    val committedReturnContext = PlaybackReturnContext(screen, category, focusId, filmId)
+    // The first player frame already needs the committed origin. An async
+    // LaunchedEffect must not leave a fast Back using the previous film's origin.
+    val playbackReturn = if (screen in setOf("player", "play-intent")) lastNonPlayback else committedReturnContext
     SideEffect {
-        if (screen !in setOf("player", "play-intent")) lastNonPlayback = PlaybackReturnContext(screen, category, focusId, filmId)
+        if (committedReturnContext.screen !in setOf("player", "play-intent")) lastNonPlayback = committedReturnContext
     }
-    LaunchedEffect(screen) {
-        if (screen == "player") {
-            playbackReturn = lastNonPlayback
-        } else recentIndexEpoch++
-    }
+    LaunchedEffect(screen) { if (screen != "player") recentIndexEpoch++ }
     fun back() {
         when (screen) {
             "player" -> {
