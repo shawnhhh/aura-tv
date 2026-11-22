@@ -1,0 +1,36 @@
+{
+  "source_sha": "e771715f4f94a9e98b32bd5d0c4949748abf6d86",
+  "targeted_jvm": [
+    {
+      "name": "tv.herrin.app.SourceDetailOwnerTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "tv.herrin.app.TmdbDiscoveryPlayIntentTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "tv.herrin.app.PlaybackBackGateTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "tv.herrin.app.M452RemoteHoldSeekTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "assembleDebug": "PASS",
+  "androidTest_compile": "PASS; not device execution",
+  "full_final_cloud_regression": "PENDING"
+}
