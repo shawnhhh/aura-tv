@@ -63,6 +63,15 @@ print('HERRIN_RECENT_DIAGNOSTIC='+json.dumps(result))
 PYRECENTREPORT
     exit 0
 fi
+# Replay the newly discovered index/intent boundary and the original recent
+# playback assertions before the unchanged unfiltered suite.
+adb shell am instrument -w -r -e class 'tv.herrin.app.PersonalIndexTransactionTest,tv.herrin.app.P0RecentPlaybackReturnTest' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee build/emulator-evidence/index-recent-preflight.txt
+python3 - <<'PYINDEX'
+from pathlib import Path
+text=Path('build/emulator-evidence/index-recent-preflight.txt').read_text()
+assert 'OK (5 tests)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
+PYINDEX
 # Explicit repair preflight: observe this real production decoder case before
 # the complete suite. No original test or full-suite gate is filtered out.
 if git log -1 --format=%s | grep -Fq '[baseline-first]'; then
