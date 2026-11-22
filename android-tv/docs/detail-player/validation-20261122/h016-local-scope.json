@@ -1,0 +1,60 @@
+{
+  "full_local_source_sha": "6003ef781cdbc28aa058cdc4818fda31c8e3a208",
+  "last_production_sha": "7b8d2889e36b38c17eedc7ab1161131f45a7babd",
+  "full_local": {
+    "jvm": {
+      "tests": 828,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "samba": "6/6",
+    "lintDebug": "PASS",
+    "assembleDebug": "PASS",
+    "androidtest_compile": "PASS; not execution",
+    "kernel_contract_check": "PASS; not original kernel compilation or playback"
+  },
+  "late_owner_fix": {
+    "source_sha": "7b8d2889e36b38c17eedc7ab1161131f45a7babd",
+    "targeted_jvm": {
+      "SourceDetailOwnerTest": {
+        "name": "tv.herrin.app.SourceDetailOwnerTest",
+        "tests": "5",
+        "skipped": "0",
+        "failures": "0",
+        "errors": "0",
+        "timestamp": "2026-11-22T11:13:37",
+        "hostname": "e7af56bfd16a",
+        "time": "0.06"
+      },
+      "TmdbDiscoveryPlayIntentTest": {
+        "name": "tv.herrin.app.TmdbDiscoveryPlayIntentTest",
+        "tests": "3",
+        "skipped": "0",
+        "failures": "0",
+        "errors": "0",
+        "timestamp": "2026-11-22T11:13:37",
+        "hostname": "e7af56bfd16a",
+        "time": "0.033"
+      }
+    },
+    "androidtest_compile": "PASS; not execution",
+    "full_new_source_regression": "PENDING"
+  },
+  "frontend": {
+    "js_syntax": "PASS",
+    "chromium": "PASS; controlled mock API only",
+    "python_unit_checks": 69
+  },
+  "pending": [
+    "new unfiltered TV",
+    "new API31",
+    "new ABBA",
+    "original bridge/adapter build",
+    "new cloud diagnostic artifact",
+    "TCL",
+    "real Safari",
+    "real Ali WebDAV",
+    "real provider QR and first frame"
+  ]
+}

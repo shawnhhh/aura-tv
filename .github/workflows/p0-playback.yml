@@ -45,8 +45,14 @@ jobs:
     needs: verification-scope
     if: needs['verification-scope'].outputs.startup_only != 'true' && needs['verification-scope'].outputs.tv_only != 'true'
     uses: ./.github/workflows/android-debug.yml
-  emulator:
+  native-bridge-check:
     needs: [verification-scope, debug]
+    if: ${{ !cancelled() && needs.debug.result == 'success' && contains(github.event.head_commit.message, '[kernel-bridge-check]') }}
+    uses: ./.github/workflows/herrin-fongmi-native-source-build.yml
+    with:
+      build_original_bridge_adapter: true
+  emulator:
+    needs: [verification-scope, debug, native-bridge-check]
     if: ${{ !cancelled() && needs['verification-scope'].outputs.startup_only != 'true' && (needs.debug.result == 'success' || (needs['verification-scope'].outputs.tv_only == 'true' && needs.debug.result == 'skipped')) }}
     uses: ./.github/workflows/android-emulator.yml
     with:

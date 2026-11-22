@@ -5,12 +5,24 @@ on:
   # with the original TV@305dff2. Do not waste an expensive native build on
   # every workflow edit; opt in only after the source revision actually changes.
   workflow_dispatch:
+    inputs:
+      build_original_bridge_adapter:
+        type: boolean
+        default: false
+        description: 'Build original hook/tvbus and attempt adapter; never playback acceptance'
+  workflow_call:
+    inputs:
+      build_original_bridge_adapter:
+        type: boolean
+        default: true
+        required: false
 
 permissions:
   contents: read
 
 jobs:
   upstream-native:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_original_bridge_adapter != true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -93,3 +105,54 @@ jobs:
           name: source-built-fongmi-native-candidate-not-validated-for-herrin
           path: native-candidate/
           retention-days: 5
+
+  original-bridges-and-adapter:
+    if: inputs.build_original_bridge_adapter == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Bind pinned original build inputs and strict dependency status
+        run: |
+          mkdir -p bridge-adapter-evidence
+          git rev-parse HEAD > bridge-adapter-evidence/SOURCE_COMMIT.txt
+          test "$(git -C android-tv/vendor/fongmi-core/upstream rev-parse HEAD)" = 305dff233cde512e2c83f71529b7c3ecfd61fefc
+          python3 android-tv/fongmi-kernel/verify_dependencies.py --report > bridge-adapter-evidence/dependencies.json
+          printf '%s\n' 'Original pinned wrapper/catalog only. No host APK, substituted AAR, provider authorization or playback acceptance.' > bridge-adapter-evidence/VERIFICATION_SCOPE.txt
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install the SDK declared by the pinned original catalog
+        run: |
+          sdk=$(python3 -c 'import tomllib; print(tomllib.load(open("android-tv/vendor/fongmi-core/upstream/gradle/libs.versions.toml","rb"))["versions"]["compileSdk"])')
+          sdkmanager "platforms;android-$sdk"
+      - name: Compile original hook and tvbus source modules with their own wrapper
+        run: |
+          set -o pipefail
+          bash android-tv/vendor/fongmi-core/upstream/gradlew -p android-tv/fongmi-kernel \
+            :hook:bundleDebugAar :tvbus:bundleDebugAar \
+            --no-daemon --max-workers=1 --console=plain 2>&1 | tee bridge-adapter-evidence/original-bridges-build.log
+      - name: Attempt independent adapter compilation without weakening the dependency gate
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          bash android-tv/vendor/fongmi-core/upstream/gradlew -p android-tv/fongmi-kernel \
+            :adapter:compileDebugJavaWithJavac \
+            --no-daemon --max-workers=1 --console=plain 2>&1 | tee bridge-adapter-evidence/original-adapter-build.log
+      - name: Preserve genuine outputs and build failures (not verified kernel inputs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-fongmi-bridge-adapter-build-not-playback-acceptance
+          path: |
+            bridge-adapter-evidence/
+            android-tv/vendor/fongmi-core/upstream/hook/build/outputs/aar/
+            android-tv/vendor/fongmi-core/upstream/tvbus/build/outputs/aar/
+          retention-days: 14
