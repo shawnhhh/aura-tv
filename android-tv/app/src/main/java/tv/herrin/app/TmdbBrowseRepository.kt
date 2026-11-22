@@ -24,6 +24,8 @@ internal class TmdbBrowseRepository(
     private val directory: File? = null,
     private val clock: () -> Long = System::currentTimeMillis
 ) {
+    /** Exact page-restore attempts; no tokens/URLs. Used by bounded cache diagnostics. */
+    internal val cachedPageReadAttempts = java.util.concurrent.atomic.AtomicInteger()
     private val network = Semaphore(3)
     // Reserve one of the three network slots for visible browse lists.
     // Slow per-title release proofs may use at most two slots.
@@ -222,6 +224,7 @@ internal class TmdbBrowseRepository(
             collectionMap(token))
     }
     suspend fun cached(spec: TmdbRailSpec, page: Int, token: String): TmdbBrowseBatch? = withContext(Dispatchers.IO) {
+        cachedPageReadAttempts.incrementAndGet()
         val json = read(prefix(token) + "-page-" + spec.key + "-$page") ?: return@withContext null
         decodeBatch(spec, page, token, json)
     }

@@ -15,6 +15,7 @@ REQUIRED_CLASSES = (
     "PersonalLibraryDirectPlaybackTest",
     "PersonalMediaIndexTest",
     "BrowseScrollStatesTest",
+    "TmdbCacheHydrationTest",
     "SpiderAuthorizationInstrumentedTest",
     "SpiderAuthorizationPlaybackTest",
     "SpiderPasswordAuthorizationTest",

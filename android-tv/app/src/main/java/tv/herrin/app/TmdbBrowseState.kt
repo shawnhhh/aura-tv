@@ -23,6 +23,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
     private val pending = mutableMapOf<String, TmdbBrowseBatch>()
     private val failedPages = mutableMapOf<String, Int>()
     private val loads = mutableMapOf<String, Mutex>()
+    private val hydration = Mutex()
     private var focused: String? = null
     fun row(spec: TmdbRailSpec) = rows[spec.key] ?: TmdbRailState()
     fun films(page: TmdbBrowsePage) = TmdbRailSpec.forPage(page).flatMap { row(it).entries.map(TmdbBrowseEntry::film) }.distinctBy(Film::id)
@@ -47,12 +48,16 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
         rows[key] = old.copy(entries = entries, page = batch.page, hasMore = batch.hasMore,
             unknown = batch.unknown, loading = false, error = false)
     }
-    suspend fun hydrate(onlyPage: TmdbBrowsePage? = null) {
-        // Decode all bounded first-page caches off main, then publish once. Publishing
-        // after each IO suspension used to recompose the whole home up to 22 times.
+    suspend fun hydrate(onlyPage: TmdbBrowsePage? = null) = hydration.withLock {
+        // Decide before any IO. A return to an already mounted category must not
+        // reread/deserialize caches only to discard them after decoding.
+        val needed = (onlyPage?.let { listOf(it) } ?: TmdbBrowsePage.entries)
+            .flatMap { TmdbRailSpec.forPage(it) }.filter { (rows[it.key]?.page ?: 0) == 0 }
+        if (needed.isEmpty()) return@withLock
+        val began = android.os.SystemClock.elapsedRealtime()
         val restored = withContext(Dispatchers.IO) {
             buildMap<String, TmdbRailState> {
-                for (page in onlyPage?.let { listOf(it) } ?: TmdbBrowsePage.entries) for (spec in TmdbRailSpec.forPage(page)) {
+                for (spec in needed) {
                     val cached = try { repository.cached(spec, 1, token) }
                     catch (cancel: CancellationException) { throw cancel }
                     catch (_: Exception) { null }
@@ -61,7 +66,13 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
                 }
             }
         }
+        currentCoroutineContext().ensureActive()
+        // A real refresh may finish while IO runs. Never roll it back to disk.
         rows.putAll(restored.filterKeys { (rows[it]?.page ?: 0) == 0 })
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "BROWSE_CACHE_RESTORE", "READS=${needed.size}")
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "BROWSE_CACHE_ELAPSED", "MS=${android.os.SystemClock.elapsedRealtime() - began}")
+        // Missing/failed cache remains page 0 and can be retried. Cancellation
+        // releases the mutex without setting an independent readiness flag.
     }
     suspend fun refresh(page: TmdbBrowsePage, force: Boolean = false) = coroutineScope {
         if (token.isBlank()) return@coroutineScope
