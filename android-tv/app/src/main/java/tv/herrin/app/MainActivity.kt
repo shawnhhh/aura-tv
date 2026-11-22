@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.testTag
@@ -2640,6 +2641,15 @@ private fun Herrin(startup: StartupPresentation) {
     fun requester(id: String) = requesters.getOrPut(id) { FocusRequester() }
     val settingsListState = rememberLazyListState()
     var lastDetailLineFocus by remember { mutableStateOf("detail-first-line") }
+    var restorePlaybackDetailFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(screen, restorePlaybackDetailFocus) {
+        if (screen == "detail" && restorePlaybackDetailFocus) {
+            withFrameNanos { }
+            // Header, synopsis, then the always-present favorite entry. Mount
+            // this real target before its layout callback restores TV focus.
+            if (settingsListState.layoutInfo.totalItemsCount > 2) settingsListState.scrollToItem(2)
+        }
+    }
     val detailFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     fun enterDetailEpisodes() {
         detailFocusJob[0]?.cancel()
@@ -3100,9 +3110,18 @@ private fun Herrin(startup: StartupPresentation) {
                 restoreGroupFocus = showGroup != null
                 restoreSeasonFocus = showGroup == null && seasonLayout != null
                 category = playbackReturn.category
-                focusId = playbackReturn.focus
-                if (films.any { it.id == playbackReturn.film }) filmId = playbackReturn.film
-                screen = playbackReturn.screen
+                if (playbackReturn.screen == "detail") {
+                    if (films.any { it.id == playbackReturn.film }) filmId = playbackReturn.film
+                } else {
+                    // Direct My/recent playback still returns to this film's
+                    // details first; Back from details restores the original rail.
+                    returnScreen = playbackReturn.screen
+                    if (playbackReturn.screen == "browse") tmdbBrowseReturn = playbackReturn
+                    if (playbackReturn.screen == "search") tmdbState.searchReturnFocus = playbackReturn.focus
+                }
+                focusId = "detail-favorite"
+                restorePlaybackDetailFocus = !restoreGroupFocus && !restoreSeasonFocus
+                screen = "detail"
             }
             "live-player" -> { category = "首页"; focusId = "nav-首页"; screen = "browse" }
             "detail", "play-intent" -> {
@@ -5084,11 +5103,18 @@ private fun Herrin(startup: StartupPresentation) {
                                     color = Color(0xFFE1E8F2))
                             } }
                         // H-004: Favorite always sits between synopsis and node selector.
-                        if (screen == "detail") item {
+                        if (screen == "detail") item(key = "detail-favorite") {
                             val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
                                 ?: (film.id in favorites)
                             TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏",
-                                modifier = Modifier.testTag("detail-favorite"), reduced = reduceMotion) {
+                                modifier = Modifier.testTag("detail-favorite")
+                                    .focusRequester(requester("detail-favorite"))
+                                    .then(Modifier.onGloballyPositioned {
+                                        if (restorePlaybackDetailFocus && screen == "detail") {
+                                            requester("detail-favorite").requestFocus()
+                                            restorePlaybackDetailFocus = false
+                                        }
+                                    }), reduced = reduceMotion) {
                                 if (showGroup == null) prefs.toggleFor(catalogScope, film.id)
                                 else if (groupFavorited) showGroup.members.filter { it.film.id in favorites }
                                     .forEach { prefs.toggleFor(catalogScope, it.film.id) }

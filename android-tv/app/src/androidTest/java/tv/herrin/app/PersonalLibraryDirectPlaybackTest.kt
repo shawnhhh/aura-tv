@@ -118,6 +118,12 @@ class PersonalLibraryDirectPlaybackTest {
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching {
             compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
+            compose.onNodeWithTag("film-detail-list").assertExists()
+            compose.onNodeWithTag("detail-favorite").assertIsFocused()
+        }.isSuccess }
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(10000) { runCatching {
+            compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
             compose.onNodeWithTag(card).assertIsDisplayed()
         }.isSuccess }
         expectedAuth.set(Credentials.basic("fixture-user", "updated-password"))

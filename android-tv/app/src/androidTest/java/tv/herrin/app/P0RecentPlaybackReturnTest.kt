@@ -94,6 +94,9 @@ class P0RecentPlaybackReturnTest {
         assertTrue("Current NAS must be searched/probed rather than replaying the retired URL",server.requestCount>=2)
         val inst=InstrumentationRegistry.getInstrumentation()
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess }
+        compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(card).assertIsDisplayed().assertIsFocused() }.isSuccess }
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
     }
@@ -119,6 +122,9 @@ class P0RecentPlaybackReturnTest {
         compose.onNodeWithTag("film-detail-list").assertDoesNotExist()
         compose.waitUntil(30000) { HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_FIRST_FRAME") }
         assertResumedPosition()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess }
+        compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(tag).assertIsDisplayed().assertIsFocused() }.isSuccess }
     }
