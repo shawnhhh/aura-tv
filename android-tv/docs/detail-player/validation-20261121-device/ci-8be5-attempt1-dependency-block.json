@@ -1,0 +1,33 @@
+{
+  "source_sha": "8be5f820feba2a5ccde8ad35e58daa9297dd9377",
+  "run": 44971925041,
+  "attempt": 1,
+  "job": 137053404683,
+  "jvm": {
+    "tests": 808,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "samba": "PASS",
+  "lint": {
+    "result": "DEPENDENCY_RESOLUTION_BLOCKED",
+    "stage": ":app:lintAnalyzeDebug",
+    "missing_reported": [
+      "org.codehaus.groovy:groovy:3.0.21",
+      "org.jetbrains.kotlin:kotlin-reflect:1.9.20",
+      "org.jetbrains.kotlin:kotlin-stdlib:1.9.20",
+      "org.apache.httpcomponents:httpclient:4.5.6"
+    ],
+    "app_lint_findings_available": false
+  },
+  "apk_built": false,
+  "tv_executed": false,
+  "official_maven_head_probe": {
+    "environment": "workspace",
+    "all_four_http_status": 200,
+    "note": "Dependency existence only; not a Lint pass."
+  },
+  "retry": "One failed-job retry requested, same immutable source; no version/assertion/lint-rule change",
+  "formal_acceptance": false
+}

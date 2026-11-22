@@ -22,3 +22,7 @@
 - `ci-18cbc-results.json`：仅续播三轮12/12与API31通过，非完整TV；APK不含7845后续生产修改。
 - `ci-original-evidence-inspection.log` / `api31-first-data-18cbc.jpg`：GitHub内只读读取原归档；纠正7eff失败阶段为播放器建立前，原XML仍为Splash，真实录像含系统栏。
 - `index-transaction-targeted.json` / `.log`：7845仅2项本地专项通过，新完整CI44968547697待结果；旧807不冒充新版本通过。
+
+- `ci-7845-independent.json`：7845的API31与ABBA真实完成，TV仍为预检失败；不含711后续H-001修复。
+- `startup-motion-compile.json` / `.log`：8be实际AndroidTest编译，未执行测试。
+- `ci-8be5-attempt1-dependency-block.json` / `.log`：808项通过，但Lint解析既有依赖失败；一次同SHA失败作业重试待结果。官方HEAD200不替代Lint。

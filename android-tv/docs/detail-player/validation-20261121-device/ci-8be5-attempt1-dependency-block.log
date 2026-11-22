@@ -1,0 +1,46 @@
+2026-11-22T01:35:45.3415756Z Execution failed for task ':app:lintAnalyzeDebug'.
+2026-11-22T01:35:45.3420457Z > Could not resolve all files for configuration ':app:detachedConfiguration1'.
+2026-11-22T01:35:45.3431141Z    > Could not find org.codehaus.groovy:groovy:3.0.21.
+2026-11-22T01:35:45.3431646Z      Searched in the following locations:
+2026-11-22T01:35:45.3432261Z        - https://dl.google.com/dl/android/maven2/org/codehaus/groovy/groovy/3.0.21/groovy-3.0.21.pom
+2026-11-22T01:35:45.3432983Z        - https://repo.maven.apache.org/maven2/org/codehaus/groovy/groovy/3.0.21/groovy-3.0.21.pom
+2026-11-22T01:35:45.3433529Z      Required by:
+2026-11-22T01:35:45.3433945Z          project :app > com.android.tools.lint:lint-gradle:31.7.3
+2026-11-22T01:35:45.3434476Z    > Could not find org.jetbrains.kotlin:kotlin-reflect:1.9.20.
+2026-11-22T01:35:45.3434947Z      Searched in the following locations:
+2026-11-22T01:35:45.3435732Z        - https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-reflect/1.9.20/kotlin-reflect-1.9.20.pom
+2026-11-22T01:35:45.3436573Z        - https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-reflect/1.9.20/kotlin-reflect-1.9.20.pom
+2026-11-22T01:35:45.3437562Z      Required by:
+2026-11-22T01:35:45.3438076Z          project :app > com.android.tools.lint:lint-gradle:31.7.3 > com.android.tools.lint:lint:31.7.3
+2026-11-22T01:35:45.3438907Z          project :app > com.android.tools.lint:lint-gradle:31.7.3 > com.android.tools.lint:lint:31.7.3 > com.android.tools.lint:lint-api:31.7.3
+2026-11-22T01:35:45.3439818Z          project :app > com.android.tools.lint:lint-gradle:31.7.3 > com.android.tools.lint:lint:31.7.3 > com.android.tools:sdk-common:31.7.3
+2026-11-22T01:35:45.3440538Z    > Could not find org.jetbrains.kotlin:kotlin-stdlib:1.9.20.
+2026-11-22T01:35:45.3441003Z      Searched in the following locations:
+2026-11-22T01:35:45.3441615Z        - https://dl.google.com/dl/android/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.9.20/kotlin-stdlib-1.9.20.pom
+2026-11-22T01:35:45.3442417Z        - https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.9.20/kotlin-stdlib-1.9.20.pom
+2026-11-22T01:35:45.3443009Z      Required by:
+2026-11-22T01:35:45.3443641Z          project :app > com.android.tools.lint:lint-gradle:31.7.3 > com.android.tools:common:31.7.3 > org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.20
+2026-11-22T01:35:45.3444720Z          project :app > com.android.tools.lint:lint-gradle:31.7.3 > com.android.tools:common:31.7.3 > org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.20 > org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.20
+2026-11-22T01:35:45.3445781Z    > Could not find org.apache.httpcomponents:httpclient:4.5.6.
+2026-11-22T01:35:45.3446255Z      Searched in the following locations:
+2026-11-22T01:35:45.3446865Z        - https://dl.google.com/dl/android/maven2/org/apache/httpcomponents/httpclient/4.5.6/httpclient-4.5.6.pom
+2026-11-22T01:35:45.3447718Z        - https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.5.6/httpclient-4.5.6.pom
+2026-11-22T01:35:45.3448296Z      Required by:
+2026-11-22T01:35:45.3449205Z          project :app > com.android.tools.lint:lint-gradle:31.7.3 > com.android.tools.lint:lint:31.7.3 > com.android.tools:sdklib:31.7.3 > org.apache.httpcomponents:httpmime:4.5.6
+2026-11-22T01:35:45.3449878Z
+2026-11-22T01:35:45.3450094Z * Try:
+2026-11-22T01:35:45.3450486Z > Run with --info or --debug option to get more log output.
+2026-11-22T01:35:45.3450954Z > Run with --scan to get full insights.
+2026-11-22T01:35:45.3451376Z > Get more help at https://help.gradle.org.
+2026-11-22T01:35:45.3451706Z
+2026-11-22T01:35:45.3451926Z * Exception is:
+2026-11-22T01:35:45.3452455Z org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:lintAnalyzeDebug'.
+2026-11-22T01:35:45.3453311Z 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:38)
+2026-11-22T01:35:45.3454276Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+2026-11-22T01:35:45.3455276Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+2026-11-22T01:35:45.3456152Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+2026-11-22T01:35:45.3457141Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+2026-11-22T01:35:45.3458211Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+2026-11-22T01:35:45.3459229Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+2026-11-22T01:35:45.3460109Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+2026-11-22T01:35:45.3460984Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)

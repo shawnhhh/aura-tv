@@ -1,0 +1,26 @@
+{
+  "source_sha": "7845becad0700f737b3c808cc32bfce0e65fc627",
+  "run": 44968547697,
+  "job": 137045849343,
+  "result": "FAILURE_BEFORE_UNFILTERED_SUITE",
+  "completed_preflights": [
+    5,
+    1,
+    1,
+    1,
+    20
+  ],
+  "resume_preflight": {
+    "tests": 20,
+    "passed": 19,
+    "failed": 1
+  },
+  "failure": {
+    "test": "HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests",
+    "line": 714,
+    "reason": "source-node-menu absent: test waited only for server request arrival, not completed trusted UI layout"
+  },
+  "full_tv_suite_executed": false,
+  "assertion_change": "Pending test-only fix adds menu readiness to the existing 15s predicate, preserving request and playback assertions.",
+  "physical_TCL": false
+}

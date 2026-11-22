@@ -1,0 +1,12 @@
+{
+  "source_sha": "8be5f820feba2a5ccde8ad35e58daa9297dd9377",
+  "task": ":app:compileDebugAndroidTestKotlin",
+  "result": "PASS",
+  "executed_tests": false,
+  "inputs": {
+    "android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt": "5581e374e6f566f3c6e80a23012d0fcb4c43c282478b25e5b4e55527fe2b24ae",
+    "android-tv/app/src/androidTest/java/tv/herrin/app/StartupMotionPreferenceTest.kt": "a04b4b5050efb7aed1017aad27cc7bc7484bba707fe496573cb3a915caf709f1",
+    "android-tv/app/src/androidTest/java/tv/herrin/app/HerrinUiSmokeTest.kt": "1ff593ba93582d87c3395566e9655d4941dbebf7988986d3593f606450bec174"
+  },
+  "note": "Only pending CI-branch configuration and documentation differ in the local worktree; compiled app/AndroidTest inputs match the stated commit."
+}
