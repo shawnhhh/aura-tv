@@ -205,7 +205,11 @@ internal class HerrinSourceDiscovery {
                         snapshot = snapshot.copy(outcomes = snapshot.outcomes + (node.id to outcome),
                             hits = if (outcome == Outcome.SEARCHING) snapshot.hits else
                                 (snapshot.hits.filterNot { it.node.id == node.id } + hits).distinctBy { it.key })
-                        publish(snapshot)
+                        // The initial plan already exposes pending work. Do not
+                        // hold the mutation lock and a network slot for a Main
+                        // roundtrip before each request has even started.
+                        // Results/ready layouts/failures still publish immediately.
+                        if (outcome != Outcome.SEARCHING) publish(snapshot)
                     }
                 }
                 suspend fun execute() {

@@ -23,7 +23,8 @@ internal class HerrinTvBoxSpiderSource(
         if (activate != null && !activate.invoke())
             throw SourceCandidateFailure(SourceSearchStage.ACTIVATE, SourceSearchOutcome.ACTIVATE_FAILED)
         val found = linkedMapOf<String, HerrinSourceMovie>()
-        for (name in identity.names.filter { it.trim().length >= 2 }.distinct().take(2)) {
+        for (name in identity.names.map(ArtworkTitle::searchQuery).filter { it.trim().length >= 2 }
+            .distinctBy(ArtworkTitle::normalize).take(2)) {
             val search = bridge.search(site, name)
             if(search is SpiderResult.Failure)throw SourceCandidateFailure(SourceSearchStage.SEARCH,SourceSearchOutcome.ERROR)
             val films = (search as? SpiderResult.Ready)?.value.orEmpty()

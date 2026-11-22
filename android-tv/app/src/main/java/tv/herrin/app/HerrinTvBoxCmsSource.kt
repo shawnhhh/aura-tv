@@ -24,8 +24,8 @@ internal class HerrinTvBoxCmsSource(
         searchInternal(identity, strict = false)
 
     private suspend fun searchInternal(identity: HerrinFilmIdentity, strict: Boolean): List<HerrinSourceMovie> {
-        val titles = identity.names.filter { it.length in 2..120 }
-            .distinct().take(2)
+        val titles = identity.names.map(ArtworkTitle::searchQuery).filter { it.length in 2..120 }
+            .distinctBy(ArtworkTitle::normalize).take(2)
         val matches = linkedMapOf<String, HerrinSourceMovie>()
         for (name in titles) {
             val result = repo.search(site, name, allowHttp)
