@@ -16,17 +16,24 @@ internal fun rememberPersonalBrowseFilms(revision: Long, connectionEpoch: Int): 
             val library = PersonalLibrary(context)
             val enabled = library.connections.list().filter { it.enabled }.map { it.id }.toSet()
             val folders = library.index.folders().filter { it.enabled && it.connection in enabled }.map { it.id }.toSet()
-            val rows = mutableListOf<org.json.JSONObject>()
+            val projection = PersonalMediaProjection.Accumulator()
+            val began = android.os.SystemClock.elapsedRealtime()
+            var files = 0
             var after = ""
             while (true) {
                 ensureActive()
                 val page = library.index.mediaAfter(after)
                 if (page.isEmpty()) break
-                rows += page.filter { it.optString("folder") in folders }
+                val allowed = page.filter { it.optString("folder") in folders }
+                projection.add(allowed)
+                files += allowed.size
                 after = page.last().getString("id")
             }
             ensureActive()
-            PersonalMediaProjection.films(rows)
+            val output = projection.films()
+            HerrinPlaybackDiagnosticJournal.record("PERSONAL", "PROJECTION_ELAPSED", "MS=${android.os.SystemClock.elapsedRealtime() - began}")
+            HerrinPlaybackDiagnosticJournal.record("PERSONAL", "PROJECTION_FILES", "COUNT=$files")
+            output
         }
         films = fresh // A cancelled revision cannot publish over a newer one.
     }

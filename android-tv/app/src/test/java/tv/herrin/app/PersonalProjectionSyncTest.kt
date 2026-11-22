@@ -40,4 +40,18 @@ class PersonalProjectionSyncTest {
         assertEquals(2,claim.season)
         assertEquals(3,claim.episode)
     }
+    @Test fun pagedProjectionMergesVersionsAcrossBoundariesAndRetainsDifferentSeasons() {
+        fun row(id: String, season: Int, episode: Int) = JSONObject().put("id",id).put("name","$id.mkv")
+            .put("title","Example").put("type","tv").put("tmdb",42).put("season",season).put("episode",episode)
+        val pages = listOf(listOf(row("a",1,1),row("b",2,1)),listOf(row("c",1,1),row("d",1,2)))
+        val projection = PersonalMediaProjection.Accumulator()
+        pages.forEach(projection::add)
+        val films = projection.films()
+        assertEquals(2,films.size)
+        val seasonOne = films.single { it.id == "personal-index:a" }
+        assertEquals(listOf(1,2),seasonOne.playbackEpisodes.map { it.number })
+        assertEquals(listOf("personal-file:a","personal-file:c"),seasonOne.playbackEpisodes.first().lines.map { it.id })
+        assertEquals("personal-index:d",seasonOne.playbackEpisodes.last().lines.single().uri)
+        assertEquals("personal-index:b",films.single { it.id != seasonOne.id }.id)
+    }
 }

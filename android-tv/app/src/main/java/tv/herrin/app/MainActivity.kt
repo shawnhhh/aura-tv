@@ -2233,8 +2233,9 @@ private fun Herrin(startup: StartupPresentation) {
             hasEnteredHome = true
         }
     }
-    val railStates = (listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片", "Top 250", "直播", "我的", "search", "recommend")).associateWith { rememberLazyListState() }
-    val browseScrollStates = railStates.keys.associateWith { rememberScrollState() }
+    val browsePositions = rememberBrowseScrollStates()
+    val railStates = browsePositions.rails
+    val browseScrollStates = browsePositions.pages
     val facetResultState = rememberLazyListState()
     // M4.25: only the active, already-loaded catalog is grouped. This is a
     // display projection; Film.id and the licensed playback paths stay intact.
