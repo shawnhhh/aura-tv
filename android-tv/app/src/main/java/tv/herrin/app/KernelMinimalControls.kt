@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.media3.common.C
+import androidx.media3.common.Player
 
 /** Chrome for the single original session. No player/renderer is constructed here. */
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
@@ -46,6 +47,19 @@ internal fun KernelMinimalControls(
     onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit, seekAcceleration: Int, specsReady: Boolean
 ) {
     val player = session.player
+    // Media3 is not Compose snapshot state: pause/resume can change without a position tick.
+    // Keep the transport icon and accessible description tied to the actual player events.
+    var playWhenReady by remember(player) { mutableStateOf(player.playWhenReady) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(ready: Boolean, reason: Int) {
+                playWhenReady = ready
+            }
+        }
+        player.addListener(listener)
+        playWhenReady = player.playWhenReady
+        onDispose { player.removeListener(listener) }
+    }
     fun Modifier.seekButton(direction: Int) = onFocusChanged { if (!it.isFocused) resetHoldSeek() }
         .onPreviewKeyEvent { event ->
             val key = event.nativeKeyEvent
@@ -117,12 +131,16 @@ internal fun KernelMinimalControls(
                 if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
             }, modifier = Modifier.fillMaxWidth().height(3.dp), color = Color.White,
                 trackColor = Color(0x66555555))
-            PlayerControlBar(player.playWhenReady, player.playbackParameters.speed, session.whole,
+            PlayerControlBar(playWhenReady, player.playbackParameters.speed, session.whole,
                 initialFocus, speedFocus, episodesFocus, audioFocus, subtitleFocus,
                 Modifier.seekButton(-1), Modifier.seekButton(1),
                 onEpisodes = { onInteraction(); onEpisodes?.invoke() ?: open("选集") },
                 onSpeed = { open("倍速") }, onRewind = { onSeek(-10_000) },
-                onToggle = { if (player.playWhenReady) session.pause() else session.play(); onInteraction() },
+                onToggle = {
+                    if (player.playWhenReady) session.pause() else session.play()
+                    playWhenReady = player.playWhenReady
+                    onInteraction()
+                },
                 onForward = { onSeek(10_000) }, onAudio = { open("音轨") }, onSubtitles = { open("字幕") })
         }
     }
