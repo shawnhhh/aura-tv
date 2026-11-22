@@ -15,3 +15,10 @@
 - `ci-4c7a-results.json` / `ci-4c7a-tv-summary.json`：292项实际291通过1失败；H-004间歇超时未定位，不因本批通过判定已修复。
 - `ci-4c7a-api31-failure.log`：null root / 无效XML，日志完成事件不能替代有效界面观察。
 - `ci-4c7a-abba.json`：四轮各6项真实模拟器数据；缓存导航回退，不是全面提速。
+
+- `ci-7eff-results.json` / `ci-7eff-tv-summary.json`：最新全量291/292，唯一失败为继续观看未出首帧；短链修正通过。
+- `ci-7eff-api31-failure.log`：有效快照品牌断言失败，后续才有12.3秒交接日志，不能改写成UI通过。
+
+- `ci-18cbc-results.json`：仅续播三轮12/12与API31通过，非完整TV；APK不含7845后续生产修改。
+- `ci-original-evidence-inspection.log` / `api31-first-data-18cbc.jpg`：GitHub内只读读取原归档；纠正7eff失败阶段为播放器建立前，原XML仍为Splash，真实录像含系统栏。
+- `index-transaction-targeted.json` / `.log`：7845仅2项本地专项通过，新完整CI44968547697待结果；旧807不冒充新版本通过。

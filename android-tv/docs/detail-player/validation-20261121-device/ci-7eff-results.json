@@ -1,0 +1,45 @@
+{
+  "source_sha": "7eff2495c75aa76daf4b59a3a520c146090f95d6",
+  "run": 44963889759,
+  "tv": {
+    "job": 137028529269,
+    "total": 292,
+    "passed": 291,
+    "failed": [
+      {
+        "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+        "test": "myContinueWatchingDirectlyDecodesAndReturnsToTheSameCard",
+        "status": "failed",
+        "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 30000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.P0RecentPlaybackReturnTest.playAndReturnTo(P0RecentPlaybackReturnTest.kt:98)\nat tv.herrin.app.P0RecentPlaybackReturnTest.myContinueWatchingDirectlyDecodesAndReturnsToTheSameCard(P0RecentPlaybackReturnTest.kt:134)\n"
+      }
+    ],
+    "preflight_counts": [
+      1,
+      1,
+      1,
+      20,
+      20
+    ],
+    "shortlink_repair_passed": true,
+    "full_suite_gate_passed": false
+  },
+  "api31": {
+    "job": 137035630706,
+    "result": "FAILURE",
+    "stage": "COLD_UI_BRAND_ASSERTION",
+    "home_completion_ms": 12276,
+    "first_visible_ms": 4373,
+    "network_start_ms": 5512,
+    "interactive_ui_verified": false,
+    "explanation": "A valid snapshot was taken before the curtain completion. The original strict brand/UI assertion failed; do not substitute later lifecycle logs for that snapshot."
+  },
+  "diagnostic_apk": {
+    "source_sha": "7eff2495c75aa76daf4b59a3a520c146090f95d6",
+    "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44963889759/artifacts/14731297837",
+    "sha256_ci": "ab6d3a2131b2e04bc3a2e7d367d366b8d8e4a2d38fd6c44f71663de890c0aa99",
+    "diagnostic_only": true,
+    "independently_downloaded": false
+  },
+  "artifact_download": "File Service reference returned; normal urllib download blocked with URLError. No bypass attempted.",
+  "formal_acceptance": false
+}

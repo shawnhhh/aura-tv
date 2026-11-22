@@ -1,0 +1,60 @@
+2026-11-22T00:25:16.1282859Z Traceback (most recent call last):
+2026-11-22T00:25:16.1311776Z   File "/home/runner/work/aura-tv/aura-tv/android-tv/scripts/check_startup_probe.py", line 91, in <module>
+2026-11-22T00:25:16.1340017Z     main()
+2026-11-22T00:25:16.1340566Z     ~~~~^^
+2026-11-22T00:25:16.1368388Z   File "/home/runner/work/aura-tv/aura-tv/android-tv/scripts/check_startup_probe.py", line 76, in main
+2026-11-22T00:25:16.1376619Z     check_ui(args.xml.read_text(), args.window.read_text(), "电影" if args.stage == "hot" else "首页")
+2026-11-22T00:25:16.1377554Z     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-11-22T00:25:16.1378491Z   File "/home/runner/work/aura-tv/aura-tv/android-tv/scripts/check_startup_probe.py", line 34, in check_ui
+2026-11-22T00:25:16.1379597Z     assert labelled("HERRIN"), "Brand missing from the app UI"
+2026-11-22T00:25:16.1380250Z            ~~~~~~~~^^^^^^^^^^
+2026-11-22T00:25:16.1380803Z AssertionError: Brand missing from the app UI
+2026-11-22T00:25:16.2643274Z --------- beginning of crash
+2026-11-22T00:25:16.2691203Z 11-22 00:25:01.483   763   763 E AndroidRuntime: FATAL EXCEPTION: main
+2026-11-22T00:25:16.2692719Z 11-22 00:25:01.483   763   763 E AndroidRuntime: Process: com.android.systemui, PID: 763
+2026-11-22T00:25:16.2721485Z 11-22 00:25:01.483   763   763 E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method 'void com.android.systemui.navigationbar.NavigationBarView.setAccessibilityButtonState(boolean, boolean)' on a null object reference
+2026-11-22T00:25:16.2750726Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at com.android.systemui.navigationbar.NavigationBar.updateAccessibilityServicesState(NavigationBar.java:1394)
+2026-11-22T00:25:16.2760851Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at com.android.systemui.navigationbar.NavigationBar$$ExternalSyntheticLambda11.onAccessibilityServicesStateChanged(Unknown Source:2)
+2026-11-22T00:25:16.2790984Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at android.view.accessibility.AccessibilityManager$1.lambda$notifyServicesStateChanged$0$AccessibilityManager$1(AccessibilityManager.java:419)
+2026-11-22T00:25:16.2792199Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at android.view.accessibility.AccessibilityManager$1$$ExternalSyntheticLambda0.run(Unknown Source:4)
+2026-11-22T00:25:16.2793001Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at android.os.Handler.handleCallback(Handler.java:938)
+2026-11-22T00:25:16.2793658Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:99)
+2026-11-22T00:25:16.2794281Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:201)
+2026-11-22T00:25:16.2794876Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:288)
+2026-11-22T00:25:16.2795521Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:7839)
+2026-11-22T00:25:16.2796176Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+2026-11-22T00:25:16.2796899Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:548)
+2026-11-22T00:25:16.2797659Z 11-22 00:25:01.483   763   763 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1003)
+2026-11-22T00:25:16.2798207Z --------- beginning of main
+2026-11-22T00:25:16.2798703Z 11-22 00:25:04.784  2098  2098 I HerrinStartupPhase: phase=first_cpu_draw activity_to_phase_ms=1741
+2026-11-22T00:25:16.2799517Z 11-22 00:25:07.385  2098  2098 D HerrinRemote: WINDOW_FOCUS_READY browse_request_issued=false
+2026-11-22T00:25:16.2800451Z 11-22 00:25:07.417  2098  2098 I HerrinStartupPhase: phase=wordmark_visible activity_to_phase_ms=4373
+2026-11-22T00:25:16.2801389Z 11-22 00:25:07.461  2098  2098 I HerrinStartupPhase: phase=home_init activity_to_phase_ms=4417
+2026-11-22T00:25:16.2802033Z 11-22 00:25:08.041  2098  2098 D HerrinRemote: POSTER orbit focus=false
+2026-11-22T00:25:16.2802580Z 11-22 00:25:08.092  2098  2098 D HerrinRemote: POSTER tide focus=false
+2026-11-22T00:25:16.2803103Z 11-22 00:25:08.123  2098  2098 D HerrinRemote: POSTER dawn focus=false
+2026-11-22T00:25:16.2804770Z 11-22 00:25:08.185  2098  2098 D HerrinRemote: POSTER night focus=false
+2026-11-22T00:25:16.2805361Z 11-22 00:25:08.229  2098  2098 D HerrinRemote: POSTER return focus=false
+2026-11-22T00:25:16.2805943Z 11-22 00:25:08.278  2098  2098 D HerrinRemote: POSTER blue focus=false
+2026-11-22T00:25:16.2808425Z 11-22 00:25:08.521  2098  2098 D HerrinRemote: ROUTE screen=browse category=首页 focusId=nav-首页
+2026-11-22T00:25:16.2823086Z 11-22 00:25:08.556  2098  2098 I HerrinStartupPhase: phase=network activity_to_phase_ms=5512
+2026-11-22T00:25:16.2823773Z 11-22 00:25:08.621  2098  2098 D HerrinRemote: POSTER blue focus=false
+2026-11-22T00:25:16.2824314Z 11-22 00:25:08.627  2098  2098 D HerrinRemote: POSTER return focus=false
+2026-11-22T00:25:16.2824859Z 11-22 00:25:08.633  2098  2098 D HerrinRemote: POSTER night focus=false
+2026-11-22T00:25:16.2825356Z 11-22 00:25:08.639  2098  2098 D HerrinRemote: POSTER dawn focus=false
+2026-11-22T00:25:16.2825732Z 11-22 00:25:08.668  2098  2098 D HerrinRemote: POSTER tide focus=false
+2026-11-22T00:25:16.2826113Z 11-22 00:25:08.690  2098  2098 D HerrinRemote: POSTER orbit focus=false
+2026-11-22T00:25:16.2826542Z 11-22 00:25:10.035  2098  2098 I HerrinStartupPhase: phase=artwork activity_to_phase_ms=6992
+2026-11-22T00:25:16.2827019Z 11-22 00:25:10.101  2098  2098 D HerrinRemote: WINDOW_FOCUS_READY browse_request_issued=false
+2026-11-22T00:25:16.2827484Z 11-22 00:25:11.482  2098  2098 D HerrinRemote: WINDOW_FOCUS_READY browse_request_issued=false
+2026-11-22T00:25:16.2827982Z 11-22 00:25:13.128  2098  2098 I HerrinStartupPhase: phase=wordmark_complete activity_to_phase_ms=10084
+2026-11-22T00:25:16.2828586Z 11-22 00:25:13.149  2098  2225 I HerrinStartupFrames: count=67 p50_ms=46.991249 p95_ms=601.625263 p99_ms=1427.805433 over_budget=64
+2026-11-22T00:25:16.2829808Z 11-22 00:25:15.193  2098  2098 I HerrinDisplay: output=1080x1920@60.000004Hz uiCandidate=system windowRequest=0.0 requestedModeId=0 supported=UiDisplayMode(width=1080, height=1920, hz=60.000004)
+2026-11-22T00:25:16.2830759Z 11-22 00:25:15.194  2098  2098 D HerrinRemote: ROUTE screen=browse category=首页 focusId=nav-首页
+2026-11-22T00:25:16.2831700Z 11-22 00:25:15.320  2098  2098 I HerrinStartup: process_to_activity_ms=707 activity_to_first_draw_ms=1741 first_draw_to_wordmark_ms=2632 wordmark_complete_ms=10084 activity_to_home_ms=12276 home_init_ms=4417 artwork_start_ms=6992 network_start_ms=5512 system_brand_exit_ms=-1
+2026-11-22T00:25:16.2832662Z 11-22 00:25:15.320  2098  2098 D HerrinRemote: RESTORE target=nav-首页 completed
+2026-11-22T00:25:16.2842543Z ##[error]The process '/usr/bin/sh' failed with exit code 1
+2026-11-22T00:25:16.2844194Z ##[group]Terminate Emulator
+2026-11-22T00:25:16.2844749Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 emu kill
+2026-11-22T00:25:16.2845347Z OK: killing emulator, bye bye
+2026-11-22T00:25:16.2845722Z OK
