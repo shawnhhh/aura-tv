@@ -11,7 +11,7 @@ nav{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 18px}
 .toggle{display:flex;gap:9px;margin-bottom:15px}
 button,select{font:inherit;color:#f6f6f6;cursor:pointer}
 button{background:#222;border:1px solid #444;border-radius:11px;padding:12px 15px}
-button.selected,button[type=submit],button#personal-import{background:#ededee;color:#111;border-color:#ededee;font-weight:650}
+button.selected,button[type=submit]{background:#ededee;color:#111;border-color:#ededee;font-weight:650}
 button.secondary{background:#161616;color:#ddd}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #ddd;outline-offset:2px}
 button:disabled{opacity:.45;cursor:default}

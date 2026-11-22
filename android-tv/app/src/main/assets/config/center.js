@@ -193,10 +193,6 @@ $('#personal-parent').onclick=()=>{
 };
 $('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
 $('#personal-directory-next').onclick=()=>{directoryPage++;browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
-$('#personal-import').onclick=async()=>{
- try{await personal('/folder',{connection:personalConnection,path:$('#personal-path').value,type:'auto'});
-  await refreshPersonal();toast(true,'nas')}catch(error){if(!error.stale)toast(false,'nas')}
-};
 $('#end').onclick=async()=>{
  directoryBrowseToken++;personalRefreshToken++;
  const ending=call('/end');session='';advanceModuleScope(true);
