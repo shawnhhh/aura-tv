@@ -5519,7 +5519,10 @@ private fun Herrin(startup: StartupPresentation) {
             }
         })
         SideEffect {
-            startup.reduced = reduceMotion
+            // StartupHost honors only Herrin's explicit preference. Some TV
+            // firmware defaults the global animator scale to zero; applying
+            // the combined UI flag here used to switch V13 to static mid-reveal.
+            startup.reduced = reduced
             // The navigation/home skeleton is already committed in this
             // composition. Only the bounded local cache read is required; never
             // wait for a network response or a non-empty grouped projection.

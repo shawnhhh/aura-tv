@@ -14,6 +14,7 @@ REQUIRED_CLASSES = (
     "SpiderAuthorizationPlaybackTest",
     "SpiderPasswordAuthorizationTest",
     "HerrinSplashTest",
+    "StartupMotionPreferenceTest",
     "LanConfigurationTest",
     "LanSourceImportTest",
     "LanHttpConfigurationTest",
