@@ -4322,14 +4322,15 @@ private fun Herrin(startup: StartupPresentation) {
                 val personalMedia = if (screen == "player" && film.playbackEpisodes.any { ep ->
                     ep.number == episode && ep.lines.any { it.id == line } })
                     tmdbState.tmdbPersonalPlayback[film.id]?.get(line) else null
-                val indexedPersonalId = if (personalRoute && film.id.startsWith("personal-"))
+                val indexedPersonalId = if (screen == "player" && personalRoute && film.id.startsWith("personal-"))
                     line.takeIf { it.startsWith("personal-file:") }?.removePrefix("personal-file:")
                         ?: film.id.removePrefix("personal-") else null
                 val personalPlayback = if (indexedPersonalId != null)
                     SelectedIndexedPersonalPlayback(indexedPersonalId, playerRetryEpoch, smbSessions)
                     else personalMedia?.let { SelectedPersonalPlayback(it,playerRetryEpoch) }
                 val personalWaiting = (personalMedia != null || indexedPersonalId != null) && personalPlayback == null
-                val licensed = if (personalRoute || personalMedia != null) personalPlayback ?:
+                val licensed = if (screen != "player") null
+                    else if (personalRoute || personalMedia != null) personalPlayback ?:
                     if (!personalWaiting) PlaybackResult.Unavailable("PERSONAL_SELECTION_EXPIRED") else null
                     else if (spiderActive && screen == "player") currentSpiderResult
                     else if (screen == "player" && film.playbackEpisodes.isNotEmpty()) {
@@ -4354,7 +4355,9 @@ private fun Herrin(startup: StartupPresentation) {
                 val testMedia = if (screen == "player" && !spiderActive &&
                     !film.id.startsWith("tmdb-") &&
                     activeCmsSite == null && !personalRoute) AuthorizedUrls.https(prefs.testMediaUrl) else null
-                val chosenMedia = if (tmdbState.automaticSearch != null ||playbackNeedsRefresh) null
+                // A retained async/private Ready result is not a navigation
+                // command. Leaving player must dispose the sole session now.
+                val chosenMedia = if (screen != "player" || tmdbState.automaticSearch != null ||playbackNeedsRefresh) null
                     else licensedMedia ?: testMedia?.let { PlaybackMedia(it) }
                 if (chosenMedia != null) {
                     val historyLine = if (licensedMedia != null) line else "independent-test"

@@ -1,0 +1,7 @@
+{
+  "base_sha": "3d59622635be41105450a24aaf38c3e6e3541365",
+  "main_activity_sha256": "9ced2dd78be752c1cc1895c7f4ca9102f6da84da97abc2747fd9a162ca50e26b",
+  "androidtest_compile": "PASS; execution pending",
+  "test_assertions": "Unchanged private WebDAV first frame/pause/seek/Back/detail focus/updated credential replay assertions",
+  "kernel_inputs": "unchanged from actual dependency-blocked attempt at 3d596226; no repeat requested"
+}

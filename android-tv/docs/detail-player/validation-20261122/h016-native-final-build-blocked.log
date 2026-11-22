@@ -1,0 +1,12 @@
+SOURCE_COMMIT=3d59622635be41105450a24aaf38c3e6e3541365
+RUN=45018920396 JOB=137199309546
+SCOPE=Actual pinned original wrapper/adapter execution; no original kernel compilation or provider playback acceptance
+BRIDGES=NOT COMPILED: original compileSdk 37 package unavailable from sdkmanager; not downgraded
+ADAPTER=DEPENDENCY_BLOCKED before Java compilation
+2026-11-22T11:54:51.0068526Z Warning: Failed to find package 'platforms;android-37'
+2026-11-22T11:54:51.1961476Z ##[error]Process completed with exit code 1.
+2026-11-22T11:54:51.4346012Z Downloading https://services.gradle.org/distributions/gradle-9.7.1-bin.zip
+2026-11-22T11:55:58.2109380Z > Task :core:verifyKernelDependencies FAILED
+2026-11-22T11:55:58.2111494Z FONGMI_BUILD_INPUTS_BLOCKED: {"status": "DEPENDENCY_BLOCKED", "verified": ["hook-release.aar", "tvbus-release.aar"], "missing_external": ["lib-decoder-ffmpeg-release.aar", "lib-mpvplayer-release.aar"], "missing_upstream": [], "media3_import_count": 150, "verified_media3_modules": [], "missing_media3_api_count": 150, "errors": [], "upstream_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc"}
+2026-11-22T11:55:58.3120698Z BUILD FAILED in 1m 6s
+2026-11-22T11:55:58.6434584Z ##[error]Process completed with exit code 1.

@@ -1,0 +1,18 @@
+SOURCE_COMMIT=3d59622635be41105450a24aaf38c3e6e3541365
+RUN=45018920396 JOB=137199676643
+RESULT=34/35 preflight, 1 failure; unfiltered suite NOT RUN
+H015=Actual decoded direction/button holds passed, including zero held seeks and one release seek
+H016_HERO=Hero origin/focus regression passed
+ROOT_CAUSE=Personal indexed resolution remained active on detail; retained Ready media mounted the player outside its player scene
+2026-11-22T12:03:00.5243737Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T12:03:00.5273037Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T12:03:24.9155429Z There was 1 failure:
+2026-11-22T12:03:24.9156664Z 1) importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials(tv.herrin.app.PersonalLibraryDirectPlaybackTest)
+2026-11-22T12:03:24.9163910Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T12:03:24.9177608Z Tests run: 35,  Failures: 1
+2026-11-22T12:03:25.8885811Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T12:03:25.8905260Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T12:03:25.9030121Z There was 1 failure:
+2026-11-22T12:03:25.9031220Z 1) importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials(tv.herrin.app.PersonalLibraryDirectPlaybackTest)
+2026-11-22T12:03:25.9038352Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T12:03:25.9052794Z Tests run: 35,  Failures: 1
