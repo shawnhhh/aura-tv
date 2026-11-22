@@ -26,3 +26,5 @@
 - `ci-7845-independent.json`：7845的API31与ABBA真实完成，TV仍为预检失败；不含711后续H-001修复。
 - `startup-motion-compile.json` / `.log`：8be实际AndroidTest编译，未执行测试。
 - `ci-8be5-attempt1-dependency-block.json` / `.log`：808项通过，但Lint解析既有依赖失败；一次同SHA失败作业重试待结果。官方HEAD200不替代Lint。
+
+- `ci-8be5-attempt2-debug.json` / `.log`：同SHA一次失败作业重试成功，JVM808、Samba6、Lint/Debug与新APK绑定；TV/API31/ABBA另行记录。
