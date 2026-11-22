@@ -102,3 +102,14 @@ No real nodes, original APK reference, emulator, full TV suite or ABBA test is
 run as part of development. Unified Android/JVM/TV and actual node evidence must
 follow integration. A source-set declaration, a successful contract compile,
 READY or HTTP response never establishes real video frames or P0 completion.
+
+## 2026-11-22 original hook/tvbus provenance
+
+The two unmodified AARs and their source modules already exist at TV@305dff2.
+They are now explicitly locked with binary SHA-256, the original GPL license
+path/hash, source revision and original `build-source-modules.sh hook|tvbus`
+commands. `missing_upstream` means missing verified lock entries, not necessarily
+missing files. An external artifact cannot claim this upstream license.
+The complete gate remains DEPENDENCY_BLOCKED for the absent matched MPV/FFmpeg
+and custom Media3 inputs. No original-core build or provider playback success is
+claimed by verifying these two archives.

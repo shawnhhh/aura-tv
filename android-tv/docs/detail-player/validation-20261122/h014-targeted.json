@@ -1,0 +1,15 @@
+{
+  "source_commit": "60dc1072",
+  "scope": "four unchanged track-label JVM cases only; UI tests compiled, not executed",
+  "jvm": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "androidtest_compilation": "success",
+  "source_files_sha256": {
+    "android-tv/app/src/main/java/tv/herrin/app/PlaybackTrackLabel.kt": "af6c0cb5b0577622ce21eed43744bb205f12343192c9bdb4850620a1c439642d",
+    "android-tv/app/src/test/java/tv/herrin/app/PlaybackTrackLabelTest.kt": "e92c14731c0778cb788a4fce647c86bf9132281f02a8f56616b76d69805dcbdd"
+  }
+}

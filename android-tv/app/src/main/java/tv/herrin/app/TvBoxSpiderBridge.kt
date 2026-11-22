@@ -549,7 +549,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             synchronized(lifecycle) { checkOpen(ticket); activeNetworkTrace=SpiderNetworkTrace.start(context) }
             if (scriptApi != null) {
                 Runtime.set(context.applicationContext)
-                Runtime.setActivity { SpiderNetworkTrace.event("ACTIVITY_REQUEST_UNAVAILABLE"); null }
+                Runtime.setActivity(SpiderRuntimeActivityHost::activity)
                 val host = SpiderHttpSessionHost()
                 val runtime = FongMiScriptRuntimes(context)
                 try {
@@ -580,9 +580,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // One ephemeral cookie jar per active site; never shared across source changes.
             val httpHost = SpiderHttpSessionHost()
             Runtime.set(context.applicationContext)
-            // An isolated Service cannot provide the foreground Activity from
-            // the main process. Do not pretend the Application is an Activity.
-            Runtime.setActivity { SpiderNetworkTrace.event("ACTIVITY_REQUEST_UNAVAILABLE"); null }
+            // Obtain an operation-owned real window in this same :spider process.
+            // The foreground main Activity approves its launch; no Activity crosses Binder.
+            Runtime.setActivity(SpiderRuntimeActivityHost::activity)
             Runtime.setToast { text ->
                 SpiderNetworkTrace.event(if(listOf("登录","扫码","授权").any(text::contains)) "PLUGIN_AUTH_NOTIFICATION" else "PLUGIN_NOTIFICATION")
             }

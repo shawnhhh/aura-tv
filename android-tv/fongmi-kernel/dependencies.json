@@ -45,7 +45,36 @@
     "app/libs/hook-release.aar",
     "app/libs/tvbus-release.aar"
   ],
-  "artifacts": [],
+  "artifacts": [
+    {
+      "origin": "upstream",
+      "path": "app/libs/hook-release.aar",
+      "sha256": "50cb2376064781c79ec3708fe2c29d1c1efcec56cfb471b25172b433172cb9b7",
+      "source_repository": "https://github.com/FongMi/TV",
+      "source_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+      "version": "TV-305dff233cde",
+      "license_origin": "upstream",
+      "license_file": "LICENSE.md",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "build_instructions": "bash android-tv/fongmi-kernel/build-source-modules.sh hook",
+      "source_module": "hook",
+      "source_build_claim": "not_built_in_this_session; unmodified archive tracked by pinned upstream"
+    },
+    {
+      "origin": "upstream",
+      "path": "app/libs/tvbus-release.aar",
+      "sha256": "b759805bf99d6b9fd0ed4882d12614fc4431fc613ef7e3dcb963d8a35d2160b4",
+      "source_repository": "https://github.com/FongMi/TV",
+      "source_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+      "version": "TV-305dff233cde",
+      "license_origin": "upstream",
+      "license_file": "LICENSE.md",
+      "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "build_instructions": "bash android-tv/fongmi-kernel/build-source-modules.sh tvbus",
+      "source_module": "tvbus",
+      "source_build_claim": "not_built_in_this_session; unmodified archive tracked by pinned upstream"
+    }
+  ],
   "required_original_apis": [
     "androidx.media3.common.DecoderMode",
     "androidx.media3.common.DiscMenuController",

@@ -156,6 +156,8 @@ internal object RemoteTrace {
 class MainActivity : ComponentActivity() {
     private var frameDiagnostics: UiFrameDiagnostics? = null
     private var presentation:StartupPresentation?=null
+    // This is cleared by the real V13/home handoff, never by network prefetch.
+    internal fun canPresentSourceWindow(): Boolean = presentation?.showing == false
     internal fun frameSummary(): String = frameDiagnostics?.summary() ?: "渲染指标未采集"
     override fun onWindowFocusChanged(hasFocus:Boolean) {
         super.onWindowFocusChanged(hasFocus)

@@ -8,7 +8,9 @@ case "${1:-}" in
   nodejs) tasks=(':nodejs:bundleDebugAar') ;;
   thunder) tasks=(':thunder:bundleDebugAar') ;;
   python-bridge) tasks=(':chaquo:bundleDebugAar') ;;
-  *) echo 'Usage: build-source-modules.sh catvod|quickjs|nodejs|thunder|python-bridge' >&2; exit 2 ;;
+  hook) tasks=(':hook:bundleDebugAar') ;;
+  tvbus) tasks=(':tvbus:bundleDebugAar') ;;
+  *) echo 'Usage: build-source-modules.sh catvod|quickjs|nodejs|thunder|python-bridge|hook|tvbus' >&2; exit 2 ;;
 esac
 # Use the pinned upstream wrapper and original build scripts. No APK generation,
 # package/signature changes, native substitution, or silently skipped feature.

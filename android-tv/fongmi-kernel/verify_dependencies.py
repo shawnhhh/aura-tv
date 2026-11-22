@@ -40,6 +40,22 @@ def load_classes(path):
         return classes, native_abis
 
 
+def verified_license(directory, entry):
+    origin = entry.get("license_origin", "directory")
+    if origin not in ("directory", "upstream"):
+        raise ValueError("Unknown license origin")
+    if origin == "upstream" and entry.get("origin") != "upstream":
+        raise ValueError("Only original upstream archives may use the upstream license")
+    path = confined(UPSTREAM if origin == "upstream" else directory, entry["license_file"])
+    if not path.is_file() or not path.read_text().strip():
+        raise ValueError("Missing license material")
+    if origin == "upstream":
+        expected = entry.get("license_sha256", "")
+        if not re.fullmatch(r"[0-9a-f]{64}", expected) or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise ValueError("Upstream license checksum mismatch")
+    return path
+
+
 def imported_media3():
     imports = set()
     for flavor in ("main", "leanback"):
@@ -103,9 +119,7 @@ def inspect(directory, lock_path):
                 raise ValueError("Missing file: " + str(path))
             if hashlib.sha256(path.read_bytes()).hexdigest() != a["sha256"]:
                 raise ValueError("Binary checksum mismatch")
-            license_path = confined(directory, a["license_file"])
-            if not license_path.is_file() or not license_path.read_text().strip():
-                raise ValueError("Missing license material")
+            verified_license(directory, a)
             classes, native = load_classes(path)
             if not classes:
                 raise ValueError("Empty implementation")

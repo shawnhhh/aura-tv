@@ -19,6 +19,9 @@
             </intent-filter>
         </activity>
         <!-- Third-party Spider execution is isolated for crash containment, not a privilege sandbox. -->
+        <activity android:name=".SpiderRuntimeActivity" android:process=":spider" android:exported="false"
+            android:screenOrientation="landscape" android:configChanges="keyboardHidden|orientation|screenSize"
+            android:theme="@style/Theme.Herrin.SpiderHost" />
         <service android:name=".TvBoxSpiderService" android:process=":spider"
             android:exported="false" android:stopWithTask="true" />
     </application>
