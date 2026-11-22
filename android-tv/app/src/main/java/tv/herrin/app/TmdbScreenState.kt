@@ -41,6 +41,18 @@ internal class TmdbScreenState {
         tmdbPersonalPlayback.remove(id)
         tmdbPlaybackRoutes.forget(id)
     }
+    private var discoveryPlayRequest: Triple<String, String, Int>? = null
+    fun requestDiscoveryPlay(film: String, hit: String) {
+        discoveryPlayRequest = Triple(film, hit, discoverySelectionEpoch)
+    }
+    fun consumeDiscoveryPlay(film: String, hit: String, epoch: Int): Boolean {
+        if (discoveryPlayRequest != Triple(film, hit, epoch)) return false
+        discoveryPlayRequest = null
+        return true
+    }
+    fun discardDiscoveryPlay(film: String, hit: String, epoch: Int) {
+        consumeDiscoveryPlay(film, hit, epoch)
+    }
     var discoveryLine: String? by mutableStateOf(null)
     var discoverySelectionEpoch by mutableIntStateOf(0)
     fun discoveryFor(id: String): HerrinSourceDiscovery {
@@ -92,6 +104,7 @@ internal class TmdbScreenState {
         sourceSearchJob?.cancel()
         sourceSearchJob = null
         discoverySelection = null
+        discoveryPlayRequest = null
         discoverySelectionEpoch++
         discoveryLoadingEpoch++
         discoveryLoadingFilm = null

@@ -1520,6 +1520,12 @@ private fun Herrin(startup: StartupPresentation) {
             tmdbState.loadedDiscoveryHits[filmId] = hit.key
             tmdbState.sourceDiscoveries[filmId]?.spiderPaused = screen == "play-intent"
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "DISCOVERY_DETAIL_READY", "EPISODES=${detailed.playbackEpisodes.size}")
+            if (tmdbState.consumeDiscoveryPlay(filmId, hit.key, detailTicket) && screen == "detail") {
+                // A click on a fully ready node/line is the play intent. Do not
+                // wait for unrelated searches or require a second play button.
+                tmdbState.sourceDiscoveries[filmId]?.spiderPaused = true
+                screen = "player"
+            }
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled
         } catch (_: Exception) {
             tmdbState.invalidateDiscoverySelection(filmId, hit.key)
@@ -1527,6 +1533,7 @@ private fun Herrin(startup: StartupPresentation) {
             tmdbState.sourceDiscoveries[filmId]?.spiderPaused = false
             tmdbState.tmdbSourceStatus = "该片源暂不可用，请选择其他线路或重试"
         } finally {
+            tmdbState.discardDiscoveryPlay(selection.first, hit.key, detailTicket)
             if (detailTicket == tmdbState.discoveryLoadingEpoch && tmdbState.discoveryLoadingFilm == filmId)
                 tmdbState.discoveryLoadingFilm = null
         }
@@ -5129,6 +5136,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     select = { hit, selectedLine ->
                                         if (hit.node.id !in discovery.selectableNodeIds ||
                                             hit.episodes.isEmpty()) return@herrinDiscoveryItems
+                                        DetailPlaybackMetrics.timeline.click()
                                         tmdbState.discoveryRecovery = null
                                         tmdbState.rejectedDiscoveryHits.clear()
                                         pendingHistoryFilm = null
@@ -5148,7 +5156,9 @@ private fun Herrin(startup: StartupPresentation) {
                                                 cmsVodId = hit.movie.film.cmsVodId,
                                                 spiderVodId = hit.movie.film.spiderVodId)
                                         }
-                                        val chosen = preview.firstOrNull { ep ->
+                                        val chosen = preview.firstOrNull { ep -> same && ep.number == episode &&
+                                            ep.lines.any { it.id == selectedLine }
+                                        } ?: preview.firstOrNull { ep ->
                                             ep.lines.any { it.id == selectedLine }
                                         } ?: preview.firstOrNull()
                                         if (chosen != null) {
@@ -5160,6 +5170,7 @@ private fun Herrin(startup: StartupPresentation) {
                                         if (same) {
                                             // A different already-loaded line needs no detail fetch.
                                             tmdbState.discoveryLine = null
+                                            screen = "player"
                                             return@herrinDiscoveryItems
                                         }
                                         if (tmdbState.requestedDiscoveryHits[film.id] == hit.key &&
@@ -5167,12 +5178,14 @@ private fun Herrin(startup: StartupPresentation) {
                                             // Keep the requested line while one detail rebind is
                                             // in flight. Never cancel/restart the same request.
                                             tmdbState.discoveryLine = selectedLine
+                                            tmdbState.requestDiscoveryPlay(film.id, hit.key)
                                             return@herrinDiscoveryItems
                                         }
                                         tmdbState.requestedDiscoveryHits[film.id] = hit.key
                                         tmdbState.discoveryLine = selectedLine
                                         tmdbState.discoverySelection = film.id to hit.key
                                         tmdbState.discoverySelectionEpoch++
+                                        tmdbState.requestDiscoveryPlay(film.id, hit.key)
                                     }, resume = { failedNode ->
                                         tmdbState.discoverySelection = null
                                         val node = failedNode ?: tmdbState.selectedDiscoveryNode[film.id]
