@@ -46,6 +46,13 @@ class SettingsModulesTest {
             PersonalProtocolTabs(protocol, true, name) { protocol = it }
             PersonalLibrarySettings(protocol, nameFocus = name, onChanged = {}, onPlay = {})
         } } }
+        val tops = listOf("name","address","port","path","username","password").map { field ->
+            compose.onNodeWithTag("personal-field-$field").assertExists().fetchSemanticsNode().boundsInRoot.top
+        }
+        assertEquals(tops.sorted(),tops)
+        assertEquals(6,tops.distinct().size)
+        compose.onNodeWithText("添加").assertExists()
+        compose.onNodeWithText("导入当前媒体目录").assertDoesNotExist()
         compose.onNodeWithTag("personal-field-name").performTextInput("Old WebDAV")
         compose.onNodeWithTag("personal-protocol-WebDAV").performSemanticsAction(
             androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }

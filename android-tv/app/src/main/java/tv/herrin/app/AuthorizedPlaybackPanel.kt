@@ -167,9 +167,14 @@ private fun AuthorizedPlaybackSession(
     var seekPreview by remember(media) { mutableStateOf<Long?>(null) }
     var seekGestureEpoch by remember(media) { mutableIntStateOf(0) }
     var resumeAfterSeek by remember(media) { mutableStateOf<(() -> Unit)?>(null) }
-    fun resetHoldSeek() {
+    fun discardHoldSeek() {
         remoteHoldSeek.reset(); seekPreview = null; kernelRemoteHeld = false; seekGestureEpoch++
-        val resume = resumeAfterSeek; resumeAfterSeek = null; resume?.invoke()
+        resumeAfterSeek = null
+    }
+    fun resetHoldSeek() {
+        val resume = resumeAfterSeek
+        discardHoldSeek()
+        resume?.invoke()
     }
     LaunchedEffect(remoteHoldSeek, seekGestureEpoch) {
         val owner = seekGestureEpoch
@@ -484,6 +489,7 @@ private fun AuthorizedPlaybackSession(
         if (playback.whole) currentMediaSession = session
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
+                discardHoldSeek()
                 pendingRecovery?.cancel()
                 recoverySession.cancelPending()
                 reportProgress()
@@ -498,6 +504,7 @@ private fun AuthorizedPlaybackSession(
             PlaybackFormatRetry.candidateMime(candidates.first(), 0, media.declaredMime),
             if (startPositionMs > 0L) startPositionMs.coerceAtMost(12L * 60L * 60_000L) else C.TIME_UNSET)
         onDispose {
+            discardHoldSeek()
             pendingRecovery?.cancel()
             recoverySession.cancelPending()
             latestReportProgress()
