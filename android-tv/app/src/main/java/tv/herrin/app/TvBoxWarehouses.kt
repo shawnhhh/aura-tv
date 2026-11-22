@@ -73,6 +73,12 @@ internal object TvBoxAutoSites {
         })
     }
 
+    /** One declared/default node only, not a broad catalog or plugin probe. */
+    fun initialSelection(config: TvBoxConfig.Single, preferredId: String): TvBoxSite? =
+        resumeOnly(config, preferredId).firstOrNull() ?: config.sites.firstOrNull {
+            it.apiUrl != null || it.spiderApi != null || it.scriptApi != null
+        }
+
     fun candidates(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
         val direct = config.sites.filter { it.apiUrl != null }.take(8)
         val spider = config.sites.filter { it.spiderApi != null || it.scriptApi != null }

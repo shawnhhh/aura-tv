@@ -30,6 +30,12 @@ class LanSourceImportTest {
             assertEquals("ACTIVE", LanSourceImport(context).status(next.id).getString("state"))
             assertEquals("https://next.invalid/box", Preferences(context).tvBoxWarehouseUrl)
             assertEquals("", Preferences(context).tvBoxTrustedSpiderJarSpec)
+            assertTrue("Catalog completion may recognize the same committed import",store.isActive(next.id))
+            assertFalse(store.isActive(pending.id))
+            val replacement = store.save("https://replacement.invalid/box")
+            assertFalse("A later phone submission revokes the old completion",store.isActive(next.id))
+            assertFalse(store.isActive(replacement.id))
+            assertEquals("https://next.invalid/box",Preferences(context).tvBoxWarehouseUrl)
         } finally {
             val edit = prefs.edit().clear()
             before.forEach { (k,v) -> when(v) {

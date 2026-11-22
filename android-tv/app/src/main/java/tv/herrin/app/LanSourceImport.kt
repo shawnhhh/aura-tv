@@ -21,6 +21,11 @@ internal class LanSourceImport(context: Context) {
         val pending = current()?.takeIf { it.id == id } ?: return@synchronized false
         write(Pending(id, pending.url, state, code)); true
     }
+    fun isActive(id: String): Boolean = synchronized(lock) {
+        val pending = current() ?: return@synchronized false
+        pending.id == id && pending.state == "ACTIVE" &&
+            prefs.getString("tvbox_warehouse_url", "") == pending.url
+    }
     fun activate(id: String): Boolean = synchronized(lock) {
         val pending = current()?.takeIf { it.id == id } ?: return@synchronized false
         val edit = prefs.edit().putString("tvbox_warehouse_url", pending.url)

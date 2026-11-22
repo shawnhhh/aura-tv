@@ -596,7 +596,9 @@ private fun Herrin(startup: StartupPresentation) {
     var candidateRoot by remember { mutableStateOf("") }
     fun finishPhoneSource(expectedId: String?): Boolean {
         if (expectedId == null) return phoneSourceId == null
-        if (expectedId != phoneSourceId || !phoneSourceImport.activate(expectedId)) return false
+        if (expectedId != phoneSourceId)
+            return phoneSourceId == null && phoneSourceImport.isActive(expectedId)
+        if (!phoneSourceImport.activate(expectedId)) return false
         candidateRoot = ""
         phoneSourceId = null
         return true
@@ -848,8 +850,12 @@ private fun Herrin(startup: StartupPresentation) {
             }.orEmpty()
             // TVBox-style import must not probe all third-party plugins.
             // Restore at most the previously selected site on startup.
+            val initialSite = TvBoxAutoSites.initialSelection(config, savedSite)
+            if (!preferCache && initialSite != null) prefs.preferSite(address, initialSite, config.spiderJar)
             val candidates = if (preferCache && pendingImportId == null)
-                TvBoxAutoSites.resumeOnly(config, savedSite) else emptyList()
+                TvBoxAutoSites.resumeOnly(config, savedSite) else listOfNotNull(initialSite)
+            // Selecting metadata does not grant Spider execution: the existing
+            // exact-root/JAR approval below still decides whether it may run.
             var chosen: Pair<TvBoxSite, List<Film>>? = null
             var chosenSpider = false
             var spiderFailure = ""

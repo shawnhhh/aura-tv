@@ -171,4 +171,12 @@ class TvBoxWarehousesTest {
         assertEquals(20, result.ignored)
         assertEquals(48, result.entries.first().name.length)
     }
+    @Test fun initialSelectionKeepsDeclaredOrderAndNeverImpliesSpiderAuthorization() {
+        val spider = TvBoxSite("First",true,key="first",spiderApi="csp_Fixture")
+        val cms = TvBoxSite("Second",false,"https://cms.invalid/api",key="second")
+        val config = TvBoxConfig.Single(listOf(spider,cms),emptyList(),true,spiderJar="https://jar.invalid/site.jar")
+        assertSame(spider,TvBoxAutoSites.initialSelection(config,""))
+        assertSame(cms,TvBoxAutoSites.initialSelection(config,TvBoxAutoSites.identity(cms,config.spiderJar)))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false,"https://root.invalid/box",config.spiderJar!!,"",""))
+    }
 }
