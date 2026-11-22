@@ -786,9 +786,9 @@ private fun AuthorizedPlaybackSession(
             }
         }
         // One visible, original HERRIN transport surface; no competing native overlay.
-        val _observeTrackChanges = uiEpoch
-        val audios = PlaybackTransport.options(player, C.TRACK_TYPE_AUDIO)
-        val captions = PlaybackTransport.options(player, C.TRACK_TYPE_TEXT)
+        val controlState = remember(player, uiEpoch) { PlayerControlState.read(player) }
+        val audios = controlState.audio
+        val captions = controlState.subtitles
         val percent = if (shownDuration > 0L)
             (shownPosition.toDouble() / shownDuration.toDouble()).toFloat().coerceIn(0f, 1f)
             else 0f
@@ -797,7 +797,7 @@ private fun AuthorizedPlaybackSession(
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
         if (!isLive && !testDiagnostics && controlsVisible && errorMessage == null) KernelMinimalControls(
-            playback, media.kernelPlayback?.title ?: media.displayTitle, seekPreview ?: shownPosition, shownDuration,
+            playback, controlState, media.kernelPlayback?.title ?: media.displayTitle, seekPreview ?: shownPosition, shownDuration,
             initialControl, moreControl, ::applyRemoteSeek,
             { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() }, onEpisodeSelection ?: onLineSelection,
             onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, specsReady = if (playback.whole) kernelFirstFrame || frameSinceSelection && kernelSelectedEpisode == media.kernelPlayback?.episode else frameSinceSelection)

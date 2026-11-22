@@ -39,7 +39,7 @@ import androidx.media3.common.C
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 @Composable
 internal fun KernelMinimalControls(
-    session: HerrinPlayerSession, title: String, position: Long, duration: Long,
+    session: HerrinPlayerSession, ui: PlayerControlState, title: String, position: Long, duration: Long,
     initialFocus: FocusRequester, speedFocus: FocusRequester,
     onSeek: (Long) -> Unit, onInteraction: () -> Unit,
     onPanel: (Boolean) -> Unit, onEpisodes: (() -> Unit)?,
@@ -91,7 +91,7 @@ internal fun KernelMinimalControls(
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Color(0x66000000)),
             verticalAlignment = Alignment.CenterVertically) {
             Text(title, color = Color.White, fontSize = 22.sp, modifier = Modifier.widthIn(max = 520.dp).testTag("player-title"), maxLines = 1)
-            val format = player.videoFormat
+            val format = ui.videoFormat
             if (specsReady && format != null && format.width > 0 && format.height > 0) {
                 Text("  " + PlayerQualityLabel.fromSize(format.width, format.height), color = Color.White,
                     modifier = Modifier.testTag("player-decoded-quality"))
@@ -115,7 +115,7 @@ internal fun KernelMinimalControls(
                 if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
             }, modifier = Modifier.fillMaxWidth().height(3.dp), color = Color.White,
                 trackColor = Color(0x66555555))
-            PlayerControlBar(player.playWhenReady, player.playbackParameters.speed, session.whole,
+            PlayerControlBar(ui.playing, ui.speed, session.whole,
                 initialFocus, speedFocus, episodesFocus, audioFocus, subtitleFocus,
                 Modifier.seekButton(-1), Modifier.seekButton(1),
                 onEpisodes = { onInteraction(); onEpisodes?.invoke() ?: open("选集") },
@@ -136,8 +136,8 @@ internal fun KernelMinimalControls(
                 Column(Modifier.width(if (name == "倍速") 160.dp else panelWidth).heightIn(max = 420.dp).padding(24.dp)) {
                     Text(name, color = Color.White, style = MaterialTheme.typography.titleLarge)
                     val type = if (name == "音轨") C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT
-                    PlayerControlMenu(name, player.playbackParameters.speed,
-                        if (name in setOf("音轨", "字幕")) PlaybackTransport.options(player, type) else emptyList(),
+                    PlayerControlMenu(name, ui.speed,
+                        when(name) { "音轨" -> ui.audio; "字幕" -> ui.subtitles; else -> emptyList() },
                         visibility.targetState && closing == null,
                         onSpeed = { session.manager.setSpeed(it); close() },
                         onTrack = { group, track -> session.manager.selectTrack(type, group, track); close() })

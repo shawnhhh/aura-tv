@@ -32,6 +32,13 @@ class MinimalPlayerGeometryTest {
             val side = compose.onNodeWithTag("transport-audio").fetchSemanticsNode().boundsInRoot
             assertTrue(primary.height > left.height && left.height > side.height)
             compose.onNodeWithTag("kernel-settings").assertDoesNotExist()
+            // The buffering position stays zero: state events alone must update
+            // the chrome, with no progress tick needed to unskip this child.
+            compose.onNodeWithTag("transport-toggle").performClick()
+            compose.onNodeWithTag("transport-toggle").assertContentDescriptionEquals("播放")
+            compose.onNodeWithTag("transport-toggle").performClick()
+            compose.onNodeWithTag("transport-toggle").assertContentDescriptionEquals("暂停")
+            compose.onNodeWithTag("seek-acceleration").assertDoesNotExist()
             compose.onNodeWithTag("transport-speed").performClick()
             compose.onNodeWithText("2.0×").assertExists()
             val fast = compose.onNodeWithText("2.0×").fetchSemanticsNode().boundsInRoot
