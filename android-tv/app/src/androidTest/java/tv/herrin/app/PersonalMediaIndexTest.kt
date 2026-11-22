@@ -106,6 +106,12 @@ class PersonalMediaIndexTest {
             val saved = index.find(id)!!
             assertEquals("New selection",saved.getString("title")); assertEquals(1,saved.getInt("manual"))
             assertEquals("Actor",org.json.JSONObject(saved.getString("metadata")).getJSONArray("actors").getString(0))
+            index.correct(id,77,"movie","Confirmed animation",2024)
+            assertTrue(index.enrichCorrection(id,77,"movie",current.copy(id="tmdb-movie-77",category="动漫")))
+            val animation = index.find(id)!!
+            assertEquals("anime",animation.getString("type"))
+            assertEquals("movie",org.json.JSONObject(animation.getString("metadata")).getString("identityType"))
+            assertEquals("动漫",PersonalMediaProjection.films(listOf(animation)).single().category)
         } finally { index.removeFolder(folderId); index.close() }
     }
     @Test fun traditionalTitlesMatchConservativelyWithoutMergingDifferentYearsOrSequels() {

@@ -132,11 +132,14 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         writableDatabase.execSQL("UPDATE media SET scrape_code='TOKEN_MISSING' WHERE folder=? AND status='available' AND tmdb IS NULL AND manual=0", arrayOf(folder))
     }
     /** A late detail response must never overwrite a newer manual correction. */
-    fun enrichCorrection(id: String, tmdb: Int, type: String, film: Film): Boolean =
-        writableDatabase.compileStatement("UPDATE media SET metadata=?,poster=CASE WHEN poster IS NULL OR poster='' THEN ? ELSE poster END,synopsis=CASE WHEN synopsis IS NULL OR synopsis='' THEN ? ELSE synopsis END,scrape_code='MANUAL_COMPLETE' WHERE id=? AND tmdb=? AND type=? AND manual=1 AND scrape_code='MANUAL_MATCH'").use {
-            it.bindString(1, PersonalMediaProjection.metadata(film, type).toString()); it.bindString(2,film.artworkUrl.orEmpty())
-            it.bindString(3,film.synopsis); it.bindString(4,id); it.bindLong(5,tmdb.toLong()); it.bindString(6,type); it.executeUpdateDelete() > 0
+    fun enrichCorrection(id: String, tmdb: Int, type: String, film: Film): Boolean {
+        val category = when(film.category) { "动漫" -> "anime"; "纪录片" -> "documentary"; else -> type }
+        return writableDatabase.compileStatement("UPDATE media SET metadata=?,type=?,poster=CASE WHEN poster IS NULL OR poster='' THEN ? ELSE poster END,synopsis=CASE WHEN synopsis IS NULL OR synopsis='' THEN ? ELSE synopsis END,scrape_code='MANUAL_COMPLETE' WHERE id=? AND tmdb=? AND type=? AND manual=1 AND scrape_code='MANUAL_MATCH'").use {
+            it.bindString(1, PersonalMediaProjection.metadata(film, type).toString()); it.bindString(2,category)
+            it.bindString(3,film.artworkUrl.orEmpty()); it.bindString(4,film.synopsis); it.bindString(5,id)
+            it.bindLong(6,tmdb.toLong()); it.bindString(7,type); it.executeUpdateDelete() > 0
         }
+    }
     fun mediaAfter(after: String = ""): List<JSONObject> = rows(
         "SELECT * FROM media WHERE status='available' AND id>? ORDER BY id LIMIT 500", arrayOf(after))
     fun matched(id: String, film: Film, tmdb: Int, type: String) {

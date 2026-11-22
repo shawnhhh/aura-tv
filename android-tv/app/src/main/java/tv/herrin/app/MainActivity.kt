@@ -1243,6 +1243,19 @@ private fun Herrin(startup: StartupPresentation) {
     }
     // Reactive token: saving a key starts matching without relaunching the app.
     var metadataToken by remember { mutableStateOf(prefs.tmdbReadToken) }
+    var personalMetadataToken by remember { mutableStateOf(metadataToken) }
+    LaunchedEffect(metadataToken) {
+        if (personalMetadataToken == metadataToken) return@LaunchedEffect
+        personalMetadataToken = metadataToken
+        if (metadataToken.isBlank()) return@LaunchedEffect
+        // A newly configured token should enrich the retained index now,
+        // without rescanning WebDAV or cancelling the current directory job.
+        while (isActive) {
+            if (!PersonalLibrary.awaitCurrentScan()) return@LaunchedEffect
+            if (withContext(Dispatchers.IO) { PersonalLibrary(context).refreshMetadata() }) return@LaunchedEffect
+            yield()
+        }
+    }
     var metadataRescanEpoch by remember { zeroIntState() }
     var tmdbConnectivity by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED) }
     var tmdbProbeMessage by remember { mutableStateOf(TmdbProbeState.NOT_CONFIGURED.text) }

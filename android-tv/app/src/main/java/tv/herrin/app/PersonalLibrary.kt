@@ -158,6 +158,7 @@ internal class PersonalLibrary(context: Context) {
             if (page.isEmpty()) break
             for (row in page) {
                 currentCoroutineContext().ensureActive()
+                if (Preferences(app).tmdbReadToken != token) return
                 val type = row.getString("type"); val id = row.getInt("tmdb")
                 try {
                     detail(type, id)?.let { index.enrichCorrection(row.getString("id"), id, type, it) }
@@ -176,6 +177,7 @@ internal class PersonalLibrary(context: Context) {
             if (page.isEmpty()) { index.scrapeCursor(folder.id, ""); break }
             for(row in page) {
                 currentCoroutineContext().ensureActive()
+                if (Preferences(app).tmdbReadToken != token) return
                 val title = PersonalMediaMatching.canonical(row.getString("title"))
                 val key = title + "|" + row.optString("year") + "|" + row.getString("type") + "|" + row.optString("metadata")
                 val film = if(cache.containsKey(key)) cache[key] else {
