@@ -193,8 +193,15 @@ internal class PersonalLibrary(context: Context) {
                             listOf(title), row.optInt("year").takeIf { it > 0 })
                         val hint = runCatching { JSONObject(row.optString("metadata")) }.getOrDefault(JSONObject())
                         if (hint.optInt("nfoTmdb") > 0) detail(hint.getString("nfoType"), hint.getInt("nfoTmdb"))
-                        else PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)
-                            ?.let(discovery::identity)?.let { (type, id) -> detail(type, id) }
+                        else {
+                            val candidates = discovery.search(title, token).films
+                            val unclassified = folder.type == "auto" && row.getString("type") == "movie" &&
+                                row.optInt("season") <= 0 && row.optInt("episode") <= 0
+                            val match = if (unclassified)
+                                PersonalMediaMatching.chooseUnclassified(expected, candidates, discovery)
+                            else PersonalMediaMatching.choose(expected, candidates, discovery)
+                            match?.let(discovery::identity)?.let { (type, id) -> detail(type, id) }
+                        }
                     } catch(cancel: CancellationException) { throw cancel }
                     catch(_: Exception) { null }
                     currentCoroutineContext().ensureActive()

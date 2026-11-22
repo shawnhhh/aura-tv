@@ -22,4 +22,14 @@ internal object PersonalMediaMatching {
             HerrinFilmIdentityMatch.matches(expected.copy(names = expected.names.map(::canonical)),
                 HerrinSourceMovie("tmdb", HerrinSourceType.NAS, film.copy(title = canonical(film.title)), identity.first, titleAliases = aliases.map(::canonical)))
         }.distinctBy(Film::id).singleOrNull()
+
+    /** Auto-imported files without a season/episode hint are not evidence of a movie.
+     * Search multi includes films and shows: accept only one unambiguous exact identity
+     * across BOTH types, never silently prefer a same-title film over a series.
+     */
+    fun chooseUnclassified(expected: HerrinFilmIdentity, films: List<Film>, discovery: HerrinTmdbDiscovery): Film? =
+        listOfNotNull(
+            choose(expected.copy(mediaType = "movie"), films, discovery),
+            choose(expected.copy(mediaType = "tv"), films, discovery)
+        ).singleOrNull()
 }

@@ -13,4 +13,16 @@ class PersonalMediaMatchingTest {
         assertNull(PersonalMediaMatching.choose(expected, listOf(localized.copy(id = "tmdb-tv-157336")), discovery))
         assertNull(PersonalMediaMatching.choose(expected, listOf(localized, localized.copy(id = "tmdb-movie-42")), discovery))
     }
+
+    @Test fun automaticFilesWithoutEpisodeEvidenceMayBeTvButNeverGuessAcrossAmbiguousTypes() {
+        val discovery = HerrinTmdbDiscovery(ArtworkJsonFetcher { _, _ -> null })
+        val tv = discovery.parsePage("""{"results":[{"id":55,"name":"共同的名字","original_name":"Shared Title","first_air_date":"2020-04-10"}]}""", "tv").single()
+        val movie = discovery.parsePage("""{"results":[{"id":66,"title":"共同的名字","original_title":"Shared Title","release_date":"2020-04-10"}]}""", "movie").single()
+        val unknown = HerrinFilmIdentity(1, "movie", listOf("Shared Title"), 2020)
+        assertEquals(tv, PersonalMediaMatching.chooseUnclassified(unknown, listOf(tv), discovery))
+        assertEquals(movie, PersonalMediaMatching.chooseUnclassified(unknown, listOf(movie), discovery))
+        assertNull(PersonalMediaMatching.chooseUnclassified(unknown, listOf(movie, tv), discovery))
+        assertNull(PersonalMediaMatching.chooseUnclassified(unknown.copy(year = 2022), listOf(tv), discovery))
+        assertNull(PersonalMediaMatching.chooseUnclassified(unknown, listOf(tv, tv.copy(id = "tmdb-tv-77")), discovery))
+    }
 }
