@@ -39,6 +39,9 @@ class PlayerControlsUiTest {
         val seek = compose.onNodeWithTag("transport-rewind").fetchSemanticsNode().boundsInRoot
         val side = compose.onNodeWithTag("transport-audio").fetchSemanticsNode().boundsInRoot
         assertTrue(primary.height > seek.height && seek.height > side.height)
+        // Central control stays dominant but must not be a giant tile on television.
+        assertTrue("Playback toggle is oversized relative to secondary controls",
+            primary.height < side.height * 1.55f)
         assertEquals(root.center.x.toDouble(), primary.center.x.toDouble(), 1.0)
         compose.onNodeWithTag("transport-audio").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         assertEquals(seek, compose.onNodeWithTag("transport-rewind").fetchSemanticsNode().boundsInRoot)

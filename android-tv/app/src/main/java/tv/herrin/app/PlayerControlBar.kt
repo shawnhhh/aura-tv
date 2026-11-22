@@ -79,11 +79,11 @@ private fun PlayerControlButton(label: String, tag: String, size: androidx.compo
     modifier: Modifier = Modifier, onClick: () -> Unit, content: @Composable () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     TextButton(onClick, modifier.size(size).onFocusChanged { focused = it.isFocused }
-        .graphicsLayer { scaleX = if (focused) 1.06f else 1f; scaleY = scaleX }
+        .graphicsLayer { scaleX = if (focused) 1.04f else 1f; scaleY = scaleX }
         .semantics { contentDescription = label }.testTag(tag),
-        shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(8.dp),
+        shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(6.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-        border = BorderStroke(2.dp, if (focused) Color.White else Color.Transparent)) { content() }
+        border = BorderStroke(1.5.dp, if (focused) Color.White else Color.Transparent)) { content() }
 }
 
 /** Seven controls over the existing session. No media or source selection logic here. */
@@ -98,10 +98,11 @@ internal fun PlayerControlBar(playing: Boolean, speed: Float, whole: Boolean,
     val forwardFocus = remember { FocusRequester() }
     BoxWithConstraints(Modifier.fillMaxWidth().testTag("player-control-bar")) {
         val factor = (maxWidth.value / 680f).coerceAtMost(1f)
-        val side = 64.dp * factor
-        val seek = 80.dp * factor
-        val primary = 104.dp * factor
-        val gap = 12.dp * factor
+        // TCL real-device feedback: retain couch-readable hierarchy without oversized controls.
+        val side = 54.dp * factor
+        val seek = 64.dp * factor
+        val primary = 82.dp * factor
+        val gap = 10.dp * factor
         fun Modifier.neighbours(leftTarget: FocusRequester, rightTarget: FocusRequester) = focusProperties {
             left = leftTarget; right = rightTarget; up = speedFocus
         }
@@ -116,29 +117,29 @@ internal fun PlayerControlBar(playing: Boolean, speed: Float, whole: Boolean,
             Row(Modifier.weight(1f).testTag("player-controls-left"),
                 horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
                 PlayerControlButton("选集", "transport-episodes", side,
-                    Modifier.focusRequester(episodesFocus).neighbours(FocusRequester.Cancel, speedFocus), onEpisodes) { icon(PlayerSymbol.Episodes, 30f) }
+                    Modifier.focusRequester(episodesFocus).neighbours(FocusRequester.Cancel, speedFocus), onEpisodes) { icon(PlayerSymbol.Episodes, 25f) }
                 PlayerControlButton("倍速", "transport-speed", side,
                     Modifier.focusRequester(speedFocus).focusProperties { left = episodesFocus; right = rewindFocus; up = FocusRequester.Cancel }, onSpeed) {
-                    Text("${speed}×", color = Color.White, fontSize = (17 * factor).sp, maxLines = 1)
+                    Text("${speed}×", color = Color.White, fontSize = (15 * factor).sp, maxLines = 1)
                 }
             }
             Row(Modifier.testTag("player-controls-center"), horizontalArrangement = Arrangement.spacedBy(gap),
                 verticalAlignment = Alignment.CenterVertically) {
                 PlayerControlButton("快退10秒", "transport-rewind", seek,
-                    Modifier.focusRequester(rewindFocus).neighbours(speedFocus, initialFocus).then(rewindModifier), onRewind) { icon(PlayerSymbol.Rewind, 38f) }
+                    Modifier.focusRequester(rewindFocus).neighbours(speedFocus, initialFocus).then(rewindModifier), onRewind) { icon(PlayerSymbol.Rewind, 31f) }
                 PlayerControlButton(if (playing) "暂停" else "播放", if (whole) "kernel-toggle" else "transport-toggle", primary,
                     Modifier.focusRequester(initialFocus).neighbours(rewindFocus, forwardFocus), onToggle) {
-                    icon(if (playing) PlayerSymbol.Pause else PlayerSymbol.Play, 48f)
+                    icon(if (playing) PlayerSymbol.Pause else PlayerSymbol.Play, 38f)
                 }
                 PlayerControlButton("快进10秒", "transport-forward", seek,
-                    Modifier.focusRequester(forwardFocus).neighbours(initialFocus, audioFocus).then(forwardModifier), onForward) { icon(PlayerSymbol.Forward, 38f) }
+                    Modifier.focusRequester(forwardFocus).neighbours(initialFocus, audioFocus).then(forwardModifier), onForward) { icon(PlayerSymbol.Forward, 31f) }
             }
             Row(Modifier.weight(1f).testTag("player-controls-right"), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically) {
                 PlayerControlButton("音轨", "transport-audio", side,
-                    Modifier.focusRequester(audioFocus).neighbours(forwardFocus, subtitleFocus), onAudio) { icon(PlayerSymbol.Audio, 30f) }
+                    Modifier.focusRequester(audioFocus).neighbours(forwardFocus, subtitleFocus), onAudio) { icon(PlayerSymbol.Audio, 25f) }
                 PlayerControlButton("字幕", "transport-subtitle", side,
-                    Modifier.focusRequester(subtitleFocus).neighbours(audioFocus, FocusRequester.Cancel), onSubtitles) { icon(PlayerSymbol.Subtitles, 30f) }
+                    Modifier.focusRequester(subtitleFocus).neighbours(audioFocus, FocusRequester.Cancel), onSubtitles) { icon(PlayerSymbol.Subtitles, 25f) }
             }
         }
     }

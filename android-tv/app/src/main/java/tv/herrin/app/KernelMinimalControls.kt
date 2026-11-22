@@ -102,26 +102,23 @@ internal fun KernelMinimalControls(
             else "%02d:%02d".format(seconds / 60, seconds % 60)
     }
     Box(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 24.dp)) {
-        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Color(0x66000000)),
+        // Text floats on the image: no heavy full-width title scrim.
+        Row(Modifier.align(Alignment.TopCenter).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = Color.White, fontSize = 22.sp, modifier = Modifier.widthIn(max = 520.dp).testTag("player-title"), maxLines = 1)
+            Text(title, color = Color.White, fontSize = 20.sp, modifier = Modifier.widthIn(max = 520.dp).testTag("player-title"), maxLines = 1)
             val format = ui.videoFormat
             if (specsReady && format != null && format.width > 0 && format.height > 0) {
                 Text("  " + PlayerQualityLabel.fromSize(format.width, format.height), color = Color.White,
                     modifier = Modifier.testTag("player-decoded-quality"))
-                val range = when {
-                    format?.sampleMimeType == "video/dolby-vision" -> "Dolby Vision"
-                    format?.colorInfo?.colorTransfer == C.COLOR_TRANSFER_ST2084 ||
-                        format?.colorInfo?.colorTransfer == C.COLOR_TRANSFER_HLG -> "HDR"
-                    else -> null
-                }
-                range?.let { Text("  $it", color = Color.White) }
+                // Playback chrome only shows the title and decoded resolution;
+                // HDR/Dolby capability stays available in internal diagnostics.
             }
 
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-            .onFocusChanged { onTransportFocus(it.hasFocus) }.background(Color(0x99000000))
-            .padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            .onFocusChanged { onTransportFocus(it.hasFocus) }.background(Color(0x55000000))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(clock(position), color = Color.White, modifier = Modifier.testTag("player-position-label"))
                 Text(clock(duration), color = Color.White, modifier = Modifier.testTag("player-duration-label"))
