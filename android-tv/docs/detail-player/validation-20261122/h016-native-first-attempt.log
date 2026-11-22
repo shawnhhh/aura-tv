@@ -1,0 +1,12 @@
+SOURCE_COMMIT=acb061511856a3784fc5246a4dcc13c51cc457cd
+RUN=45017024629
+JOB=137193222419
+SCOPE=Actual original adapter attempt; bridge compilation NOT executed; dependency-blocked, not playback acceptance
+2026-11-22T11:30:18.1915993Z verify_dependencies.py: error: the following arguments are required: --directory
+2026-11-22T11:30:18.1991371Z ##[error]Process completed with exit code 2.
+2026-11-22T11:30:18.2051706Z [36;1m  --no-daemon --max-workers=1 --console=plain 2>&1 | tee bridge-adapter-evidence/original-adapter-build.log[0m
+2026-11-22T11:30:18.5878304Z Downloading https://services.gradle.org/distributions/gradle-9.7.1-bin.zip
+2026-11-22T11:31:35.4582515Z FONGMI_BUILD_INPUTS_BLOCKED: {"status": "DEPENDENCY_BLOCKED", "verified": ["hook-release.aar", "tvbus-release.aar"], "missing_external": ["lib-decoder-ffmpeg-release.aar", "lib-mpvplayer-release.aar"], "missing_upstream": [], "media3_import_count": 150, "verified_media3_modules": [], "missing_media3_api_count": 150, "errors": [], "upstream_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc"}
+2026-11-22T11:31:35.4642987Z Execution failed for task ':core:verifyKernelDependencies' (registered in build file 'core/build.gradle').
+2026-11-22T11:31:35.4650077Z BUILD FAILED in 1m 17s
+2026-11-22T11:31:35.7311602Z ##[error]Process completed with exit code 1.
