@@ -44,6 +44,14 @@ class PlayerControlsUiTest {
         assertEquals(seek, compose.onNodeWithTag("transport-rewind").fetchSemanticsNode().boundsInRoot)
         compose.onNodeWithTag("transport-toggle").performClick()
         compose.onNodeWithTag("transport-toggle").assert(SemanticsMatcher.expectValue(PlayerControlSymbol, "pause"))
+        // Actual compositor UI evidence only; this is not a decoded-media claim.
+        val inst = InstrumentationRegistry.getInstrumentation()
+        for (command in listOf("mkdir -p /data/local/tmp/herrin-test-evidence",
+            "screencap -p /data/local/tmp/herrin-test-evidence/h014-controls.png")) {
+            inst.uiAutomation.executeShellCommand(command).use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
+        }
     }
 
     @Test fun nativeDpadCanReachEveryPermanentAction() {

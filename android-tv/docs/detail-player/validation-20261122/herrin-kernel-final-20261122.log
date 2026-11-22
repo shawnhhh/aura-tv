@@ -1,0 +1,14 @@
+test_collector_rejects_duplicate_build_outputs (test_native_candidate.NativeCandidateTests.test_collector_rejects_duplicate_build_outputs) ... ok
+test_collects_from_shared_buildout_not_only_module_folder (test_native_candidate.NativeCandidateTests.test_collects_from_shared_buildout_not_only_module_folder) ... ok
+test_original_tv_missing_class_is_explicit_incompatibility (test_native_candidate.NativeCandidateTests.test_original_tv_missing_class_is_explicit_incompatibility) ... ok
+test_rejects_mislabeled_or_wrong_architecture (test_native_candidate.NativeCandidateTests.test_rejects_mislabeled_or_wrong_architecture) ... ok
+test_rejects_missing_ffmpeg (test_native_candidate.NativeCandidateTests.test_rejects_missing_ffmpeg) ... ok
+test_exact_upstream_license_is_required (test_upstream_license.UpstreamLicenseTest.test_exact_upstream_license_is_required) ... ok
+test_external_archive_cannot_borrow_the_upstream_license (test_upstream_license.UpstreamLicenseTest.test_external_archive_cannot_borrow_the_upstream_license) ... ok
+test_license_path_must_remain_confined (test_upstream_license.UpstreamLicenseTest.test_license_path_must_remain_confined) ... ok
+test_unknown_license_origin_is_rejected (test_upstream_license.UpstreamLicenseTest.test_unknown_license_origin_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.007s
+
+OK

@@ -1,5 +1,7 @@
 # SMB / WebDAV personal library — implementation and verification record
 
+> 2026-11-22 最新个人直播放送、分页刮削/纠正补资料与增量投影见 [H-001～H-014 台账](../detail-player/H-001-H-014-20261122.md)。真实阿里云盘、TCL与长时间同步待验收，原记录按历史源码保留。
+
 > 2026-11-21 用户真机反馈与新增 H-010～H-013 见 [实机续修台账](../detail-player/H-001-H-013-DEVICE-20261121.md)。个人WebDAV播放、表单/目录、刮削与自动同步正在修复；历史自动化不代表本轮已验收。
 
 > 实机反馈前的 H-001～H-009 自动化汇总见 [主台账](../detail-player/H-001-H-009-20261120.md)：应用源码 3e1da724 的 JVM 790/790、TV 289/289、Lint/Debug 通过；ec40e7b9 的 API31 冷/热/取帧通过，68a76b04 的 ABBA 四轮各6项通过，性能有升有降；APK 仅供诊断。下方此前里程碑、APK 与测试绑定其注明的历史源码。

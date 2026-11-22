@@ -1,0 +1,45 @@
+{
+  "source_sha": "3914da6aea4accdfbc05747881db4b9ecd6cea17",
+  "jvm": {
+    "tests": 817,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "samba": {
+    "name": "tv.herrin.app.SmbProtocolIntegrationTest",
+    "tests": "6",
+    "skipped": "0",
+    "failures": "0",
+    "errors": "0",
+    "timestamp": "2026-11-22T06:44:15",
+    "hostname": "e7af56bfd16a",
+    "time": "0.89"
+  },
+  "kernel_contract_check": "PASS; host contract only, not adapter/full-kernel compilation or playback",
+  "lint_debug": "PASS",
+  "assemble_debug": "PASS",
+  "androidtest_kotlin_compile": "PASS; not execution",
+  "python": {
+    "android_scripts": 46,
+    "verification_scope": 14,
+    "native_kit": 14,
+    "kernel_candidate_license": 9,
+    "failures": 0,
+    "invocation_correction": "kernel tests require PYTHONPATH=android-tv/fongmi-kernel; original missing-import-path failure retained"
+  },
+  "js_syntax": "PASS",
+  "chromium": "PASS; mock API only",
+  "local_apk_sha256": "ec57e042442529ac3e29bd86935357ff3c2fe3153bc01f022832e8d8276e7839",
+  "pending": [
+    "TV full suite",
+    "API31",
+    "ABBA",
+    "new H014 compositor capture (test-only addition after local compile)",
+    "TCL",
+    "iPhone Safari",
+    "real Ali WebDAV",
+    "provider QR and frame",
+    "complete original kernel dependencies/build"
+  ]
+}
