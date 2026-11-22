@@ -658,6 +658,8 @@ private fun Herrin(startup: StartupPresentation) {
     val spiderBridge = remember(context) { TvBoxSpiderBridge(context) }
     val siteChoiceEpoch = remember { java.util.concurrent.atomic.AtomicLong() }
     val siteActivationJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    // Join an in-flight first-node CMS load instead of issuing a duplicate request.
+    var autoCmsRequest by remember { mutableStateOf<TvBoxSite?>(null) }
     DisposableEffect(spiderBridge) { onDispose { spiderBridge.close() } }
     // Applying a source is the explicit user action that permits its Spider.
     // On subsequent launches, auto-run only the exact previously accepted JAR+MD5.
@@ -749,6 +751,7 @@ private fun Herrin(startup: StartupPresentation) {
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
         val nodeSelectionTicket = siteChoiceEpoch.incrementAndGet()
         siteActivationJob[0]?.cancel()
+        autoCmsRequest = null
         val pendingImportId = phoneSourceId
         val runSpiderAfterApply = tvBoxRunSpiderAfterApply
         val preferCache = tvBoxColdStartRequest
@@ -884,8 +887,11 @@ private fun Herrin(startup: StartupPresentation) {
                     vodImportFeedback = "加载中…"
                     tvBoxStatus = "正在试读 ${site.name}（${candidateIndex + 1}/${candidates.size}）…"
                     val cmsStart = SystemClock.elapsedRealtime()
-                    val loaded = withTimeoutOrNull(timeout) {
-                        tvBoxVodRepo.load(site, allowHttp = true)
+                    autoCmsRequest = site
+                    val loaded = try {
+                        withTimeoutOrNull(timeout) { tvBoxVodRepo.load(site, allowHttp = true) }
+                    } finally {
+                        if (autoCmsRequest == site) autoCmsRequest = null
                     }
                     cmsElapsed += SystemClock.elapsedRealtime() - cmsStart
                     when (loaded) {
@@ -3046,12 +3052,19 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     fun activateTvBoxSite(site: TvBoxSite, selected: TvBoxConfig.Single?, allowHttp: Boolean = true) {
-        siteChoiceEpoch.incrementAndGet()
-        siteActivationJob[0]?.cancel()
+        // If first-node auto selection already started this CMS request, navigate now;
+        // its original request will publish the fetched catalog without a second GET.
+        if (site.apiUrl != null && site == autoCmsRequest) {
+            providerFilms = null
+            category = "首页"; screen = "browse"
+            return
+        }
         if (site == activeCmsSite && providerFilms != null) {
             category = "首页"; screen = "browse"
             return
         }
+        siteChoiceEpoch.incrementAndGet()
+        siteActivationJob[0]?.cancel()
         when {
             site.apiUrl != null -> { siteActivationJob[0] = uiScope.launch {
                 val pendingImportId = phoneSourceId
@@ -4636,7 +4649,8 @@ private fun Herrin(startup: StartupPresentation) {
                                 Spacer(Modifier.width(12.dp))
                                 Box {
                                     val activeNode = tvBoxSingle?.sites?.firstOrNull {
-                                        it.key == activeCmsSite?.key || it.key == spiderBridge.approvedActiveSiteKey()
+                                        it.key == activeCmsSite?.key || it.key == spiderBridge.approvedActiveSiteKey() ||
+                                            (it.key == autoCmsRequest?.key && it.apiUrl == autoCmsRequest?.apiUrl)
                                     }
                                     TvButton((activeNode?.name ?: "影视节点") + " ▾",
                                         modifier = Modifier.testTag("settings-source-sites")

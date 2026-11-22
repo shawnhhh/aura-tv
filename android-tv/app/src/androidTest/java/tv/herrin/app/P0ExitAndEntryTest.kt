@@ -105,8 +105,23 @@ class P0ExitAndEntryTest {
         ready()
         okhttp3.mockwebserver.MockWebServer().use { fixture ->
             fixture.start()
-            fixture.enqueue(okhttp3.mockwebserver.MockResponse().setHeader("Content-Type", "application/json")
-                .setBody("""{"sites":[{"name":"扫码刷新样本","api":"${fixture.url("/cms")}"}]}"""))
+            // Concurrent first-node CMS loading must not consume another import's response.
+            // Route fixture responses by request path, not a shared FIFO queue.
+            fixture.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): okhttp3.mockwebserver.MockResponse =
+                    when (request.path?.substringBefore('?')) {
+                        "/box.json" -> okhttp3.mockwebserver.MockResponse()
+                            .setHeader("Content-Type", "application/json")
+                            .setBody("""{"sites":[{"name":"扫码刷新样本","api":"${fixture.url("/cms")}"}]}""")
+                        "/cms" -> okhttp3.mockwebserver.MockResponse()
+                            .setHeader("Content-Type", "application/json")
+                            .setBody("""{"list":[{"vod_id":"first","vod_name":"首个影视节点","type_name":"电影"}]}""")
+                        "/denied.json" -> okhttp3.mockwebserver.MockResponse().setResponseCode(403)
+                        "/invalid.json" -> okhttp3.mockwebserver.MockResponse().setBody("not-json")
+                        "/warehouses.json" -> okhttp3.mockwebserver.MockResponse().setBody("""{"urls":[]}""")
+                        else -> okhttp3.mockwebserver.MockResponse().setResponseCode(404)
+                    }
+            }
             compose.onNodeWithTag("settings").performClick()
             compose.onNodeWithTag("phone-config-main").performClick()
             compose.onNodeWithTag("phone-config-http").assertDoesNotExist()
@@ -143,14 +158,17 @@ class P0ExitAndEntryTest {
             }
             assertEquals(fixture.url("/box.json").toString(),
                 Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
-            assertEquals("Phone config activation must not request the CMS", 1, fixture.requestCount)
+            compose.waitUntil(15000) {
+                Preferences(InstrumentationRegistry.getInstrumentation().targetContext)
+                    .tvBoxLastWorkingSiteId.isNotBlank()
+            }
+            assertEquals("Phone import loads exactly its first node", 2, fixture.requestCount)
             val workingRoot = fixture.url("/box.json").toString()
-            for ((path, response, code) in listOf(
-                Triple("/denied.json", okhttp3.mockwebserver.MockResponse().setResponseCode(403), "SOURCE_HTTP_403"),
-                Triple("/invalid.json", okhttp3.mockwebserver.MockResponse().setBody("not-json"), "SOURCE_BODY_INVALID"),
-                Triple("/warehouses.json", okhttp3.mockwebserver.MockResponse().setBody("""{"urls":[]}"""), "SOURCE_WAREHOUSE_PARSE_FAILED")
+            for ((path, code) in listOf(
+                "/denied.json" to "SOURCE_HTTP_403",
+                "/invalid.json" to "SOURCE_BODY_INVALID",
+                "/warehouses.json" to "SOURCE_WAREHOUSE_PARSE_FAILED"
             )) {
-                fixture.enqueue(response)
                 val failed = post("/sources", org.json.JSONObject().put("url", fixture.url(path).toString()), key)
                 var result = org.json.JSONObject()
                 compose.waitUntil(15000) {
@@ -163,11 +181,12 @@ class P0ExitAndEntryTest {
             compose.onNodeWithTag("phone-config-close").performClick()
             assertEquals(workingRoot, Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
             compose.onNodeWithTag("settings-source-sites").assertExists()
-            assertEquals("/box.json", fixture.takeRequest().path)
-            assertEquals("/denied.json", fixture.takeRequest().path)
-            assertEquals("/invalid.json", fixture.takeRequest().path)
-            assertEquals("/warehouses.json", fixture.takeRequest().path)
-            assertEquals("Only config plus three explicit invalid candidates", 4, fixture.requestCount)
+            val requests = (0 until fixture.requestCount).mapNotNull {
+                fixture.takeRequest(1, java.util.concurrent.TimeUnit.SECONDS)?.path?.substringBefore('?')
+            }
+            assertEquals(listOf("/box.json", "/denied.json", "/invalid.json", "/warehouses.json"),
+                requests.filterNot { it == "/cms" })
+            assertEquals("Only one first-node CMS request", 1, requests.count { it == "/cms" })
         }
     }
 }

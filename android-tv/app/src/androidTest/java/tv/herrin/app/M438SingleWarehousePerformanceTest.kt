@@ -78,8 +78,9 @@ class M438SingleWarehousePerformanceTest {
             val started = SystemClock.elapsedRealtime()
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.awaitAppliedWarehouse(active = false)
+            compose.awaitSelectedWarehouse()
             val importMs = SystemClock.elapsedRealtime() - started
-            assertEquals("Import validates only config; all nodes wait for selection", 1, server.requestCount)
+            assertEquals("Import loads only the first CMS, not all 12 nodes", 2, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             val catalogStart = SystemClock.elapsedRealtime()
