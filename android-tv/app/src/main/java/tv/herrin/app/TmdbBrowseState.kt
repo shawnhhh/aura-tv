@@ -54,7 +54,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
         val needed = (onlyPage?.let { listOf(it) } ?: TmdbBrowsePage.entries)
             .flatMap { TmdbRailSpec.forPage(it) }.filter { (rows[it.key]?.page ?: 0) == 0 }
         if (needed.isEmpty()) return@withLock
-        val began = android.os.SystemClock.elapsedRealtime()
+        val began = System.nanoTime()
         val restored = withContext(Dispatchers.IO) {
             buildMap<String, TmdbRailState> {
                 for (spec in needed) {
@@ -70,7 +70,7 @@ internal class TmdbBrowseState(val repository: TmdbBrowseRepository, val token: 
         // A real refresh may finish while IO runs. Never roll it back to disk.
         rows.putAll(restored.filterKeys { (rows[it]?.page ?: 0) == 0 })
         HerrinPlaybackDiagnosticJournal.record("CONFIG", "BROWSE_CACHE_RESTORE", "READS=${needed.size}")
-        HerrinPlaybackDiagnosticJournal.record("CONFIG", "BROWSE_CACHE_ELAPSED", "MS=${android.os.SystemClock.elapsedRealtime() - began}")
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "BROWSE_CACHE_ELAPSED", "MS=${(System.nanoTime() - began) / 1_000_000}")
         // Missing/failed cache remains page 0 and can be retried. Cancellation
         // releases the mutex without setting an independent readiness flag.
     }

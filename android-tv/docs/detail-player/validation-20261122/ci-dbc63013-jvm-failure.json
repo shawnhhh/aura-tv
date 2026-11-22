@@ -1,0 +1,27 @@
+{
+  "source_sha": "dbc6301356a39e533bb2d04906d245e711027fc9",
+  "run_id": 44995744706,
+  "job_id": 137126363510,
+  "jvm": {
+    "tests": 817,
+    "passed": 814,
+    "failures": 3,
+    "errors": 0,
+    "skipped": 0
+  },
+  "failed_tests": [
+    "replacementRefreshWaitsForCancelledOwnerAndStillUpdatesFocusedRailCache",
+    "coldRestoreLoadsAllIndependentPagesOfflineWithoutLosingHundredsOfMetadataItems",
+    "freshCategoryCacheSurvivesReentryAndRecreationWithoutNetworkButRetryRefreshes"
+  ],
+  "exception": "java.lang.RuntimeException (CI summary)",
+  "diagnosis": "New hydrate timing called Android SystemClock from a state class also exercised by plain JVM tests; replaced with System.nanoTime without changing assertions.",
+  "reports_artifact": "https://github.com/shawnhhh/aura-tv/actions/runs/44995744706/artifacts/14743852507",
+  "unexecuted": [
+    "Lint",
+    "Debug APK",
+    "TV full suite",
+    "API31",
+    "ABBA"
+  ]
+}

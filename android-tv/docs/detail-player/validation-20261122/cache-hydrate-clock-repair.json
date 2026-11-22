@@ -1,0 +1,17 @@
+{
+  "parent_sha": "dbc6301356a39e533bb2d04906d245e711027fc9",
+  "changed_production_file": "android-tv/app/src/main/java/tv/herrin/app/TmdbBrowseState.kt",
+  "file_sha256": "587ed11da30cccd273017f8e8ffa90a1bb45b42ccbe72a1e21151e7890cdb697",
+  "jvm": {
+    "name": "tv.herrin.app.TmdbBrowseRepositoryTest",
+    "tests": "21",
+    "skipped": "0",
+    "failures": "0",
+    "errors": "0",
+    "timestamp": "2026-11-22T07:02:07",
+    "hostname": "e7af56bfd16a",
+    "time": "1.907"
+  },
+  "androidtest_compile": "PASS; not execution",
+  "scope": "Targeted failed class; full new source CI pending"
+}
