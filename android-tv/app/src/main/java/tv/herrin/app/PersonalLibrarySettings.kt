@@ -43,9 +43,12 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
     var query by remember { mutableStateOf("") }
     var matches by remember { mutableStateOf(JSONObject()) }
     var busy by remember { mutableStateOf(false) }
+    var formRevision by remember { mutableLongStateOf(0L) }
     fun execute(route: String, value: JSONObject = JSONObject(), browse: Boolean = false) {
         if(busy) return
         busy = true
+        if (browse) browser = JSONObject()
+        val requestedRevision = formRevision
         val requestedPage = browsePage
         val requestedInput = input.toString()
         // The passed request owns its path/connection; click state writes can
@@ -56,13 +59,14 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
             try {
                 val result = withContext(Dispatchers.IO) { api.handle(route, if(browse) JSONObject(value.toString()).put("offset", requestedPage * 100) else value) }
                 status = result.optString("error", result.optString("result", "已保存"))
-                toast = if (result.optBoolean("ok", true)) "成功" else "失败"
+                if (route != "/personal/save" || requestedRevision == formRevision)
+                    toast = if (result.optBoolean("ok", true)) "成功" else "失败"
                 if(result.optBoolean("ok", true)) {
-                    if(browse && requestedPath == path && requestedConnection == selected) browser = result
+                    if(browse && requestedPath == path && requestedConnection == selected && requestedPage == browsePage) browser = result
                     if(route == "/personal/search") matches = result
                     if(route == "/personal/save") {
-                        val sameForm = input.toString() == requestedInput && path == requestedPath
-                        if(input.optString("password") == value.optString("password")) {
+                        val sameForm = requestedRevision == formRevision && input.toString() == requestedInput && path == requestedPath
+                        if(sameForm && input.optString("password") == value.optString("password")) {
                             input = JSONObject(input.toString()).also { it.remove("password") }
                         }
                         if(sameForm) {
@@ -71,12 +75,14 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
                         }
                     }
                     data = withContext(Dispatchers.IO) { api.handle("/personal", JSONObject().put("offset", page * 100).put("category", category)) }
-                    onChanged()
+                    if (route in setOf("/personal/save", "/personal/delete", "/personal/toggle",
+                            "/personal/folder", "/personal/folder/delete")) onChanged()
                 }
             } catch(cancel: CancellationException) { throw cancel }
             catch(error: Exception) {
                 android.util.Log.w("HerrinPersonal", "Personal operation failed: " + error.javaClass.simpleName)
-                status = "操作失败"; toast = "失败"
+                status = "操作失败"
+                if (route != "/personal/save" || requestedRevision == formRevision) toast = "失败"
             }
             finally { busy = false }
         }
@@ -103,7 +109,7 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
             if((c.getString("protocol") == "smb") != (tab == "SMB")) continue
             Text(c.getString("name") + (if(c.optBoolean("enabled")) " · 启用" else " · 停用"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton("编辑") { input = JSONObject(c.toString()); selected = c.getString("id"); path = c.optString("path"); browsePage = 0; browser = JSONObject() }
+                TvButton("编辑") { formRevision++; input = JSONObject(c.toString()); selected = c.getString("id"); path = c.optString("path"); browsePage = 0; browser = JSONObject() }
                 TvButton(if(busy) "读取中…" else "浏览目录") { if(!busy) {
                     selected = c.getString("id"); path = c.optString("path"); browser = JSONObject(); browsePage = 0
                     execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true)
@@ -112,13 +118,14 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
                 TvButton("删除") { confirm = "/personal/delete" to c.getString("id") }
             }
         }
-        TvButton("新建连接") { input = JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else ""); selected = ""; path = ""; browser = JSONObject(); browsePage = 0 }
+        TvButton("新建连接") { formRevision++; input = JSONObject().put("protocol", if(tab == "SMB") "smb" else "https").put("port", if(tab == "SMB") "445" else ""); selected = ""; path = ""; browser = JSONObject(); browsePage = 0 }
         val fields = if (tab == "SMB")
             listOf("name" to "连接名称", "host" to "服务器地址", "port" to "端口", "path" to "路径",
                 "username" to "用户名", "password" to "密码")
         else listOf("name" to "连接名称", "address" to "服务器地址", "port" to "端口", "path" to "路径", "username" to "用户名", "password" to "密码")
         fields.forEach { (key, label) ->
             OutlinedTextField(if(key == "path") path else input.optString(key), { value ->
+                formRevision++
                 if(key == "path") path = value.take(2048)
                 else input = JSONObject(input.toString()).put(key, value.take(if(key in setOf("password", "address")) 2048 else 256))
             }, modifier = Modifier.testTag("personal-field-$key").onPreviewKeyEvent { event ->
@@ -132,22 +139,21 @@ internal fun PersonalLibrarySettings(tab: String, nameFocus: FocusRequester? = n
                     if(key == "name" && nameFocus != null) Modifier.focusRequester(nameFocus) else Modifier), label = { Text(label) },
                 singleLine = true, visualTransformation = if(key == "password") PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None)
         }
-        if(tab == "SMB") TvButton("SMB3 加密：${input.optBoolean("encryption")}") { input = JSONObject(input.toString()).put("encryption", !input.optBoolean("encryption")) }
+        if(tab == "SMB") TvButton("SMB3 加密：${input.optBoolean("encryption")}") { formRevision++; input = JSONObject(input.toString()).put("encryption", !input.optBoolean("encryption")) }
         TvButton(if(busy) "处理中…" else "添加") { if(!busy) execute("/personal/save", JSONObject(input.toString()).put("path", path)) }
         if(selected.isNotEmpty()) {
             TvButton("测试 / 浏览当前目录") { execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
-            TvButton("上级目录") { browsePage = 0; path = path.substringBeforeLast('/', ""); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+            TvButton("上级目录") { if(!busy) { formRevision++; browsePage = 0; path = path.substringBeforeLast('/', ""); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) } }
             val files = browser.optJSONArray("files")
             if (browser.optBoolean("ok") && files?.length() == 0) Text("此目录下暂无文件夹")
             if(files != null) for(i in 0 until minOf(100, files.length())) {
                 val f = files.getJSONObject(i)
-                TvButton(f.getString("name")) { browsePage = 0; path = f.getString("path"); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
+                TvButton(f.getString("name")) { if(!busy) { formRevision++; browsePage = 0; path = f.getString("path"); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) } }
             }
             Row {
-                TvButton("目录上一页") { browsePage = (browsePage - 1).coerceAtLeast(0); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) }
-                TvButton("目录下一页") { if((browsePage + 1) * 100 < browser.optInt("total")) { browsePage++; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) } }
+                TvButton("目录上一页") { if(!busy) { browsePage = (browsePage - 1).coerceAtLeast(0); execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) } }
+                TvButton("目录下一页") { if(!busy && (browsePage + 1) * 100 < browser.optInt("total")) { browsePage++; execute("/personal/browse", JSONObject().put("id", selected).put("path", path), true) } }
             }
-            TvButton("导入当前媒体目录") { execute("/personal/folder", JSONObject().put("connection", selected).put("path", path).put("type", "auto")) }
         }
         Text("文件夹管理")
         val folders = data.optJSONArray("folders")
