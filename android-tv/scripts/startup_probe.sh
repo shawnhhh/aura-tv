@@ -28,7 +28,9 @@ adb shell atrace --list_categories > "$evidence/atrace-categories.txt"
 tracing=0
 if adb shell atrace --async_start -b 16384 gfx view wm am sched freq dalvik binder_driver > "$evidence/atrace-start.txt" 2>&1; then tracing=1; fi
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/cold-launch.txt"
-sleep 5
+# Observe the real curtain-completion event, then take one fresh UI snapshot.
+# Five seconds alone can still be the reveal on a stalled first-data AVD.
+python3 android-tv/scripts/await_startup_home.py "$evidence/cold-before-snapshot.txt"
 python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-cold "$evidence/home.xml"
 adb shell dumpsys window > "$evidence/cold-window.txt"
 # Observe lifecycle completion with the same UI snapshot. The old log capture
@@ -109,6 +111,7 @@ test -s "$evidence/visual-only-startup.mp4"
 # A missing recording/decoder is a failed evidence check, never a silent pass.
 mkdir -p "$evidence/visual-frames"
 ffmpeg -v error -i "$evidence/visual-only-startup.mp4" -vf fps=4 "$evidence/visual-frames/frame-%03d.png"
+python3 android-tv/scripts/await_startup_home.py "$evidence/visual-before-snapshot.txt"
 python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-visual "$evidence/visual-home.xml"
 adb shell dumpsys window > "$evidence/visual-window.txt"
 adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/visual-diagnostics.txt"
@@ -144,7 +147,7 @@ PREFS
     fi
     adb logcat -c
     adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/$scenario-launch.txt"
-    sleep 5
+    python3 android-tv/scripts/await_startup_home.py "$evidence/$scenario-before-snapshot.txt"
     python3 android-tv/scripts/capture_startup_ui.py "/sdcard/herrin-$scenario" "$evidence/$scenario-home.xml"
     adb shell dumpsys window > "$evidence/$scenario-window.txt"
     adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I AndroidRuntime:E > "$evidence/$scenario-diagnostics.txt"

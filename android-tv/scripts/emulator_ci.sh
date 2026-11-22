@@ -18,6 +18,8 @@ collect() {
     adb pull /sdcard/herrin-final.xml build/emulator-evidence/final.xml >/dev/null 2>&1 || true
     adb logcat -d -s HerrinRemote:D > build/emulator-evidence/remote-trace.log 2>&1 || true
     cat build/emulator-evidence/remote-trace.log
+    adb logcat -d -s HerrinRecentFailure:E > build/emulator-evidence/recent-failure.log 2>&1 || true
+    cat build/emulator-evidence/recent-failure.log
     # Public fixture semantics only. Preserve the original failing assertion and
     # expose its exact tree even when artifact downloads are unavailable.
     adb logcat -d -s HerrinCachedHeroFailure:D > build/emulator-evidence/cached-hero-failure.log 2>&1 || true
@@ -37,6 +39,30 @@ bash scripts/emulator_smoke.sh 2>&1 | tee build/emulator-evidence/adb-smoke.log
 # Regression preflight for the failures discovered in run 42358864061. This
 # supplements the unfiltered suite below; it never makes failed cases optional.
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+# Explicitly scoped failure diagnosis. The workflow and report label this as
+# partial verification; the existing 291/292 full-suite failure remains recorded.
+if [[ "${HERRIN_TV_MODE:-full}" == recent-diagnostic ]]; then
+    for sample in 1 2 3; do
+        adb shell am instrument -w -r -e class 'tv.herrin.app.P0RecentPlaybackReturnTest' tv.herrin.app.test/androidx.test.runner.AndroidJUnitRunner | tee "build/emulator-evidence/recent-diagnostic-$sample.txt"
+        python3 - "$sample" <<'PYRECENT'
+from pathlib import Path
+import sys
+text=Path(f'build/emulator-evidence/recent-diagnostic-{sys.argv[1]}.txt').read_text()
+assert 'OK (4 tests)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
+PYRECENT
+    done
+    python3 - <<'PYRECENTREPORT'
+import json,subprocess
+from pathlib import Path
+result={'source_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+        'mode':'recent-diagnostic','samples':3,'tests_per_sample':4,'full_suite_run':False,
+        'physical_TCL':False,'note':'Diagnostic only. Does not replace the recorded full-suite failure.'}
+Path('build/emulator-evidence/targeted-summary.json').write_text(json.dumps(result,indent=2))
+print('HERRIN_RECENT_DIAGNOSTIC='+json.dumps(result))
+PYRECENTREPORT
+    exit 0
+fi
 # Explicit repair preflight: observe this real production decoder case before
 # the complete suite. No original test or full-suite gate is filtered out.
 if git log -1 --format=%s | grep -Fq '[baseline-first]'; then

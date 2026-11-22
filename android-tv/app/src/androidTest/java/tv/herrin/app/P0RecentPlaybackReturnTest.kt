@@ -11,11 +11,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.ExternalResource
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
 
 /** Public recent metadata outside the home catalog -> freshly authorized NAS lookup -> real player -> same card. */
 class P0RecentPlaybackReturnTest {
     private val server=MockWebServer()
     private val discoveryFails=java.util.concurrent.atomic.AtomicBoolean(false)
+    private val observedRequests=java.util.concurrent.ConcurrentLinkedQueue<String>()
     private val discoveries=java.util.concurrent.atomic.AtomicInteger()
     @get:Rule(order=0) val fixture=object:ExternalResource() {
         override fun before() {
@@ -27,7 +30,10 @@ class P0RecentPlaybackReturnTest {
             java.io.File(c.filesDir,"tmdb-home-pages").deleteRecursively(); clearTmdbBrowseTestCache(c)
             val video=inst.context.assets.open("playback-diagnostics/baseline-72.mp4").use { it.readBytes() }
             server.dispatcher=object:Dispatcher() {
-                override fun dispatch(request:RecordedRequest):MockResponse = when {
+                override fun dispatch(request:RecordedRequest):MockResponse {
+                    // Original loopback fixture only; never record headers, secrets or real providers.
+                    observedRequests.add("${request.method} ${request.path} RANGE=${request.getHeader("Range")}")
+                    return when {
                     request.method=="PROPFIND" && discoveryFails.get() -> { discoveries.incrementAndGet(); MockResponse().setResponseCode(503) }
                     request.method=="PROPFIND" -> { discoveries.incrementAndGet(); MockResponse().setResponseCode(207)
                         .setHeader("Content-Type","application/xml").setBody("""<d:multistatus xmlns:d="DAV:"><d:response><d:href>/dav/Interstellar.2014.1080p.mp4</d:href><d:propstat><d:prop><d:resourcetype/></d:prop></d:propstat></d:response></d:multistatus>""") }
@@ -37,6 +43,7 @@ class P0RecentPlaybackReturnTest {
                     request.method=="GET" -> MockResponse().setHeader("Content-Type","video/mp4")
                         .setHeader("Accept-Ranges","bytes").setBody(Buffer().write(video))
                     else -> MockResponse().setResponseCode(404)
+                    }
                 }
             }
             server.start()
@@ -57,6 +64,19 @@ class P0RecentPlaybackReturnTest {
         }
     }
     @get:Rule(order=1) val compose=createAndroidComposeRule<MainActivity>()
+    @get:Rule(order=2) val failureEvidence=object:TestWatcher() {
+        override fun failed(error:Throwable?,description:Description) {
+            // The watcher supplements the original failure; it never replaces it.
+            val state=runCatching { compose.onRoot(useUnmergedTree=true).printToString(maxDepth=12) }
+                .getOrElse { "SEMANTICS_UNAVAILABLE" }
+            val message="RECENT_PLAYBACK_FAILURE case=${description.methodName}\n" +
+                "REQUESTS=${observedRequests.joinToString(" | ")}\n" +
+                HerrinPlaybackDiagnosticJournal.export() + "\n" + state
+            message.chunked(2500).forEachIndexed { index,chunk ->
+                android.util.Log.e("HerrinRecentFailure", "CHUNK=$index $chunk")
+            }
+        }
+    }
 
     @Test fun recentOutsideTmdbHomeDirectlyPlaysFreshAuthorizedSourceAndReturnsToCard() {
         val card="card-tmdb-movie-157336"

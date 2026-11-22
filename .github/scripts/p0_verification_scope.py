@@ -19,6 +19,8 @@ PROBES = {
     "android-tv/scripts/test_check_startup_probe.py",
     "android-tv/scripts/capture_startup_ui.py",
     "android-tv/scripts/test_capture_startup_ui.py",
+    "android-tv/scripts/await_startup_home.py",
+    "android-tv/scripts/test_await_startup_home.py",
 }
 ALLOWED = PROBES | {
     ".github/scripts/p0_verification_scope.py",
@@ -31,7 +33,7 @@ ALLOWED = PROBES | {
 }
 ABBA_ONLY = ALLOWED - PROBES - {".github/workflows/android-startup.yml"}
 TV_CONTROL = {".github/scripts/p0_verification_scope.py", ".github/scripts/test_p0_verification_scope.py",
-              ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh"}
+              ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh", ".github/workflows/android-emulator.yml"}
 
 
 # This exact method is not invoked by the ABBA home/remote test selection.
@@ -43,6 +45,20 @@ ABBA_REUSE_ALLOWED = PROBES | TV_CONTROL | {
 
 def abba_reusable(paths):
     return bool(paths) and all(p in ABBA_REUSE_ALLOWED or p.startswith("android-tv/docs/") for p in paths)
+
+
+DIAGNOSTIC_BASE_SHA = "7eff2495c75aa76daf4b59a3a520c146090f95d6"
+RECENT_TEST = "android-tv/app/src/androidTest/java/tv/herrin/app/P0RecentPlaybackReturnTest.kt"
+DIAGNOSTIC_ALLOWED = TV_CONTROL | PROBES | {RECENT_TEST, ".github/workflows/android-emulator.yml"}
+
+
+def tv_mode(subject, paths):
+    # This is explicitly a failing-case diagnostic, never full-suite acceptance.
+    # Any app/build/other-test change restores normal verification; API31 still runs.
+    if "[recent-playback-diagnostic]" in subject and RECENT_TEST in paths and all(
+            p in DIAGNOSTIC_ALLOWED or p.startswith("android-tv/docs/") for p in paths):
+        return "recent-diagnostic"
+    return "full"
 
 
 def tv_only(paths):
@@ -70,6 +86,8 @@ def main():
     reuse_debug = False
     reuse_abba = False
     abba_paths = []
+    mode = "full"
+    diagnostic_paths = []
     if os.environ.get("GITHUB_EVENT_NAME") == "push" and os.environ.get("GITHUB_REF_NAME") == BRANCH:
         try:
             # Compare cumulatively to the verified SHA, not merely to the last
@@ -84,11 +102,18 @@ def main():
                 reuse_debug = tv_only(tv_paths)
             abba_paths = subprocess.check_output(["git", "diff", "--name-only", "-z", VALIDATED_ABBA_SHA, "HEAD"]).decode().rstrip("\0").split("\0")
             reuse_abba = abba_reusable(abba_paths)
+            if reuse_debug:
+                diagnostic_paths = subprocess.check_output(["git", "diff", "--name-only", "-z", DIAGNOSTIC_BASE_SHA, "HEAD"]).decode().rstrip("\0").split("\0")
+                subject = subprocess.check_output(["git", "log", "-1", "--format=%s"]).decode()
+                mode = tv_mode(subject, diagnostic_paths)
         except (subprocess.CalledProcessError, UnicodeError):
             reuse = False
             reuse_abba = False
     result = {"startup_only": reuse,
               "tv_only": reuse_debug,
+              "tv_mode": mode,
+              "diagnostic_base_sha": DIAGNOSTIC_BASE_SHA if mode != "full" else None,
+              "changed_paths_since_diagnostic_base": diagnostic_paths,
               "reuse_abba": reuse_abba,
               "reused_abba_sha": VALIDATED_ABBA_SHA if reuse_abba else None,
               "reused_abba_run": VALIDATED_ABBA_RUN if reuse_abba else None,
@@ -112,6 +137,7 @@ def main():
         output.write("startup_only=" + str(reuse).lower() + "\n")
         output.write("abba_only=" + str(reuse_startup).lower() + "\n")
         output.write("tv_only=" + str(reuse_debug).lower() + "\n")
+        output.write("tv_mode=" + mode + "\n")
         output.write("reuse_abba=" + str(reuse_abba).lower() + "\n")
 
 

@@ -7,6 +7,11 @@ on:
     paths: ['android-tv/**', '.github/workflows/android-emulator.yml']
   workflow_dispatch:
   workflow_call:
+    inputs:
+      tv_mode:
+        type: string
+        default: full
+        required: false
 permissions:
   contents: read
 concurrency:
@@ -14,6 +19,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   emulator:
+    name: ${{ inputs.tv_mode == 'recent-diagnostic' && 'Recent playback diagnostic (not full suite)' || 'TV full suite' }}
+    env:
+      HERRIN_TV_MODE: ${{ inputs.tv_mode || 'full' }}
     # P0 pushes use the serial caller, including when its PR becomes mergeable.
     if: github.event_name != 'pull_request' || (github.head_ref != 'codex/herrin-p0-live-playback-20261110' && github.head_ref != 'codex/m471-tmdb-personal-to-tvbox-playback-20261102' && github.head_ref != 'codex/herrin-responsive-config-20261106' && github.head_ref != 'codex/herrin-startup-source-health-20261107')
     runs-on: ubuntu-latest

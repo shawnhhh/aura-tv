@@ -1,8 +1,23 @@
 import unittest
-from p0_verification_scope import PROBES, startup_only, abba_only, tv_only, abba_reusable
+from p0_verification_scope import PROBES, startup_only, abba_only, tv_only, abba_reusable, tv_mode, RECENT_TEST
 
 
 class VerificationScopeTest(unittest.TestCase):
+    def test_explicit_recent_diagnostic_is_not_full_verification(self):
+        paths = [RECENT_TEST, ".github/workflows/android-emulator.yml", "android-tv/scripts/emulator_ci.sh"]
+        self.assertEqual("recent-diagnostic", tv_mode("test: [recent-playback-diagnostic]", paths))
+        self.assertEqual("recent-diagnostic", tv_mode("[recent-playback-diagnostic]", paths + list(PROBES)))
+        self.assertEqual("full", tv_mode("ordinary change", paths))
+        self.assertEqual("full", tv_mode("[recent-playback-diagnostic]", []))
+
+    def test_app_other_tests_and_performance_changes_cannot_enter_diagnostic_mode(self):
+        for path in ("android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt",
+                     "android-tv/app/build.gradle.kts",
+                     "android-tv/app/src/androidTest/java/tv/herrin/app/HerrinUiSmokeTest.kt",
+                     ".github/scripts/tmdb_performance_ab.py"):
+            with self.subTest(path=path):
+                self.assertEqual("full", tv_mode("[recent-playback-diagnostic]", [RECENT_TEST, path]))
+
     def test_proven_abba_can_be_reused_after_only_the_warehouse_test_and_startup_probe_change(self):
         self.assertTrue(abba_reusable(list(PROBES) + [
             "android-tv/app/src/androidTest/java/tv/herrin/app/TvBoxWarehouseIntegrationTest.kt",
