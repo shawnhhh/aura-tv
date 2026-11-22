@@ -47,6 +47,11 @@ class M453BufferingRemoteFocusInstrumentedTest {
                 "player-quality-label", "transport-viewport-mode", "transport-more", "player-verification-toggle"))
                 compose.onNodeWithTag(tag).assertDoesNotExist()
             compose.onNodeWithTag("kernel-settings").assertDoesNotExist()
+            compose.onNodeWithTag("transport-toggle").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP)
+            compose.onNodeWithTag("player-root-focus").assertIsFocused()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+            compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("transport-toggle").assertIsFocused() }.isSuccess }
             compose.onNodeWithTag("transport-speed")
                 .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)

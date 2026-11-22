@@ -42,7 +42,7 @@ internal fun KernelMinimalControls(
     session: HerrinPlayerSession, ui: PlayerControlState, title: String, position: Long, duration: Long,
     initialFocus: FocusRequester, speedFocus: FocusRequester,
     onSeek: (Long) -> Unit, onInteraction: () -> Unit,
-    onPanel: (Boolean) -> Unit, onEpisodes: (() -> Unit)?,
+    onPanel: (Boolean) -> Unit, onTransportFocus: (Boolean) -> Unit, onEpisodes: (() -> Unit)?,
     onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit, specsReady: Boolean
 ) {
     val player = session.player
@@ -105,7 +105,8 @@ internal fun KernelMinimalControls(
             }
 
         }
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0x99000000))
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .onFocusChanged { onTransportFocus(it.hasFocus) }.background(Color(0x99000000))
             .padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(clock(position), color = Color.White, modifier = Modifier.testTag("player-position-label"))
