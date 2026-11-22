@@ -103,6 +103,7 @@ internal class PersonalLibraryApi(context: Context) {
             "/personal/match" -> {
                 library.index.correct(id, input.getInt("tmdb"), input.getString("type"), input.getString("title"), input.optString("year").toIntOrNull(), input.optString("poster"), input.optString("synopsis"))
                 PersonalLibrary.metadataChanged()
+                library.refreshMetadata() // Persisted correction succeeds independently of online details.
             }
             "/personal" -> Unit
             else -> error("UNKNOWN_PERSONAL_OPERATION")

@@ -582,6 +582,8 @@ private fun Herrin(startup: StartupPresentation) {
     val tmdbState=remember { TmdbScreenState() }
     val personalIndexRevision by PersonalLibrary.revisions.collectAsState()
     PersonalLibraryStartupImport()
+    val personalBrowseFilms = rememberPersonalBrowseFilms(personalIndexRevision, personalSourceConfigEpoch)
+
     SourceSearchLifecycle(tmdbState)
     var providerFilms by remember { mutableStateOf<List<Film>?>(null) }
     var providerStatus by remember { mutableStateOf("当前使用离线演示目录") }
@@ -3336,19 +3338,9 @@ private fun Herrin(startup: StartupPresentation) {
                 LaunchedEffect(isSearch,category,films,catalogScope,screen){
                     myRecent=if(!isSearch &&category=="我的")withContext(Dispatchers.Default){watchHistory.recent(catalogScope,films)} else emptyList()
                 }
-                var myPersonal by remember { mutableStateOf<List<Film>>(emptyList()) }
+                val myPersonal = personalBrowseFilms
                 var personalMatch by remember { mutableStateOf<Film?>(null) }
                 personalMatch?.let { target -> PersonalMatchDialog(target) { personalMatch = null } }
-                LaunchedEffect(isSearch, screen, personalIndexRevision) {
-                    myPersonal = if (!isSearch && screen == "browse") withContext(Dispatchers.IO) {
-                        val library = PersonalLibrary(context)
-                        val enabled = library.connections.list().filter { it.enabled }.map { it.id }.toSet()
-                        val folders = library.index.folders().filter { it.enabled && it.connection in enabled }.map { it.id }.toSet()
-                        val rows = library.index.media(limit = 500)
-                        PersonalMediaProjection.films((0 until rows.length()).map { rows.getJSONObject(it) }
-                            .filter { it.optString("folder") in folders })
-                    } else emptyList()
-                }
                 // Focus color animations can recompose every frame: searching,
                 // regrouping and reading playback history must NOT run per frame.
                 val filtered = remember(showCatalog, films, category, isSearch,

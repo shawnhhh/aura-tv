@@ -69,4 +69,53 @@ class PersonalMediaIndexTest {
             }
         } finally { index.removeFolder(id); index.close() }
     }
+    @Test fun keysetPagesIncludeFilesAfterFiveHundredAndLateDetailsCannotUndoCorrection() {
+        val index = PersonalMediaIndex(InstrumentationRegistry.getInstrumentation().targetContext)
+        val connection = UUID.randomUUID().toString()
+        val folderId = index.folder(connection, "Large", "auto")
+        try {
+            val folder = index.folders(connection).single()
+            repeat(507) { index.record(folder, PersonalRemoteFile("Large/Example.$it.mkv",false,100,"v1"),1) }
+            val ids = mutableSetOf<String>(); var after = ""
+            while (true) {
+                val page = index.unmatched(folderId, after)
+                if (page.isEmpty()) break
+                assertTrue(page.size <= 200)
+                page.forEach { assertTrue(ids.add(it.getString("id"))) }
+                after = page.last().getString("id")
+                index.scrapeCursor(folderId, after)
+                assertEquals(after,index.scrapeCursor(folderId))
+            }
+            assertEquals(507,ids.size)
+            // This test shares the real database with other suites; filter this folder.
+            var allAfter = ""; val visible = mutableSetOf<String>()
+            do {
+                val page = index.mediaAfter(allAfter)
+                page.filter { it.getString("folder") == folderId }.forEach { visible.add(it.getString("id")) }
+                allAfter = page.lastOrNull()?.getString("id").orEmpty()
+            } while (allAfter.isNotEmpty())
+            assertEquals(ids,visible)
+            val id = ids.first()
+            index.correct(id,42,"movie","My title",2024)
+            index.correct(id,99,"tv","New selection",2025)
+            val stale = Film("tmdb-movie-42","Old title","","电影","2024","Old synopsis",R.drawable.photofilm_orbit)
+            assertFalse(index.enrichCorrection(id,42,"movie",stale))
+            assertEquals("New selection",index.find(id)!!.getString("title"))
+            val current = stale.copy(id="tmdb-tv-99",actors=listOf("Actor"),backdropUrl="https://image.tmdb.org/t/p/original/example.jpg")
+            assertTrue(index.enrichCorrection(id,99,"tv",current))
+            val saved = index.find(id)!!
+            assertEquals("New selection",saved.getString("title")); assertEquals(1,saved.getInt("manual"))
+            assertEquals("Actor",org.json.JSONObject(saved.getString("metadata")).getJSONArray("actors").getString(0))
+        } finally { index.removeFolder(folderId); index.close() }
+    }
+    @Test fun traditionalTitlesMatchConservativelyWithoutMergingDifferentYearsOrSequels() {
+        if(android.os.Build.VERSION.SDK_INT < 29) return
+        assertEquals("进击的巨人 II",PersonalMediaMatching.canonical("進擊的巨人 Ⅱ"))
+        val discovery = HerrinTmdbDiscovery(ArtworkJsonFetcher { _, _ -> null })
+        val film = Film("tmdb-tv-42","进击的巨人 II","","动漫","2024","",R.drawable.photofilm_orbit)
+        val identity = HerrinFilmIdentity(1,"tv",listOf("進擊的巨人 Ⅱ"),2024)
+        assertEquals(film,PersonalMediaMatching.choose(identity,listOf(film),discovery))
+        assertNull(PersonalMediaMatching.choose(identity,listOf(film.copy(year="2023")),discovery))
+        assertNull(PersonalMediaMatching.choose(identity.copy(names=listOf("進擊的巨人 III")),listOf(film),discovery))
+    }
 }

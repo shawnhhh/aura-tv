@@ -125,35 +125,81 @@ internal class PersonalLibrary(context: Context) {
             } finally { publishIndexChange() }
         }
     }
+    fun refreshMetadata(): Boolean = synchronized(scanLock) {
+        if (active?.isCompleted == false) return@synchronized false
+        active = scope.launch {
+            try {
+                val enabled = connections.list().filter { it.enabled }.map { it.id }.toSet()
+                for (folder in index.folders().filter { it.enabled && it.connection in enabled }) {
+                    ensureActive()
+                    scrape(folder)
+                }
+            } catch (cancel: CancellationException) { throw cancel }
+            catch (_: Exception) { HerrinPlaybackDiagnosticJournal.record("PERSONAL", "METADATA_REFRESH_FAILED") }
+            finally { publishIndexChange() }
+        }
+        true
+    }
     private suspend fun scrape(folder: PersonalMediaIndex.Folder) {
-        if(folder.type == "video") return // Explicit "other videos" remain raw unless the user matches them.
         val token = Preferences(app).tmdbReadToken
         if(token.isBlank()) {
-            index.unmatched(folder.id).forEach { index.scrapeStatus(it.getString("id"), "TOKEN_MISSING") }
+            index.missingToken(folder.id)
             HerrinPlaybackDiagnosticJournal.record("PERSONAL", "SCRAPE_TOKEN_MISSING")
             return
         }
         val discovery = HerrinTmdbDiscovery(cacheDir = app.cacheDir)
-        // At most 200 unmatched files per explicit refresh, serial requests; failures retain raw files.
         val cache = LinkedHashMap<String, Film?>()
-        for(row in index.unmatched(folder.id)) {
-            currentCoroutineContext().ensureActive()
-            val title = row.getString("title")
-            val key = title + "|" + row.optString("year") + "|" + row.getString("type") + "|" + row.optString("metadata")
-            val film = if(cache.containsKey(key)) cache[key] else {
-                val result = try {
-                    val expected = HerrinFilmIdentity(1, if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie",
-                        listOf(title), row.optInt("year").takeIf { it > 0 })
-                    val hint = runCatching { JSONObject(row.optString("metadata")) }.getOrDefault(JSONObject())
-                    if (hint.optInt("nfoTmdb") > 0) discovery.identified(hint.getString("nfoType"), hint.getInt("nfoTmdb"), token)
-                    else PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)?.let { discovery.detail(it, token) }
-                } catch(cancel: CancellationException) { throw cancel }
-                catch(_: Exception) { null }
-                cache[key] = result
-                result
+        suspend fun detail(type: String, id: Int): Film? = discovery.identified(type, id, token)
+        // Explicit corrections are authoritative, including "other videos". Complete
+        // their official metadata without replacing the chosen identity or title.
+        var correctedAfter = ""
+        while (true) {
+            val page = index.pendingCorrections(folder.id, correctedAfter)
+            if (page.isEmpty()) break
+            for (row in page) {
+                currentCoroutineContext().ensureActive()
+                val type = row.getString("type"); val id = row.getInt("tmdb")
+                try {
+                    detail(type, id)?.let { index.enrichCorrection(row.getString("id"), id, type, it) }
+                } catch (cancel: CancellationException) { throw cancel }
+                catch (_: Exception) { HerrinPlaybackDiagnosticJournal.record("PERSONAL", "MANUAL_DETAIL_PENDING") }
+                delay(250) // Serial, cancellable pacing; never occupy the playback thread.
             }
-            if(film != null) discovery.identity(film)?.let { (type, id) -> index.matched(row.getString("id"), film, id, type) }
-            else index.scrapeStatus(row.getString("id"), "NO_UNAMBIGUOUS_MATCH_OR_NETWORK_FAILURE")
+            correctedAfter = page.last().getString("id")
+        }
+        if(folder.type == "video") return
+        // Keyset pages, not a repeated first-200 LIMIT. Persist the completed row
+        // so user cancellation resumes fairly; reset only after the whole pass.
+        var after = index.scrapeCursor(folder.id)
+        while (true) {
+            val page = index.unmatched(folder.id, after)
+            if (page.isEmpty()) { index.scrapeCursor(folder.id, ""); break }
+            for(row in page) {
+                currentCoroutineContext().ensureActive()
+                val title = PersonalMediaMatching.canonical(row.getString("title"))
+                val key = title + "|" + row.optString("year") + "|" + row.getString("type") + "|" + row.optString("metadata")
+                val film = if(cache.containsKey(key)) cache[key] else {
+                    val result = try {
+                        val expected = HerrinFilmIdentity(1, if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie",
+                            listOf(title), row.optInt("year").takeIf { it > 0 })
+                        val hint = runCatching { JSONObject(row.optString("metadata")) }.getOrDefault(JSONObject())
+                        if (hint.optInt("nfoTmdb") > 0) detail(hint.getString("nfoType"), hint.getInt("nfoTmdb"))
+                        else PersonalMediaMatching.choose(expected, discovery.search(title, token).films, discovery)
+                            ?.let(discovery::identity)?.let { (type, id) -> detail(type, id) }
+                    } catch(cancel: CancellationException) { throw cancel }
+                    catch(_: Exception) { null }
+                    currentCoroutineContext().ensureActive()
+                    cache[key] = result
+                    if (cache.size > 128) cache.remove(cache.keys.first())
+                    delay(250)
+                    result
+                }
+                if(film != null) discovery.identity(film)?.let { (type, id) -> index.matched(row.getString("id"), film, id, type) }
+                else index.scrapeStatus(row.getString("id"), "NO_UNAMBIGUOUS_MATCH_OR_NETWORK_FAILURE")
+                after = row.getString("id")
+                index.scrapeCursor(folder.id, after)
+            }
+            publishIndexChange() // Coalesce publication to a completed page.
         }
     }
     fun cancelAndWait() { runBlocking { active?.cancelAndJoin() } }

@@ -65,4 +65,14 @@ class PersonalStoragePolicyTest {
         assertEquals(2024, name.year); assertEquals(2, name.season); assertEquals(13, name.episode)
         assertTrue(PersonalStoragePolicy.extensions.containsAll(listOf("mkv", "mp4", "ts", "m2ts")))
     }
+    @Test fun bracketedAnimeAndChineseSeasonsKeepWorkIdentityWithoutResolutionEpisodes() {
+        val anime = PersonalStoragePolicy.parse("[ReleaseGroup] Example II - 03v2 [1080p][A1B2C3D4].mkv", "Anime/Example II/Season 2")
+        assertEquals("Example II", anime.title); assertEquals(2, anime.season); assertEquals(3, anime.episode)
+        val chinese = PersonalStoragePolicy.parse("第十二集.2160p.mkv", "剧集/长安 (2025)/第二季")
+        assertEquals("长安", chinese.title); assertEquals(2025, chinese.year); assertEquals(2,chinese.season); assertEquals(12,chinese.episode)
+        assertNull(PersonalStoragePolicy.parse("Example.[720].mkv", "Movies").episode)
+        val numeric = PersonalStoragePolicy.parse("1917.1080p.mkv")
+        assertEquals("1917", numeric.title); assertNull(numeric.year)
+        assertEquals("Example II Part 2", PersonalStoragePolicy.parse("Example Ⅱ Part 2.1080p.mkv").title)
+    }
 }

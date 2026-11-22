@@ -9,20 +9,25 @@ import org.json.JSONObject
 import java.util.UUID
 
 /** No credentials, request headers or authorized URLs enter this database. */
-internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.applicationContext, "personal-media.db", null, 2) {
+internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.applicationContext, "personal-media.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE folders(id TEXT PRIMARY KEY, connection TEXT NOT NULL, path TEXT NOT NULL, type TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT 'pending', scanned INTEGER NOT NULL DEFAULT 0, UNIQUE(connection,path))")
         db.execSQL("CREATE TABLE media(id TEXT PRIMARY KEY, connection TEXT NOT NULL, folder TEXT NOT NULL, path TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, modified TEXT NOT NULL, extension TEXT NOT NULL, type TEXT NOT NULL, title TEXT NOT NULL, year INTEGER, season INTEGER, episode INTEGER, tmdb INTEGER, confidence REAL NOT NULL DEFAULT 0, manual INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'available', scanned INTEGER NOT NULL, synopsis TEXT, poster TEXT)")
         db.execSQL("CREATE INDEX media_folder ON media(folder,status)")
         db.execSQL("CREATE INDEX media_tmdb ON media(tmdb,type,status)")
         addMetadataColumns(db)
+        addScrapeCursor(db)
     }
     private fun addMetadataColumns(db: SQLiteDatabase) {
         db.execSQL("ALTER TABLE media ADD COLUMN metadata TEXT")
         db.execSQL("ALTER TABLE media ADD COLUMN scrape_code TEXT")
     }
+    private fun addScrapeCursor(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE folders ADD COLUMN scrape_after TEXT NOT NULL DEFAULT ''")
+    }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) addMetadataColumns(db)
+        if (oldVersion < 3) addScrapeCursor(db)
     }
     data class Folder(val id: String, val connection: String, val path: String, val type: String, val enabled: Boolean, val state: String, val scanned: Long)
     fun folders(connection: String? = null): List<Folder> = readableDatabase.query("folders", null,
@@ -114,7 +119,26 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         return rows("SELECT * FROM media WHERE connection=? AND status='available' AND (tmdb=? OR ($clause)) LIMIT 200",
             (listOf(connection, identity.tmdbId.toString()) + names).toTypedArray())
     }
-    fun unmatched(folder: String): List<JSONObject> = rows("SELECT * FROM media WHERE folder=? AND status='available' AND tmdb IS NULL AND manual=0 LIMIT 200", arrayOf(folder))
+    fun unmatched(folder: String, after: String = ""): List<JSONObject> = rows(
+        "SELECT * FROM media WHERE folder=? AND id>? AND status='available' AND tmdb IS NULL AND manual=0 ORDER BY id LIMIT 200", arrayOf(folder, after))
+    fun scrapeCursor(folder: String): String = rows("SELECT scrape_after FROM folders WHERE id=?", arrayOf(folder))
+        .firstOrNull()?.optString("scrape_after").orEmpty()
+    fun scrapeCursor(folder: String, after: String) {
+        writableDatabase.execSQL("UPDATE folders SET scrape_after=? WHERE id=?", arrayOf(after, folder))
+    }
+    fun pendingCorrections(folder: String, after: String = ""): List<JSONObject> = rows(
+        "SELECT * FROM media WHERE folder=? AND id>? AND status='available' AND manual=1 AND tmdb>0 AND scrape_code='MANUAL_MATCH' ORDER BY id LIMIT 200", arrayOf(folder, after))
+    fun missingToken(folder: String) {
+        writableDatabase.execSQL("UPDATE media SET scrape_code='TOKEN_MISSING' WHERE folder=? AND status='available' AND tmdb IS NULL AND manual=0", arrayOf(folder))
+    }
+    /** A late detail response must never overwrite a newer manual correction. */
+    fun enrichCorrection(id: String, tmdb: Int, type: String, film: Film): Boolean =
+        writableDatabase.compileStatement("UPDATE media SET metadata=?,poster=CASE WHEN poster IS NULL OR poster='' THEN ? ELSE poster END,synopsis=CASE WHEN synopsis IS NULL OR synopsis='' THEN ? ELSE synopsis END,scrape_code='MANUAL_COMPLETE' WHERE id=? AND tmdb=? AND type=? AND manual=1 AND scrape_code='MANUAL_MATCH'").use {
+            it.bindString(1, PersonalMediaProjection.metadata(film, type).toString()); it.bindString(2,film.artworkUrl.orEmpty())
+            it.bindString(3,film.synopsis); it.bindString(4,id); it.bindLong(5,tmdb.toLong()); it.bindString(6,type); it.executeUpdateDelete() > 0
+        }
+    fun mediaAfter(after: String = ""): List<JSONObject> = rows(
+        "SELECT * FROM media WHERE status='available' AND id>? ORDER BY id LIMIT 500", arrayOf(after))
     fun matched(id: String, film: Film, tmdb: Int, type: String) {
         val category = when(film.category) { "动漫" -> "anime"; "纪录片" -> "documentary"; else -> type }
         writableDatabase.execSQL("UPDATE media SET tmdb=?,type=?,title=?,year=?,synopsis=?,poster=?,metadata=?,scrape_code='MATCHED',confidence=0.95 WHERE id=? AND manual=0",
@@ -126,7 +150,11 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
     fun nfoHint(folder: String, nfo: String, hint: PersonalNfoIdentity.Hint) {
         val parent = nfo.substringBeforeLast('/', "")
         val stem = nfo.substringAfterLast('/').substringBeforeLast('.')
-        for(row in unmatched(folder)) {
+        var after = ""
+        while (true) {
+        val page = unmatched(folder, after)
+        if (page.isEmpty()) break
+        for(row in page) {
             val path = row.getString("path")
             val fileParent = path.substringBeforeLast('/', "")
             if (if(stem == "tvshow" && hint.type == "tv") !PersonalStoragePolicy.contains(parent,fileParent) else fileParent != parent) continue
@@ -134,6 +162,8 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
             val metadata = JSONObject().put("nfoTmdb", hint.tmdb).put("nfoType", hint.type)
             writableDatabase.execSQL("UPDATE media SET metadata=? WHERE id=? AND tmdb IS NULL AND manual=0",
                 arrayOf(metadata.toString(), row.getString("id")))
+        }
+        after = page.last().getString("id")
         }
     }
     companion object {
