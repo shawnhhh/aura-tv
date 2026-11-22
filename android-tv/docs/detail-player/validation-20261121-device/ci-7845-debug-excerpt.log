@@ -1,0 +1,7 @@
+2026-11-22T00:53:21.4325183Z BUILD SUCCESSFUL in 2m 25s
+2026-11-22T01:01:34.6525669Z BUILD SUCCESSFUL in 8m 12s
+2026-11-22T01:01:35.1512263Z | JVM | 808 | 0 | 0 | 0 |
+2026-11-22T01:01:35.1541147Z - `app-debug.apk`：27119346 字节；SHA-256 `900a37ada5c185a63ba25c6ecacc3fd8740efe0577cd811dcd7bd1cf9da39fbb`
+2026-11-22T01:01:35.2065360Z 900a37ada5c185a63ba25c6ecacc3fd8740efe0577cd811dcd7bd1cf9da39fbb  app/build/outputs/apk/debug/app-debug.apk
+2026-11-22T01:01:37.7477294Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44968547697/artifacts/14732338316
+2026-11-22T01:01:39.2803681Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44968547697/artifacts/14733121169

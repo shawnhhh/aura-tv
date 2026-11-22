@@ -1,0 +1,29 @@
+{
+  "source_sha": "7845becad0700f737b3c808cc32bfce0e65fc627",
+  "run": 44968547697,
+  "job": 137043021476,
+  "result": "SUCCESS",
+  "jvm": {
+    "tests": 808,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "samba": {
+    "tests": 6,
+    "result": "PASS",
+    "controlled": true
+  },
+  "lint": "PASS",
+  "debug": "PASS",
+  "diagnostic_apk": {
+    "source_sha": "7845becad0700f737b3c808cc32bfce0e65fc627",
+    "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44968547697/artifacts/14732338316",
+    "apk_bytes": 27119346,
+    "sha256_ci": "900a37ada5c185a63ba25c6ecacc3fd8740efe0577cd811dcd7bd1cf9da39fbb",
+    "diagnostic_only": true,
+    "independently_downloaded": false
+  },
+  "other_checks": "TV/API31/ABBA not represented by this debug result",
+  "formal_acceptance": false
+}
