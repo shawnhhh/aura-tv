@@ -37,6 +37,10 @@ internal class StartupPresentation {
 internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable (StartupPresentation) -> Unit) {
     val state = remember { initial ?: StartupPresentation() }
     val context = LocalContext.current
+    DisposableEffect(state, state.showing) {
+        val lease = if (state.showing) StartupBackgroundWork.hold() else null
+        onDispose { lease?.close() }
+    }
     LaunchedEffect(Unit) {
         state.preferences = withContext(Dispatchers.IO) { coroutineScope {
             val housekeeping = async { runCatching {

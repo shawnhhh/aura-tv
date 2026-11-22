@@ -72,6 +72,7 @@ internal class PersonalLibrary(context: Context) {
         val f = index.folders().first { it.id == folderId && it.enabled }
         val c = requireNotNull(connections.get(f.connection)).also { require(it.enabled) }
         active = scope.launch {
+            StartupBackgroundWork.awaitReady()
             val stamp = System.currentTimeMillis()
             var count = 0
             try {
@@ -84,11 +85,13 @@ internal class PersonalLibrary(context: Context) {
                 val sidecars = ArrayList<PersonalRemoteFile>()
                 while(queue.isNotEmpty()) {
                     ensureActive()
+                    StartupBackgroundWork.awaitReady()
                     val (path, depth) = queue.removeFirst()
                     if(!visited.add(path)) continue
                     check(visited.size <= 10000) { "DIRECTORY_LIMIT" }
                     for(file in remote.list(path)) {
                         ensureActive()
+                        StartupBackgroundWork.awaitReady()
                         require(PersonalStoragePolicy.contains(f.path, file.path))
                         if(file.directory) {
                             check(depth < 16 && queue.size < 10000) { "DEPTH_LIMIT" }
@@ -104,6 +107,7 @@ internal class PersonalLibrary(context: Context) {
                 }
                 for (sidecar in sidecars) {
                     ensureActive()
+                    StartupBackgroundWork.awaitReady()
                     try { PersonalNfoIdentity.parse(remote.text(sidecar.path))?.let { index.nfoHint(f.id, sidecar.path, it) } }
                     catch(cancel: CancellationException) { throw cancel }
                     catch(_: Exception) { HerrinPlaybackDiagnosticJournal.record("PERSONAL", "NFO_READ_FAILED") }
@@ -141,6 +145,7 @@ internal class PersonalLibrary(context: Context) {
         true
     }
     private suspend fun scrape(folder: PersonalMediaIndex.Folder) {
+        StartupBackgroundWork.awaitReady()
         val token = Preferences(app).tmdbReadToken
         if(token.isBlank()) {
             index.missingToken(folder.id)
@@ -158,6 +163,7 @@ internal class PersonalLibrary(context: Context) {
             if (page.isEmpty()) break
             for (row in page) {
                 currentCoroutineContext().ensureActive()
+                StartupBackgroundWork.awaitReady()
                 if (Preferences(app).tmdbReadToken != token) return
                 val type = row.getString("type"); val id = row.getInt("tmdb")
                 try {
@@ -177,6 +183,7 @@ internal class PersonalLibrary(context: Context) {
             if (page.isEmpty()) { index.scrapeCursor(folder.id, ""); break }
             for(row in page) {
                 currentCoroutineContext().ensureActive()
+                StartupBackgroundWork.awaitReady()
                 if (Preferences(app).tmdbReadToken != token) return
                 val title = PersonalMediaMatching.canonical(row.getString("title"))
                 val key = title + "|" + row.optString("year") + "|" + row.getString("type") + "|" + row.optString("metadata")

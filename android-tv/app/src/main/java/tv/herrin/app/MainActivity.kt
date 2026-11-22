@@ -584,7 +584,7 @@ private fun Herrin(startup: StartupPresentation) {
 
     val tmdbState=remember { TmdbScreenState() }
     val personalIndexRevision by PersonalLibrary.revisions.collectAsState()
-    PersonalLibraryStartupImport()
+    PersonalLibraryStartupImport(enabled = !startup.showing)
     val personalBrowseFilms = rememberPersonalBrowseFilms(personalIndexRevision, personalSourceConfigEpoch)
 
     SourceSearchLifecycle(tmdbState)

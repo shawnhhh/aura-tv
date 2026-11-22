@@ -6,9 +6,10 @@ import androidx.compose.ui.platform.LocalContext
 
 /** Incremental scans reuse the persistent index and only previously imported enabled roots. */
 @Composable
-internal fun PersonalLibraryStartupImport() {
+internal fun PersonalLibraryStartupImport(enabled: Boolean = true) {
     val context = LocalContext.current.applicationContext
-    LaunchedEffect(context) {
+    LaunchedEffect(context, enabled) {
+        if (!enabled) return@LaunchedEffect
         val library = withContext(Dispatchers.IO) { PersonalLibrary(context) }
         while (isActive) {
         val pending = withContext(Dispatchers.IO) {
