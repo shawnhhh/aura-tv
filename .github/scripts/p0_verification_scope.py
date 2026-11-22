@@ -8,10 +8,12 @@ VALIDATED_APP_SHA = "3e1da7241b7ec2645cb19450695fe0e23a33bdc2"
 VALIDATED_RUN = 44714558232
 VALIDATED_STARTUP_SHA = "ec40e7b988b19a7abe3046186663b7c3a1e7ad8f"
 VALIDATED_STARTUP_RUN = 44861586714
-VALIDATED_DEBUG_SHA = "82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e"
-VALIDATED_DEBUG_RUN = 44921354185
-VALIDATED_ABBA_SHA = "4c7a907e870903547aa52cff114f668a4a8a99b9"
-VALIDATED_ABBA_RUN = 44924819337
+VALIDATED_DEBUG_SHA = "7845becad0700f737b3c808cc32bfce0e65fc627"
+VALIDATED_DEBUG_RUN = 44968547697
+VALIDATED_ABBA_SHA = "7845becad0700f737b3c808cc32bfce0e65fc627"
+VALIDATED_ABBA_RUN = 44968547697
+VERIFIED_API31_SHA = "7845becad0700f737b3c808cc32bfce0e65fc627"
+VERIFIED_API31_RUN = 44968547697
 BRANCH = "codex/herrin-p0-live-playback-20261110"
 PROBES = {
     "android-tv/scripts/startup_probe.sh",
@@ -36,10 +38,11 @@ TV_CONTROL = {".github/scripts/p0_verification_scope.py", ".github/scripts/test_
               ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh", ".github/workflows/android-emulator.yml"}
 
 
-# This exact method is not invoked by the ABBA home/remote test selection.
+# These classes are not invoked by the ABBA home/remote test selection.
 # Any other AndroidTest, app, dependency or performance-runner change fails closed.
 ABBA_REUSE_ALLOWED = PROBES | TV_CONTROL | {
     "android-tv/app/src/androidTest/java/tv/herrin/app/TvBoxWarehouseIntegrationTest.kt",
+    "android-tv/app/src/androidTest/java/tv/herrin/app/HerrinUiSmokeTest.kt",
 }
 
 
@@ -59,6 +62,13 @@ def tv_mode(subject, paths):
             p in DIAGNOSTIC_ALLOWED or p.startswith("android-tv/docs/") for p in paths):
         return "recent-diagnostic"
     return "full"
+
+
+def api31_reusable(paths):
+    # AndroidTest is not packaged into the standalone startup APK. Every app,
+    # build, startup-script or API31-workflow change requires a fresh probe.
+    return bool(paths) and all(p.startswith("android-tv/app/src/androidTest/") or
+        p.startswith("android-tv/docs/") or p in TV_CONTROL for p in paths)
 
 
 def tv_only(paths):
@@ -88,6 +98,8 @@ def main():
     abba_paths = []
     mode = "full"
     diagnostic_paths = []
+    reuse_api31 = False
+    api31_paths = []
     if os.environ.get("GITHUB_EVENT_NAME") == "push" and os.environ.get("GITHUB_REF_NAME") == BRANCH:
         try:
             # Compare cumulatively to the verified SHA, not merely to the last
@@ -102,6 +114,8 @@ def main():
                 reuse_debug = tv_only(tv_paths)
             abba_paths = subprocess.check_output(["git", "diff", "--name-only", "-z", VALIDATED_ABBA_SHA, "HEAD"]).decode().rstrip("\0").split("\0")
             reuse_abba = abba_reusable(abba_paths)
+            api31_paths = subprocess.check_output(["git", "diff", "--name-only", "-z", VERIFIED_API31_SHA, "HEAD"]).decode().rstrip("\0").split("\0")
+            reuse_api31 = api31_reusable(api31_paths)
             if reuse_debug:
                 diagnostic_paths = subprocess.check_output(["git", "diff", "--name-only", "-z", DIAGNOSTIC_BASE_SHA, "HEAD"]).decode().rstrip("\0").split("\0")
                 subject = subprocess.check_output(["git", "log", "-1", "--format=%s"]).decode()
@@ -109,9 +123,12 @@ def main():
         except (subprocess.CalledProcessError, UnicodeError):
             reuse = False
             reuse_abba = False
+            reuse_api31 = False
     result = {"startup_only": reuse,
               "tv_only": reuse_debug,
               "tv_mode": mode,
+              "reuse_api31": reuse_api31,
+              "changed_paths_since_verified_api31": api31_paths,
               "diagnostic_base_sha": DIAGNOSTIC_BASE_SHA if mode != "full" else None,
               "changed_paths_since_diagnostic_base": diagnostic_paths,
               "reuse_abba": reuse_abba,
@@ -122,8 +139,8 @@ def main():
               "checkout_sha": subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip(),
               "reused_app_sha": VALIDATED_APP_SHA if reuse else None,
               "reused_validation_run": VALIDATED_RUN if reuse else None,
-              "reused_api31_sha": VALIDATED_STARTUP_SHA if reuse_startup else None,
-              "reused_api31_run": VALIDATED_STARTUP_RUN if reuse_startup else None,
+              "reused_api31_sha": VERIFIED_API31_SHA if reuse_api31 else VALIDATED_STARTUP_SHA if reuse_startup else None,
+              "reused_api31_run": VERIFIED_API31_RUN if reuse_api31 else VALIDATED_STARTUP_RUN if reuse_startup else None,
               "reused_debug_sha": VALIDATED_DEBUG_SHA if reuse_debug else None,
               "reused_debug_run": VALIDATED_DEBUG_RUN if reuse_debug else None,
               "changed_paths_since_verified_debug": tv_paths,
@@ -138,6 +155,7 @@ def main():
         output.write("abba_only=" + str(reuse_startup).lower() + "\n")
         output.write("tv_only=" + str(reuse_debug).lower() + "\n")
         output.write("tv_mode=" + mode + "\n")
+        output.write("reuse_api31=" + str(reuse_api31).lower() + "\n")
         output.write("reuse_abba=" + str(reuse_abba).lower() + "\n")
 
 

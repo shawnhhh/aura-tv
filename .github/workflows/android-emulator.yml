@@ -73,6 +73,23 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: bash android-tv/scripts/emulator_ci.sh
+      - name: Bind the actual TV-tested diagnostic APK to source (not acceptance)
+        if: ${{ success() && (github.head_ref || github.ref_name) == 'codex/herrin-p0-live-playback-20261110' && inputs.tv_mode != 'recent-diagnostic' }}
+        run: |
+          mkdir -p android-tv/build/tv-diagnostic
+          cp android-tv/app/build/outputs/apk/debug/app-debug.apk android-tv/build/tv-diagnostic/
+          git rev-parse HEAD > android-tv/build/tv-diagnostic/SOURCE_COMMIT.txt
+          (cd android-tv/build/tv-diagnostic && sha256sum app-debug.apk > SHA256SUMS.txt)
+          cat android-tv/build/tv-diagnostic/SOURCE_COMMIT.txt android-tv/build/tv-diagnostic/SHA256SUMS.txt
+          echo 'Diagnostic only. Controlled emulator tests do not prove TCL or real-source acceptance.' > android-tv/build/tv-diagnostic/VERIFICATION_SCOPE.txt
+      - name: Upload TV-tested diagnostic only (not formal acceptance)
+        if: ${{ success() && (github.head_ref || github.ref_name) == 'codex/herrin-p0-live-playback-20261110' && inputs.tv_mode != 'recent-diagnostic' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-TV-debug-diagnostic
+          path: android-tv/build/tv-diagnostic/
+          if-no-files-found: error
+          retention-days: 14
       - name: Generate Chinese acceptance record
         if: always()
         working-directory: android-tv

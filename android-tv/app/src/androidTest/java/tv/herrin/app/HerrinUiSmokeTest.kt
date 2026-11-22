@@ -707,7 +707,14 @@ http://example.org/live/channel.m3u8
             focus("card-tmdb-movie-9001");key(KeyEvent.KEYCODE_DPAD_CENTER)
             val list=compose.onNodeWithTag("film-detail-list")
             list.performScrollToNode(hasTestTag("source-region"))
-            compose.waitUntil(15000) { details.contains("a:local-a") && details.contains("b:local-b") }
+            compose.waitUntil(15000) {
+                details.contains("a:local-a") && details.contains("b:local-b") && runCatching {
+                    // Request arrival precedes the response/layout publication.
+                    // H-004 intentionally offers a node only after every trusted detail is ready.
+                    list.performScrollToNode(hasTestTag("source-region"))
+                    compose.onNodeWithTag("source-node-menu").assertIsDisplayed()
+                }.isSuccess
+            }
             assertEquals(0, mediaCalls.get())
             for (source in listOf("a", "b")) {
                 val site = TvBoxSite("CMS " + source.uppercase(), false, server.url("/$source").toString(), key = source)

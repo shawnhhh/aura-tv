@@ -23,6 +23,7 @@ jobs:
       abba_only: ${{ steps.scope.outputs.abba_only }}
       tv_only: ${{ steps.scope.outputs.tv_only }}
       reuse_abba: ${{ steps.scope.outputs.reuse_abba }}
+      reuse_api31: ${{ steps.scope.outputs.reuse_api31 }}
       tv_mode: ${{ steps.scope.outputs.tv_mode }}
     steps:
       - uses: actions/checkout@v4
@@ -53,10 +54,10 @@ jobs:
   # These independent probes still run after a test failure. The failed TV or
   # startup job remains failed; no continue-on-error or acceptance bypass.
   startup-api31:
-    if: ${{ !cancelled() && needs['verification-scope'].outputs.abba_only != 'true' && (github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110') && (needs.emulator.result == 'success' || needs.emulator.result == 'failure' || (needs['verification-scope'].outputs.startup_only == 'true' && needs.emulator.result == 'skipped')) }}
+    if: ${{ !cancelled() && needs['verification-scope'].outputs.reuse_api31 != 'true' && needs['verification-scope'].outputs.abba_only != 'true' && (github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110') && (needs.emulator.result == 'success' || needs.emulator.result == 'failure' || (needs['verification-scope'].outputs.startup_only == 'true' && needs.emulator.result == 'skipped')) }}
     needs: [verification-scope, emulator]
     uses: ./.github/workflows/android-startup.yml
   tmdb-abba:
-    if: ${{ !cancelled() && needs['verification-scope'].outputs.tv_mode != 'recent-diagnostic' && needs['verification-scope'].outputs.reuse_abba != 'true' && github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110' && (needs['startup-api31'].result == 'success' || needs['startup-api31'].result == 'failure' || (needs['verification-scope'].outputs.abba_only == 'true' && needs['startup-api31'].result == 'skipped')) }}
+    if: ${{ !cancelled() && needs['verification-scope'].outputs.tv_mode != 'recent-diagnostic' && needs['verification-scope'].outputs.reuse_abba != 'true' && github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110' && (needs['startup-api31'].result == 'success' || needs['startup-api31'].result == 'failure' || ((needs['verification-scope'].outputs.abba_only == 'true' || needs['verification-scope'].outputs.reuse_api31 == 'true') && needs['startup-api31'].result == 'skipped')) }}
     needs: [verification-scope, startup-api31]
     uses: ./.github/workflows/tmdb-browse-performance.yml
