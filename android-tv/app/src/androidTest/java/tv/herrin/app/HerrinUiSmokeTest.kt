@@ -662,8 +662,10 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("episode-4").performClick()
         compose.onNodeWithText("播放演示").assertExists()
     }
-    @Test fun tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests() {
+    @Test fun tmdbDetailPrefetchIsMediaFreeAndReadyNodesPlayWithoutSecondTap() {
         MockWebServer().use { server ->
+            val video = InstrumentationRegistry.getInstrumentation().context.assets
+                .open("playback-diagnostics/baseline-72.mp4").use { it.readBytes() }
             val details=java.util.concurrent.ConcurrentLinkedQueue<String>()
             val mediaCalls=java.util.concurrent.atomic.AtomicInteger()
             val failChosenB=java.util.concurrent.atomic.AtomicBoolean(false)
@@ -675,7 +677,15 @@ http://example.org/live/channel.m3u8
                             .put(org.json.JSONObject().put("key","b").put("name","CMS B").put("type",1).put("api",server.url("/b")))
                             .put(org.json.JSONObject().put("key","c").put("name","CMS C").put("type",1).put("api",server.url("/c")))).toString())
                     if(url.encodedPath !in listOf("/a","/b","/c")) {
-                        mediaCalls.incrementAndGet();return MockResponse().setResponseCode(503)
+                        mediaCalls.incrementAndGet()
+                        val range = request.getHeader("Range")?.let { Regex("bytes=(\\d+)-(\\d*)").matchEntire(it) }
+                        val first = range?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                        if (first >= video.size) return MockResponse().setResponseCode(416)
+                        val last = (range?.groupValues?.get(2)?.toIntOrNull() ?: video.lastIndex).coerceAtMost(video.lastIndex)
+                        return MockResponse().setResponseCode(if(range == null) 200 else 206)
+                            .setHeader("Content-Type","video/mp4").setHeader("Accept-Ranges","bytes")
+                            .apply { if(range != null) setHeader("Content-Range","bytes $first-$last/${video.size}") }
+                            .setBody(okio.Buffer().write(video,first,last-first+1))
                     }
                     val source=url.encodedPath.substringAfter('/')
                     val row=org.json.JSONObject().put("vod_id","local-$source").put("vod_name","协议测试1")
@@ -683,7 +693,7 @@ http://example.org/live/channel.m3u8
                     if(url.queryParameter("ids") != null) {
                         details.add(source+":"+url.queryParameter("ids"))
                         if (source == "b" && failChosenB.get()) return MockResponse().setResponseCode(503)
-                        row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/unavailable-$source.mp4"))
+                        row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/controlled-$source.mp4"))
                     }
                     return MockResponse().setHeader("Content-Type","application/json")
                         .setBody(org.json.JSONObject().put("list",org.json.JSONArray().put(row)).toString())
@@ -715,20 +725,29 @@ http://example.org/live/channel.m3u8
                     compose.onNodeWithTag("source-node-menu").assertIsDisplayed()
                 }.isSuccess
             }
-            assertEquals(0, mediaCalls.get())
+            assertEquals("Background trusted layout prefetch must never open media",0,mediaCalls.get())
+            fun frames() = HerrinPlaybackDiagnosticJournal.export().lineSequence().count { "CLICK_TO_FIRST_FRAME" in it }
+            fun awaitSelectedFrame(before: Int) {
+                compose.waitUntil(30000) { frames() > before }
+                compose.onNodeWithTag("player-root-focus").assertIsDisplayed()
+                key(KeyEvent.KEYCODE_BACK)
+                compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess }
+                list.performScrollToNode(hasTestTag("source-region"))
+            }
             for (source in listOf("a", "b")) {
                 val site = TvBoxSite("CMS " + source.uppercase(), false, server.url("/$source").toString(), key = source)
                 compose.onNodeWithTag("source-node-menu").performClick()
                 val nodeTag = "source-node-" + HerrinDiscoveryNodes.id(root, site, null)
                 compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(nodeTag).assertExists() }.isSuccess }
+                val beforeFrame = frames()
                 compose.onNodeWithTag(nodeTag).performClick()
-                compose.onNodeWithText("线路 1").performClick()
+                awaitSelectedFrame(beforeFrame)
                 compose.waitUntil(10000) { details.count { it == "$source:local-$source" } >= 2 }
             }
             assertTrue(details.all { it == "a:local-a" || it == "b:local-b" })
             assertTrue("Prefetch and explicit selection must remain bounded", details.size <= 8)
             assertTrue("An unconfirmed year must never be prefetched", details.none { it.startsWith("c:") })
-            assertEquals(0, mediaCalls.get())
+            assertTrue("Explicit ready-node choices must open real media",mediaCalls.get() > 0)
             compose.onNodeWithTag("source-region").assertIsDisplayed()
             compose.waitUntil(10000) { runCatching {
                 list.performScrollToNode(hasTestTag("detail-play-cta"))
@@ -743,7 +762,9 @@ http://example.org/live/channel.m3u8
             val bNode = HerrinDiscoveryNodes.id(root,
                 TvBoxSite("CMS B", false, server.url("/b").toString(), key = "b"), null)
             compose.onNodeWithTag("source-node-menu").performClick()
+            val beforeA = frames()
             compose.onNodeWithTag("source-node-$aNode").performClick()
+            awaitSelectedFrame(beforeA)
             compose.waitUntil(10000) { runCatching {
                 list.performScrollToNode(hasTestTag("detail-play-cta"))
                 compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
@@ -774,6 +795,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithText("请选择片源线路").assertIsDisplayed()
             compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
             failChosenB.set(false)
+            val mediaBeforeRetry = mediaCalls.get()
             list.performScrollToNode(hasTestTag("source-retry-$bNode"))
             compose.onNodeWithTag("source-retry-$bNode").assertIsDisplayed().performClick()
             compose.waitUntil(10000) { runCatching {
@@ -781,7 +803,10 @@ http://example.org/live/channel.m3u8
                 compose.onNodeWithText("线路 1").assertIsDisplayed()
             }.isSuccess }
             compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
+            assertEquals("Retrying a layout must not resolve media",mediaBeforeRetry,mediaCalls.get())
+            val beforeRetryFrame = frames()
             compose.onNodeWithText("线路 1").performClick()
+            awaitSelectedFrame(beforeRetryFrame)
             try {
                 compose.waitUntil(10000) { runCatching {
                     list.performScrollToNode(hasTestTag("detail-play-cta"))
@@ -795,9 +820,9 @@ http://example.org/live/channel.m3u8
                     compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12), failure)
             }
             assertEquals("Targeted retry must preserve another provider's detail", aReadsBeforeRetry, details.count { it == "a:local-a" })
-            assertEquals(0, mediaCalls.get())
+            assertTrue("Explicit retry selection must decode after layout-only retry",mediaCalls.get() > mediaBeforeRetry)
             list.performScrollToNode(hasTestTag("source-region"))
-            capture("p0-real-cms-protocol-source-groups-before-media")
+            capture("p0-real-cms-ready-node-playback-return")
         }
     }
     @Test fun onlineSearchProtocolEmptyAndRemoteResult() {
