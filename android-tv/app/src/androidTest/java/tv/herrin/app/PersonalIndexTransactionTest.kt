@@ -40,4 +40,25 @@ class PersonalIndexTransactionTest {
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(1, state.tmdbLookupEpoch) }
     }
+
+    @Test fun queuedBrowseInvalidationReadsTheNewSceneBeforeRetiringRoutes() {
+        val live = java.util.concurrent.atomic.AtomicReference("browse")
+        val revision = mutableStateOf(0L)
+        val state = TmdbScreenState()
+        state.tmdbPlaybackRoutes.personal("private-file")
+        // The scheduled effect belongs to an older browse composition.
+        compose.setContent { PersonalLibraryIndexChanges(revision.value, "browse", state, currentScreen = live::get) }
+        compose.runOnIdle { live.set("play-intent"); revision.value = 1L }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertNotNull(state.tmdbPlaybackRoutes.forFilm("private-file"))
+            assertEquals(0, state.tmdbLookupEpoch)
+            live.set("browse"); revision.value = 2L
+        }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertNull(state.tmdbPlaybackRoutes.forFilm("private-file"))
+            assertEquals(1, state.tmdbLookupEpoch)
+        }
+    }
 }

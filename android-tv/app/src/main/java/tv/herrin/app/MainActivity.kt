@@ -1144,6 +1144,10 @@ private fun Herrin(startup: StartupPresentation) {
     }
     var category by rememberSaveable { mutableStateOf("首页") }
     var screen by rememberSaveable { mutableStateOf("browse") }
+    var personalOpenNotice by remember(screen, category) { mutableStateOf(false) }
+    LaunchedEffect(personalOpenNotice) {
+        if (personalOpenNotice) { delay(2400); personalOpenNotice = false }
+    }
     LaunchedEffect(startup.diagnostics) {
         if (startup.diagnostics) { settingsTvBoxOnly = false; screen = "settings" }
     }
@@ -1535,7 +1539,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.preferredSiteStatus = "首选影视点：${site.name}"
         tmdbState.tmdbLookupEpoch++
     }
-    PersonalLibraryIndexChanges(personalIndexRevision, screen, tmdbState)
+    PersonalLibraryIndexChanges(personalIndexRevision, screen, tmdbState, currentScreen = { screen })
     val lookupFilm = tmdbState.tmdbResolved[filmId] ?: (tmdbState.tmdbBrowseIndex + tmdbState.tmdbTop250Films + recentIndexFilms).firstOrNull { it.id == filmId }
     // Capture the same value as the effect key. Lifecycle observers can publish
     // STARTED during apply, before the old (false-keyed) effect is launched.
@@ -4027,19 +4031,20 @@ private fun Herrin(startup: StartupPresentation) {
                                 .focusRequester(requester("card-${displayKey(item)}")), reduceMotion,
                                 onFocus = { filmId = item.id; heroSelections[category] = item.id; focusId = "card-${displayKey(item)}" }, onClick = {
                                     if (!isSearch && item.id.startsWith("personal-index:")) {
-                                        val mediaId = item.id.removePrefix("personal-index:")
-                                        uiScope.launch {
-                                            val result = withContext(Dispatchers.IO) { PersonalLibrary(context).play(mediaId, smbSessions) }
-                                            if (result is PlaybackResult.Ready) {
-                                                val target = "personal-$mediaId"
-                                                val entry = item.copy(id = target)
-                                                tmdbState.tmdbResolved[target] = entry
-                                                val firstLine = entry.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()?.id ?: "personal-file"
-                                                tmdbState.tmdbPersonalPlayback[target] = mapOf(firstLine to result.media)
-                                                tmdbState.tmdbPlaybackRoutes.personal(target)
-                                                activeCmsSite = null; spiderActive = false
-                                                filmId = target; episode = entry.playbackEpisodes.firstOrNull()?.number ?: 1; line = firstLine; screen = "player"
-                                            } else HerrinPlaybackDiagnosticJournal.record("SOURCE", "PERSONAL_MEDIA_UNAVAILABLE")
+                                        val selected = PersonalMediaPlaybackEntry.from(item)
+                                        if (selected == null) {
+                                            personalOpenNotice = true
+                                            HerrinPlaybackDiagnosticJournal.record("PERSONAL", "INDEX_ENTRY_INVALID")
+                                        } else {
+                                            // Commit only stable index coordinates synchronously.
+                                            // SelectedIndexedPersonalPlayback owns the IO/auth path.
+                                            DetailPlaybackMetrics.timeline.click()
+                                            tmdbState.selectPersonal(selected)
+                                            activeCmsSite = null; spiderActive = false
+                                            filmId = selected.film.id
+                                            episode = selected.episode; line = selected.line
+                                            screen = "player"
+                                            HerrinPlaybackDiagnosticJournal.record("LOOKUP", "PERSONAL_PLAY_INTENT")
                                         }
                                     } else {
                                         val recent = !isSearch && category in setOf("首页", "我的") && (recentIndexFilms + myRecent).any { it.id == item.id }
@@ -5520,6 +5525,10 @@ private fun Herrin(startup: StartupPresentation) {
                 "nas" -> { personalSourceConfigEpoch++ }
             }
         })
+        if (personalOpenNotice && screen == "browse") Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
+            Text("暂时无法打开个人媒体", color = Color.White,
+                modifier = Modifier.padding(24.dp).background(Color(0xEE17191D)).padding(12.dp).testTag("personal-open-result"))
+        }
         SideEffect {
             // StartupHost honors only Herrin's explicit preference. Some TV
             // firmware defaults the global animator scale to zero; applying

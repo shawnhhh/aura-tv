@@ -12,10 +12,14 @@ internal class PersonalIndexRevisionGuard(private var applied: Long) {
 }
 
 @Composable
-internal fun PersonalLibraryIndexChanges(revision: Long, screen: String, state: TmdbScreenState) {
+internal fun PersonalLibraryIndexChanges(revision: Long, screen: String, state: TmdbScreenState,
+    currentScreen: () -> String = { screen }) {
     val guard = remember(state) { PersonalIndexRevisionGuard(revision) }
+    val latestScreen by rememberUpdatedState(currentScreen)
     LaunchedEffect(revision, screen) {
-        if(guard.advance(revision, screen)) {
+        // A click may have begun playback after this old browse composition
+        // scheduled its effect. Read the live scene before revoking routes.
+        if(guard.advance(revision, latestScreen())) {
             state.tmdbPlaybackRoutes.clear()
             state.tmdbFallbackIndex.clear()
             state.tmdbLookupEpoch++

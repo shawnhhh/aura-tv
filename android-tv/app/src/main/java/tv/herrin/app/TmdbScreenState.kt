@@ -85,4 +85,26 @@ internal class TmdbScreenState {
     val tmdbSearchPlans=SourceSearchPlans()
     val tmdbSearchGeneration=AtomicLong()
     var tmdbLookupEpoch by mutableIntStateOf(0)
+
+    /** Atomically leave public-source work before the existing private-file playback effect starts. */
+    fun selectPersonal(entry: PersonalMediaPlaybackEntry.Selection) {
+        tmdbSearchGeneration.incrementAndGet()
+        sourceSearchJob?.cancel()
+        sourceSearchJob = null
+        discoverySelection = null
+        discoverySelectionEpoch++
+        discoveryLoadingEpoch++
+        discoveryLoadingFilm = null
+        discoveryLine = null
+        discoveryRecovery = null
+        directPlayFilm = null
+        resumeSourceFilm = null
+        automaticSearch = null
+        automaticResume = null
+        automaticPlayback.clear()
+        // No transient/signed URL from an earlier private attempt is reused.
+        tmdbPersonalPlayback.remove(entry.film.id)
+        tmdbResolved[entry.film.id] = entry.film
+        tmdbPlaybackRoutes.personal(entry.film.id)
+    }
 }
