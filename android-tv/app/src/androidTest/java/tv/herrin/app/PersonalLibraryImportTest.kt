@@ -45,11 +45,18 @@ class PersonalLibraryImportTest {
                 assertEquals("complete", automaticallyImported.state)
                 assertEquals("Add alone starts the selected subtree import", 2, library.index.media(automaticallyImported.id).length())
                 val before = PersonalLibrary.revisions.value
-                api.handle("/personal/folder", JSONObject().put("connection", connection).put("path", "media").put("type", "movie"))
+                assertTrue(api.handle("/personal/folder", JSONObject().put("connection", connection)
+                    .put("path", "media").put("type", "movie")).getBoolean("ok"))
                 val folder = library.index.folders(connection).single()
                 suspend fun awaitState(state: String) {
-                    withTimeout(10000) { while(library.index.folders(connection).single { it.id == folder.id }.state != state) delay(25) }
-                    library.cancelAndWait()
+                    // A refresh is queued on the scanner's IO dispatcher. The
+                    // previous generation can still say "complete" here; do
+                    // not mistake it for the new scan and cancel that scan.
+                    withTimeout(10000) {
+                        assertTrue("The requested scan must finish without cancellation",
+                            PersonalLibrary.awaitCurrentScan())
+                    }
+                    assertEquals(state, library.index.folders(connection).single { it.id == folder.id }.state)
                 }
                 awaitState("complete")
                 assertTrue(PersonalLibrary.revisions.value > before)

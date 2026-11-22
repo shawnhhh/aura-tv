@@ -31,6 +31,8 @@ class VerificationScopeTest(unittest.TestCase):
         self.assertTrue(abba_reusable(list(PROBES) + [
             "android-tv/app/src/androidTest/java/tv/herrin/app/TvBoxWarehouseIntegrationTest.kt",
             "android-tv/app/src/androidTest/java/tv/herrin/app/HerrinUiSmokeTest.kt",
+            "android-tv/app/src/androidTest/java/tv/herrin/app/PersonalLibraryImportTest.kt",
+            "android-tv/scripts/verify_full_tv_suite.py",
             ".github/workflows/p0-playback.yml"]))
 
     def test_abba_reuse_rejects_app_build_remote_tests_and_performance_runner_changes(self):
@@ -45,6 +47,7 @@ class VerificationScopeTest(unittest.TestCase):
     def test_instrumentation_only_reuses_debug_but_not_tv_or_startup(self):
         self.assertTrue(tv_only(["android-tv/app/src/androidTest/java/tv/herrin/app/AppliedWarehouseAssertions.kt",
                                  ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh", "android-tv/scripts/capture_startup_ui.py",
+                                 "android-tv/scripts/verify_full_tv_suite.py",
                                  "android-tv/docs/detail-player/PROGRESS.md"]))
 
     def test_any_app_jvm_fixture_or_build_change_forbids_debug_reuse(self):

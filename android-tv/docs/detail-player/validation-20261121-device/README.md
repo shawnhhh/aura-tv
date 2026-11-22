@@ -28,3 +28,9 @@
 - `ci-8be5-attempt1-dependency-block.json` / `.log`：808项通过，但Lint解析既有依赖失败；一次同SHA失败作业重试待结果。官方HEAD200不替代Lint。
 
 - `ci-8be5-attempt2-debug.json` / `.log`：同SHA一次失败作业重试成功，JVM808、Samba6、Lint/Debug与新APK绑定；TV/API31/ABBA另行记录。
+
+- `ci-8be5-controlled-source-timing.json`：同源码JVM受控loopback的阶段耗时原数据，不是远端影视仓或TCL提速；candidate p95=89.834ms、verified p95=131.29ms，未与真实网络前后作比较。
+
+- `ci-8be5-tv-summary.json` / `ci-8be5-tv-failure.log`：295项294通过1失败，唯一导入测试:55同步竞态，原断言保留；不是全量通过。
+- `ci-8be5-api31.json`：同SHA冷/热/首数据断网/force-stop/配置断网通过，32实际取帧。
+- `ci-8be5-abba.json`：同SHA四轮各6项，导航均值回退1228.5ms，性能未验收。

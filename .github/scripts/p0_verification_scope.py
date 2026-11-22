@@ -8,12 +8,12 @@ VALIDATED_APP_SHA = "3e1da7241b7ec2645cb19450695fe0e23a33bdc2"
 VALIDATED_RUN = 44714558232
 VALIDATED_STARTUP_SHA = "ec40e7b988b19a7abe3046186663b7c3a1e7ad8f"
 VALIDATED_STARTUP_RUN = 44861586714
-VALIDATED_DEBUG_SHA = "7845becad0700f737b3c808cc32bfce0e65fc627"
-VALIDATED_DEBUG_RUN = 44968547697
-VALIDATED_ABBA_SHA = "7845becad0700f737b3c808cc32bfce0e65fc627"
-VALIDATED_ABBA_RUN = 44968547697
-VERIFIED_API31_SHA = "7845becad0700f737b3c808cc32bfce0e65fc627"
-VERIFIED_API31_RUN = 44968547697
+VALIDATED_DEBUG_SHA = "8be5f820feba2a5ccde8ad35e58daa9297dd9377"
+VALIDATED_DEBUG_RUN = 44971925041
+VALIDATED_ABBA_SHA = "8be5f820feba2a5ccde8ad35e58daa9297dd9377"
+VALIDATED_ABBA_RUN = 44971925041
+VERIFIED_API31_SHA = "8be5f820feba2a5ccde8ad35e58daa9297dd9377"
+VERIFIED_API31_RUN = 44971925041
 BRANCH = "codex/herrin-p0-live-playback-20261110"
 PROBES = {
     "android-tv/scripts/startup_probe.sh",
@@ -35,7 +35,8 @@ ALLOWED = PROBES | {
 }
 ABBA_ONLY = ALLOWED - PROBES - {".github/workflows/android-startup.yml"}
 TV_CONTROL = {".github/scripts/p0_verification_scope.py", ".github/scripts/test_p0_verification_scope.py",
-              ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh", ".github/workflows/android-emulator.yml"}
+              ".github/workflows/p0-playback.yml", "android-tv/scripts/emulator_ci.sh", ".github/workflows/android-emulator.yml",
+              "android-tv/scripts/verify_full_tv_suite.py"}
 
 
 # These classes are not invoked by the ABBA home/remote test selection.
@@ -43,6 +44,7 @@ TV_CONTROL = {".github/scripts/p0_verification_scope.py", ".github/scripts/test_
 ABBA_REUSE_ALLOWED = PROBES | TV_CONTROL | {
     "android-tv/app/src/androidTest/java/tv/herrin/app/TvBoxWarehouseIntegrationTest.kt",
     "android-tv/app/src/androidTest/java/tv/herrin/app/HerrinUiSmokeTest.kt",
+    "android-tv/app/src/androidTest/java/tv/herrin/app/PersonalLibraryImportTest.kt",
 }
 
 

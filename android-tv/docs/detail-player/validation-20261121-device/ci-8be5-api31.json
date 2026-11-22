@@ -1,0 +1,112 @@
+{
+  "source_sha": "8be5f820feba2a5ccde8ad35e58daa9297dd9377",
+  "run_id": 44971925041,
+  "job_id": 137064039752,
+  "conclusion": "success",
+  "checks": [
+    {
+      "stage": "cold",
+      "interactive_ui": true,
+      "details_only_hero": true,
+      "actual_window_and_focus": true,
+      "metrics": {
+        "process_to_activity_ms": 1091,
+        "activity_to_first_draw_ms": 484,
+        "first_draw_to_wordmark_ms": 334,
+        "wordmark_complete_ms": 4722,
+        "activity_to_home_ms": 7109,
+        "home_init_ms": 861,
+        "artwork_start_ms": 2345,
+        "network_start_ms": 2333,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "measurement": "app_uptime_cpu_events_not_panel_presentation",
+      "performance_source": true
+    },
+    {
+      "stage": "hot",
+      "interactive_ui": true,
+      "details_only_hero": true,
+      "actual_window_and_focus": true,
+      "metrics": {
+        "process_to_activity_ms": 1091,
+        "activity_to_first_draw_ms": 484,
+        "first_draw_to_wordmark_ms": 334,
+        "wordmark_complete_ms": 4722,
+        "activity_to_home_ms": 7109,
+        "home_init_ms": 861,
+        "artwork_start_ms": 2345,
+        "network_start_ms": 2333,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "measurement": "app_uptime_cpu_events_not_panel_presentation",
+      "performance_source": false
+    },
+    {
+      "stage": "visual",
+      "interactive_ui": true,
+      "details_only_hero": true,
+      "actual_window_and_focus": true,
+      "metrics": {
+        "process_to_activity_ms": 1071,
+        "activity_to_first_draw_ms": 470,
+        "first_draw_to_wordmark_ms": 390,
+        "wordmark_complete_ms": 4774,
+        "activity_to_home_ms": 6867,
+        "home_init_ms": 1035,
+        "artwork_start_ms": 2204,
+        "network_start_ms": 2199,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "measurement": "app_uptime_cpu_events_not_panel_presentation",
+      "performance_source": false
+    }
+  ],
+  "visual": {
+    "sampled_frames": 32,
+    "samples_per_second": 4,
+    "recording_limit_seconds": 12,
+    "interactive_home_after_recording": true,
+    "performance_source": false,
+    "physical_TCL": false
+  },
+  "matrix": [
+    {
+      "scenario": "force-stop",
+      "metrics": {
+        "process_to_activity_ms": 685,
+        "activity_to_first_draw_ms": 397,
+        "first_draw_to_wordmark_ms": 308,
+        "wordmark_complete_ms": 4671,
+        "activity_to_home_ms": 6437,
+        "home_init_ms": 752,
+        "artwork_start_ms": 1880,
+        "network_start_ms": 1879,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "configured_provider_contacted": false
+    },
+    {
+      "scenario": "configured-offline",
+      "metrics": {
+        "process_to_activity_ms": 564,
+        "activity_to_first_draw_ms": 232,
+        "first_draw_to_wordmark_ms": 208,
+        "wordmark_complete_ms": 3392,
+        "activity_to_home_ms": 5001,
+        "home_init_ms": 675,
+        "artwork_start_ms": 1111,
+        "network_start_ms": 1111,
+        "system_brand_exit_ms": -1
+      },
+      "physical_TCL": false,
+      "configured_provider_contacted": false
+    }
+  ],
+  "physical_TCL": false,
+  "evidence_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44971925041/artifacts/14735054904"
+}
