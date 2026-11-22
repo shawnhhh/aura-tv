@@ -134,6 +134,8 @@ class P0RecentPlaybackReturnTest {
         compose.onNodeWithTag("details").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithTag("details").performClick()
         compose.onNodeWithTag("film-detail-list").assertExists()
+        compose.onNodeWithTag("screen-first").assertDoesNotExist()
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("detail-favorite").assertIsFocused() }.isSuccess }
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("details").assertIsFocused() }.isSuccess }

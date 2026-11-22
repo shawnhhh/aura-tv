@@ -55,25 +55,35 @@ class PlayerHoldPreviewTest {
                 }
                 val before=seeks.get()
                 val code=if(button)KeyEvent.KEYCODE_DPAD_CENTER else KeyEvent.KEYCODE_DPAD_RIGHT
+                // A deliberately continuous preview cannot become Espresso-idle
+                // while held. Drive its real Compose frames explicitly, then
+                // restore ordinary idling after KeyUp; never suppress assertions.
+                compose.mainClock.autoAdvance = false
                 val down=SystemClock.uptimeMillis()
                 inst.sendKeySync(KeyEvent(down,down,KeyEvent.ACTION_DOWN,code,0))
                 SystemClock.sleep(100)
                 val repeatAt=SystemClock.uptimeMillis()
                 inst.sendKeySync(KeyEvent(down,repeatAt,KeyEvent.ACTION_DOWN,code,1))
                 var anchor=0L; var duration=0L
-                compose.runOnIdle { anchor=observed.get().currentPosition; duration=observed.get().duration }
+                compose.runOnUiThread { anchor=observed.get().currentPosition; duration=observed.get().duration }
+                val previews=mutableListOf<String>()
                 repeat(10) { index ->
                     SystemClock.sleep(40)
                     inst.sendKeySync(KeyEvent(down,SystemClock.uptimeMillis(),KeyEvent.ACTION_DOWN,code,index+2))
+                    compose.mainClock.advanceTimeByFrame()
+                    previews += compose.onNodeWithTag("player-position-label").fetchSemanticsNode()
+                        .config[androidx.compose.ui.semantics.SemanticsProperties.Text].single().text
                 }
+                assertTrue("Continuous frames must show advancing preview positions",previews.distinct().size >= 3)
                 assertEquals("Holding changes only the preview, never repeated decoder seeks",before,seeks.get())
                 compose.onNodeWithTag("seek-acceleration").assertDoesNotExist()
                 var paused=false
-                compose.runOnIdle { paused=!observed.get().playWhenReady }
+                compose.runOnUiThread { paused=!observed.get().playWhenReady }
                 assertTrue("Actual playback pauses during the continuous preview",paused)
                 val releaseAt=SystemClock.uptimeMillis()
                 val expected=tv.herrin.kernel.SeekBounds.offset(anchor,(releaseAt-repeatAt)*10,duration)
                 inst.sendKeySync(KeyEvent(down,releaseAt,KeyEvent.ACTION_UP,code,0))
+                compose.mainClock.autoAdvance = true
                 compose.waitUntil(5000) {
                     var resumed=false
                     compose.runOnIdle { resumed=observed.get().playWhenReady && kotlin.math.abs(observed.get().currentPosition-expected) < 2000 }
@@ -83,6 +93,6 @@ class PlayerHoldPreviewTest {
                 SystemClock.sleep(300)
                 assertEquals("No queued seeks may continue after KeyUp",after,seeks.get())
             }
-        } finally { file.delete() }
+        } finally { compose.mainClock.autoAdvance = true; file.delete() }
     }
 }

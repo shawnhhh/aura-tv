@@ -1,0 +1,26 @@
+{
+  "base_sha": "c84d27656c608efb981c06665b69f0f16a805555",
+  "inputs": {
+    "android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt": "5440e5b176bec1ba4716caf513186054894c148faacc7245eb9b8e99818966ac",
+    "android-tv/app/src/androidTest/java/tv/herrin/app/PlayerHoldPreviewTest.kt": "9fc304f9f9b182e1ac1978f02ca5641f803885ea73b1e51832a27d1f1cde679f",
+    "android-tv/app/src/androidTest/java/tv/herrin/app/P0RecentPlaybackReturnTest.kt": "75dd5f4ddcebf660a141679dc11a3fa4ea64510f5a682af12eca268c51c6e1db"
+  },
+  "targeted_jvm": [
+    {
+      "name": "tv.herrin.app.PlaybackBackGateTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "tv.herrin.app.M452RemoteHoldSeekTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "androidtest_compile": "PASS; device execution PENDING",
+  "unmatched_optional_test_filter": "BrowseHeroSelectionTest does not exist; not counted as executed; actual 12 tests only"
+}

@@ -2679,12 +2679,18 @@ private fun Herrin(startup: StartupPresentation) {
     val settingsListState = rememberLazyListState()
     var lastDetailLineFocus by remember { mutableStateOf("detail-first-line") }
     var restorePlaybackDetailFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(screen, restorePlaybackDetailFocus) {
+    var detailFavoriteAttached by remember { mutableStateOf(false) }
+    var detailFavoriteFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(screen, restorePlaybackDetailFocus, detailFavoriteAttached) {
         if (screen == "detail" && restorePlaybackDetailFocus) {
+            // The detail list has no screen Back row: header, synopsis, favorite.
+            // Scroll before requesting, and wait for the real placed focus node.
+            if (!detailFavoriteAttached) settingsListState.scrollToItem(2)
             withFrameNanos { }
-            // Header, synopsis, then the always-present favorite entry. Mount
-            // this real target before its layout callback restores TV focus.
-            if (settingsListState.layoutInfo.totalItemsCount > 2) settingsListState.scrollToItem(2)
+            if (detailFavoriteAttached) {
+                requester("detail-favorite").requestFocus()
+                if (detailFavoriteFocused) restorePlaybackDetailFocus = false
+            }
         }
     }
     val detailFocusJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
@@ -2885,7 +2891,7 @@ private fun Herrin(startup: StartupPresentation) {
         tmdbState.discoveryRecovery = null
         tmdbState.rejectedDiscoveryHits.clear()
         DetailPlaybackMetrics.timeline.enter()
-        if (screen == "browse") tmdbBrowseReturn = null
+        if (screen == "browse") tmdbBrowseReturn = PlaybackReturnContext(screen, category, focusId, f.id)
         tmdbState.resumeSourceFilm = null
         RemoteTrace.event { "DETAILS invoked film=${f.id} from=$screen" }
         cmsDetailStatus = ""
@@ -3219,6 +3225,13 @@ private fun Herrin(startup: StartupPresentation) {
             inputModes.requestInputMode(InputMode.Keyboard)
             // Request only attached controls; returning to a rail first composes its remembered scroll position.
             withFrameNanos { }
+            if (screen == "detail") {
+                // Detail owns its lazy/season focus. The generic screen-first
+                // request must not steal focus after playback has restored it.
+                if (!restoreGroupFocus && !restoreSeasonFocus)
+                    restorePlaybackDetailFocus = !detailFavoriteFocused
+                return@LaunchedEffect
+            }
             val id = when (screen) {
                 "browse" -> (pendingToolbarFocus ?: focusId).let { if (it == "play") "details" else it }
                 "search" -> focusId
@@ -5141,17 +5154,23 @@ private fun Herrin(startup: StartupPresentation) {
                             } }
                         // H-004: Favorite always sits between synopsis and node selector.
                         if (screen == "detail") item(key = "detail-favorite") {
+                            DisposableEffect(Unit) { onDispose {
+                                detailFavoriteAttached = false
+                                detailFavoriteFocused = false
+                            } }
                             val groupFavorited = showGroup?.members?.any { it.film.id in favorites }
                                 ?: (film.id in favorites)
                             TvButton(if (groupFavorited) "♥ 已收藏 · 取消" else "♡ 添加收藏",
                                 modifier = Modifier.testTag("detail-favorite")
                                     .focusRequester(requester("detail-favorite"))
-                                    .then(Modifier.onGloballyPositioned {
-                                        if (restorePlaybackDetailFocus && screen == "detail") {
-                                            requester("detail-favorite").requestFocus()
+                                    .onGloballyPositioned { detailFavoriteAttached = true }
+                                    .onFocusChanged {
+                                        detailFavoriteFocused = it.isFocused
+                                        if (it.isFocused) {
+                                            focusId = "detail-favorite"
                                             restorePlaybackDetailFocus = false
                                         }
-                                    }), reduced = reduceMotion) {
+                                    }, reduced = reduceMotion) {
                                 if (showGroup == null) prefs.toggleFor(catalogScope, film.id)
                                 else if (groupFavorited) showGroup.members.filter { it.film.id in favorites }
                                     .forEach { prefs.toggleFor(catalogScope, it.film.id) }
@@ -5520,8 +5539,8 @@ private fun Herrin(startup: StartupPresentation) {
                     LazyColumn(Modifier.testTag(if (screen == "detail") "film-detail-list" else "settings-list").fillMaxSize(), state = settingsListState,
                     contentPadding = PaddingValues(if (screen == "settings" && settingsTvBoxOnly) 24.dp else 48.dp),
                     verticalArrangement = Arrangement.spacedBy(if (screen == "settings" && settingsTvBoxOnly) 12.dp else 18.dp)) {
-                    item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        if (screen != "settings" || !settingsTvBoxOnly)
+                    if (screen == "settings") item { Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (!settingsTvBoxOnly)
                             TvButton("‹ 返回", Modifier.testTag("screen-first").focusRequester(requester("screen-first")),
                                 reduceMotion, onFocus = { if (screen == "settings") focusId = "screen-first" }) { back() }
                         if (screen == "settings") Spacer(Modifier.weight(1f))
