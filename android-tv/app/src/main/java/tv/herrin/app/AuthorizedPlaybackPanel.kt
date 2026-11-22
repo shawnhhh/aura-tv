@@ -766,8 +766,8 @@ private fun AuthorizedPlaybackSession(
         }
         if (!isLive && !testDiagnostics && controlsVisible && errorMessage == null) KernelMinimalControls(
             playback, media.kernelPlayback?.title ?: media.displayTitle, shownPosition, shownDuration,
-            initialControl, moreControl, { onBack() }, ::applyRemoteSeek,
-            { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() }, onEpisodeSelection,
+            initialControl, moreControl, ::applyRemoteSeek,
+            { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() }, onEpisodeSelection ?: onLineSelection,
             onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, seekAcceleration = seekAcceleration, specsReady = if (playback.whole) kernelFirstFrame || frameSinceSelection && kernelSelectedEpisode == media.kernelPlayback?.episode else frameSinceSelection)
         if (testDiagnostics && !playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,

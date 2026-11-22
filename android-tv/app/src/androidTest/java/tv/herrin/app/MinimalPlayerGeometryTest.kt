@@ -26,7 +26,11 @@ class MinimalPlayerGeometryTest {
             val left = compose.onNodeWithTag("transport-rewind").fetchSemanticsNode().boundsInRoot
             val right = compose.onNodeWithTag("transport-forward").fetchSemanticsNode().boundsInRoot
             assertEquals(root.center.x.toDouble(), ((left.left + right.right) / 2).toDouble(), 2.0)
-            compose.onNodeWithTag("transport-episodes").assertDoesNotExist()
+            compose.onNodeWithTag("transport-episodes").assertIsDisplayed()
+            compose.onNodeWithTag("player-back").assertDoesNotExist()
+            val primary = compose.onNodeWithTag("transport-toggle").fetchSemanticsNode().boundsInRoot
+            val side = compose.onNodeWithTag("transport-audio").fetchSemanticsNode().boundsInRoot
+            assertTrue(primary.height > left.height && left.height > side.height)
             compose.onNodeWithTag("kernel-settings").assertDoesNotExist()
             compose.onNodeWithTag("transport-speed").performClick()
             compose.onNodeWithText("2.0×").assertExists()

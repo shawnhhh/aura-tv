@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,6 +27,7 @@ import android.view.KeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
@@ -39,7 +41,7 @@ import androidx.media3.common.C
 internal fun KernelMinimalControls(
     session: HerrinPlayerSession, title: String, position: Long, duration: Long,
     initialFocus: FocusRequester, speedFocus: FocusRequester,
-    onBack: () -> Unit, onSeek: (Long) -> Unit, onInteraction: () -> Unit,
+    onSeek: (Long) -> Unit, onInteraction: () -> Unit,
     onPanel: (Boolean) -> Unit, onEpisodes: (() -> Unit)?,
     onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit, seekAcceleration: Int, specsReady: Boolean
 ) {
@@ -53,9 +55,9 @@ internal fun KernelMinimalControls(
     var panel by remember { mutableStateOf<String?>(null) }
     val visibility = remember { MutableTransitionState(false) }
     var closing by remember { mutableStateOf<String?>(null) }
+    val episodesFocus = remember { FocusRequester() }
     val audioFocus = remember { FocusRequester() }
     val subtitleFocus = remember { FocusRequester() }
-    val menuFocus = remember { FocusRequester() }
     val speedOffset = with(LocalDensity.current) { IntOffset(56.dp.roundToPx(), -124.dp.roundToPx()) }
     val panelWidth = (LocalConfiguration.current.screenWidthDp * .26f).dp
     val userReduced = Preferences(androidx.compose.ui.platform.LocalContext.current).reducedMotion
@@ -72,15 +74,11 @@ internal fun KernelMinimalControls(
             closing = null
             onPanel(false)
             withFrameNanos { }
-            runCatching { (when (previous) { "音轨" -> audioFocus; "字幕" -> subtitleFocus; else -> speedFocus }).requestFocus() }
+            (when (previous) { "选集" -> episodesFocus; "音轨" -> audioFocus; "字幕" -> subtitleFocus; else -> speedFocus }).requestFocus()
         }
     }
     LaunchedEffect(panel) {
         onPanel(panel != null)
-        if (panel != null) {
-            repeat(2) { withFrameNanos { } }
-            if (visibility.targetState && closing == null) runCatching { menuFocus.requestFocus() }
-        }
     }
     DisposableEffect(Unit) { onDispose { onPanel(false) } }
     fun open(name: String) { closing = null; panel = name; visibility.targetState = true; onPanel(true); onInteraction() }
@@ -92,12 +90,11 @@ internal fun KernelMinimalControls(
     Box(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 24.dp)) {
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(Color(0x66000000)),
             verticalAlignment = Alignment.CenterVertically) {
-            PlayerTextButton(onClick = onBack, modifier = Modifier.testTag("player-back")) { Text("‹", color = Color.White) }
-            Text(title, color = Color.White, modifier = Modifier.widthIn(max = 520.dp), maxLines = 1)
+            Text(title, color = Color.White, fontSize = 22.sp, modifier = Modifier.widthIn(max = 520.dp).testTag("player-title"), maxLines = 1)
             val format = player.videoFormat
-            if (specsReady && player.videoSize.width > 0 && player.videoSize.height > 0 &&
-                (player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 0) {
-                Text("  " + PlayerQualityLabel.fromSize(player.videoSize.width, player.videoSize.height), color = Color.White)
+            if (specsReady && format != null && format.width > 0 && format.height > 0) {
+                Text("  " + PlayerQualityLabel.fromSize(format.width, format.height), color = Color.White,
+                    modifier = Modifier.testTag("player-decoded-quality"))
                 val range = when {
                     format?.sampleMimeType == "video/dolby-vision" -> "Dolby Vision"
                     format?.colorInfo?.colorTransfer == C.COLOR_TRANSFER_ST2084 ||
@@ -120,68 +117,32 @@ internal fun KernelMinimalControls(
                 if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
             }, modifier = Modifier.fillMaxWidth().height(3.dp), color = Color.White,
                 trackColor = Color(0x66555555))
-            Box(Modifier.fillMaxWidth()) {
-                Row(Modifier.align(Alignment.CenterStart)) {
-                    onEpisodes?.let { action ->
-                        PlayerTextButton(onClick = { onInteraction(); action() }, modifier = Modifier.semantics { contentDescription = "选集" }.testTag("transport-episodes")) { Text("▦", color = Color.White) }
-                    }
-                    PlayerTextButton(onClick = { open("倍速") }, modifier = Modifier.focusRequester(speedFocus).testTag("transport-speed")) {
-                        Text("${player.playbackParameters.speed}×", color = Color.White)
-                    }
-                }
-                Row(Modifier.align(Alignment.Center)) {
-                PlayerTextButton(onClick = { onSeek(-10_000) }, modifier = Modifier.testTag("transport-rewind").seekButton(-1)) { Text("↶ 10", color = Color.White) }
-                PlayerTextButton(onClick = {
-                    if (player.playWhenReady) session.pause() else session.play()
-                    onInteraction()
-                }, modifier = Modifier.focusRequester(initialFocus).focusProperties { up = speedFocus }.testTag(if (session.whole) "kernel-toggle" else "transport-toggle")) {
-                    Text(if (player.playWhenReady) "Ⅱ" else "▷", color = Color.White)
-                }
-                PlayerTextButton(onClick = { onSeek(10_000) }, modifier = Modifier.testTag("transport-forward").seekButton(1)) { Text("10 ↷", color = Color.White) }
-                }
-                Row(Modifier.align(Alignment.CenterEnd)) {
-                    PlayerTextButton(onClick = { open("音轨") }, modifier = Modifier.focusRequester(audioFocus).semantics { contentDescription = "音轨" }.testTag("transport-audio")) { Text("♫", color = Color.White) }
-                    PlayerTextButton(onClick = { open("字幕") }, modifier = Modifier.focusRequester(subtitleFocus).semantics { contentDescription = "字幕" }.testTag("transport-subtitle")) { Text("▤", color = Color.White) }
-                }
-            }
+            PlayerControlBar(player.playWhenReady, player.playbackParameters.speed, session.whole,
+                initialFocus, speedFocus, episodesFocus, audioFocus, subtitleFocus,
+                Modifier.seekButton(-1), Modifier.seekButton(1),
+                onEpisodes = { onInteraction(); onEpisodes?.invoke() ?: open("选集") },
+                onSpeed = { open("倍速") }, onRewind = { onSeek(-10_000) },
+                onToggle = { if (player.playWhenReady) session.pause() else session.play(); onInteraction() },
+                onForward = { onSeek(10_000) }, onAudio = { open("音轨") }, onSubtitles = { open("字幕") })
         }
     }
     panel?.let { name ->
-        Popup(alignment = if (name == "倍速") Alignment.BottomStart else Alignment.CenterEnd,
+        Popup(alignment = when (name) { "倍速" -> Alignment.BottomStart; "选集" -> Alignment.CenterStart; else -> Alignment.CenterEnd },
             offset = if (name == "倍速") speedOffset else IntOffset.Zero,
             onDismissRequest = ::close, properties = PopupProperties(focusable = true)) {
             BackHandler { close() }
             Box(Modifier.testTag("player-menu-popup")) {
-            AnimatedVisibility(visibility, enter = slideInHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else it },
-                exit = slideOutHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else it }) {
+            AnimatedVisibility(visibility, enter = slideInHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else if (name == "选集") -it else it },
+                exit = slideOutHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else if (name == "选集") -it else it }) {
             Surface(color = Color(0xD9111111), tonalElevation = 0.dp) {
                 Column(Modifier.width(if (name == "倍速") 160.dp else panelWidth).heightIn(max = 420.dp).padding(24.dp)) {
                     Text(name, color = Color.White, style = MaterialTheme.typography.titleLarge)
-                    LazyColumn {
-                        when (name) {
-                            "倍速" -> items(PlaybackTransport.speeds.reversed()) { speed ->
-                                PlayerTextButton(onClick = { session.manager.setSpeed(speed); close() },
-                                    modifier = if (kotlin.math.abs(player.playbackParameters.speed - speed) < 0.01f) Modifier.focusRequester(menuFocus) else Modifier) { Text((if (kotlin.math.abs(player.playbackParameters.speed - speed) < 0.01f) "✓ " else "") + "${speed}×") }
-                            }
-                            "音轨", "字幕" -> {
-                                val type = if (name == "音轨") C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT
-                                if (type == C.TRACK_TYPE_TEXT) item {
-                                    PlayerTextButton(onClick = { session.manager.selectTrack(type, -1, -1); close() },
-                                        modifier = if (PlaybackTransport.options(player, type).none { it.selected }) Modifier.focusRequester(menuFocus) else Modifier) { Text("关闭字幕") }
-                                }
-                                val options = PlaybackTransport.options(player, type)
-                                if (options.isEmpty()) item { Text("暂无可用轨道", color = Color.White) }
-                                items(options) { option ->
-                                    PlayerTextButton(onClick = {
-                                        session.manager.selectTrack(type, option.groupIndex, option.trackIndex)
-                                        close()
-                                    }, modifier = if (option.selected || type == C.TRACK_TYPE_AUDIO && options.none { it.selected } && option == options.first())
-                                        Modifier.focusRequester(menuFocus) else Modifier) { Text((if (option.selected) "✓ " else "") + option.label) }
-                                }
-                            }
-
-                        }
-                    }
+                    val type = if (name == "音轨") C.TRACK_TYPE_AUDIO else C.TRACK_TYPE_TEXT
+                    PlayerControlMenu(name, player.playbackParameters.speed,
+                        if (name in setOf("音轨", "字幕")) PlaybackTransport.options(player, type) else emptyList(),
+                        visibility.targetState && closing == null,
+                        onSpeed = { session.manager.setSpeed(it); close() },
+                        onTrack = { group, track -> session.manager.selectTrack(type, group, track); close() })
                 }
             }
             }

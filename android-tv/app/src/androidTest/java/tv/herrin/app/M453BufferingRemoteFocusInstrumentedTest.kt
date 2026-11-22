@@ -40,10 +40,10 @@ class M453BufferingRemoteFocusInstrumentedTest {
                 compose.onNodeWithTag("transport-speed").assertExists()
             }.isSuccess }
             compose.onNodeWithText("Original fixture").assertExists()
-            for (tag in listOf("transport-speed", "transport-audio", "transport-subtitle", "player-back",
+            for (tag in listOf("transport-speed", "transport-audio", "transport-subtitle", "transport-episodes",
                 "transport-rewind", "transport-forward", "player-position-label", "player-duration-label"))
                 compose.onNodeWithTag(tag).assertExists()
-            for (tag in listOf("danmaku-controls", "transport-repeat", "transport-skip-silence",
+            for (tag in listOf("player-back", "danmaku-controls", "transport-repeat", "transport-skip-silence",
                 "player-quality-label", "transport-viewport-mode", "transport-more", "player-verification-toggle"))
                 compose.onNodeWithTag(tag).assertDoesNotExist()
             compose.onNodeWithTag("kernel-settings").assertDoesNotExist()
@@ -55,6 +55,14 @@ class M453BufferingRemoteFocusInstrumentedTest {
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("player-menu-popup").assertDoesNotExist() }.isSuccess }
             compose.onNodeWithTag("transport-toggle").assertExists()
+            compose.onNodeWithTag("transport-episodes").performClick()
+            compose.onNodeWithText("暂无可用版本或集数").assertIsDisplayed()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("transport-episodes").assertIsFocused() }.isSuccess }
+            compose.onNodeWithTag("transport-audio").performClick()
+            compose.onNodeWithText("暂无可用音轨").assertIsDisplayed()
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            compose.waitUntil(3000) { runCatching { compose.onNodeWithTag("transport-audio").assertIsFocused() }.isSuccess }
             compose.onNodeWithTag("transport-subtitle").performClick()
             compose.onNodeWithText("关闭字幕").performClick()
             compose.runOnIdle { org.junit.Assert.assertEquals("Menus retain sole player", 1, players.size) }

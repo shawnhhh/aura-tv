@@ -40,10 +40,8 @@ object PlaybackTransport {
                 (0 until group.length).mapNotNull { trackIndex ->
                     if (!group.isTrackSupported(trackIndex)) null else {
                         val format = group.getTrackFormat(trackIndex)
-                        val language = format.language?.takeUnless { it == "und" || it.isBlank() }
                         Option(groupIndex, trackIndex,
-                            format.label?.takeIf { it.isNotBlank() }
-                                ?: language ?: (if (trackType == C.TRACK_TYPE_TEXT) "字幕 " else "音轨 ") + (trackIndex + 1),
+                            PlaybackTrackLabel.from(format, trackType, trackIndex),
                             group.isTrackSelected(trackIndex))
                     }
                 }
