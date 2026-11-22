@@ -47,7 +47,7 @@ class SettingsModulesTest {
             PersonalLibrarySettings(protocol, nameFocus = name, onChanged = {}, onPlay = {})
         } } }
         val tops = listOf("name","address","port","path","username","password").map { field ->
-            compose.onNodeWithTag("personal-field-$field").assertExists().fetchSemanticsNode().boundsInRoot.top
+            compose.onNodeWithTag("personal-field-$field").assertExists().getUnclippedBoundsInRoot().top
         }
         assertEquals(tops.sorted(),tops)
         assertEquals(6,tops.distinct().size)

@@ -785,10 +785,10 @@ private fun Herrin(startup: StartupPresentation) {
         when (val result = loadedConfig) {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
-                if (isRoot && settingsTvBoxOnly && runSpiderAfterApply && result.entries.isNotEmpty()) {
+                if (isRoot && settingsTvBoxOnly && (runSpiderAfterApply || pendingImportId != null) && result.entries.isNotEmpty()) {
                     val first = result.entries.first()
                     tvBoxSelectedName = first.name
-                    tvBoxRunSpiderAfterApply = true
+                    tvBoxRunSpiderAfterApply = runSpiderAfterApply
                     tvBoxRequest = first.url to false
                     tvBoxLoadEpoch++
                 }
@@ -851,7 +851,7 @@ private fun Herrin(startup: StartupPresentation) {
             // TVBox-style import must not probe all third-party plugins.
             // Restore at most the previously selected site on startup.
             val initialSite = TvBoxAutoSites.initialSelection(config, savedSite)
-            if (!preferCache && initialSite != null) prefs.preferSite(address, initialSite, config.spiderJar)
+            if (!preferCache && initialSite != null) prefs.preferSite(prefs.tvBoxWarehouseUrl.ifBlank { address }, initialSite, config.spiderJar)
             val candidates = if (preferCache && pendingImportId == null)
                 TvBoxAutoSites.resumeOnly(config, savedSite) else listOfNotNull(initialSite)
             // Selecting metadata does not grant Spider execution: the existing

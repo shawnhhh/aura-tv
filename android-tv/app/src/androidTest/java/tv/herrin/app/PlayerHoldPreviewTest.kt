@@ -22,7 +22,7 @@ class PlayerHoldPreviewTest {
     @Test fun directionAndButtonHoldPreviewWithoutSeekThenCommitOnceAndResume() {
         val inst = InstrumentationRegistry.getInstrumentation()
         val file = File(inst.targetContext.cacheDir,"hold-original-72.mp4")
-        inst.context.assets.open("playback-diagnostics/baseline-72.mp4").use { input -> file.outputStream().use(input::copyTo) }
+        inst.context.assets.open("playback-diagnostics/baseline-72.mp4").use { input -> file.outputStream().use { input.copyTo(it) } }
         val observed = AtomicReference<ExoPlayer>()
         val seeks = AtomicInteger()
         try {
@@ -40,11 +40,12 @@ class PlayerHoldPreviewTest {
                 frames>3
             }
             for(button in listOf(false,true)) {
+                val beforeReset = seeks.get()
                 compose.runOnIdle { observed.get().seekTo(10000);observed.get().play() }
                 compose.waitUntil(5000) {
                     var ready=false
                     compose.runOnIdle { ready=observed.get().playbackState == Player.STATE_READY && observed.get().isPlaying }
-                    ready
+                    ready && seeks.get() > beforeReset
                 }
                 compose.onNodeWithTag("player-root-focus").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
                 if(button) {
@@ -57,7 +58,10 @@ class PlayerHoldPreviewTest {
                 val down=SystemClock.uptimeMillis()
                 inst.sendKeySync(KeyEvent(down,down,KeyEvent.ACTION_DOWN,code,0))
                 SystemClock.sleep(100)
-                inst.sendKeySync(KeyEvent(down,SystemClock.uptimeMillis(),KeyEvent.ACTION_DOWN,code,1))
+                val repeatAt=SystemClock.uptimeMillis()
+                inst.sendKeySync(KeyEvent(down,repeatAt,KeyEvent.ACTION_DOWN,code,1))
+                var anchor=0L; var duration=0L
+                compose.runOnIdle { anchor=observed.get().currentPosition; duration=observed.get().duration }
                 repeat(10) { index ->
                     SystemClock.sleep(40)
                     inst.sendKeySync(KeyEvent(down,SystemClock.uptimeMillis(),KeyEvent.ACTION_DOWN,code,index+2))
@@ -67,10 +71,12 @@ class PlayerHoldPreviewTest {
                 var paused=false
                 compose.runOnIdle { paused=!observed.get().playWhenReady }
                 assertTrue("Actual playback pauses during the continuous preview",paused)
-                inst.sendKeySync(KeyEvent(down,SystemClock.uptimeMillis(),KeyEvent.ACTION_UP,code,0))
+                val releaseAt=SystemClock.uptimeMillis()
+                val expected=tv.herrin.kernel.SeekBounds.offset(anchor,(releaseAt-repeatAt)*10,duration)
+                inst.sendKeySync(KeyEvent(down,releaseAt,KeyEvent.ACTION_UP,code,0))
                 compose.waitUntil(5000) {
                     var resumed=false
-                    compose.runOnIdle { resumed=observed.get().playWhenReady && observed.get().currentPosition in 13000..20000 }
+                    compose.runOnIdle { resumed=observed.get().playWhenReady && kotlin.math.abs(observed.get().currentPosition-expected) < 2000 }
                     seeks.get()==before+1 && resumed
                 }
                 val after=seeks.get()

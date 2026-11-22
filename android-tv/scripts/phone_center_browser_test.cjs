@@ -228,6 +228,7 @@ fs.mkdirSync(evidence,{recursive:true});
   assert.strictEqual(requests.filter(r=>r.path==='/pair').length,1,'all modules share one pairing');
   assert(requests.filter(r=>r.path!=='/pair').every(r=>r.headers['x-herrin-session']==='mock-management'));
   assert.deepStrictEqual(errors,[]);
+  assert.equal(await page.locator('#personal-import').count(), 0, 'Add is the single save-and-import action');
   await page.screenshot({path:path.join(evidence,'phone-center-mobile.png'),fullPage:true});
   await page.locator('[data-tab=tmdb]').click();
   holdTmdb=true;

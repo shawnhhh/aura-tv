@@ -10,6 +10,8 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 REQUIRED_CLASSES = (
+    "PlayerHoldPreviewTest",
+    "SettingsModulesTest",
     "PlayerControlsUiTest",
     "SpiderRuntimeActivityTest",
     "PersonalLibraryDirectPlaybackTest",
