@@ -8,12 +8,12 @@ import androidx.media3.common.Player
  * Passing these values across the Compose boundary prevents stale chrome when
  * playback pauses at an unchanged position and the child would otherwise skip. */
 internal data class PlayerControlState(
-    val playing: Boolean, val speed: Float, val videoFormat: Format?,
+    val speed: Float, val videoFormat: Format?,
     val audio: List<PlaybackTransport.Option>, val subtitles: List<PlaybackTransport.Option>
 ) {
     companion object {
         @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
-        fun read(player: Player) = PlayerControlState(player.playWhenReady,player.playbackParameters.speed,
+        fun read(player: Player) = PlayerControlState(player.playbackParameters.speed,
             player.videoFormat,PlaybackTransport.options(player,C.TRACK_TYPE_AUDIO),
             PlaybackTransport.options(player,C.TRACK_TYPE_TEXT))
     }
