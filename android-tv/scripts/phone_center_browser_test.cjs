@@ -3,6 +3,8 @@ const {chromium}=require('playwright');
 const fs=require('fs');
 const assert=require('assert');
 const path=require('path');
+const crypto=require('crypto');
+const {execFileSync}=require('child_process');
 
 const evidence=process.env.HERRIN_BROWSER_EVIDENCE_DIR||path.resolve(__dirname,'../build/phone-center-browser');
 fs.mkdirSync(evidence,{recursive:true});
@@ -11,7 +13,13 @@ fs.mkdirSync(evidence,{recursive:true});
  const browser=await chromium.launch({executablePath:process.env.HERRIN_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
  try{
   const page=await browser.newPage({viewport:{width:393,height:852},deviceScaleFactor:1});
+  const configRoot=path.resolve(__dirname,'../app/src/main/assets/config');
+  const inputs=new Map(['center.html','center.js','center.css'].map(name=>[name,fs.readFileSync(path.join(configRoot,name))]));
+  const sourceHashes=Object.fromEntries([...inputs].map(([name,bytes])=>['android-tv/app/src/main/assets/config/'+name,crypto.createHash('sha256').update(bytes).digest('hex')]));
+  sourceHashes['android-tv/scripts/phone_center_browser_test.cjs']=crypto.createHash('sha256').update(fs.readFileSync(__filename)).digest('hex');
+  const sourceSha=execFileSync('git',['rev-parse','HEAD'],{cwd:path.resolve(__dirname,'../..'),encoding:'utf8'}).trim();
   const requests=[],errors=[],connections=[],folders=[];
+  let holdInitialStatus=true,releaseInitialStatus=()=>{},notifyInitialStatus=()=>{};
   let nextId=0,sourceState='ACTIVE',holdSourceStatus=false,releaseSourceStatus=()=>{},notifySourceStatus=()=>{};
   let holdBrowse=false,releaseBrowse=()=>{},notifyBrowse=()=>{};
   let holdTmdb=false,releaseTmdb=()=>{},notifyTmdb=()=>{};
@@ -21,13 +29,13 @@ fs.mkdirSync(evidence,{recursive:true});
    const req=route.request(),url=new URL(req.url());
    if(req.method()==='GET'){
     const file=url.pathname==='/'?'center.html':url.pathname.slice(1);
-    await route.fulfill({status:200,contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(path.resolve(__dirname,'../app/src/main/assets/config',file))});
+    await route.fulfill({status:200,contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:inputs.get(file)||fs.readFileSync(path.join(configRoot,file))});
     return;
    }
    const body=JSON.parse(req.postData());requests.push({path:url.pathname,body,headers:req.headers()});
    let response={ok:true};
    if(url.pathname==='/pair')response={session:'mock-management',pending:false};
-   if(url.pathname==='/status')response={tvbox:'',m3u:'',epg:''};
+   if(url.pathname==='/status'){if(holdInitialStatus){notifyInitialStatus();await new Promise(resolve=>{releaseInitialStatus=resolve});holdInitialStatus=false}response={tvbox:'',m3u:'',epg:''}};
    if(url.pathname==='/tmdb'&&holdTmdb){notifyTmdb();await new Promise(resolve=>{releaseTmdb=resolve});holdTmdb=false}
    if(url.pathname==='/personal')response={ok:true,connections,folders,media:[],progress:''};
    if(url.pathname==='/personal/save'){
@@ -72,8 +80,10 @@ fs.mkdirSync(evidence,{recursive:true});
   assert.strictEqual(await page.getByText('局域网快速配置').count(),0);
   await page.locator('#pair').click();
   assert.strictEqual(requests.length,0,'pairing requires explicit certificate acknowledgement');
-  await page.locator('#verified').check();await page.locator('#pair').click();
-  await page.locator('#manager').waitFor({state:'visible'});
+  const initialStatusRequested=new Promise(resolve=>{notifyInitialStatus=resolve});
+  await page.locator('#verified').check();await page.locator('#pair').click();await initialStatusRequested;
+  assert(await page.locator('#manager').isHidden(),'initial status must be ready before editable forms can be overwritten');
+  releaseInitialStatus();await page.locator('#manager').waitFor({state:'visible'});
   assert(!page.url().includes('#'),'pairing capability must leave address bar');
   assert.strictEqual(await page.locator('#module-content').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(16, 16, 16)');
   for(const tab of ['sources','live','nas','tmdb']){
@@ -107,9 +117,11 @@ fs.mkdirSync(evidence,{recursive:true});
   holdBrowse=true;
   const browseRequested=new Promise(resolve=>{notifyBrowse=resolve});
   await page.locator('#personal-browse').click();await browseRequested;
+  const browseCancelled=page.waitForEvent('requestfailed',r=>new URL(r.url()).pathname==='/personal/browse');
   await page.locator('[data-personal-tab=SMB]').click();
-  const browseResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/personal/browse');
-  releaseBrowse();await browseResponse;await page.waitForTimeout(50);
+  releaseBrowse();
+  assert((await browseCancelled).failure().errorText.includes('ABORTED'),'module changes cancel the old request');
+  await page.waitForTimeout(50);
   assert(await page.locator('#personal-browser').isHidden());
   assert.strictEqual(await page.locator('#personal-directories button').count(),0);
   await page.locator('[data-personal-tab=WebDAV]').click();
@@ -149,6 +161,20 @@ fs.mkdirSync(evidence,{recursive:true});
   assert.strictEqual(await f.locator('[name=id]').inputValue(),'','late save must not assign an ID to the edited new form');
 
 
+  // A new form may intentionally reuse the old password. The old save must not clear it.
+  holdSave=true;
+  const repeatedSecretSave=new Promise(resolve=>{notifySave=resolve});
+  await f.locator('[name=password]').fill('reused-secret');
+  await f.locator('button[type=submit]').click();await repeatedSecretSave;
+  await page.locator('#personal-new').click();
+  await f.locator('[name=name]').fill('New form with reused password');
+  await f.locator('[name=password]').fill('reused-secret');
+  const repeatedSaveResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/personal/save');
+  releaseSave();await repeatedSaveResponse;
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  assert.strictEqual(await f.locator('[name=password]').inputValue(),'reused-secret');
+  assert.strictEqual(await f.locator('[name=id]').inputValue(),'');
+
   await page.locator('[data-tab=sources]').click();
   await page.locator('#sources [name=url]').fill('http://饭太硬.net/tv');
   await page.locator('#sources button').click();
@@ -170,6 +196,31 @@ fs.mkdirSync(evidence,{recursive:true});
   releaseSourceStatus();
   await page.waitForFunction(()=>!document.querySelector('#sources button').disabled);
   assert(await page.locator('#module-toast').isHidden(),'source result must not leak into live tab');
+  // Switch between polling fetches, then submit again while the previous sleep is pending.
+  sourceState='SAVED';
+  const firstPending=page.waitForResponse(r=>new URL(r.url()).pathname==='/sources/status');
+  await page.locator('#sources button').click();await firstPending;
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  await page.locator('[data-tab=live]').click();await page.locator('[data-tab=sources]').click();
+  assert(await page.locator('#sources button').isEnabled(),'leaving a module releases its old UI owner');
+  holdSourceStatus=true;
+  const nextPoll=new Promise(resolve=>{notifySourceStatus=resolve});
+  await page.locator('#sources button').click();await nextPoll;
+  await page.waitForTimeout(1300);
+  assert(await page.locator('#sources button').isDisabled(),'old finally cannot unlock the newer request');
+  sourceState='ACTIVE';releaseSourceStatus();
+  await page.waitForFunction(()=>!document.querySelector('#sources button').disabled);
+
+  // Deterministic client deadline check only; this is not a network/performance measurement.
+  await page.evaluate(()=>{window.__realDateNow=Date.now;window.__deadlineOffset=0;Date.now=()=>window.__realDateNow()+window.__deadlineOffset});
+  sourceState='SAVED';
+  const processing=page.waitForResponse(r=>new URL(r.url()).pathname==='/sources/status');
+  await page.locator('#sources button').click();await processing;
+  await page.evaluate(()=>{window.__deadlineOffset=51000});
+  await page.waitForFunction(()=>document.querySelector('#module-toast').textContent==='仍在处理，请稍后查看');
+  assert(await page.locator('#sources button').isEnabled());
+  await page.evaluate(()=>{Date.now=window.__realDateNow;delete window.__realDateNow;delete window.__deadlineOffset});
+
   await page.locator('[data-tab=live]').click();
   await page.locator('#live [name=m3u]').fill('https://example.invalid/live.m3u');
   await page.locator('#live button').click();
@@ -193,8 +244,8 @@ fs.mkdirSync(evidence,{recursive:true});
   assert(await page.locator('#module-toast').isHidden(),'ended-session response must not notify');
   assert.deepStrictEqual(errors,[],'failed end request must not reject an unhandled promise');
   fs.writeFileSync(path.join(evidence,'phone-center-result.json'),JSON.stringify({
-   test:'Chromium mobile frontend with mocked API',passed:true,pairings:1,modules:4,requests:requests.length,
-   imports:['http','https','smb'],sourceResults:['ACTIVE','FAILED','background ACTIVE'],real_android_server:false,real_mobile_safari:false
+   test:'Chromium mobile frontend with mocked API',source_sha:sourceSha,source_files_sha256:sourceHashes,passed:true,pairings:1,modules:4,requests:requests.length,
+   imports:['http','https','smb'],sourceResults:['ACTIVE','FAILED','cancelled background ACTIVE','processing deadline is not failure'],requestOwnership:true,reusedPasswordIsolation:true,real_android_server:false,real_mobile_safari:false
   },null,2));
   console.log('PASS: mobile UI, HTTP/HTTPS + SMB forms, folders, scoped import feedback, session close (mock API only)');
  }finally{await browser.close()}
