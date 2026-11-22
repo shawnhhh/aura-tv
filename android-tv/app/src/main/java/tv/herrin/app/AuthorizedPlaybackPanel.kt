@@ -163,8 +163,21 @@ private fun AuthorizedPlaybackSession(
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
     LaunchedEffect(media) { DetailPlaybackMetrics.timeline.mediaReady(metricToken) }
     val remoteHoldSeek = remember(media) { RemoteHoldSeek() }
-    var seekAcceleration by remember(media) { mutableIntStateOf(1) }
-    fun resetHoldSeek() { remoteHoldSeek.reset(); seekAcceleration = 1 }
+    var seekPreview by remember(media) { mutableStateOf<Long?>(null) }
+    var seekGestureEpoch by remember(media) { mutableIntStateOf(0) }
+    var resumeAfterSeek by remember(media) { mutableStateOf<(() -> Unit)?>(null) }
+    fun resetHoldSeek() {
+        remoteHoldSeek.reset(); seekPreview = null; kernelRemoteHeld = false; seekGestureEpoch++
+        val resume = resumeAfterSeek; resumeAfterSeek = null; resume?.invoke()
+    }
+    LaunchedEffect(remoteHoldSeek, seekGestureEpoch) {
+        val owner = seekGestureEpoch
+        while (remoteHoldSeek.isLongPress && owner == seekGestureEpoch) {
+            withFrameNanos { }
+            if (remoteHoldSeek.isLongPress && owner == seekGestureEpoch)
+                seekPreview = remoteHoldSeek.preview(android.os.SystemClock.uptimeMillis())
+        }
+    }
     LaunchedEffect(kernelPanelOpen, externalPanelOpen, playbackState) {
         if (kernelPanelOpen || externalPanelOpen || playbackState == Player.STATE_ENDED) resetHoldSeek()
     }
@@ -539,13 +552,31 @@ private fun AuthorizedPlaybackSession(
     }
     fun holdSeek(direction: Int, key: KeyEvent): Boolean {
         if (!player.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) { resetHoldSeek(); return true }
-        val delta = when (key.action) {
-            KeyEvent.ACTION_DOWN -> remoteHoldSeek.down(direction, key.repeatCount, key.eventTime)
-            KeyEvent.ACTION_UP -> remoteHoldSeek.up(direction)
-            else -> null
+        when (key.action) {
+            KeyEvent.ACTION_DOWN -> {
+                val becameHold = remoteHoldSeek.down(direction, key.repeatCount, key.eventTime,
+                    player.currentPosition, player.duration, key.downTime)
+                if (remoteHoldSeek.isHeld) kernelRemoteHeld = true
+                if (becameHold) {
+                    if (player.playWhenReady && resumeAfterSeek == null) {
+                        resumeAfterSeek = { playback.play() }
+                        playback.pause()
+                    }
+                    seekPreview = remoteHoldSeek.preview(key.eventTime)
+                    seekGestureEpoch++
+                }
+                if (!isLive) controlsVisible = true
+            }
+            KeyEvent.ACTION_UP -> {
+                if (!remoteHoldSeek.owns(direction)) return true
+                if (key.isCanceled) { resetHoldSeek(); return true }
+                val target = remoteHoldSeek.up(direction, key.eventTime, player.currentPosition, player.duration)
+                seekPreview = null; kernelRemoteHeld = false; seekGestureEpoch++
+                if (target != null) shownPosition = playback.manager.seekTo(target)
+                controlsInteractionEpoch++
+                val resume = resumeAfterSeek; resumeAfterSeek = null; resume?.invoke()
+            }
         }
-        seekAcceleration = remoteHoldSeek.acceleration
-        if (delta != null) applyRemoteSeek(delta)
         return true
     }
     BackHandler { requestBack("dispatcher") }
@@ -766,10 +797,10 @@ private fun AuthorizedPlaybackSession(
             return "%02d:%02d".format(seconds / 60L, seconds % 60L)
         }
         if (!isLive && !testDiagnostics && controlsVisible && errorMessage == null) KernelMinimalControls(
-            playback, media.kernelPlayback?.title ?: media.displayTitle, shownPosition, shownDuration,
+            playback, media.kernelPlayback?.title ?: media.displayTitle, seekPreview ?: shownPosition, shownDuration,
             initialControl, moreControl, ::applyRemoteSeek,
             { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() }, onEpisodeSelection ?: onLineSelection,
-            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, seekAcceleration = seekAcceleration, specsReady = if (playback.whole) kernelFirstFrame || frameSinceSelection && kernelSelectedEpisode == media.kernelPlayback?.episode else frameSinceSelection)
+            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, specsReady = if (playback.whole) kernelFirstFrame || frameSinceSelection && kernelSelectedEpisode == media.kernelPlayback?.episode else frameSinceSelection)
         if (testDiagnostics && !playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(

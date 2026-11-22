@@ -43,7 +43,7 @@ internal fun KernelMinimalControls(
     initialFocus: FocusRequester, speedFocus: FocusRequester,
     onSeek: (Long) -> Unit, onInteraction: () -> Unit,
     onPanel: (Boolean) -> Unit, onEpisodes: (() -> Unit)?,
-    onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit, seekAcceleration: Int, specsReady: Boolean
+    onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit, specsReady: Boolean
 ) {
     val player = session.player
     fun Modifier.seekButton(direction: Int) = onFocusChanged { if (!it.isFocused) resetHoldSeek() }
@@ -111,8 +111,6 @@ internal fun KernelMinimalControls(
                 Text(clock(position), color = Color.White, modifier = Modifier.testTag("player-position-label"))
                 Text(clock(duration), color = Color.White, modifier = Modifier.testTag("player-duration-label"))
             }
-            if (seekAcceleration > 1) Text("${seekAcceleration}×  ${clock(position)}", color = Color.White,
-                modifier = Modifier.testTag("seek-acceleration"))
             LinearProgressIndicator(progress = {
                 if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
             }, modifier = Modifier.fillMaxWidth().height(3.dp), color = Color.White,

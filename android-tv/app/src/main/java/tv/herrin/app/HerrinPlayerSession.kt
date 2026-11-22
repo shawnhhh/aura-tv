@@ -111,6 +111,15 @@ internal class HerrinPlayerSession(context: Context, private var media: Playback
         var onTimeout: ((PlaybackException) -> Unit)?
             get() = legacy?.manager?.onTimeout
             set(value) { check(!whole); requireNotNull(legacy).manager.onTimeout = value }
+        fun seekTo(position: Long): Long {
+            if (closed || !player.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) return player.currentPosition
+            val destination = tv.herrin.kernel.SeekBounds.offset(0, position.coerceAtLeast(0), player.duration)
+            if (whole) {
+                if (!isActiveWhole()) return player.currentPosition
+                requireNotNull(runtime).gateway.seek(destination)
+            } else requireNotNull(legacy).manager.seekTo(destination)
+            return destination
+        }
         fun seekBy(delta: Long): Long {
             if (!whole) return requireNotNull(legacy).manager.seekBy(delta)
             if (!isActiveWhole()) return player.currentPosition
