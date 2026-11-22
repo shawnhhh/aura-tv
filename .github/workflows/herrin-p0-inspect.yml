@@ -1,7 +1,7 @@
 name: HERRIN P0 Retained Controlled Failure Evidence
 on:
   push:
-    branches: ['codex/herrin-startup-source-health-20261107']
+    branches: ['codex/herrin-startup-source-health-20261107', 'codex/herrin-p0-live-playback-20261110']
     paths: ['.github/workflows/herrin-p0-inspect.yml']
 permissions:
   contents: read
@@ -15,9 +15,10 @@ jobs:
         with:
           name: HERRIN-emulator-evidence
           github-token: ${{ github.token }}
-          run-id: 42362418140
+          run-id: ${{ github.ref_name == 'codex/herrin-p0-live-playback-20261110' && '44963889759' || '42362418140' }}
           path: evidence/tv
       - name: Inspect controlled fixture recovery and cached home failures
+        if: github.ref_name != 'codex/herrin-p0-live-playback-20261110'
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -31,12 +32,14 @@ jobs:
                           if i not in shown:print(path.name+': '+rows[i]);shown.add(i)
           PY
       - uses: actions/download-artifact@v4
+        if: github.ref_name != 'codex/herrin-p0-live-playback-20261110'
         with:
           name: HERRIN-API31-startup-evidence
           github-token: ${{ github.token }}
           run-id: 42361229841
           path: evidence/api31
       - name: Review recorded branding geometry separately from timing metrics
+        if: github.ref_name != 'codex/herrin-p0-live-playback-20261110'
         run: |
           video=$(find evidence/api31 -name visual-only-startup.mp4 -type f | head -n 1)
           test -s "$video"
@@ -48,12 +51,78 @@ jobs:
           from pathlib import Path
           print('HERRIN_VISUAL_ONLY_JPEG='+base64.b64encode(Path('/tmp/herrin-visual.jpg').read_bytes()).decode())
           PY
+      - name: Inspect the original failed recent-playback window without another media run
+        if: github.ref_name == 'codex/herrin-p0-live-playback-20261110'
+        run: |
+          python3 - <<'RECENT'
+          import re,json
+          from pathlib import Path
+          method='myContinueWatchingDirectlyDecodesAndReturnsToTheSameCard'
+          for path in Path('evidence/tv').rglob('logcat.txt'):
+              rows=path.read_text(errors='replace').splitlines()
+              starts=[i for i,row in enumerate(rows) if method in row and 'started:' in row]
+              print('ORIGINAL_RECENT_WINDOW',json.dumps({'run':44963889759,'method':method,'start_found':bool(starts)}))
+              if not starts: continue
+              start=starts[-1]
+              end=next((i for i in range(start+1,len(rows)) if method in rows[i] and ('finished:' in rows[i] or 'failed:' in rows[i])),len(rows)-1)
+              tags=re.compile(r'\b(?:HerrinPlaybackDiag|HerrinDecoderEvidence|HerrinRecentFailure|ExoPlayerImplInternal|MediaCodecRenderer|MediaCodec|ACodec|CCodec|SurfaceUtils|MockWebServer|TestRunner)\s*:')
+              selected=[row for row in rows[max(0,start-5):min(len(rows),end+10)] if tags.search(row)]
+              for row in selected[:300]:
+                  print('ORIGINAL_RECENT '+re.sub(r'https?://[^\s\]<>]+','<fixture-url>',row)[:900])
+          RECENT
+      - uses: actions/download-artifact@v4
+        if: github.ref_name == 'codex/herrin-p0-live-playback-20261110'
+        with:
+          name: HERRIN-API31-startup-evidence
+          github-token: ${{ github.token }}
+          run-id: 44963889759
+          path: evidence/current-api31
+      - name: Inspect the failed cold snapshot instead of inferring its UI from later logs
+        if: github.ref_name == 'codex/herrin-p0-live-playback-20261110'
+        run: |
+          python3 - <<'SNAPSHOT'
+          import json,re,xml.etree.ElementTree as ET
+          from pathlib import Path
+          for path in Path('evidence/current-api31').rglob('home.xml'):
+              root=ET.fromstring(path.read_text())
+              rows=[{k:n.get(k) for k in ('package','text','content-desc','bounds','enabled','clickable','focused')} for n in root.iter('node')]
+              for row in rows:
+                  for key in ('text','content-desc'):
+                      row[key]=re.sub(r'https?://[^\s]+','<fixture-url>',row[key] or '')[:160]
+              print('ORIGINAL_COLD_SNAPSHOT='+json.dumps(rows[:160],ensure_ascii=False))
+          SNAPSHOT
+      - uses: actions/download-artifact@v4
+        if: github.ref_name == 'codex/herrin-p0-live-playback-20261110'
+        with:
+          name: HERRIN-API31-startup-evidence
+          github-token: ${{ github.token }}
+          run-id: 44966779706
+          path: evidence/latest-api31
+      - name: Review actual first-data startup frames separately from CPU timing
+        if: github.ref_name == 'codex/herrin-p0-live-playback-20261110'
+        run: |
+          python3 -m pip install --quiet imageio-ffmpeg==0.6.0
+          python3 - <<'VISUAL'
+          import base64,subprocess,json
+          from pathlib import Path
+          import imageio_ffmpeg
+          videos=list(Path('evidence/latest-api31').rglob('visual-only-startup.mp4'))
+          if videos:
+              output=Path('/tmp/herrin-first-data-platform.jpg')
+              subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-i',str(videos[0]),
+                  '-vf','fps=1,scale=320:180,tile=4x3','-frames:v','1',str(output)],check=True)
+              print('HERRIN_VISUAL_ONLY_JPEG='+base64.b64encode(output.read_bytes()).decode())
+              print('HERRIN_VISUAL_SCOPE='+json.dumps({'source':'18cbc73a','actual_recording':True,
+                  'first_data_offline':True,'sampled_once_per_second':True,'performance_source':False,'physical_TCL':False}))
+          else:
+              print('HERRIN_VISUAL_BLOCKED=recording_missing_no_visual_acceptance')
+          VISUAL
       - name: Check official trace availability and bounded main/render slices
         run: |
           python3 - <<'TRACEPY'
-          import re,zlib
+          import os,re,zlib
           from pathlib import Path
-          root=Path('evidence/api31')
+          root=Path('evidence/latest-api31' if os.environ['GITHUB_REF_NAME']=='codex/herrin-p0-live-playback-20261110' else 'evidence/api31')
           for p in root.rglob('atrace-start.txt'):print('ATRACE_START '+p.read_text(errors='replace')[:2000])
           logs=''.join(p.read_text(errors='replace') for p in root.rglob('cold-diagnostics.txt'))
           match=re.search(r'\s(\d+)\s+\1\s+I HerrinStartupPhase:',logs)
