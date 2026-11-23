@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import re
 import zipfile
+from classfile_api import public_instance_methods
 
 ROOT = Path(__file__).resolve().parent
 UPSTREAM = ROOT.parent / "vendor/fongmi-core/upstream"
@@ -80,6 +81,7 @@ def inspect(directory, lock_path):
     seen_paths = set()
     seen_names = set()
     verified = []
+    methods = {}
     errors = []
     missing_external = set(external)
     missing_upstream = set(upstream)
@@ -128,6 +130,14 @@ def inspect(directory, lock_path):
                 raise ValueError("Duplicate implementation class: " + sorted(duplicate)[0])
             if origin == "external" and native != {"arm64-v8a", "armeabi-v7a"}:
                 raise ValueError("Native ARM32/ARM64 libraries missing")
+            # Names must be real public instance methods, not a UTF-8 constant
+            # or a same-named class. This narrow check does not prove full ABI.
+            with zipfile.ZipFile(path) as aar:
+                with zipfile.ZipFile(io.BytesIO(aar.read("classes.jar"))) as jar:
+                    for owner in lock.get("required_original_methods", {}):
+                        entry = owner.replace(".", "/") + ".class"
+                        if entry in jar.namelist():
+                            methods[owner] = public_instance_methods(jar.read(entry))
             found.update(classes)
             verified.append(path.name)
             if origin == "external":
@@ -156,6 +166,12 @@ def inspect(directory, lock_path):
     missing_apis = sorted(required - found)
     if not missing_external and not missing_upstream and not errors and missing_apis:
         errors.append("Original media APIs missing: " + ", ".join(missing_apis[:30]))
+    missing_methods = sorted(
+        owner + "." + name
+        for owner, names in lock.get("required_original_methods", {}).items()
+        for name in names if name not in methods.get(owner, set()))
+    if not missing_external and not missing_upstream and missing_methods:
+        errors.append("Original public methods missing: " + ", ".join(missing_methods))
     status = ("INVALID" if errors else "DEPENDENCY_BLOCKED" if
               missing_external or missing_upstream else
               "BUILD_INPUTS_PRESENT_NOT_PLAYBACK_PROOF")
@@ -169,6 +185,8 @@ def inspect(directory, lock_path):
             Path(item["path"]).name for item in lock["artifacts"]
             if item.get("origin") == "media3" and Path(item["path"]).name in verified),
         "missing_media3_api_count": len(missing_apis),
+        "missing_media3_apis": missing_apis,
+        "missing_original_methods": missing_methods,
         "errors": errors,
         "upstream_commit": lock["upstream_commit"],
     }

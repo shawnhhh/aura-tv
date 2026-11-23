@@ -32,7 +32,12 @@ public final class KernelAuthorizationActivity extends FragmentActivity {
         session = new Session(owner, observer, cancelled);
     }
     static void cancelRequests() {
+        // Rotate the capability before completing old futures. Queued dismiss
+        // callbacks from a previous episode cannot cancel the new selection.
+        Session previous = session;
+        if (previous != null) session = new Session(previous.owner(), previous.pending(), previous.cancelled());
         for (Request request : REQUESTS.values()) request.result().cancel(false);
+        if (session != null) publishPending(session);
     }
     static void endSession(Object owner) {
         Session current = session;
@@ -54,7 +59,11 @@ public final class KernelAuthorizationActivity extends FragmentActivity {
         String ticket = UUID.randomUUID().toString();
         var request = new Request(current, options, callback, result);
         REQUESTS.put(ticket, request);
+        android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+        Runnable timeout = () -> result.complete(null);
+        main.postDelayed(timeout, 120_000L);
         result.whenComplete((value, failure) -> {
+            main.removeCallbacks(timeout);
             REQUESTS.remove(ticket, request);
             // Null means dismissed, never authorized. Notify the player before
             // the upstream worker can publish a protected playback result.
@@ -106,8 +115,8 @@ public final class KernelAuthorizationActivity extends FragmentActivity {
         dialog.whenComplete((value, failure) -> App.post(() -> {
             if (failure == null) request.result().complete(value);
             else {
-                request.result().completeExceptionally(failure);
-                if (request.owner() == session) request.owner().cancelled().run();
+                boolean completed = request.result().completeExceptionally(failure);
+                if (completed && request.owner() == session) request.owner().cancelled().run();
             }
             finish();
         }));

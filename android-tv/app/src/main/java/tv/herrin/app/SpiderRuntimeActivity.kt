@@ -84,7 +84,7 @@ internal object SpiderRuntimeActivityHost {
         result.whenComplete { value, failure ->
             current.dialogs.remove(result)
             // Closing the provider window is cancellation, never login success.
-            if (failure == null && value == null) {
+            if (failure != null || value == null) {
                 val cancelled = synchronized(lock) {
                     if (owner === current) { owner = null; true } else false
                 }

@@ -91,6 +91,15 @@
       "ci_run": "https://github.com/shawnhhh/aura-tv/actions/runs/43144759251",
       "evidence": "SHA-256 passed for common, exoplayer, and ui AARs, but required DecoderMode, DiscMenuController, SubtitleSelectionState, IsoDiscPreparation, and PlayerView.setBackendPlayer are absent.",
       "must_not_be_staged": true
+    },
+    {
+      "repository": "https://github.com/FongMi/media",
+      "commit": "2bc207851df311340767e913931ca7b28cab1794",
+      "branch": "release",
+      "license": "Apache-2.0",
+      "status": "REJECTED_SOURCE_API_ABSENT",
+      "evidence": "Source inspection only: release tree has none of DecoderMode, DiscMenuController, SubtitleSelectionState, IsoDiscPreparation, matching MPV Java wrapper classes, or PlayerView.setBackendPlayer. No build or tests run.",
+      "must_not_be_staged": true
     }
   ],
   "media3_classpath_policy": "Only explicitly locked origin=media3 AARs with real required APIs, full source/sha256/license and complete binary coverage may be staged; no stock Media3 fallback.",
@@ -128,5 +137,10 @@
       "must_not_be_staged": true,
       "reason": "Both pinned source-built native AARs package valid ARM ELF but lack four classes imported by original TV@305dff2; cannot substitute native candidates for the exact original-core Java ABI."
     }
-  ]
+  ],
+  "required_original_methods": {
+    "androidx.media3.ui.PlayerView": [
+      "setBackendPlayer"
+    ]
+  }
 }
