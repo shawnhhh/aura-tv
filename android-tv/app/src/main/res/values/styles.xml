@@ -7,7 +7,11 @@
         <item name="android:windowBackground">@drawable/launch_backdrop</item>
         <item name="android:colorAccent">#FFFFFF</item>
     </style>
-    <style name="Theme.Herrin.SpiderHost" parent="android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Herrin.SpiderHost" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">#FFFFFF</item>
+        <item name="colorOnPrimary">#101114</item>
+        <item name="colorSurface">#17191D</item>
+        <item name="colorOnSurface">#FFFFFF</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowDisablePreview">true</item>

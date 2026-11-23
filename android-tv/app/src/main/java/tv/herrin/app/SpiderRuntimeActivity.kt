@@ -6,7 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.OnBackPressedCallback
 import java.lang.ref.WeakReference
 import java.util.UUID
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 /** Real same-:spider-process window for provider code using CatVod Runtime.activity().
  * It renders no QR, login state or media. Only the provider owns those operations. */
-class SpiderRuntimeActivity : ComponentActivity() {
+class SpiderRuntimeActivity : FragmentActivity() {
     private var ticket: String? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +49,7 @@ internal object SpiderRuntimeActivityHost {
         val result = CompletableFuture<Activity>()
         var requested = false
         var activity = WeakReference<Activity>(null)
+        val dialogs = java.util.concurrent.CopyOnWriteArrayList<CompletableFuture<String>>()
     }
     private val lock = Any()
     private val main by lazy { Handler(Looper.getMainLooper()) }
@@ -65,8 +66,53 @@ internal object SpiderRuntimeActivityHost {
         previous?.let(::finish)
     }
     private fun finish(value: Owner) {
+        value.dialogs.forEach { it.cancel(true) }
         value.result.completeExceptionally(IllegalStateException("Spider activity operation ended"))
         main.post { value.activity.get()?.takeUnless { it.isFinishing || it.isDestroyed }?.finish() }
+    }
+
+    /** Original provider dialog, bound to this operation and its real window.
+     * 未测试，待后续统一验证。 No host interpretation of login/cookies. */
+    fun dialog(options: String, callback: java.util.function.Function<String, CompletableFuture<String>>?): CompletableFuture<String> {
+        val current = synchronized(lock) { owner }
+        val result = CompletableFuture<String>()
+        if (current == null) {
+            result.completeExceptionally(IllegalStateException("No active Spider operation"))
+            return result
+        }
+        current.dialogs.add(result)
+        result.whenComplete { value, failure ->
+            current.dialogs.remove(result)
+            // Closing the provider window is cancellation, never login success.
+            if (failure == null && value == null) {
+                val cancelled = synchronized(lock) {
+                    if (owner === current) { owner = null; true } else false
+                }
+                if (cancelled) { finish(current); current.cancel() }
+            }
+        }
+        CompletableFuture.runAsync {
+            val window = activity()
+            main.post {
+                if (result.isDone) return@post
+                if (window == null || synchronized(lock) { owner !== current } ||
+                    window.isFinishing || window.isDestroyed) {
+                    result.cancel(true)
+                    return@post
+                }
+                val guarded = callback?.let { action -> java.util.function.Function<String, CompletableFuture<String>> { event ->
+                    if (synchronized(lock) { owner !== current } || result.isDone)
+                        CompletableFuture<String>().apply { cancel(true) }
+                    else action.apply(event)
+                } }
+                val original = tv.herrin.app.spiderdialog.SpiderDialog.show(options, guarded)
+                result.whenComplete { _, _ -> if (!original.isDone) original.cancel(true) }
+                original.whenComplete { value, failure ->
+                    if (failure == null) result.complete(value) else result.completeExceptionally(failure)
+                }
+            }
+        }
+        return result
     }
 
     fun activity(): Activity? {

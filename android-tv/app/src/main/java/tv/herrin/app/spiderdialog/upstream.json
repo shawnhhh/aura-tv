@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/FongMi/TV",
+  "commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+  "license": "GPL-3.0-only",
+  "status": "未测试，待后续统一验证",
+  "files": [
+    {
+      "path": "java/com/fongmi/android/tv/ui/dialog/SpiderDialog.java",
+      "sha256": "fda500b7675ef02234179172909c65529a359958daee86421266d8c910831a35",
+      "host_changes": [
+        "package/import relocation",
+        "secure dialog window and opaque QR accessibility label"
+      ]
+    },
+    {
+      "path": "java/com/fongmi/android/tv/utils/QRCode.java",
+      "sha256": "80b9c4dd6f2765abdfdcab7678b02596e3eb72954fc8e790899b554717475636",
+      "host_changes": [
+        "package/import relocation"
+      ]
+    }
+  ]
+}

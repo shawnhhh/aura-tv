@@ -311,7 +311,7 @@ class TvBoxSpiderService : Service() {
             return@Handler true
         }
         if (message.what == SpiderIpc.AUTH_ACTION) {
-            if (authCaller?.second == message.arg1) authorization.action(message.arg2, message.data.getString("button"))
+            if (authCaller?.second == message.arg1 && authCaller?.first == message.replyTo) authorization.action(message.arg2, message.data.getString("button"))
             return@Handler true
         }
         val reply = message.replyTo
@@ -490,22 +490,11 @@ class TvBoxSpiderService : Service() {
         check(process == "$packageName:spider") { "Spider must run in its dedicated process" }
         CatVodRuntime.setActivity(SpiderRuntimeActivityHost::activity)
         CatVodRuntime.setDialog { options, callback ->
-            SpiderNetworkTrace.event("AUTH_DIALOG_REQUESTED")
-            if (authCaller == null) java.util.concurrent.CompletableFuture<String>().apply {
-                SpiderNetworkTrace.event("AUTH_DIALOG_NO_ACTIVE_OPERATION")
-                completeExceptionally(IllegalStateException("No active authorization operation"))
-            } else try {
-                authorization.show(options, callback).also { result ->
-                    SpiderNetworkTrace.event("AUTH_DIALOG_ACCEPTED")
-                    val deadline = watchdog.schedule({ result.complete(null) },
-                        SpiderAuthorizationProtocol.TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                    result.whenComplete { _, _ -> deadline.cancel(false) }
-                }
-            } catch (_: Exception) {
-                SpiderNetworkTrace.event("AUTH_DIALOG_PROTOCOL_REJECTED")
-                java.util.concurrent.CompletableFuture<String>().apply {
-                    completeExceptionally(IllegalArgumentException("Unsupported authorization dialog"))
-                }
+            SpiderNetworkTrace.event("AUTH_ORIGINAL_DIALOG_REQUESTED")
+            SpiderRuntimeActivityHost.dialog(options, callback).also { result ->
+                val deadline = watchdog.schedule({ result.complete(null) },
+                    SpiderAuthorizationProtocol.TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                result.whenComplete { _, _ -> deadline.cancel(false) }
             }
         }
     }

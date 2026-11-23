@@ -61,6 +61,11 @@ dependencies {
     // Shared UI boundary only. Original engine classes are isolated until the
     // complete kernel build and host classpath migration have passed.
     implementation(project(":kernel-contract"))
+    // Original SpiderDialog UI is independent of native playback archives.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.fragment:fragment:1.8.5")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("com.github.bumptech.glide:glide:4.16.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
     // GPL-3.0 CatVod SDK is source-compiled in this app module to avoid
     // AGP 8.7/D8 cross-module dexing failures; source stays in its own packages.
