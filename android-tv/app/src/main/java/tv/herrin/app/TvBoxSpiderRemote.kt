@@ -331,6 +331,8 @@ class TvBoxSpiderService : Service() {
                             data = Bundle().apply { putString("ticket", ticket) }
                         })
                     }, {
+                        // Publish failure before a plugin can return a media URL.
+                        if (activeOperation == id) retiring = true
                         Handler(Looper.getMainLooper()).post {
                             if (activeOperation == id) {
                                 retiring = true
@@ -456,7 +458,8 @@ class TvBoxSpiderService : Service() {
                         terminate.cancel(false)
                     }
                 }
-                val bounded = if (response.toString().length <= SpiderIpc.MAX_RESPONSE_CHARS) response
+                val bounded = if (retiring) SpiderIpc.error("授权已取消，请重试。")
+                    else if (response.toString().length <= SpiderIpc.MAX_RESPONSE_CHARS) response
                     else SpiderIpc.error("Spider 返回内容超过进程通信限制")
                 val responseMessage = Message.obtain(null, operation).apply {
                     arg1 = id
@@ -615,6 +618,7 @@ internal class TvBoxSpiderBridge(context: Context) {
             val respond: (String?) -> Unit = { button ->
                 runCatching { server?.send(Message.obtain(null, SpiderIpc.AUTH_ACTION).apply {
                     arg1 = operationId; arg2 = dialogId
+                    replyTo = responses
                     data = Bundle().apply { if (button != null) putString("button", button) }
                 }) }
                 Unit

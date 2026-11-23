@@ -67,9 +67,11 @@ public final class KernelAuthorizationActivity extends FragmentActivity {
             REQUESTS.remove(ticket, request);
             // Null means dismissed, never authorized. Notify the player before
             // the upstream worker can publish a protected playback result.
-            if (failure == null && value == null) App.post(() -> {
-                if (session == current) current.cancelled().run();
-            });
+            if (failure == null && value == null) {
+                Runnable cancel = () -> { if (session == current) current.cancelled().run(); };
+                if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) cancel.run();
+                else App.post(cancel);
+            }
             publishPending(current);
         });
         publishPending(current);
@@ -113,7 +115,10 @@ public final class KernelAuthorizationActivity extends FragmentActivity {
             return request.callback().apply(event);
         });
         dialog.whenComplete((value, failure) -> App.post(() -> {
-            if (failure == null) request.result().complete(value);
+            if (failure == null) {
+                if (value == null && request.owner() == session) request.owner().cancelled().run();
+                request.result().complete(value);
+            }
             else {
                 boolean completed = request.result().completeExceptionally(failure);
                 if (completed && request.owner() == session) request.owner().cancelled().run();

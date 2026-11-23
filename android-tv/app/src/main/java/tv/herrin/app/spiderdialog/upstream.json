@@ -19,5 +19,17 @@
         "package/import relocation"
       ]
     }
+  ],
+  "license_file": "android-tv/LICENSE-GPL-3.0.md",
+  "license_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+  "resource_sources": [
+    {
+      "path": "app/src/main/res/values-zh-rCN/strings.xml",
+      "sha256": "69b362e361acfc0abee44454af80ade074a130561eb6ace6f5eb75ad6fe3bb73"
+    },
+    {
+      "path": "app/src/main/res/drawable/ic_arrow_drop_down.xml",
+      "sha256": "f3511dbfd551dcefd188928782ba6bfc6f893c87eb3ac7c47f2fb1e5707b24e6"
+    }
   ]
 }

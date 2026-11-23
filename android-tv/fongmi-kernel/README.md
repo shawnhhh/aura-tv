@@ -113,3 +113,36 @@ missing files. An external artifact cannot claim this upstream license.
 The complete gate remains DEPENDENCY_BLOCKED for the absent matched MPV/FFmpeg
 and custom Media3 inputs. No original-core build or provider playback success is
 claimed by verifying these two archives.
+
+## H-005 development — 2026-11-23
+
+All changes in this batch: **未测试，待后续统一验证**. No tests, builds,
+dependency compilation, APKs or manually triggered CI were run.
+
+- Code committed: the normal app now hosts a relocated GPL original
+  `SpiderDialog` and `QRCode` from TV@305dff2 in its real `:spider`
+  FragmentActivity. Only host imports/services, secure-window behavior and the
+  opaque QR accessibility label differ. Provenance and original file hashes:
+  `app/src/main/java/tv/herrin/app/spiderdialog/upstream.json`.
+  `Runtime.dialog` → operation-owned Activity → original dialog → provider
+  callback → original pending Spider operation. The host neither polls a cloud
+  account itself nor interprets dialog completion as authentication success.
+- Code committed: operation/session cancellation, action callback retirement,
+  bounded dialog lifetime and rejection of media returned after cancellation.
+  Whole-kernel selection switches retire old authorization capabilities before
+  new selection; no Cookie/Token cache or expiry policy is invented by the host.
+- Dependency blocked: exact `lib-mpvplayer-release.aar`,
+  `lib-decoder-ffmpeg-release.aar` and matching custom Media3. Required APIs
+  include `MpvConfigFileInspector`, `MpvDecoderMode`, `MpvSubtitleContentLoader`,
+  `MpvDrmSupport`, `DecoderMode`, `DiscMenuController`, `SubtitleSelectionState`,
+  `IsoDiscPreparation`, and `PlayerView.setBackendPlayer`. The dependency report
+  now emits the complete missing imported-class list and a narrow public-method
+  gate; it does not establish full binary compatibility.
+- Source inspection: official media `release` at
+  `2bc207851df311340767e913931ca7b28cab1794` also lacks these custom APIs.
+  The incompatible `release-1.11.0-fongmi` head is unchanged. Neither is staged.
+- Not developed: preserving an in-flight original dialog across Activity
+  destruction. Destruction cancels the pending operation; an explicit retry
+  uses the provider's own valid login state. No consumed action is replayed.
+- Dependency blocked: final whole-kernel classpath migration/player takeover.
+  This batch does not establish real provider authorization or playback frames.
