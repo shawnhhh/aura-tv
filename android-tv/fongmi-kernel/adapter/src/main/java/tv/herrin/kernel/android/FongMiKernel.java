@@ -82,6 +82,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     private volatile boolean closed;
     private boolean firstFrame;
     private boolean authorizationPending;
+    private boolean authorizationCancelled;
     private boolean loaded;
     private Phase phase = Phase.IDLE;
     private String errorCode = "";
@@ -98,7 +99,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         lifecycle.registry.setCurrentState(Lifecycle.State.RESUMED);
         KernelAuthorizationActivity.bindSession(this, pending -> {
             if (!closed) { authorizationPending = pending; publish(""); }
-        });
+        }, this::cancelAuthorization);
     }
 
     private static void requireMain() {
@@ -230,6 +231,8 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         site(selected.siteKey());
         if (!selected.flag().getEpisodes().contains(selected.episode()))
             throw new IllegalStateException("Episode was replaced by upstream resolution");
+        KernelAuthorizationActivity.cancelRequests();
+        authorizationCancelled = false;
         active = selected;
         if (playbackAdmission != null && !playbackAdmission.isDone()) playbackAdmission.cancel(false);
         boolean changingMovie = vodSession == null || currentVod != selected.vod() || !currentSite.equals(selected.siteKey());
@@ -475,6 +478,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         firstFrame = false;
     }
     private void releaseVodSession() {
+        KernelAuthorizationActivity.cancelRequests();
         if (vodSession != null) {
             if (manager != null) vodSession.saveHistory(true, System.currentTimeMillis(), manager.getPosition(), manager.getDuration());
             vodSession.close();
@@ -488,6 +492,16 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         history = null;
         latestDetail = null;
         selectedEpisodeHandle = "";
+    }
+    /** 未测试，待后续统一验证。 Dismissal cannot fall through to protected media. */
+    private void cancelAuthorization() {
+        if (closed || authorizationCancelled) return;
+        authorizationCancelled = true;
+        KernelAuthorizationActivity.cancelRequests();
+        if (vodSession != null) vodSession.beginSelection();
+        if (manager != null) manager.stop();
+        emit(Phase.ERROR, "AUTHORIZATION_CANCELLED");
+        failAdmission();
     }
     private void failAdmission() {
         if (playbackAdmission != null && !playbackAdmission.isDone())
@@ -568,6 +582,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
     @Override public void setPlaybackEnding(long ending) { if (manager != null) manager.setEnding(ending); }
     @Override public boolean isPlaybackEndingManaged() { return true; }
     @Override public void startPlayback(Result result, boolean useParse, long position, MediaMetadata metadata) {
+        if (closed || authorizationCancelled) return;
         ensurePlayer();
         long start = requestedPosition == C.TIME_UNSET ? position : requestedPosition;
         requestedPosition = C.TIME_UNSET;
@@ -575,7 +590,7 @@ public final class FongMiKernel implements Kernel, VodPlaybackHost {
         if (playbackAdmission != null) playbackAdmission.complete(null);
     }
     @Override public boolean preloadPlayback(Result result, long position, MediaMetadata metadata, VodPlayRequest tag) {
-        return manager != null && manager.preload(PlaySpec.from(result, getHistoryKey(), metadata)
+        return !authorizationCancelled && manager != null && manager.preload(PlaySpec.from(result, getHistoryKey(), metadata)
             .setEnding(history == null ? 0 : history.getEnding()), position, tag);
     }
     @Override public boolean seekToPreloaded(VodPlayRequest tag) { return manager != null && manager.seekToPreloaded(tag); }
