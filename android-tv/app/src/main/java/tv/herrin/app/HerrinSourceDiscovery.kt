@@ -141,7 +141,7 @@ internal class HerrinSourceDiscovery {
             publish(snapshot)
         }
         deliver()
-        val cmsSlots = Semaphore(6)
+        val cmsSlots = Semaphore(4)
         val detailSlots = Semaphore(3)
         suspend fun spiderOperation(block: suspend () -> Unit) {
             while (true) {
