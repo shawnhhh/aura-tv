@@ -336,7 +336,8 @@ class TvBoxSpiderService : Service() {
                             runCatching { reply.send(Message.obtain(null, operation).apply {
                                 arg1 = id
                                 data = Bundle().apply {
-                                    putString("payload", SpiderIpc.error("授权未完成，请重试。").toString())
+                                    putString("payload", SpiderIpc.error("授权未完成，请重试。")
+                                        .put("authorizationEnded", true).toString())
                                 }
                             }) }
                             operations[id]?.cancel()
@@ -791,6 +792,9 @@ internal class TvBoxSpiderBridge(context: Context) {
                     }
                 }
                 val result = sendRequest(operation, payload, invocation)
+                // The worker may exit immediately after the denial. That
+                // transport change cannot reopen an explicitly ended dialog.
+                if (result is SpiderResult.Failure && result.authorizationEnded) return@withLock result
                 if (!sourceSession.isCurrent(invocation))
                     return@withLock SpiderResult.Failure("Spider 会话已结束或变化，已取消操作")
                 if (startedGeneration == generation) return@withLock result
@@ -862,7 +866,8 @@ internal class TvBoxSpiderBridge(context: Context) {
         val result = withContext(Dispatchers.Default){JSONObject(response)}
         if (operation == SpiderIpc.PLAY) SpiderPlaybackEvidence.replay(result.optJSONArray("playbackEvidence"))
         if (result.optBoolean("ok")) SpiderResult.Ready(result)
-        else SpiderResult.Failure(result.optString("message").ifBlank { "Spider 返回错误" })
+        else SpiderResult.Failure(result.optString("message").ifBlank { "Spider 返回错误" },
+            authorizationEnded = result.optBoolean("authorizationEnded"))
     } catch (timeout: TimeoutCancellationException) {
         kotlinx.coroutines.currentCoroutineContext().let { context -> context[Job]?.ensureActive() }
         SpiderResult.Failure("Spider 服务响应超时，请重新应用站点")

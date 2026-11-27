@@ -155,7 +155,6 @@ internal class HerrinSourceDiscovery {
         coroutineScope {
             val owner = this
             val queued = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-            val perNodeDetails = java.util.concurrent.ConcurrentHashMap<String, Semaphore>()
             suspend fun load(node: Node, hit: Hit) {
                 val started = System.nanoTime()
                 try {
@@ -201,15 +200,14 @@ internal class HerrinSourceDiscovery {
             fun prefetch(node: Node) {
                 val matches = snapshot.hits.filter { it.node.id == node.id && it.relevance == SourceRelevance.CONFIRMED }
                 val candidates = if (node.bundledPersonalLayout) matches.take(1) else matches
-                candidates.filter { it.key !in snapshot.detailed }.forEach { hit ->
-                    if (!queued.add(hit.key)) return@forEach
-                    owner.launch {
-                        // A node with many versions cannot fill the entire global
-                        // queue ahead of every other provider's first candidate.
-                        perNodeDetails.getOrPut(node.id) { Semaphore(1) }.withPermit {
-                            if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation { load(node, hit) }
-                            else detailSlots.withPermit { load(node, hit) }
-                        }
+                owner.launch {
+                    // One coroutine preserves this node's candidate order.
+                    // Release each shared slot before the next candidate so
+                    // unrelated nodes can publish their ready layouts.
+                    for (hit in candidates) {
+                        if (hit.key in snapshot.detailed || !queued.add(hit.key)) continue
+                        if (node.type == HerrinSourceType.TVBOX_SPIDER) spiderOperation { load(node, hit) }
+                        else detailSlots.withPermit { load(node, hit) }
                     }
                 }
             }

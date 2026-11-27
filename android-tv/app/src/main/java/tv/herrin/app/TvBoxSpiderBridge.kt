@@ -32,7 +32,7 @@ import java.util.zip.ZipFile
  */
 internal sealed interface SpiderResult<out T> {
     data class Ready<T>(val value: T) : SpiderResult<T>
-    data class Failure(val message: String) : SpiderResult<Nothing>
+    data class Failure(val message: String, val authorizationEnded: Boolean = false) : SpiderResult<Nothing>
 }
 
 internal object SpiderVodCodec {
