@@ -142,7 +142,7 @@ internal class LanConfigServer(
                 }
                 "/status" -> JSONObject().put("endpoint", TmdbEndpoints.current)
                     .put("tokenConfigured", prefs.tmdbReadToken.isNotBlank())
-                    .put("tvbox", prefs.tvBoxWarehouseUrl).put("m3u", prefs.livePlaylistUrl)
+                    .put("tvbox", prefs.tvBoxWarehouseDisplayUrl).put("m3u", prefs.livePlaylistUrl)
                     .put("epg", prefs.liveEpgUrl).put("nas", prefs.nasWebDavUrl)
                     .put("smb",HerrinSmbConfigStore(context).publicConfig()).put("nasProtocol", "WebDAV")
                 "/tmdb/test" -> JSONObject().put("result", TmdbConnectivityProbe.checkDetailed(prefs.tmdbReadToken).text)
@@ -162,7 +162,7 @@ internal class LanConfigServer(
                         ?: return response(Response.Status.BAD_REQUEST,
                             "{\"code\":\"SOURCE_URL_INVALID\"}")
                     val store = LanSourceImport(context)
-                    val saved = try { store.save(url) } catch (_: Exception) {
+                    val saved = try { store.save(url, raw.trim()) } catch (_: Exception) {
                         return response(Response.Status.INTERNAL_ERROR, "{\"code\":\"SOURCE_SAVE_FAILED\"}")
                     }
                     try { applied("sources") } catch (_: Exception) {

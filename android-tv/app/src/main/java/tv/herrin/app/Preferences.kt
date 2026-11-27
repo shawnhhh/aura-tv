@@ -51,7 +51,13 @@ class Preferences(context: Context) : FavoritesStore {
     /** User-applied URL. Only a matching, explicitly applied Spider JAR may auto-run again. */
     var tvBoxWarehouseUrl: String
         get() = prefs.getString("tvbox_warehouse_url", "") ?: ""
-        set(value) { prefs.edit().putString("tvbox_warehouse_url", value).apply() }
+        set(value) {
+            prefs.edit().putString("tvbox_warehouse_url", TvBoxUrl.normalize(value, true) ?: value)
+                .putString("tvbox_warehouse_display_url", value).apply()
+        }
+    val tvBoxWarehouseDisplayUrl: String
+        get() = prefs.getString("tvbox_warehouse_display_url", null)
+            ?.takeIf { TvBoxUrl.same(it, tvBoxWarehouseUrl) } ?: TvBoxUrl.display(tvBoxWarehouseUrl)
     /** Trust is scoped to the exact source URL and exact URL+MD5 JAR spec. */
     var tvBoxTrustedSpiderRootUrl: String
         get() = prefs.getString("tvbox_trusted_spider_root", "") ?: ""

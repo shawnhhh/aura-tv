@@ -603,7 +603,11 @@ private fun Herrin(startup: StartupPresentation) {
         phoneSourceId = null
         return true
     }
-    fun failPhoneSource(code: String) { phoneSourceId?.let { phoneSourceImport.update(it, "FAILED", code) } }
+    fun failPhoneSource(code: String) {
+        phoneSourceId?.let { phoneSourceImport.update(it, "FAILED", code) }
+        phoneSourceId = null
+        candidateRoot = ""
+    }
     var configuredTvBoxUrl by remember { mutableStateOf(prefs.tvBoxWarehouseUrl) }
     // Default settings are deliberately just two source inputs. Legacy diagnostics
     // and import tools remain behind an explicit advanced page.
@@ -678,14 +682,14 @@ private fun Herrin(startup: StartupPresentation) {
     // the regular player loading surface. No catalog-wide eager scans.
     var cmsPlaybackPendingId by remember { mutableStateOf<String?>(null) }
     var cmsPlaybackFailedId by remember { mutableStateOf<String?>(null) }
-    var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseUrl) }
+    var tvBoxUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxWarehouseDisplayUrl) }
     // Large pasted backups should never be marshalled into an Activity saved-state Bundle.
     var tvBoxJsonDraft by remember { mutableStateOf("") }
     var tvBoxLiveUrlDraft by rememberSaveable { mutableStateOf(prefs.tvBoxLiveSourceUrl) }
     // HTTP metadata/playlist access is enabled by default; plugin execution is
     // limited to a user-applied source or a previously pinned JAR fingerprint.
     var tvBoxAllowHttp by remember { mutableStateOf(true) }
-    SideEffect { spiderBridge.configureKernelWarehouse(candidateRoot.ifBlank { prefs.tvBoxWarehouseUrl }, tvBoxAllowHttp) }
+    SideEffect { spiderBridge.configureKernelWarehouse(configuredTvBoxUrl, tvBoxAllowHttp) }
     val kernelPages = remember(context) { HerrinKernelRuntime.find()?.pages }
     LaunchedEffect(kernelPages?.revision) {
         if (kernelPages != null) {
@@ -726,8 +730,9 @@ private fun Herrin(startup: StartupPresentation) {
         if (pending != null) {
             phoneSourceId = pending.id
             candidateRoot = pending.url
-            tvBoxUrlDraft = pending.url
+            tvBoxUrlDraft = pending.displayUrl
             snapshotFlow { startup.networkReady }.first { it }
+            if (phoneSourceImport.current()?.id != pending.id) return@LaunchedEffect
             tvBoxRequest = pending.url to true
             tvBoxLoadEpoch++
         } else if (configuredTvBoxUrl.isNotBlank()) {
@@ -753,6 +758,7 @@ private fun Herrin(startup: StartupPresentation) {
         siteActivationJob[0]?.cancel()
         autoCmsRequest = null
         val pendingImportId = phoneSourceId
+        val phoneIdAtStart = phoneSourceImport.current()?.id
         val runSpiderAfterApply = tvBoxRunSpiderAfterApply
         val preferCache = tvBoxColdStartRequest
         tvBoxColdStartRequest = false
@@ -763,23 +769,42 @@ private fun Herrin(startup: StartupPresentation) {
         tvBoxImportJsonRequest = null
         val loadedConfig = if (imported != null)
             tvBoxRepository.importJson(imported, address, tvBoxAllowHttp)
-            else tvBoxRepository.loadUserWarehouse(address, preferCached = preferCache || !isRoot)
+            else tvBoxRepository.loadUserWarehouse(address, preferCached = preferCache,
+                allowCachedFallback = preferCache)
+        if (nodeSelectionTicket != siteChoiceEpoch.get() ||
+            phoneSourceImport.current()?.id != phoneIdAtStart || phoneSourceId != pendingImportId) return@LaunchedEffect
         if (loadedConfig is TvBoxConfig.Error) {
             HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_FAILED")
             tvBoxStatus = loadedConfig.reason
             vodImportFeedback = "配置读取失败"
-            failPhoneSource(LanSourceImport.failure(loadedConfig.reason))
+            val failureCode = LanSourceImport.failure(loadedConfig.reason)
+            HerrinPlaybackDiagnosticJournal.record("CONFIG", failureCode)
+            failPhoneSource(failureCode)
             return@LaunchedEffect
         }
-        if (nodeSelectionTicket != siteChoiceEpoch.get()) return@LaunchedEffect
-        HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_PARSED")
-        if (phoneSourceId == null) {
-            spiderActive = false
-            activeCmsSite = null
-            spiderBridge.close()
-        } else {
-            phoneSourceId?.let { phoneSourceImport.update(it, "AWAITING_SITE") }
+        val parsed = LanWarehouseCommitPolicy.isParsedTvBox(loadedConfig)
+        if (pendingImportId != null) {
+            if (!parsed) { failPhoneSource("SOURCE_BODY_INVALID"); return@LaunchedEffect }
+            val saved = runCatching { finishPhoneSource(pendingImportId) }.getOrDefault(false)
+            if (!saved) { failPhoneSource("SOURCE_SAVE_FAILED"); return@LaunchedEffect }
+            configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
+            tvBoxUrlDraft = prefs.tvBoxWarehouseDisplayUrl
+            providerFilms = null
+            vodImportFeedback = "影视仓配置已保存"
+        } else if (isRoot && parsed && !preferCache) {
+            if (!phoneSourceImport.saveFromTv(address, phoneIdAtStart)) {
+                HerrinPlaybackDiagnosticJournal.record("CONFIG", "SOURCE_SAVE_FAILED")
+                vodImportFeedback = "配置保存失败"
+                return@LaunchedEffect
+            }
+            configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
+            tvBoxUrlDraft = prefs.tvBoxWarehouseDisplayUrl
+            providerFilms = null
         }
+        HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_PARSED")
+        spiderActive = false
+        activeCmsSite = null
+        spiderBridge.close()
         // Candidate metadata must never reuse the previous single warehouse's
         // sites when the new root is a multi-warehouse list.
         tvBoxSingle = null
@@ -788,10 +813,11 @@ private fun Herrin(startup: StartupPresentation) {
         when (val result = loadedConfig) {
             is TvBoxConfig.Warehouses -> {
                 tvBoxWarehouses = result.entries
-                if (isRoot && settingsTvBoxOnly && (runSpiderAfterApply || pendingImportId != null) && result.entries.isNotEmpty()) {
+                if (isRoot && result.entries.isNotEmpty()) {
                     val first = result.entries.first()
                     tvBoxSelectedName = first.name
                     tvBoxRunSpiderAfterApply = runSpiderAfterApply
+                    tvBoxColdStartRequest = preferCache
                     tvBoxRequest = first.url to false
                     tvBoxLoadEpoch++
                 }
@@ -818,32 +844,13 @@ private fun Herrin(startup: StartupPresentation) {
                 tvBoxStatus = result.reason
             }
         }
-        // Configuration success is terminal before optional catalog/live work.
-        // A phone poll must never wait for a Spider login or an empty CMS home.
-        if (pendingImportId != null && (loadedConfig is TvBoxConfig.Single || loadedConfig is TvBoxConfig.Warehouses)) {
-            if (!finishPhoneSource(pendingImportId)) return@LaunchedEffect
-            configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-            spiderActive = false; activeCmsSite = null
-            spiderBridge.close()
-            providerFilms = null
-            vodImportFeedback = "影视仓配置已保存"
-        }
-        if (phoneSourceId == null && isRoot && (tvBoxSingle != null || tvBoxWarehouses.isNotEmpty())) {
-            if (prefs.tvBoxWarehouseUrl != address) {
-                // A different root can never inherit approval of the old binary.
-                prefs.tvBoxTrustedSpiderRootUrl = ""
-                prefs.tvBoxTrustedSpiderJarSpec = ""
-            }
-            prefs.tvBoxWarehouseUrl = address
-            configuredTvBoxUrl = address
-        }
         // Cache-first on startup, refresh in the background for the next
         // launch. Never replace the active browsing state mid-remote action.
         if (((loadedConfig is TvBoxConfig.Single && loadedConfig.fromCache) ||
                 (loadedConfig is TvBoxConfig.Warehouses && loadedConfig.fromCache))) {
             launch(Dispatchers.IO) { tvBoxRepository.loadUserWarehouse(address) }
         }
-        if (settingsTvBoxOnly && tvBoxSingle != null) {
+        if (tvBoxSingle != null) {
             spiderBridge.configureKernelWarehouse(address, tvBoxAllowHttp)
             // Import must activate an actual catalog, not just display 49 names
             // under Settings while the home page stays on the demo collection.
@@ -853,10 +860,14 @@ private fun Herrin(startup: StartupPresentation) {
             }.orEmpty()
             // TVBox-style import must not probe all third-party plugins.
             // Restore at most the previously selected site on startup.
-            val initialSite = TvBoxAutoSites.initialSelection(config, savedSite)
-            if (!preferCache && initialSite != null) prefs.preferSite(prefs.tvBoxWarehouseUrl.ifBlank { address }, initialSite, config.spiderJar)
-            val candidates = if (preferCache && pendingImportId == null)
-                TvBoxAutoSites.resumeOnly(config, savedSite) else listOfNotNull(initialSite)
+            val declared = TvBoxAutoSites.initialSelection(config, savedSite)
+            val initialSite = declared?.takeIf {
+                it.apiUrl != null || TvBoxSpiderPolicy.mayRun(runSpiderAfterApply, prefs.tvBoxWarehouseUrl,
+                    it.jar ?: config.spiderJar ?: it.scriptApi.orEmpty(),
+                    prefs.tvBoxTrustedSpiderRootUrl, prefs.tvBoxTrustedSpiderJarSpec)
+            } ?: config.sites.firstOrNull { it.apiUrl != null } ?: declared
+            if (initialSite != null) prefs.preferSite(prefs.tvBoxWarehouseUrl.ifBlank { address }, initialSite, config.spiderJar)
+            val candidates = listOfNotNull(initialSite)
             // Selecting metadata does not grant Spider execution: the existing
             // exact-root/JAR approval below still decides whether it may run.
             var chosen: Pair<TvBoxSite, List<Film>>? = null
@@ -899,7 +910,9 @@ private fun Herrin(startup: StartupPresentation) {
                             chosen = site to loaded.films
                             break
                         }
-                        else -> Unit
+                        is TvBoxVodResult.Error -> HerrinPlaybackDiagnosticJournal.record("CONFIG",
+                            "DEFAULT_NODE_CATALOG_FAILED", "HTTP=${loaded.httpCode ?: 0}")
+                        null -> HerrinPlaybackDiagnosticJournal.record("CONFIG", "DEFAULT_NODE_CATALOG_TIMEOUT")
                     }
                 } else if (site.spiderApi != null || site.scriptApi != null) {
                     val jarSpec = site.jar ?: config.spiderJar ?: site.scriptApi ?: continue
@@ -932,7 +945,8 @@ private fun Herrin(startup: StartupPresentation) {
                     }
                 }
             }
-            val currentNodeSelection = nodeSelectionTicket == siteChoiceEpoch.get()
+            val currentNodeSelection = nodeSelectionTicket == siteChoiceEpoch.get() &&
+                phoneSourceImport.current()?.id == phoneIdAtStart
             if (chosen != null) {
                 if (!finishPhoneSource(pendingImportId)) return@LaunchedEffect
                 configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
@@ -1019,30 +1033,6 @@ private fun Herrin(startup: StartupPresentation) {
                     tvBoxStatus += "；已备份 ${backups.size} 条 TVBox 直播线路（独立直播源优先）"
                 }
             }
-        }
-        // H-006: a phone submission updates the SAME persisted TV warehouse
-        // slot as the remote "应用影视源" action. Parse success, not playable
-        // site discovery, is the transaction's commit boundary. An untrusted
-        // new Spider still requires explicit TV approval before execution.
-        if (pendingImportId != null && phoneSourceId == pendingImportId) {
-            if (LanWarehouseCommitPolicy.isParsedTvBox(loadedConfig)) {
-                val wasDifferentRoot = prefs.tvBoxWarehouseUrl != address
-                if (finishPhoneSource(pendingImportId)) {
-                    configuredTvBoxUrl = prefs.tvBoxWarehouseUrl
-                    tvBoxUrlDraft = configuredTvBoxUrl
-                    if (wasDifferentRoot) {
-                        // No stale Spider authorization or source-bound films
-                        // may survive replacing the configured warehouse root.
-                        spiderBridge.close()
-                        spiderActive = false
-                        activeCmsSite = null
-                        providerFilms = null
-                        tvBoxVodScope = "tvbox:pending"
-                    }
-                    vodImportFeedback = "影视仓配置已保存"
-                    tvBoxStatus += "；配置已同步电视，可在「选择影视点」选择站点；新 Spider 仍需电视确认"
-                } else failPhoneSource("SOURCE_SAVE_FAILED")
-            } else failPhoneSource("SOURCE_BODY_INVALID")
         }
         // Multi-warehouse lists are valid; lack of a Single is not failure.
         if (tvBoxSingle == null && tvBoxWarehouses.isEmpty() &&
@@ -5646,7 +5636,7 @@ private fun Herrin(startup: StartupPresentation) {
                         // validate/commit the warehouse, then refresh source state.
                         phoneSourceId = pending.id
                         candidateRoot = pending.url
-                        tvBoxUrlDraft = pending.url
+                        tvBoxUrlDraft = pending.displayUrl
                         tvBoxRequest = pending.url to true
                         tvBoxLoadEpoch++
                     } else personalSourceConfigEpoch++
