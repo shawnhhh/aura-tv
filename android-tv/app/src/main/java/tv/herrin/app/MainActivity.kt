@@ -593,20 +593,17 @@ private fun Herrin(startup: StartupPresentation) {
     var filmId by rememberSaveable { mutableStateOf(demoFilms.first().id) }
     val phoneSourceImport = remember(context) { LanSourceImport(context) }
     var phoneSourceId by remember { mutableStateOf<String?>(null) }
-    var candidateRoot by remember { mutableStateOf("") }
     fun finishPhoneSource(expectedId: String?): Boolean {
         if (expectedId == null) return phoneSourceId == null
         if (expectedId != phoneSourceId)
             return phoneSourceId == null && phoneSourceImport.isActive(expectedId)
         if (!phoneSourceImport.activate(expectedId)) return false
-        candidateRoot = ""
         phoneSourceId = null
         return true
     }
     fun failPhoneSource(code: String) {
         phoneSourceId?.let { phoneSourceImport.update(it, "FAILED", code) }
         phoneSourceId = null
-        candidateRoot = ""
     }
     var configuredTvBoxUrl by remember { mutableStateOf(prefs.tvBoxWarehouseUrl) }
     // Default settings are deliberately just two source inputs. Legacy diagnostics
@@ -729,7 +726,6 @@ private fun Herrin(startup: StartupPresentation) {
         val pending = phoneSourceImport.current()?.takeIf { it.state in setOf("SAVED", "AWAITING_SITE") }
         if (pending != null) {
             phoneSourceId = pending.id
-            candidateRoot = pending.url
             tvBoxUrlDraft = pending.displayUrl
             snapshotFlow { startup.networkReady }.first { it }
             if (phoneSourceImport.current()?.id != pending.id) return@LaunchedEffect
@@ -1550,11 +1546,12 @@ private fun Herrin(startup: StartupPresentation) {
             }
             tmdbState.loadedDiscoveryHits[targetFilmId] = hit.key
             tmdbState.sourceDiscoveries[targetFilmId]?.spiderPaused =
-                hit.node.type == HerrinSourceType.TVBOX_SPIDER
+                screen == "play-intent" && hit.node.type == HerrinSourceType.TVBOX_SPIDER
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "DISCOVERY_DETAIL_READY", "EPISODES=${detailed.playbackEpisodes.size}")
             if (tmdbState.consumeDiscoveryPlay(targetFilmId, hit.key, detailTicket) && screen == "detail") {
                 // A click on a fully ready node/line is the play intent. Do not
                 // wait for unrelated searches or require a second play button.
+                tmdbState.sourceDiscoveries[targetFilmId]?.spiderPaused = hit.node.type == HerrinSourceType.TVBOX_SPIDER
                 screen = "player"
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled
@@ -1764,7 +1761,7 @@ private fun Herrin(startup: StartupPresentation) {
                             tmdbState.discoveredSources[targetId] = snapshot
                             if (snapshot.hits.any { it.relevance == SourceRelevance.CONFIRMED }) DetailPlaybackMetrics.timeline.hit()
                             if (snapshot.hits.any { it.episodes.isNotEmpty() }) DetailPlaybackMetrics.timeline.details()
-                            if (screen == "detail" && tmdbState.autoLayoutSelected[targetId] != planRevision &&
+                            if (screen in setOf("detail", "play-intent") && tmdbState.autoLayoutSelected[targetId] != planRevision &&
                                 tmdbState.discoverySelection == null && tmdbState.discoveryLoadingFilm != targetId &&
                                 tmdbState.selectedDiscoveryNode[targetId] !in snapshot.selectableNodeIds) {
                                 snapshot.readyRoutes.firstOrNull { it.nodeId in snapshot.selectableNodeIds }
@@ -2291,6 +2288,24 @@ private fun Herrin(startup: StartupPresentation) {
     val browsePositions = rememberBrowseScrollStates()
     val railStates = browsePositions.rails
     val browseScrollStates = browsePositions.pages
+    var moduleEntry by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(screen, category, moduleEntry) {
+        val target = moduleEntry ?: return@LaunchedEffect
+        if (screen != "browse" || target != category) {
+            moduleEntry = null
+            return@LaunchedEffect
+        }
+        browseScrollStates[target]?.scrollTo(0)
+        railStates[target]?.scrollToItem(0)
+        if (target == "首页") railStates["recommend"]?.scrollToItem(0)
+        val page = TmdbBrowsePage.from(target)
+        if (page != null) {
+            val rows = TmdbRailSpec.forPage(page).map { it.key } +
+                if (page == TmdbBrowsePage.HOME) listOf("recent") else emptyList()
+            rows.forEach { tmdbBrowseState.scrolls[it]?.scrollToItem(0) }
+        }
+        if (moduleEntry == target) moduleEntry = null
+    }
     val facetResultState = rememberLazyListState()
     // M4.25: only the active, already-loaded catalog is grouped. This is a
     // display projection; Film.id and the licensed playback paths stay intact.
@@ -2494,6 +2509,9 @@ private fun Herrin(startup: StartupPresentation) {
         spiderResolvedFor = HerrinAutomaticPlayback.Attempt(film.id, episode, line, playerRetryEpoch,
             tmdbState.tmdbFallbackIndex.selected(film.id) ?: catalogScope)
         if (spiderActive && screen == "player" && tmdbState.automaticSearch == null &&!playbackNeedsRefresh) {
+            tmdbState.sourceDiscoveries[film.id]?.spiderPaused = true
+            tmdbState.discoverySpiderLock.lock()
+            try {
             val selectionConsent=spiderBridge.configurationTicket()
             val sourceFilm = if (film.id.startsWith("tmdb-")) tmdbState.tmdbPlaybackRoutes.sourceFilm(film.id) else film
             if (sourceFilm == null) {
@@ -2610,6 +2628,9 @@ private fun Herrin(startup: StartupPresentation) {
                     if (spiderStatus == failedStatus) spiderStatus =
                         "$failedStatus；$reason"
                 }
+            }
+            } finally {
+                tmdbState.discoverySpiderLock.unlock()
             }
         }
         }
@@ -3512,14 +3533,20 @@ private fun Herrin(startup: StartupPresentation) {
                 val recommendationPrefix = if (railFilms.isEmpty()) "card-" else "recommend-"
                 val recommendState = railStates.getValue("recommend")
                 val browseScroll = browseScrollStates.getValue(if (isSearch) "search" else category)
-                LaunchedEffect(screen, category, recentIndexFilms) {
-                    if (!isSearch && category == "首页" && sourceConfigured) {
-                        val index = railFilms.indexOfFirst { "card-${displayKey(it)}" == focusId }
+                LaunchedEffect(screen, category) {
+                    val restoreTarget = focusId
+                    if (!isSearch && independentPage == null && moduleEntry == null &&
+                        (restoreTarget.startsWith("card-") || restoreTarget.startsWith("recommend-"))) {
+                        val inRecommendations = restoreTarget.startsWith("recommend-") || railFilms.isEmpty()
+                        val entries = if (inRecommendations) recommendedFilms else railFilms
+                        val prefix = if (inRecommendations) recommendationPrefix else "card-"
+                        val index = entries.indexOfFirst { "$prefix${displayKey(it)}" == restoreTarget }
                         if (index >= 0) {
-                            railState.scrollToItem(index)
+                            (if (inRecommendations) recommendState else railState).scrollToItem(index)
                             repeat(4) {
                                 withFrameNanos { }
-                                if (runCatching { requester(focusId).requestFocus() }.isSuccess) return@LaunchedEffect
+                                if (focusId != restoreTarget) return@LaunchedEffect
+                                if (runCatching { requester(restoreTarget).requestFocus() }.isSuccess) return@LaunchedEffect
                             }
                         }
                     }
@@ -3578,8 +3605,13 @@ private fun Herrin(startup: StartupPresentation) {
                             { id -> requester(id) },
                             onFocus = { tmdbBrowseState.focus(null); focusId = it },
                             onSelect = { selected ->
+                                if (selected != category || screen != "browse") {
+                                    posterFocusJob[0]?.cancel()
+                                    moduleEntry = selected
+                                    heroSelections.remove(selected)
+                                    focusId = "nav-$selected"
+                                }
                                 category = selected
-                                if (tmdbPrimary && TmdbBrowsePage.from(selected) != null) heroSelections.remove(selected)
                                 val candidates = if (tmdbPrimary && TmdbBrowsePage.from(selected) != null) tmdbBrowseState.films(TmdbBrowsePage.from(selected)!!)
                                 else if (selected == "Top 250") tmdbState.tmdbTop250Films else catalogFilms.filter {
                                     selected == "首页" || it.category == selected || selected in it.genres
@@ -4675,7 +4707,6 @@ private fun Herrin(startup: StartupPresentation) {
                                 vodImportFeedback = "读取中…"
                                 phoneSourceId?.let { phoneSourceImport.update(it, "SUPERSEDED") }
                                 phoneSourceId = null
-                                candidateRoot = ""
                                 tvBoxRequest = tvBoxUrlDraft.trim() to true
                                 tvBoxLoadEpoch++
                             }
@@ -4732,7 +4763,6 @@ private fun Herrin(startup: StartupPresentation) {
                             HerrinPlaybackDiagnosticJournal.record("CONFIG", "JSON_IMPORT_RESET")
                             phoneSourceId?.let { phoneSourceImport.update(it, "SUPERSEDED") }
                             phoneSourceId = null
-                            candidateRoot = ""
                             tvBoxRequest = tvBoxUrlDraft.trim() to true
                             tvBoxImportJsonRequest = tvBoxJsonDraft
                             tvBoxLoadEpoch++
@@ -5635,7 +5665,6 @@ private fun Herrin(startup: StartupPresentation) {
                         // merely because the phone SENT a candidate. First
                         // validate/commit the warehouse, then refresh source state.
                         phoneSourceId = pending.id
-                        candidateRoot = pending.url
                         tvBoxUrlDraft = pending.displayUrl
                         tvBoxRequest = pending.url to true
                         tvBoxLoadEpoch++

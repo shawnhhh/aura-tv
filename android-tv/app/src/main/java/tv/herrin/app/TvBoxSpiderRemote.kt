@@ -331,15 +331,17 @@ class TvBoxSpiderService : Service() {
                             data = Bundle().apply { putString("ticket", ticket) }
                         })
                     }, {
-                        // Publish failure before a plugin can return a media URL.
-                        if (activeOperation == id) retiring = true
-                        Handler(Looper.getMainLooper()).post {
-                            if (activeOperation == id) {
-                                retiring = true
-                                authorization.cancel()
-                                operations[id]?.cancel()
-                                watchdog.schedule({ android.os.Process.killProcess(android.os.Process.myPid()) }, 250, TimeUnit.MILLISECONDS)
-                            }
+                        if (activeOperation == id) {
+                            retiring = true
+                            runCatching { reply.send(Message.obtain(null, operation).apply {
+                                arg1 = id
+                                data = Bundle().apply {
+                                    putString("payload", SpiderIpc.error("授权未完成，请重试。").toString())
+                                }
+                            }) }
+                            operations[id]?.cancel()
+                            watchdog.schedule({ android.os.Process.killProcess(android.os.Process.myPid()) },
+                                250, TimeUnit.MILLISECONDS)
                         }
                     })
                     // Cancellation cannot stop a JNI call that ignores interruption.
@@ -494,11 +496,7 @@ class TvBoxSpiderService : Service() {
         CatVodRuntime.setActivity(SpiderRuntimeActivityHost::activity)
         CatVodRuntime.setDialog { options, callback ->
             SpiderNetworkTrace.event("AUTH_ORIGINAL_DIALOG_REQUESTED")
-            SpiderRuntimeActivityHost.dialog(options, callback).also { result ->
-                val deadline = watchdog.schedule({ result.complete(null) },
-                    SpiderAuthorizationProtocol.TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                result.whenComplete { _, _ -> deadline.cancel(false) }
-            }
+            SpiderRuntimeActivityHost.dialog(options, callback)
         }
     }
 

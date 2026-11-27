@@ -87,12 +87,17 @@ public final class SpiderDialog implements LifecycleEventObserver {
     }
 
     public static CompletableFuture<String> show(String options, Function<String, CompletableFuture<String>> callback) {
+        return show(null, options, callback);
+    }
+
+    public static CompletableFuture<String> show(FragmentActivity owner, String options,
+            Function<String, CompletableFuture<String>> callback) {
         SpiderDialog request = new SpiderDialog(callback);
         CompletableFuture<String> completion = request.result.whenCompleteAsync((value, error) -> request.close(), App::post);
         completion.whenComplete((value, error) -> {
             if (completion.isCancelled()) request.cancel();
         });
-        App.post(() -> request.showDialog(options));
+        App.post(() -> request.showDialog(owner, options));
         return completion;
     }
 
@@ -100,12 +105,13 @@ public final class SpiderDialog implements LifecycleEventObserver {
         this.callback = callback;
     }
 
-    private void showDialog(String options) {
+    private void showDialog(FragmentActivity expectedOwner, String options) {
         if (result.isDone()) return;
         try {
-            Activity current = Runtime.activity();
-            if (!(current instanceof FragmentActivity owner)) throw new IllegalStateException("No Activity available for dialog");
+            Activity current = expectedOwner != null ? expectedOwner : Runtime.activity();
+            if (!(current instanceof FragmentActivity owner) || owner.isFinishing() || owner.isDestroyed()) throw new IllegalStateException("No Activity available for dialog");
             activity = owner;
+            if (options.length() > 350_000) throw new IllegalArgumentException("Dialog payload too large");
             JSONObject json = new JSONObject(options);
             MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity).setTitle(json.optString("title"));
             bindContent(builder, json);
@@ -121,8 +127,8 @@ public final class SpiderDialog implements LifecycleEventObserver {
     }
 
     private void showDialog() {
-        dialog.show();
         dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.show();
         for (Map.Entry<Integer, ButtonOptions> button : buttons.entrySet()) dialog.getButton(button.getKey()).setOnClickListener(view -> onButton(button.getKey(), button.getValue()));
         setEnabled(true);
         dialog.getWindow().getDecorView().post(this::focusInput);
@@ -206,6 +212,7 @@ public final class SpiderDialog implements LifecycleEventObserver {
 
     private void setQRCode(Object code) {
         if (!(code instanceof String value) || value.isBlank()) throw new IllegalArgumentException("Dialog qrcode must be a nonempty string");
+        if (value.length() > 4096) throw new IllegalArgumentException("Dialog QR payload too large");
         Bitmap bitmap = QRCode.getBitmap(value, 220, 4);
         if (bitmap == null) throw new IllegalArgumentException("Dialog qrcode cannot be encoded");
         qrcode.setImageBitmap(bitmap);
@@ -222,6 +229,14 @@ public final class SpiderDialog implements LifecycleEventObserver {
             return;
         }
         if (!value.startsWith("data:image/") || !value.contains(";base64,")) throw new IllegalArgumentException("Dialog image requires a base64 image data URI");
+        if (value.length() > 350_000) throw new IllegalArgumentException("Dialog image payload too large");
+        byte[] encoded = android.util.Base64.decode(value.substring(value.indexOf(";base64,") + 8),
+            android.util.Base64.DEFAULT);
+        var bounds = new android.graphics.BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        android.graphics.BitmapFactory.decodeByteArray(encoded, 0, encoded.length, bounds);
+        if (bounds.outWidth < 1 || bounds.outWidth > 2048 || bounds.outHeight < 1 || bounds.outHeight > 2048)
+            throw new IllegalArgumentException("Dialog image dimensions out of bounds");
         if (images == null) images = Glide.with(activity);
         image.setVisibility(View.VISIBLE);
         images.asBitmap().load(value).override(ResUtil.dp2px(220)).fitCenter().diskCacheStrategy(DiskCacheStrategy.NONE).skipMemoryCache(true).listener(imageListener()).into(image);
@@ -511,6 +526,7 @@ public final class SpiderDialog implements LifecycleEventObserver {
             return;
         }
         try {
+            if (update != null && update.length() > 350_000) throw new IllegalArgumentException("Dialog update too large");
             applyUpdate(which, button, update == null ? new JSONObject() : new JSONObject(update));
         } catch (JSONException | RuntimeException failure) {
             result.completeExceptionally(failure);

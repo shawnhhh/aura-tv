@@ -45,12 +45,9 @@
     <label>路径<input name="path" maxlength="2048" placeholder="选择要添加的媒体目录"></label>
     <label>用户名<input name="username" maxlength="256" autocomplete="off"></label>
     <label>密码<input name="password" type="password" maxlength="2048" autocomplete="off"></label>
-    <button type="submit">添加</button>
-   </form>
-   <div id="personal-browser" hidden>
-    <label>路径<input id="personal-path" maxlength="2048"></label>
+    <button id="personal-browse" type="button">浏览目录</button>
+    <div id="personal-browser" hidden>
     <div class="actions">
-     <button id="personal-browse" type="button">浏览目录</button>
      <button id="personal-parent" type="button" class="secondary">上级</button>
     </div>
     <div id="personal-directories"></div>
@@ -58,7 +55,9 @@
      <button type="button" id="personal-directory-previous" class="secondary">上一页</button>
      <button type="button" id="personal-directory-next" class="secondary">下一页</button>
     </div>
-   </div>
+    </div>
+    <button type="submit">添加</button>
+   </form>
    <div id="personal-folders"></div>
   </section>
   <form id="tmdb" hidden>

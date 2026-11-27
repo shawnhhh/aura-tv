@@ -83,7 +83,7 @@ internal class LanConfigServer(
             }
             if (session.uri == "/personal" || session.uri.startsWith("/personal/")) {
                 val result = PersonalLibraryApi(context).handle(session.uri, input)
-                if (session.uri in setOf("/personal/save", "/personal/delete", "/personal/toggle", "/personal/folder",
+                if (result.optBoolean("ok", true) && session.uri in setOf("/personal/save", "/personal/delete", "/personal/toggle", "/personal/folder",
                         "/personal/folder/delete", "/personal/match")) applied("nas")
                 return response(Response.Status.OK, result.toString())
             }

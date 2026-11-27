@@ -80,23 +80,28 @@ internal object SpiderRuntimeActivityHost {
             result.completeExceptionally(IllegalStateException("No active Spider operation"))
             return result
         }
-        current.dialogs.add(result)
-        result.whenComplete { value, failure ->
-            current.dialogs.remove(result)
-            // Closing the provider window is cancellation, never login success.
-            if (failure != null || value == null) {
-                val cancelled = synchronized(lock) {
-                    if (owner === current) { owner = null; true } else false
-                }
-                if (cancelled) { finish(current); current.cancel() }
+        synchronized(lock) {
+            if (owner !== current || current.dialogs.isNotEmpty()) {
+                result.completeExceptionally(IllegalStateException("Spider authorization window is unavailable"))
+                return result
             }
+            current.dialogs.add(result)
+        }
+        val timeout = Runnable { abort(current, "AUTH_DIALOG_TIMEOUT") }
+        main.postDelayed(timeout, SpiderAuthorizationProtocol.TIMEOUT_MS)
+        result.whenComplete { _, _ ->
+            main.removeCallbacks(timeout)
+            current.dialogs.remove(result)
+            if (result.isCancelled) abort(current, "AUTH_DIALOG_CANCELLED")
         }
         CompletableFuture.runAsync {
-            val window = activity()
+            if (result.isDone) return@runAsync
+            val window = activity(current)
             main.post {
                 if (result.isDone) return@post
                 if (window == null || synchronized(lock) { owner !== current } ||
                     window.isFinishing || window.isDestroyed) {
+                    abort(current, "AUTH_WINDOW_UNAVAILABLE")
                     result.cancel(true)
                     return@post
                 }
@@ -105,20 +110,25 @@ internal object SpiderRuntimeActivityHost {
                         CompletableFuture<String>().apply { cancel(true) }
                     else action.apply(event)
                 } }
-                val original = tv.herrin.app.spiderdialog.SpiderDialog.show(options, guarded)
+                val original = tv.herrin.app.spiderdialog.SpiderDialog.show(window as FragmentActivity, options, guarded)
                 result.whenComplete { _, _ -> if (!original.isDone) original.cancel(true) }
                 original.whenComplete { value, failure ->
-                    if (failure == null) result.complete(value) else result.completeExceptionally(failure)
+                    when {
+                        result.isDone -> Unit
+                        failure != null -> abort(current, "AUTH_DIALOG_FAILED")
+                        value == null -> abort(current, "AUTH_DIALOG_DISMISSED")
+                        else -> result.complete(value)
+                    }
                 }
             }
         }
         return result
     }
 
-    fun activity(): Activity? {
-        val current = synchronized(lock) { owner } ?: run {
-            SpiderNetworkTrace.event("ACTIVITY_NO_ACTIVE_OPERATION"); return null
-        }
+    fun activity(): Activity? = synchronized(lock) { owner }?.let(::activity)
+
+    private fun activity(current: Owner): Activity? {
+        if (synchronized(lock) { owner !== current }) return null
         current.activity.get()?.takeUnless { it.isFinishing || it.isDestroyed }?.let {
             // The real window must have completed attachment before first use.
             if (current.result.isDone && !current.result.isCompletedExceptionally) return it
@@ -135,23 +145,22 @@ internal object SpiderRuntimeActivityHost {
             current.request(current.ticket)
             SpiderNetworkTrace.event("ACTIVITY_HOST_REQUESTED")
         } catch (_: Exception) {
-            SpiderNetworkTrace.event("ACTIVITY_HOST_SEND_FAILED"); end(current.operation); return null
+            abort(current, "ACTIVITY_HOST_SEND_FAILED"); return null
         }
         return try {
             current.result.get(10, TimeUnit.SECONDS).takeUnless { it.isFinishing || it.isDestroyed }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
-            SpiderNetworkTrace.event("ACTIVITY_HOST_INTERRUPTED"); end(current.operation); null
+            abort(current, "ACTIVITY_HOST_INTERRUPTED"); null
         } catch (_: java.util.concurrent.TimeoutException) {
-            SpiderNetworkTrace.event("ACTIVITY_HOST_TIMEOUT"); end(current.operation); null
+            abort(current, "ACTIVITY_HOST_TIMEOUT"); null
         } catch (_: java.util.concurrent.ExecutionException) {
             SpiderNetworkTrace.event("ACTIVITY_HOST_UNAVAILABLE"); null
         }
     }
     fun denied(operation: Int, ticket: String?) {
         val current = synchronized(lock) { owner?.takeIf { it.operation == operation && it.ticket == ticket } } ?: return
-        SpiderNetworkTrace.event("ACTIVITY_FOREGROUND_HOST_DENIED")
-        end(current.operation)
+        abort(current, "ACTIVITY_FOREGROUND_HOST_DENIED")
     }
     fun attach(ticket: String?, activity: Activity): Boolean = synchronized(lock) {
         val current = owner?.takeIf { it.requested && it.ticket == ticket && !it.result.isCompletedExceptionally }
@@ -165,11 +174,22 @@ internal object SpiderRuntimeActivityHost {
             if (it.result.complete(activity)) SpiderNetworkTrace.event("ACTIVITY_REAL_WINDOW_READY")
         }
     }
+    private fun abort(current: Owner, reason: String) {
+        synchronized(lock) {
+            if (owner !== current) return
+            owner = null
+        }
+        SpiderNetworkTrace.event(reason)
+        // Retire the operation before waking a provider waiting on its dialog.
+        // A provider swallowing cancellation cannot return admitted media.
+        current.cancel()
+        finish(current)
+    }
+
     fun cancel(ticket: String?, activity: Activity) {
         val current = synchronized(lock) {
-            owner?.takeIf { it.ticket == ticket && it.activity.get() === activity }?.also { owner = null }
+            owner?.takeIf { it.ticket == ticket && it.activity.get() === activity }
         } ?: return
-        finish(current)
-        current.cancel()
+        abort(current, "ACTIVITY_AUTH_CANCELLED")
     }
 }

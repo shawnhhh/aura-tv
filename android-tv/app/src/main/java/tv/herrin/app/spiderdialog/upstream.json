@@ -9,7 +9,8 @@
       "sha256": "fda500b7675ef02234179172909c65529a359958daee86421266d8c910831a35",
       "host_changes": [
         "package/import relocation",
-        "secure dialog window and opaque QR accessibility label"
+        "secure dialog window and opaque QR accessibility label",
+        "explicit FragmentActivity owner and authorization payload bounds"
       ]
     },
     {

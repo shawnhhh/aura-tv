@@ -1,5 +1,5 @@
 'use strict';
-let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',personalConnection='',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0,formRevision=0,sourceFormRevision=0;
+let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0,formRevision=0,sourceFormRevision=0;
 history.replaceState(null,'',location.pathname);
 const $=s=>document.querySelector(s);
 const status=$('#status');
@@ -82,7 +82,11 @@ async function watchSource(id,ownerModule,ownerForm){
   if(Date.now()-started>50000){notice('仍在处理，请稍后查看','sources');return}
   const r=await call('/sources/status',{importId:id});
   if(!current())return;
-  if(r.state==='ACTIVE'){toast(true,'sources');return}
+  if(r.state==='ACTIVE'){
+   const saved=await call('/status');
+   if(current()){$('#sources [name=url]').value=saved.tvbox||'';toast(true,'sources')}
+   return;
+  }
   if(['FAILED','SUPERSEDED'].includes(r.state)){toast(false,'sources');return}
   await new Promise(r=>setTimeout(r,1100));
  }
@@ -138,8 +142,6 @@ async function refreshPersonal(){
    f.elements.address.value=protocol==='SMB'?c.host:(c.address||'');
    f.elements.port.value=c.port||'';
   });
-  button(actions,'浏览目录',async()=>{personalConnection=c.id;directoryPage=0;$('#personal-path').value=c.path||'';
-   $('#personal-browser').hidden=false;await browsePersonal()});
   button(actions,c.enabled?'停用':'启用',async()=>{await personal('/toggle',{id:c.id});await refreshPersonal();toast(true,'nas')});
   button(actions,'删除',async()=>{if(!confirm('确定删除？'))return;await personal('/delete',{id:c.id,confirmed:true});await refreshPersonal();toast(true,'nas')});
   list.append(row);
@@ -153,42 +155,49 @@ async function refreshPersonal(){
   dirs.append(row);
  }
 }
-$('#personal-edit').addEventListener('input',()=>{formRevision++});
+$('#personal-edit').addEventListener('input',()=>{formRevision++;directoryBrowseToken++;$('#personal-browser').hidden=true});
+function personalDraft(f, selectedProtocol){
+ const data=Object.fromEntries(new FormData(f));
+ if(selectedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
+ else {data.protocol='https';delete data.host;data.port=Number(data.port)||''}
+ if(data.id&&!data.password)delete data.password;
+ return data;
+}
 $('#personal-edit').onsubmit=async e=>{
  e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),requestedProtocol=protocol,requestedModule=moduleEpoch,requestedForm=formRevision;if(b.disabled)return;const finish=beginBusy(b);
  try{
-  const data=Object.fromEntries(new FormData(f));
-  if(requestedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
-  else {data.protocol='https';delete data.host;data.port=Number(data.port)||''}
-  if(data.id&&!data.password)delete data.password;
+  const data=personalDraft(f,requestedProtocol);
   const result=await personal('/save',data);
   // Only the original form may clear its submitted secret, even when a new form reuses the same text.
   if(requestedForm===formRevision&&requestedProtocol===protocol&&f.elements.password.value===data.password)f.elements.password.value='';
   // Commit is complete, but a late response must not overwrite a newly selected form.
   if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
   f.elements.id.value=result.id;
-  personalConnection=result.id;directoryPage=0;
-  $('#personal-path').value=result.path||'';$('#personal-browser').hidden=false;
+  directoryBrowseToken++;directoryPage=0;
+  f.elements.path.value=result.path||'';$('#personal-browser').hidden=true;
   await refreshPersonal();
   if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
-  renderDirectories(result);toast(true,'nas');
+  toast(true,'nas');
  }catch(error){if(!error.stale&&requestedModule===moduleEpoch)toast(false,'nas')}finally{finish()}
 };
 function renderDirectories(r){
  const el=$('#personal-directories');el.replaceChildren();
- for(const f of r.files||[])button(el,f.name,async()=>{$('#personal-path').value=f.path;directoryPage=0;await browsePersonal()});
+ for(const f of r.files||[])button(el,f.name,async()=>{$('#personal-edit').elements.path.value=f.path;directoryPage=0;await browsePersonal()});
  $('#personal-directory-previous').disabled=directoryPage===0;
  $('#personal-directory-next').disabled=(directoryPage+1)*100>=(r.total||0);
 }
 async function browsePersonal(){
- const ticket=++directoryBrowseToken,connection=personalConnection,path=$('#personal-path').value,offset=directoryPage*100;
- const r=await personal('/browse',{id:connection,path,offset});
- if(ticket!==directoryBrowseToken||connection!==personalConnection||path!==$('#personal-path').value||tab!=='nas')return;
+ const f=$('#personal-edit');
+ if(!f.reportValidity())return;
+ const ticket=++directoryBrowseToken,requestedForm=formRevision,path=f.elements.path.value;
+ const r=await personal('/preview',{...personalDraft(f,protocol),offset:directoryPage*100});
+ if(ticket!==directoryBrowseToken||formRevision!==requestedForm||path!==f.elements.path.value||tab!=='nas')return;
+ $('#personal-browser').hidden=false;
  renderDirectories(r);
 }
-$('#personal-browse').onclick=()=>browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
+$('#personal-browse').onclick=()=>{directoryPage=0;browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
 $('#personal-parent').onclick=()=>{
- const v=$('#personal-path');v.value=v.value.split('/').filter(Boolean).slice(0,-1).join('/');directoryPage=0;
+ const v=$('#personal-edit').elements.path;v.value=v.value.split('/').filter(Boolean).slice(0,-1).join('/');directoryPage=0;
  browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
 };
 $('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};

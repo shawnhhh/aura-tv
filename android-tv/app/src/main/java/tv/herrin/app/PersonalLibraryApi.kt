@@ -9,31 +9,46 @@ import org.json.JSONObject
 internal class PersonalLibraryApi(context: Context) {
     private val library = PersonalLibrary(context)
     private val prefs = Preferences(context)
+    private data class Draft(val normalized: JSONObject, val old: PersonalConnections.Connection?,
+                             val candidate: PersonalConnections.Connection)
+
+    private fun connectionDraft(input: JSONObject): Draft {
+        val id = input.optString("id")
+        val address = input.optString("address").trim()
+        val normalized = JSONObject(input.toString())
+        if (input.optString("protocol") != "smb" && address.isNotBlank()) {
+            val parsed = PersonalStoragePolicy.webDavAddress(address, input.optString("port"))
+            normalized.put("protocol", parsed.scheme).put("host", parsed.host)
+                .put("port", parsed.port).put("basePath", parsed.basePath)
+            if (PersonalStoragePolicy.path(normalized.optString("path")) == parsed.basePath && parsed.basePath.isNotEmpty())
+                normalized.put("path", "")
+        }
+        val protocol = normalized.getString("protocol")
+        val old = id.takeIf { it.isNotBlank() }?.let { library.connections.get(it) }
+        val host = PersonalStoragePolicy.host(normalized.getString("host"))
+        val port = normalized.getInt("port")
+        PersonalStoragePolicy.endpoint(protocol, host, port)
+        val same = old?.takeIf { it.protocol == protocol && it.host.equals(host, true) && it.port == port && it.username == input.optString("username") && it.domain == input.optString("domain") }
+        val candidate = PersonalConnections.Connection(id, normalized.getString("name"), protocol, host, port,
+            normalized.optString("username"), normalized.optString("password").ifEmpty { same?.password.orEmpty() },
+            normalized.optString("domain"), normalized.optBoolean("encryption"), normalized.optBoolean("enabled", true),
+            PersonalStoragePolicy.path(normalized.optString("path")),
+            PersonalStoragePolicy.path(normalized.optString("basePath")))
+        return Draft(normalized, old, candidate)
+    }
+
+    private fun directories(files: List<PersonalRemoteFile>, offset: Int): JSONObject {
+        val dirs = files.filter { it.directory }.sortedBy { it.path }
+        return JSONObject().put("ok", true).put("total", dirs.size)
+            .put("files", JSONArray().apply {
+                dirs.drop(offset).take(100).forEach { put(JSONObject().put("name", it.name).put("path", it.path)) }
+            })
+    }
     fun handle(path: String, input: JSONObject): JSONObject {
         val id = input.optString("id")
         when(path) {
             "/personal/save" -> {
-                // Validate candidate before committing; a failed edit preserves the existing connection.
-                val address = input.optString("address").trim()
-                val normalized = JSONObject(input.toString())
-                if (input.optString("protocol") != "smb" && address.isNotBlank()) {
-                    val parsed = PersonalStoragePolicy.webDavAddress(address, input.optString("port"))
-                    normalized.put("protocol", parsed.scheme).put("host", parsed.host)
-                        .put("port", parsed.port).put("basePath", parsed.basePath)
-                    if (PersonalStoragePolicy.path(normalized.optString("path")) == parsed.basePath && parsed.basePath.isNotEmpty())
-                        normalized.put("path", "")
-                }
-                val protocol = normalized.getString("protocol")
-                val old = id.takeIf { it.isNotBlank() }?.let { library.connections.get(it) }
-                val host = PersonalStoragePolicy.host(normalized.getString("host"))
-                val port = normalized.getInt("port")
-                PersonalStoragePolicy.endpoint(protocol, host, port)
-                val same = old?.takeIf { it.protocol == protocol && it.host.equals(host, true) && it.port == port && it.username == input.optString("username") && it.domain == input.optString("domain") }
-                val candidate = PersonalConnections.Connection(id, normalized.getString("name"), protocol, host, port,
-                    normalized.optString("username"), normalized.optString("password").ifEmpty { same?.password.orEmpty() },
-                    normalized.optString("domain"), normalized.optBoolean("encryption"), normalized.optBoolean("enabled", true),
-                    PersonalStoragePolicy.path(normalized.optString("path")),
-                    PersonalStoragePolicy.path(normalized.optString("basePath")))
+                val (normalized, old, candidate) = connectionDraft(input)
                 val folder = PersonalStoragePolicy.path(normalized.optString("path"))
                 require(folder.isNotEmpty() || candidate.basePath.isNotEmpty()) { "MEDIA_FOLDER_REQUIRED" }
                 val available = try { runBlocking { PersonalRemoteFiles.list(candidate, folder) } }
@@ -51,9 +66,7 @@ internal class PersonalLibraryApi(context: Context) {
                 // Root enumeration is not implicit consent to scan an entire drive.
                 val folderId = library.index.folder(saved.id, folder, "auto")
                 library.refresh(folderId)
-                val directories = available.filter { it.directory }.sortedBy { it.path }
-                return JSONObject().put("ok", true).put("id", saved.id).put("path", folder).put("folderId", folderId).put("total", directories.size)
-                    .put("files", JSONArray().apply { directories.take(100).forEach { put(JSONObject().put("name", it.name).put("path", it.path)) } })
+                return directories(available, 0).put("id", saved.id).put("path", folder).put("folderId", folderId)
             }
             "/personal/delete" -> {
                 require(input.optBoolean("confirmed"))
@@ -65,6 +78,15 @@ internal class PersonalLibraryApi(context: Context) {
                 library.cancelAndWait()
                 val old = requireNotNull(library.connections.get(id))
                 library.connections.save(old.publicJson().put("password", old.password).put("enabled", !old.enabled))
+            }
+            "/personal/preview" -> {
+                val (_, _, candidate) = connectionDraft(input)
+                val offset = input.optInt("offset").coerceIn(0, 1_000_000)
+                return try {
+                    directories(runBlocking { PersonalRemoteFiles.list(candidate, candidate.rootPath) }, offset)
+                } catch (error: Exception) {
+                    JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error))
+                }
             }
             "/personal/browse", "/personal/test" -> {
                 val c = requireNotNull(library.connections.get(id))
