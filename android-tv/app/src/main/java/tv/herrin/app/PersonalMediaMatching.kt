@@ -32,4 +32,42 @@ internal object PersonalMediaMatching {
             choose(expected.copy(mediaType = "movie"), films, discovery),
             choose(expected.copy(mediaType = "tv"), films, discovery)
         ).singleOrNull()
+    data class Decision(val film: Film?, val ambiguous: Boolean = false)
+
+    /** Exact normalized and original names outrank minor Latin typos. Fuzzy
+     * claims require a year, known type and agreement on every title digit. */
+    fun decide(names: List<String>, year: Int?, type: String?, candidates: List<Film>,
+               discovery: HerrinTmdbDiscovery, allowApproximate: Boolean = true): Decision {
+        val expected = names.map { ArtworkTitle.normalize(canonical(it)) }.filter { it.isNotEmpty() }.distinct()
+        val byIdentity = candidates.groupBy(discovery::identity).filterKeys { it != null && (type == null || it.first == type) }
+        val exact = byIdentity.mapNotNull { (_, entries) ->
+            val known = entries.firstOrNull { it.year.isNotBlank() } ?: entries.first()
+            if (year != null && known.year.toIntOrNull() != year) return@mapNotNull null
+            known.takeIf { entries.any { candidate -> filmNames(candidate).any { it in expected } } }
+        }
+        if (exact.isNotEmpty()) return Decision(exact.singleOrNull(), exact.size > 1)
+        if (!allowApproximate || year == null || type == null) return Decision(null)
+        val approximate = byIdentity.mapNotNull { (_, entries) ->
+            val dated = entries.firstOrNull { it.year.toIntOrNull() == year } ?: return@mapNotNull null
+            dated.takeIf { entries.any { entry ->
+                filmNames(entry).any { actual -> expected.any { oneLatinEdit(it, actual) } }
+            } }
+        }
+        return Decision(approximate.singleOrNull(), approximate.size > 1)
+    }
+
+    private fun filmNames(film: Film) = listOfNotNull(film.title, film.originalDisplay?.title,
+        film.subtitle.takeIf { film.metadataSource == "TMDB" && it.isNotBlank() })
+        .map { ArtworkTitle.normalize(canonical(it)) }
+
+    private fun oneLatinEdit(a: String, b: String): Boolean {
+        if (minOf(a.length, b.length) < 8 || kotlin.math.abs(a.length - b.length) > 1 ||
+            !a.all { it in 'a'..'z' || it in '0'..'9' } || !b.all { it in 'a'..'z' || it in '0'..'9' } ||
+            a.filter(Char::isDigit) != b.filter(Char::isDigit)) return false
+        val shorter = if (a.length <= b.length) a else b
+        val longer = if (a.length <= b.length) b else a
+        val first = shorter.indices.firstOrNull { shorter[it] != longer[it] } ?: return a.length != b.length
+        return if (a.length == b.length) shorter.substring(first + 1) == longer.substring(first + 1)
+            else shorter.substring(first) == longer.substring(first + 1)
+    }
 }

@@ -72,13 +72,13 @@ internal object SeasonEpisodes {
     private val episodeOnlyEnglish = Regex("^(?:E|EP|Episode)\\s*(\\d{1,3})$", RegexOption.IGNORE_CASE)
     private val episodeOnlyNumber = Regex("^(\\d{1,3})\\s*(?:集|话)?$")
 
-    internal fun explicitEpisode(text: String): Pair<Int, Int>? =
+    internal fun explicitEpisode(text: String, allowSpecials: Boolean = false): Pair<Int, Int>? =
         sequenceOf(chinesePair, latinPair, englishPair).mapNotNull { pattern ->
             pattern.matchEntire(text.trim())?.let {
                 it.groupValues[1].toIntOrNull() to it.groupValues[2].toIntOrNull()
             }
         }.firstOrNull()?.let { (season, number) ->
-            if (season != null && number != null && season in 1..99 && number in 1..999)
+            if (season != null && number != null && season in (if (allowSpecials) 0 else 1)..99 && number in 1..999)
                 season to number else null
         }
 
@@ -97,7 +97,7 @@ internal object SeasonEpisodes {
         if (film.playbackEpisodes.isEmpty()) return null
         data class Indexed(val season: Int, val number: Int, val source: PlaybackEpisode, val line: PlaybackLine)
         val indexed = film.playbackEpisodes.flatMap { episode ->
-            val episodePair = explicitEpisode(episode.title)
+            val episodePair = explicitEpisode(episode.title, allowSpecials = film.id.startsWith("personal-"))
             episode.lines.mapNotNull { line ->
                 val lineSeason = explicitSeason(line.title)
                 // Explicitly contradictory hints must not route the wrong season's stream.

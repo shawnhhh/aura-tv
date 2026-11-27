@@ -5,13 +5,16 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.conflate
 
 /** Keep the index projection alive across detail/player/Back; no database work per focus frame. */
 @Composable
 internal fun rememberPersonalBrowseFilms(revision: Long, connectionEpoch: Int): List<Film> {
     val context = LocalContext.current.applicationContext
     var films by remember { mutableStateOf<List<Film>>(emptyList()) }
-    LaunchedEffect(context, revision, connectionEpoch) {
+    val currentRevision by rememberUpdatedState(revision)
+    LaunchedEffect(context, connectionEpoch) {
+        snapshotFlow { currentRevision }.conflate().collect {
         val fresh = withContext(Dispatchers.IO) {
             val library = PersonalLibrary(context)
             val enabled = library.connections.list().filter { it.enabled }.map { it.id }.toSet()
@@ -30,12 +33,13 @@ internal fun rememberPersonalBrowseFilms(revision: Long, connectionEpoch: Int): 
                 after = page.last().getString("id")
             }
             ensureActive()
-            val output = projection.films()
+            val output = projection.browseFilms()
             HerrinPlaybackDiagnosticJournal.record("PERSONAL", "PROJECTION_ELAPSED", "MS=${android.os.SystemClock.elapsedRealtime() - began}")
             HerrinPlaybackDiagnosticJournal.record("PERSONAL", "PROJECTION_FILES", "COUNT=$files")
             output
         }
-        films = fresh // A cancelled revision cannot publish over a newer one.
+        films = fresh
+        }
     }
     return films
 }

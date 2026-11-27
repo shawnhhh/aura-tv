@@ -95,11 +95,12 @@ internal class HerrinTmdbDiscovery(
     data class SearchPage(val films: List<Film>, val page: Int, val totalPages: Int)
 
     /** Always online; an empty response is never substituted with home/demo data. */
-    suspend fun search(query: String, token: String, page: Int = 1): SearchPage {
-        require(page in 1..500)
+    suspend fun search(query: String, token: String, page: Int = 1,
+                       searchLanguage: String = language): SearchPage {
+        require(page in 1..500 && searchLanguage.matches(Regex("[a-z]{2}-[A-Z]{2}")))
         if (query.isBlank()) return SearchPage(emptyList(), 1, 0)
         if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
-        val url = base + "/search/multi?language=$language&include_adult=false&page=$page&query=" +
+        val url = base + "/search/multi?language=$searchLanguage&include_adult=false&page=$page&query=" +
             URLEncoder.encode(query.trim().take(200), "UTF-8")
         val raw = if (fetcher === NetworkArtworkFetcher) TmdbSearchTransport.load(url, token)
             else kotlinx.coroutines.runInterruptible(Dispatchers.IO) { fetcher.load(url, token) }
@@ -201,7 +202,8 @@ internal class HerrinTmdbDiscovery(
     suspend fun identified(type: String, id: Int, token: String): Film? = withContext(Dispatchers.IO) {
         require(type in setOf("movie", "tv") && id > 0)
         if(token.isBlank()) return@withContext null
-        val json = fetcher.load("$base/$type/$id?language=zh-CN&append_to_response=credits,external_ids", token) ?: return@withContext null
+        val url = "$base/$type/$id?language=zh-CN&append_to_response=credits,external_ids"
+        val json = kotlinx.coroutines.runInterruptible { fetcher.load(url, token) } ?: return@withContext null
         val obj = JSONObject(json)
         if(obj.optInt("id") != id) return@withContext null
         obj.put("genre_ids", JSONArray().apply { val genres = obj.optJSONArray("genres") ?: JSONArray()

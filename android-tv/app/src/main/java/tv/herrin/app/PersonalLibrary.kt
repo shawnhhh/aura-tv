@@ -5,10 +5,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import org.json.JSONArray
 import org.json.JSONObject
-import java.net.URI
-import java.util.concurrent.ConcurrentHashMap
 
 /** Persistent index first. Network enumeration runs only on an explicit import/refresh. */
 internal class PersonalLibrary(context: Context) {
@@ -82,7 +79,9 @@ internal class PersonalLibrary(context: Context) {
                 queue.add(f.path to 0)
                 progress = "正在读取媒体目录…"
                 PersonalRemoteFiles.Session(c, f.path).use { remote ->
-                val sidecars = ArrayList<PersonalRemoteFile>()
+                val nfoAfter = index.nfoCursor(f.id)
+                val sidecars = java.util.PriorityQueue<PersonalRemoteFile>(compareByDescending { it.path })
+                var moreSidecars = false
                 while(queue.isNotEmpty()) {
                     ensureActive()
                     StartupBackgroundWork.awaitReady()
@@ -96,29 +95,32 @@ internal class PersonalLibrary(context: Context) {
                         if(file.directory) {
                             check(depth < 16 && queue.size < 10000) { "DEPTH_LIMIT" }
                             queue.add(file.path to depth + 1)
-                        } else if(file.name.endsWith(".nfo", true) && file.size <= 65536 && sidecars.size < 100) {
+                        } else if(file.name.endsWith(".nfo", true) && file.size in 1..65536 && file.path > nfoAfter) {
                             sidecars += file
+                            if (sidecars.size > 100) { sidecars.poll(); moreSidecars = true }
                         } else if(file.name.substringAfterLast('.').lowercase() in PersonalStoragePolicy.extensions) {
                             check(count < 100000) { "MEDIA_LIMIT" }
                             index.record(f, file, stamp); count++
-                            progress = "已扫描 $count 个视频 · ${visited.size} 个目录"
+                            if (count % 32 == 0) publishIndexChange()
                         }
                     }
                 }
-                for (sidecar in sidecars) {
+                val orderedSidecars = sidecars.sortedBy { it.path }
+                for (sidecar in orderedSidecars) {
                     ensureActive()
                     StartupBackgroundWork.awaitReady()
                     try { PersonalNfoIdentity.parse(remote.text(sidecar.path))?.let { index.nfoHint(f.id, sidecar.path, it) } }
                     catch(cancel: CancellationException) { throw cancel }
                     catch(_: Exception) { HerrinPlaybackDiagnosticJournal.record("PERSONAL", "NFO_READ_FAILED") }
                 }
+                index.nfoCursor(f.id, if (moreSidecars) orderedSidecars.last().path else "")
                 }
                 index.finish(f.id, stamp)
                 publishIndexChange()
                 connections.status(c.id, "connected")
-                progress = "扫描完成：$count 个视频；正在匹配资料"
-                scrape(f)
                 progress = "扫描完成：$count 个视频"
+                HerrinPlaybackDiagnosticJournal.record("PERSONAL", "SCAN_COMPLETE", "COUNT=$count")
+                refreshMetadata()
             } catch(cancel: CancellationException) {
                 index.state(f.id, "cancelled"); progress = "扫描已取消；再次刷新可恢复，已保存索引保留"
                 throw cancel
@@ -130,96 +132,52 @@ internal class PersonalLibrary(context: Context) {
         }
     }
     fun refreshMetadata(): Boolean = synchronized(scanLock) {
-        if (active?.isCompleted == false) return@synchronized false
-        active = scope.launch {
-            try {
+        if (activeMetadata?.isCompleted == false) {
+            metadataRequested = true
+            return@synchronized true
+        }
+        activeMetadata = scope.launch {
+            do {
+                synchronized(scanLock) { metadataRequested = false }
+                val token = Preferences(app).tmdbReadToken
                 val enabled = connections.list().filter { it.enabled }.map { it.id }.toSet()
-                for (folder in index.folders().filter { it.enabled && it.connection in enabled }) {
-                    ensureActive()
-                    scrape(folder)
+                val folders = index.folders().filter { it.enabled && it.connection in enabled }
+                try {
+                    if (token.isBlank()) {
+                        folders.forEach { index.missingToken(it.id) }
+                        HerrinPlaybackDiagnosticJournal.record("PERSONAL", "SCRAPE_TOKEN_MISSING")
+                    } else {
+                        val scraper = PersonalMetadataScraper(index, HerrinTmdbDiscovery(cacheDir = app.cacheDir),
+                            token, { Preferences(app).tmdbReadToken }, ::publishIndexChange)
+                        var remaining = folders
+                        while (remaining.isNotEmpty()) {
+                            ensureActive()
+                            remaining = remaining.filter { scraper.page(it) }
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    HerrinPlaybackDiagnosticJournal.record("PERSONAL", "METADATA_REFRESH_FAILED")
                 }
-            } catch (cancel: CancellationException) { throw cancel }
-            catch (_: Exception) { HerrinPlaybackDiagnosticJournal.record("PERSONAL", "METADATA_REFRESH_FAILED") }
-            finally { publishIndexChange() }
+            } while (synchronized(scanLock) { metadataRequested })
         }
         true
     }
-    private suspend fun scrape(folder: PersonalMediaIndex.Folder) {
-        StartupBackgroundWork.awaitReady()
-        val token = Preferences(app).tmdbReadToken
-        if(token.isBlank()) {
-            index.missingToken(folder.id)
-            HerrinPlaybackDiagnosticJournal.record("PERSONAL", "SCRAPE_TOKEN_MISSING")
-            return
+    fun cancelAndWait() = runBlocking {
+        val jobs = synchronized(scanLock) {
+            metadataRequested = false
+            listOfNotNull(active, activeMetadata).also { it.forEach { job -> job.cancel() } }
         }
-        val discovery = HerrinTmdbDiscovery(cacheDir = app.cacheDir)
-        val cache = LinkedHashMap<String, Film?>()
-        suspend fun detail(type: String, id: Int): Film? = discovery.identified(type, id, token)
-        // Explicit corrections are authoritative, including "other videos". Complete
-        // their official metadata without replacing the chosen identity or title.
-        var correctedAfter = ""
-        while (true) {
-            val page = index.pendingCorrections(folder.id, correctedAfter)
-            if (page.isEmpty()) break
-            for (row in page) {
-                currentCoroutineContext().ensureActive()
-                StartupBackgroundWork.awaitReady()
-                if (Preferences(app).tmdbReadToken != token) return
-                val type = row.getString("type"); val id = row.getInt("tmdb")
-                try {
-                    detail(type, id)?.let { index.enrichCorrection(row.getString("id"), id, type, it) }
-                } catch (cancel: CancellationException) { throw cancel }
-                catch (_: Exception) { HerrinPlaybackDiagnosticJournal.record("PERSONAL", "MANUAL_DETAIL_PENDING") }
-                delay(250) // Serial, cancellable pacing; never occupy the playback thread.
-            }
-            correctedAfter = page.last().getString("id")
-        }
-        if(folder.type == "video") return
-        // Keyset pages, not a repeated first-200 LIMIT. Persist the completed row
-        // so user cancellation resumes fairly; reset only after the whole pass.
-        var after = index.scrapeCursor(folder.id)
-        while (true) {
-            val page = index.unmatched(folder.id, after)
-            if (page.isEmpty()) { index.scrapeCursor(folder.id, ""); break }
-            for(row in page) {
-                currentCoroutineContext().ensureActive()
-                StartupBackgroundWork.awaitReady()
-                if (Preferences(app).tmdbReadToken != token) return
-                val title = PersonalMediaMatching.canonical(row.getString("title"))
-                val key = title + "|" + row.optString("year") + "|" + row.getString("type") + "|" + row.optString("metadata")
-                val film = if(cache.containsKey(key)) cache[key] else {
-                    val result = try {
-                        val expected = HerrinFilmIdentity(1, if(row.getString("type") in setOf("tv", "anime")) "tv" else "movie",
-                            listOf(title), row.optInt("year").takeIf { it > 0 })
-                        val hint = runCatching { JSONObject(row.optString("metadata")) }.getOrDefault(JSONObject())
-                        if (hint.optInt("nfoTmdb") > 0) detail(hint.getString("nfoType"), hint.getInt("nfoTmdb"))
-                        else {
-                            val candidates = discovery.search(title, token).films
-                            val unclassified = folder.type == "auto" && row.getString("type") == "movie" &&
-                                row.optInt("season") <= 0 && row.optInt("episode") <= 0
-                            val match = if (unclassified)
-                                PersonalMediaMatching.chooseUnclassified(expected, candidates, discovery)
-                            else PersonalMediaMatching.choose(expected, candidates, discovery)
-                            match?.let(discovery::identity)?.let { (type, id) -> detail(type, id) }
-                        }
-                    } catch(cancel: CancellationException) { throw cancel }
-                    catch(_: Exception) { null }
-                    currentCoroutineContext().ensureActive()
-                    cache[key] = result
-                    if (cache.size > 128) cache.remove(cache.keys.first())
-                    delay(250)
-                    result
-                }
-                if(film != null) discovery.identity(film)?.let { (type, id) -> index.matched(row.getString("id"), film, id, type) }
-                else index.scrapeStatus(row.getString("id"), "NO_UNAMBIGUOUS_MATCH_OR_NETWORK_FAILURE")
-                after = row.getString("id")
-                index.scrapeCursor(folder.id, after)
-            }
-            publishIndexChange() // Coalesce publication to a completed page.
+        jobs.joinAll()
+    }
+    fun cancel() {
+        synchronized(scanLock) {
+            metadataRequested = false
+            active?.cancel()
+            activeMetadata?.cancel()
         }
     }
-    fun cancelAndWait() { runBlocking { active?.cancelAndJoin() } }
-    fun cancel() { active?.cancel() }
     companion object {
         private val revision = MutableStateFlow(0L)
         val revisions = revision.asStateFlow()
@@ -228,6 +186,8 @@ internal class PersonalLibrary(context: Context) {
         private val scanLock = Any()
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
         @Volatile private var active: Job? = null
+        private var activeMetadata: Job? = null
+        private var metadataRequested = false
         suspend fun awaitCurrentScan(): Boolean {
             val job = active ?: return true
             job.join()
