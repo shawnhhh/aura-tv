@@ -51,6 +51,8 @@ class LanSourceImportTest {
         assertEquals("SOURCE_BODY_INVALID", LanSourceImport.failure("WAREHOUSE_FORMAT_INVALID：正文无效"))
         assertEquals("SOURCE_URL_INVALID", LanSourceImport.failure("WAREHOUSE_URL_INVALID：格式错误"))
         assertEquals("SOURCE_WAREHOUSE_PARSE_FAILED", LanSourceImport.failure("无法解析仓库"))
-        assertEquals("SOURCE_FETCH_FAILED", LanSourceImport.failure("WAREHOUSE_TIMEOUT：配置读取超时"))
+        assertEquals("SOURCE_HTTP_404", LanSourceImport.failure("WAREHOUSE_HTTP_ERROR：配置读取 HTTP 404"))
+        assertEquals("SOURCE_TIMEOUT", LanSourceImport.failure("WAREHOUSE_TIMEOUT：配置读取超时"))
+        assertEquals("SOURCE_FETCH_FAILED", LanSourceImport.failure("WAREHOUSE_DNS_ERROR：域名解析失败"))
     }
 }
