@@ -160,7 +160,12 @@ internal class PersonalLibrary(context: Context) {
                 } catch (_: Exception) {
                     HerrinPlaybackDiagnosticJournal.record("PERSONAL", "METADATA_REFRESH_FAILED")
                 }
-            } while (synchronized(scanLock) { metadataRequested })
+            } while (synchronized(scanLock) {
+                if (metadataRequested) true else {
+                    activeMetadata = null
+                    false
+                }
+            })
         }
         true
     }

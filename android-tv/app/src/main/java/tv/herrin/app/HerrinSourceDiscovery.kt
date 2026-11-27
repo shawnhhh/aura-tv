@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 /** In-memory, configuration-scoped provider results. No media resolution in this layer. */
@@ -168,7 +169,11 @@ internal class HerrinSourceDiscovery {
             suspend fun load(node: Node, hit: Hit) {
                 val started = System.nanoTime()
                 try {
-                    val detail = withTimeoutOrNull(node.timeoutMs) { node.details(hit.movie) }
+                    val detail = withTimeoutOrNull(node.timeoutMs) {
+                        if (node.type == HerrinSourceType.TVBOX_SPIDER)
+                            withContext(SpiderRequestBudget(node.timeoutMs)) { node.details(hit.movie) }
+                        else node.details(hit.movie)
+                    }
                     coroutineContext.ensureActive()
                     if (detail != null) {
                         retainEpisodes(revision, hit.key, detail.film, ticket)?.let {

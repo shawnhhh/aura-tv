@@ -64,6 +64,11 @@ internal fun LazyListScope.herrinDiscoveryItems(
                                 }
                             )
                         }
+                        if (!running) DropdownMenuItem(
+                            modifier = Modifier.testTag("source-node-search-again"),
+                            text = { Text("重新搜索") },
+                            onClick = { expanded = false; resume(null) }
+                        )
                     }
                 }
                 if (running) CircularProgressIndicator(

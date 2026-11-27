@@ -15,6 +15,8 @@ internal object PersonalMediaProjection {
     private fun groupKey(row: JSONObject): String {
         val identityType = runCatching { JSONObject(row.optString("metadata")).optString("identityType") }
             .getOrNull()?.takeIf { it in setOf("movie", "tv") } ?: row.optString("type")
+        if (identityType == "tv" && row.optInt("episode") <= 0 && row.optInt("season", -1) >= 0)
+            return row.getString("id")
         return if (row.optInt("tmdb") > 0) "$identityType:${row.optString("type")}:${row.optInt("tmdb")}:S${row.optInt("season")}"
         else row.getString("id")
     }
@@ -68,7 +70,7 @@ internal object PersonalMediaProjection {
             for ((key, rows) in page.groupBy(::groupKey)) {
                 val film = PersonalMediaProjection.films(rows).single()
                 groups.getOrPut(key) {
-                    Group(film.copy(playbackEpisodes = emptyList()), rows.first().optInt("season", -1).takeIf { it in 0..99 })
+                    Group(film.copy(playbackEpisodes = emptyList()), rows.first().optInt("season", -1).takeIf { it in 0..99 && rows.first().optInt("episode") > 0 })
                 }.add(film)
             }
         }

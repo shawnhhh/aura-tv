@@ -48,6 +48,9 @@ internal class TmdbScreenState {
         discoveryRequestedEpisode = episode
         discoveryPlayRequest = Triple(film, hit, discoverySelectionEpoch)
     }
+    fun hasDiscoveryPlay(film: String, hit: String, epoch: Int): Boolean =
+        discoveryPlayRequest == Triple(film, hit, epoch)
+
     fun consumeDiscoveryPlay(film: String, hit: String, epoch: Int): Boolean {
         if (discoveryPlayRequest != Triple(film, hit, epoch)) return false
         discoveryPlayRequest = null

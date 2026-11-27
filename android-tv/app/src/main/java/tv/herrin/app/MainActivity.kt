@@ -1454,14 +1454,19 @@ private fun Herrin(startup: StartupPresentation) {
             val detailStarted = System.nanoTime()
             var detailStage = SourceSearchStage.DETAILS
             var detailOutcome = SourceSearchOutcome.TIMEOUT
+            val usePrefetched = !tmdbState.hasDiscoveryPlay(targetFilmId, hit.key, detailTicket)
             val loaded = withContext(Dispatchers.IO + SpiderSearchAuthority(consent)) {
                 try {
                     withTimeoutOrNull(15_000) {
                         if (hit.node.type == HerrinSourceType.TVBOX_SPIDER) {
                             tmdbState.discoverySpiderLock.lock()
                             try { hit.node.details(hit.movie) } finally { tmdbState.discoverySpiderLock.unlock() }
-                        } else tmdbState.sourceDiscoveries[targetFilmId]?.recentCmsDetail(snapshot.revision, hit)
-                            ?: hit.node.details(hit.movie)
+                        } else {
+                            val prefetched = if (usePrefetched)
+                                tmdbState.sourceDiscoveries[targetFilmId]?.recentCmsDetail(snapshot.revision, hit)
+                            else null
+                            prefetched ?: hit.node.details(hit.movie)
+                        }
                     }
                 } catch(cancelled: kotlinx.coroutines.CancellationException) { throw cancelled
                 } catch(failure: SourceCandidateFailure) { detailStage=failure.stage;detailOutcome=failure.outcome;null

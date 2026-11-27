@@ -142,7 +142,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
 
     fun delayMetadata(row: JSONObject, code: String, retryAt: Long) {
         writableDatabase.execSQL(
-            "UPDATE media SET scrape_code=?,scrape_next=? WHERE id=? AND size=? AND modified=? AND manual=? AND COALESCE(tmdb,0)=CAST(? AS INTEGER)",
+            "UPDATE media SET scrape_code=?,scrape_next=? WHERE id=? AND size=? AND modified=? AND status='available' AND manual=? AND COALESCE(tmdb,0)=CAST(? AS INTEGER)",
             arrayOf(code, retryAt, row.getString("id"), row.getLong("size"), row.getString("modified"),
                 row.optInt("manual"), row.optInt("tmdb")))
     }

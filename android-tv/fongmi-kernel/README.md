@@ -146,3 +146,9 @@ dependency compilation, APKs or manually triggered CI were run.
   uses the provider's own valid login state. No consumed action is replayed.
 - Dependency blocked: final whole-kernel classpath migration/player takeover.
   This batch does not establish real provider authorization or playback frames.
+
+The official `FongMi/media` remote still exposes only the two previously
+rejected heads. TV `696dc992abebeec439fba2d6ea7fa62ec86caf18`, immediately
+before the MPV pipeline, still requires custom Media3 danmaku APIs and ships
+a different set of local runtime archives. It is not a drop-in alternative
+and has not replaced the pinned TV 5.8.7 inputs.
