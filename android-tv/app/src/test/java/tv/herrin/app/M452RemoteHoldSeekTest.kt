@@ -68,4 +68,20 @@ class M452RemoteHoldSeekTest {
         assertFalse(seek.down(1,0,1600,20000,-1,1000))
         assertEquals(21000L,seek.up(1,1600,20000,-1))
     }
+    @Test fun sustainedPreviewAcceleratesSymmetricallyAndReleasesAtThePreview() {
+        val forward = RemoteHoldSeek()
+        val reverse = RemoteHoldSeek()
+        for ((direction, hold) in listOf(1 to forward, -1 to reverse)) {
+            hold.down(direction, 0, 1000, 900_000, 2_000_000)
+            hold.down(direction, 1, 1500, 900_000, 2_000_000, 1000)
+        }
+        val early = forward.preview(2500)!! - forward.preview(1500)!!
+        val late = forward.preview(6500)!! - forward.preview(5500)!!
+        assertTrue(late > early)
+        assertTrue(late <= 120_000)
+        val target = forward.preview(6500)!!
+        assertEquals(900_000L - (target - 900_000L), reverse.preview(6500))
+        assertEquals(target, forward.up(1, 6500, 900_000, 2_000_000, 1000))
+        assertNull(forward.up(1, 6501, 900_000, 2_000_000, 1000))
+    }
 }

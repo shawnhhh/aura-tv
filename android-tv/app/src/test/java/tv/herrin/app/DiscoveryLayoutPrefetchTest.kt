@@ -160,7 +160,7 @@ class DiscoveryLayoutPrefetchTest {
         assertEquals(2, snapshot.routes.size)
         assertEquals(1, loads)
     }
-    @Test fun nodeRemainsUnavailableUntilEveryConfirmedVodHasFinishedDetails() = runBlocking {
+    @Test fun nodePublishesFirstConfirmedLayoutWhileSiblingDetailIsPending() = runBlocking {
         val release = CompletableDeferred<Unit>()
         val started = CompletableDeferred<Unit>()
         val a = offer("a"); val b = offer("b")
@@ -178,7 +178,8 @@ class DiscoveryLayoutPrefetchTest {
         }
         try {
             withTimeout(5000) { started.await() }
-            assertFalse(current.get().selectableNodeIds.contains("node"))
+            assertTrue(current.get().selectableNodeIds.contains("node"))
+            assertEquals(setOf("node:a"), current.get().readyRoutes.map { it.hitKey }.toSet())
             release.complete(Unit); job.join()
             assertEquals(setOf("node"), current.get().selectableNodeIds)
             assertEquals(4, current.get().readyRoutes.size)
@@ -219,7 +220,7 @@ class DiscoveryLayoutPrefetchTest {
         assertFalse(snapshot.toString().contains("token=private"))
     }
 
-    @Test fun failedSiblingHidesNodeAndIndependentRetryReacquiresCompleteLayout() = runBlocking {
+    @Test fun failedSiblingDoesNotHideReadyRouteAndIndependentRetryReacquiresCompleteLayout() = runBlocking {
         var fail = true
         val node = HerrinSourceDiscovery.Node("node", "CMS", HerrinSourceType.TVBOX_CMS,
             { listOf(offer("a"), offer("b")) }, {
@@ -229,7 +230,7 @@ class DiscoveryLayoutPrefetchTest {
         val service = HerrinSourceDiscovery()
         var snapshot = HerrinSourceDiscovery.Snapshot("", 0)
         service.search("r", listOf(node), null, Mutex()) { snapshot = it }
-        assertTrue(snapshot.selectableNodeIds.isEmpty())
+        assertEquals(setOf("node"), snapshot.selectableNodeIds)
         assertEquals(setOf("node:b"), snapshot.failedDetails)
         assertEquals(2, snapshot.readyRoutes.size)
         fail = false

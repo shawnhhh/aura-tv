@@ -138,6 +138,13 @@ class HerrinUiSmokeTest {
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(code)
         compose.waitForIdle()
     }
+    private fun exitPlayer() {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        android.os.SystemClock.sleep(40)
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitForIdle()
+    }
     private fun activate(text: String) {
         compose.onNodeWithText(text).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.waitForIdle()
@@ -626,7 +633,7 @@ http://example.org/live/channel.m3u8
         focus("detail-play-cta")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("播放演示").assertExists()
-        key(KeyEvent.KEYCODE_BACK)
+        exitPlayer()
         compose.onNodeWithText("集数").assertExists()
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("card-tide").assertIsFocused()
@@ -721,7 +728,7 @@ http://example.org/live/channel.m3u8
             compose.waitUntil(15000) {
                 details.contains("a:local-a") && details.contains("b:local-b") && runCatching {
                     // Request arrival precedes the response/layout publication.
-                    // H-004 intentionally offers a node only after every trusted detail is ready.
+                    // Only ready, confirmed detail layouts are selectable.
                     list.performScrollToNode(hasTestTag("source-region"))
                     compose.onNodeWithTag("source-node-menu").assertIsDisplayed()
                 }.isSuccess
@@ -731,7 +738,7 @@ http://example.org/live/channel.m3u8
             fun awaitSelectedFrame(before: Int) {
                 compose.waitUntil(30000) { frames() > before }
                 compose.onNodeWithTag("player-root-focus").assertIsDisplayed()
-                key(KeyEvent.KEYCODE_BACK)
+                exitPlayer()
                 compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess }
                 list.performScrollToNode(hasTestTag("source-region"))
             }
@@ -743,7 +750,7 @@ http://example.org/live/channel.m3u8
                 val beforeFrame = frames()
                 compose.onNodeWithTag(nodeTag).performClick()
                 awaitSelectedFrame(beforeFrame)
-                compose.waitUntil(10000) { details.count { it == "$source:local-$source" } >= 2 }
+                assertTrue("Playback must use a previously confirmed detail", details.contains("$source:local-$source"))
             }
             assertTrue(details.all { it == "a:local-a" || it == "b:local-b" })
             assertTrue("Prefetch and explicit selection must remain bounded", details.size <= 8)
@@ -777,28 +784,20 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("source-node-menu").performClick()
             compose.onNodeWithTag("source-node-$bNode").performClick()
             compose.waitUntil(10000) { details.count { it == "b:local-b" } > bReadsBeforeFailure }
-            try {
-                compose.waitUntil(10000) { runCatching {
-                    // Retry controls grow this lazy item after the 503. Bring
-                    // the actual message into view, not just the item's top.
-                    list.performScrollToNode(hasText("暂无可用线路"))
-                    compose.onNodeWithText("暂无可用线路").assertIsDisplayed()
-                }.isSuccess }
-            } catch (failure: Throwable) {
-                // This case has only our original local CMS fixture. Export
-                // its public IDs and semantics, never a real provider payload.
-                throw AssertionError("DETAIL_REBIND_FAILURE requests=${details.joinToString()}\n" +
-                    DiscoveryProtocolTrace.summary() + "\n" +
-                    compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12), failure)
-            }
-            compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
-            list.performScrollToNode(hasText("请选择片源线路"))
-            compose.onNodeWithText("请选择片源线路").assertIsDisplayed()
+            compose.waitUntil(10000) { runCatching {
+                compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS A ▾")
+            }.isSuccess }
+            compose.onNodeWithText("暂无可用线路").assertDoesNotExist()
+            compose.onNodeWithText("请选择片源线路").assertDoesNotExist()
             compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
             failChosenB.set(false)
             val mediaBeforeRetry = mediaCalls.get()
-            list.performScrollToNode(hasTestTag("source-retry-$bNode"))
-            compose.onNodeWithTag("source-retry-$bNode").assertIsDisplayed().performClick()
+            compose.onNodeWithTag("source-node-menu").performClick()
+            compose.onNodeWithTag("source-node-$bNode").assertDoesNotExist()
+            compose.onNodeWithTag("source-node-search-again").performClick()
+            compose.waitUntil(10000) { runCatching {
+                compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
+            }.isSuccess }
             compose.waitUntil(10000) { runCatching {
                 list.performScrollToNode(hasText("线路 1"))
                 compose.onNodeWithText("线路 1").assertIsDisplayed()
@@ -836,10 +835,11 @@ http://example.org/live/channel.m3u8
         focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("film-detail-list").assertExists()
         compose.onNodeWithText("协议测试1").assertExists()
-        // Metadata-only TMDB results must expose unavailability instead of demo episodes.
-        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("tmdb-episodes-unavailable"))
-        compose.onNodeWithTag("tmdb-episodes-unavailable").assertExists()
-        compose.onNodeWithTag("tmdb-episodes-unavailable").assertIsDisplayed()
+        // Metadata-only TMDB results show the empty node control without demo media.
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("source-region"))
+        compose.onNodeWithTag("source-node-wait").assertIsDisplayed().assertTextEquals("节点 ▾")
+        compose.onNodeWithTag("episode-1").assertDoesNotExist()
+        compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
         compose.onNodeWithText("播放演示").assertDoesNotExist()
         key(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-9001").assertIsFocused() }.isSuccess }

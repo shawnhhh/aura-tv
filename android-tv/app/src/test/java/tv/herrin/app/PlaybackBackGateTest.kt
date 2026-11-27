@@ -29,4 +29,19 @@ class PlaybackBackGateTest {
         assertTrue(gate.accept(null,400))
         assertFalse(gate.accept(300,410))
     }
+    @Test fun backConsumesTheFirstLayerAndOnlyTheSecondDistinctPressExits() {
+        val gate = PlaybackBackGate()
+        var closed = 0
+        var exits = 0
+        fun press(key: Long?, at: Long) = gate.press(key, at, { closed++ }, { exits++ })
+        press(10, 20)
+        press(10, 30)
+        press(null, 40)
+        assertEquals(1, closed)
+        assertEquals(0, exits)
+        press(80, 110)
+        assertEquals(1, exits)
+        press(115, 130)
+        assertEquals(1, exits)
+    }
 }

@@ -331,7 +331,7 @@ class TvBoxSpiderService : Service() {
                             data = Bundle().apply { putString("ticket", ticket) }
                         })
                     }, {
-                        if (activeOperation == id) {
+                        if (activeOperation == id && operation != SpiderIpc.ACTIVITY_SELF_TEST) {
                             retiring = true
                             runCatching { reply.send(Message.obtain(null, operation).apply {
                                 arg1 = id
@@ -413,8 +413,10 @@ class TvBoxSpiderService : Service() {
                             SpiderIpc.ACTIVITY_SELF_TEST -> {
                                 check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
                                 val host = CatVodRuntime.activity()
+                                val mainHost = withContext(Dispatchers.Main.immediate) { CatVodRuntime.activity() }
                                 JSONObject().put("ok", true).put("probe_only", true).put("host_ready", host is SpiderRuntimeActivity)
                                     .put("pid", android.os.Process.myPid())
+                                    .put("main_has_same_window", host != null && mainHost === host)
                                     .put("secure", host?.window?.attributes?.flags?.and(android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0 && host != null)
                                     .put("window_attached", host?.window?.decorView?.windowToken != null)
                             }

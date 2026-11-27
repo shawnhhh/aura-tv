@@ -28,6 +28,7 @@ class SpiderRuntimeActivityTest {
             val facts = (result as SpiderResult.Ready).value
             assertTrue(facts.getBoolean("host_ready"))
             assertTrue(facts.getBoolean("secure"))
+            assertTrue(facts.getBoolean("main_has_same_window"))
             assertTrue(facts.getBoolean("window_attached"))
             assertNotEquals(android.os.Process.myPid(), facts.getInt("pid"))
             compose.waitUntil(5000) { compose.activity.lifecycle.currentState == Lifecycle.State.RESUMED }
@@ -47,6 +48,7 @@ class SpiderRuntimeActivityTest {
             val facts = (result as SpiderResult.Ready).value
             assertFalse(facts.getBoolean("host_ready"))
             assertFalse(facts.getBoolean("window_attached"))
+            assertFalse(facts.getBoolean("main_has_same_window"))
         } finally { bridge.close() }
     }
 }

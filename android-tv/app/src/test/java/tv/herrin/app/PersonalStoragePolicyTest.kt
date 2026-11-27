@@ -75,4 +75,17 @@ class PersonalStoragePolicyTest {
         assertEquals("1917", numeric.title); assertNull(numeric.year)
         assertEquals("Example II Part 2", PersonalStoragePolicy.parse("Example Ⅱ Part 2.1080p.mkv").title)
     }
+    @Test fun contextualNamesKeepSequelDigitsAndUseSeasonDirectoryForNumericEpisodes() {
+        val movie = PersonalStoragePolicy.parse("流浪地球2.2023.2160p.WEB-DL.H265.mkv")
+        assertEquals("流浪地球2", movie.title)
+        assertEquals(2023, movie.year)
+        val episode = PersonalStoragePolicy.parse("01.mkv", "绝命毒师/Season 01")
+        assertEquals("绝命毒师", episode.title)
+        assertEquals(1, episode.season)
+        assertEquals(1, episode.episode)
+        val special = PersonalStoragePolicy.parse("OVA 02.mkv", "Anime/Example/Specials")
+        assertEquals("Example", special.title)
+        assertEquals(0, special.season)
+        assertEquals(2, special.episode)
+    }
 }

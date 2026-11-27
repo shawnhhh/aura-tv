@@ -116,6 +116,8 @@ class PersonalLibraryDirectPlaybackTest {
         compose.onNodeWithTag("transport-toggle").performClick()
         compose.onNodeWithTag("transport-toggle").assertContentDescriptionEquals("暂停")
         inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        android.os.SystemClock.sleep(40)
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(10000) { runCatching {
             compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
             compose.onNodeWithTag("film-detail-list").assertExists()
