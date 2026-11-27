@@ -1460,7 +1460,8 @@ private fun Herrin(startup: StartupPresentation) {
                         if (hit.node.type == HerrinSourceType.TVBOX_SPIDER) {
                             tmdbState.discoverySpiderLock.lock()
                             try { hit.node.details(hit.movie) } finally { tmdbState.discoverySpiderLock.unlock() }
-                        } else hit.node.details(hit.movie)
+                        } else tmdbState.sourceDiscoveries[targetFilmId]?.recentCmsDetail(snapshot.revision, hit)
+                            ?: hit.node.details(hit.movie)
                     }
                 } catch(cancelled: kotlinx.coroutines.CancellationException) { throw cancelled
                 } catch(failure: SourceCandidateFailure) { detailStage=failure.stage;detailOutcome=failure.outcome;null
@@ -1699,7 +1700,7 @@ private fun Herrin(startup: StartupPresentation) {
             // lookup; cap fan-out so a TV does not stall or scan the internet.
             for (warehouse in importedWarehouses) {
                 if (directSites.size >= 100) break
-                when (val nested = HerrinDiscoveryWarehouses.cached(warehouse.url) ?: tvBoxRepository.forSearch(warehouse.url, tvBoxAllowHttp, allowNetwork = screen != "detail" && extended)) {
+                when (val nested = HerrinDiscoveryWarehouses.cached(warehouse.url) ?: tvBoxRepository.forSearch(warehouse.url, tvBoxAllowHttp, allowNetwork = !detailLookup && extended)) {
                     is TvBoxConfig.Single -> {
                         val cmsSites = nested.sites.filter { it.apiUrl != null }.take(100-directSites.size)
                         directSites += cmsSites

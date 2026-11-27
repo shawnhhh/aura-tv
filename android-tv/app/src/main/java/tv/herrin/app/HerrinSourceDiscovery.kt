@@ -77,6 +77,13 @@ internal class HerrinSourceDiscovery {
     private val runs = Mutex()
     private val mutations = Mutex()
     @Volatile private var snapshot = Snapshot("", 0)
+    private data class CachedDetail(val revision: String, val expiresAt: Long, val value: Detail)
+    private val cmsDetails = linkedMapOf<String, CachedDetail>()
+
+    suspend fun recentCmsDetail(revision: String, hit: Hit): Detail? = mutations.withLock {
+        if (hit.node.type != HerrinSourceType.TVBOX_CMS || snapshot.revision != revision) return@withLock null
+        cmsDetails[hit.key]?.takeIf { it.revision == revision && it.expiresAt >= System.nanoTime() }?.value
+    }
 
     /** Retain each provider's actual episode/line layout without caching media authorization.
      * Selecting it again always reacquires details through that provider's callback. */
@@ -98,6 +105,7 @@ internal class HerrinSourceDiscovery {
 
     suspend fun invalidateLayout(revision: String, key: String): Snapshot? = mutations.withLock {
         if (snapshot.revision != revision) return@withLock null
+        cmsDetails.remove(key)
         snapshot = snapshot.copy(hits = snapshot.hits.map { if (it.key == key) it.copy(episodes = emptyList()) else it },
             // A failed selection is terminal until its explicit node retry.
             // Lifecycle continuation must not silently prefetch it again.
@@ -109,6 +117,7 @@ internal class HerrinSourceDiscovery {
     suspend fun resetNode(revision: String, nodeId: String): Snapshot? = mutations.withLock {
         if (snapshot.revision != revision) return@withLock null
         val keys = snapshot.hits.filter { it.node.id == nodeId }.map { it.key }.toSet()
+        keys.forEach(cmsDetails::remove)
         snapshot = snapshot.copy(outcomes = snapshot.outcomes - nodeId,
             hits = snapshot.hits.filterNot { it.node.id == nodeId }, detailed = snapshot.detailed - keys, failedDetails = snapshot.failedDetails - keys)
         snapshot
@@ -164,7 +173,13 @@ internal class HerrinSourceDiscovery {
                     if (detail != null) {
                         retainEpisodes(revision, hit.key, detail.film, ticket)?.let {
                             mutations.withLock {
-                                if (snapshot.revision == revision && version.get() == ticket) deliver()
+                                if (snapshot.revision == revision && version.get() == ticket) {
+                                    if (node.type == HerrinSourceType.TVBOX_CMS && detail.film.playbackEpisodes.isNotEmpty()) {
+                                        if (cmsDetails.size >= 16) cmsDetails.remove(cmsDetails.keys.first())
+                                        cmsDetails[hit.key] = CachedDetail(revision, System.nanoTime() + 20_000_000_000L, detail)
+                                    }
+                                    deliver()
+                                }
                             }
                             HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
                                 "MS=${(System.nanoTime() - started) / 1_000_000}")

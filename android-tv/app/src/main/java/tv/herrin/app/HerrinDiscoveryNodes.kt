@@ -55,8 +55,13 @@ internal object HerrinDiscoveryNodes {
                 details = { offer ->
                     // Aggregation switches sessions. Reacquire the exact provider VOD after
                     // restart, never re-sign a stale Film or substitute the TMDB id.
-                    if (!activate()) throw SourceCandidateFailure(SourceSearchStage.ACTIVATE,SourceSearchOutcome.ACTIVATE_FAILED) else {
-                        val fresh = if(bridge.isApprovedSourceFilm(offer.film)) offer else
+                    if (bridge.configurationTicket() != consent)
+                        throw SourceCandidateFailure(SourceSearchStage.ACTIVATE, SourceSearchOutcome.AUTH_REQUIRED)
+                    val owned = bridge.isApprovedSourceFilm(offer.film)
+                    if (!owned && !activate())
+                        throw SourceCandidateFailure(SourceSearchStage.ACTIVATE, SourceSearchOutcome.ACTIVATE_FAILED)
+                    run {
+                        val fresh = if (owned || bridge.isApprovedSourceFilm(offer.film)) offer else
                             HerrinTvBoxSpiderSource(site, bridge).searchCandidates(identity)
                                 .firstOrNull { it.film.spiderVodId == offer.film.spiderVodId }
                         if(fresh == null) throw SourceCandidateFailure(SourceSearchStage.SEARCH,SourceSearchOutcome.NO_MATCH)
