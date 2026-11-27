@@ -434,7 +434,8 @@ class TvBoxSpiderService : Service() {
                                 SpiderPlaybackEvidence.clear()
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
                                     request.optInt("episode"), request.optString("line"),
-                                    request.optBoolean("allowHttp"))
+                                    request.optBoolean("allowHttp"),
+                                    foregroundPlayback = request.optBoolean("foregroundPlayback"))
                                 when (result) {
                                     is PlaybackResult.Ready -> SpiderIpc.playback(result.media)
                                     is PlaybackResult.Unavailable -> SpiderIpc.error(result.reason)
@@ -587,7 +588,8 @@ internal class TvBoxSpiderBridge(context: Context) {
             val ticket = message.data.getString("ticket")
             val server = message.replyTo
             val activity = foregroundActivity.get()
-            val current = pending.containsKey(operation) && server?.binder == remote?.binder &&
+            val current = pending.containsKey(operation) && operation !in searchRequests &&
+                server?.binder == remote?.binder &&
                 ticket?.matches(Regex("[a-f0-9-]{36}")) == true && activity != null &&
                 !activity.isFinishing && !activity.isDestroyed && activity.window.decorView.isShown &&
                 (activity !is androidx.lifecycle.LifecycleOwner || activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) &&
@@ -974,7 +976,8 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
     }
 
-    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
+    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean,
+                     foregroundPlayback: Boolean = false): PlaybackResult {
         kernelPages?.let { return it.media(film, episode, line) }
         playbackLease.incrementAndGet()
         val invocation = sourceSession.snapshot()
@@ -982,6 +985,8 @@ internal class TvBoxSpiderBridge(context: Context) {
             return PlaybackResult.Unavailable("Spider 影片或选集来源已失效，请重新查找片源")
         val payload = JSONObject().put("film", SpiderIpc.film(film))
             .put("episode", episode).put("line", line).put("allowHttp", allowHttp)
+            .put("foregroundPlayback", foregroundPlayback &&
+                kotlinx.coroutines.currentCoroutineContext()[SpiderRequestBudget] == null)
         return when (val response = request(SpiderIpc.PLAY, payload, invocation)) {
             is SpiderResult.Failure -> PlaybackResult.Unavailable(response.message)
             is SpiderResult.Ready -> try {

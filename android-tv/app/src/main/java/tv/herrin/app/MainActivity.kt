@@ -2571,7 +2571,8 @@ private fun Herrin(startup: StartupPresentation) {
                     }
                 }
             }
-            val parsed = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp)
+            val parsed = spiderBridge.play(playableFilm, episode, line, tvBoxAllowHttp,
+                foregroundPlayback = true)
             spiderResolved = if(parsed is PlaybackResult.Ready && parsed.media.kernelPlayback != null) {
                 HerrinPlaybackDiagnosticJournal.record("SOURCE", "KERNEL_MEDIA_VALIDATION_DEFERRED")
                 parsed

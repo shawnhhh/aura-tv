@@ -732,7 +732,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         SpiderResult.Failure("Spider ${SpiderFailureDetails.message(error)}")
     }
 
-    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
+    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean,
+                     foregroundPlayback: Boolean = false): PlaybackResult {
         val attemptResult = attemptPlayback {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
@@ -744,6 +745,12 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // or plugin code. Keep it interruptible without wrapping the later
             // suspending ParseJob in runBlocking (which breaks cancellation).
             val raw = PlaybackDiagnosticSession.stage("SPIDER", "PLAYER_CONTENT") { runInterruptible(Dispatchers.IO) {
+                // Legacy providers may call getActivity from their own main-thread
+                // callback. Attach the real host before entering playerContent, but
+                // only for explicitly admitted foreground playback.
+                if (foregroundPlayback && SpiderRuntimeActivityHost.activity() == null)
+                    error("播放授权窗口无法打开，请重试")
+                SpiderNetworkTrace.event("PLAYER_CONTENT_ENTERED")
                 HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_STARTED")
                 spider.playerContent(selected.title, selected.uri, activeVipFlags)
             } }
