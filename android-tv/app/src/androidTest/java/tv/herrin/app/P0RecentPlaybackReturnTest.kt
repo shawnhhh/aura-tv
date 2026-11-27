@@ -12,6 +12,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.rules.TestWatcher
+import org.junit.rules.TestName
 import org.junit.runner.Description
 
 /** Public recent metadata outside the home catalog -> freshly authorized NAS lookup -> real player -> same card. */
@@ -20,8 +21,10 @@ class P0RecentPlaybackReturnTest {
     private val discoveryFails=java.util.concurrent.atomic.AtomicBoolean(false)
     private val observedRequests=java.util.concurrent.ConcurrentLinkedQueue<String>()
     private val discoveries=java.util.concurrent.atomic.AtomicInteger()
-    @get:Rule(order=0) val fixture=object:ExternalResource() {
+    @get:Rule(order=0) val testName = TestName()
+    @get:Rule(order=1) val fixture=object:ExternalResource() {
         override fun before() {
+            discoveryFails.set(testName.methodName == "failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan")
             val inst=InstrumentationRegistry.getInstrumentation()
             val c=inst.targetContext
             HerrinPlaybackDiagnosticJournal.clear()
@@ -63,8 +66,8 @@ class P0RecentPlaybackReturnTest {
             c.getSharedPreferences("herrin-watch-history",0).edit().clear().commit()
         }
     }
-    @get:Rule(order=1) val compose=createAndroidComposeRule<MainActivity>()
-    @get:Rule(order=2) val failureEvidence=object:TestWatcher() {
+    @get:Rule(order=2) val compose=createAndroidComposeRule<MainActivity>()
+    @get:Rule(order=3) val failureEvidence=object:TestWatcher() {
         override fun failed(error:Throwable?,description:Description) {
             // The watcher supplements the original failure; it never replaces it.
             val state=runCatching { compose.onRoot(useUnmergedTree=true).printToString(maxDepth=12) }
@@ -170,15 +173,17 @@ class P0RecentPlaybackReturnTest {
     }
 
     @Test fun failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan() {
-        discoveryFails.set(true)
         homeReady()
+        compose.waitUntil(8000) {
+            discoveries.get() > 0 && HerrinPlaybackDiagnosticJournal.export().contains("PERSONAL SCAN_FAILED HTTP=503")
+        }
+        val completed = discoveries.get()
+        assertTrue("The controlled initial import must have reached the unavailable server", completed > 0)
         compose.onNodeWithTag("play").assertDoesNotExist()
         compose.onNodeWithTag("details").performClick()
         compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("film-detail-list").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithTag("one-tap-loading").assertDoesNotExist()
         compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
-        val completed = discoveries.get()
-        assertTrue("The controlled initial import must have reached the unavailable server", completed > 0)
         compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("source-region"))
         compose.waitForIdle()
         org.junit.Assert.assertEquals("Returning to detail must not implicitly restart the failed storage scan", completed, discoveries.get())

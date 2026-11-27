@@ -159,6 +159,8 @@ internal object RemoteTrace {
 class MainActivity : ComponentActivity() {
     private var frameDiagnostics: UiFrameDiagnostics? = null
     private var presentation:StartupPresentation?=null
+    internal var dispatchingBackKey: Long? = null
+        private set
     // This is cleared by the real V13/home handoff, never by network prefetch.
     internal fun canPresentSourceWindow(): Boolean = presentation?.showing == false
     internal fun frameSummary(): String = frameDiagnostics?.summary() ?: "渲染指标未采集"
@@ -205,7 +207,13 @@ class MainActivity : ComponentActivity() {
                 if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount >= 0)
                     RemoteFocusLatencyProbe.keyDown(event.keyCode)
                 RemoteTrace.event { "ACTIVITY before code=${event.keyCode} action=${event.action} windowFocus=${hasWindowFocus()} viewFocus=${currentFocus?.javaClass?.simpleName}" }
-                val handled = originalCallback.dispatchKeyEvent(event)
+                if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK &&
+                    event.action == android.view.KeyEvent.ACTION_UP) dispatchingBackKey = event.downTime
+                val handled = try {
+                    originalCallback.dispatchKeyEvent(event)
+                } finally {
+                    dispatchingBackKey = null
+                }
                 RemoteTrace.event { "ACTIVITY after code=${event.keyCode} action=${event.action} handled=$handled" }
                 return handled
             }
@@ -706,6 +714,7 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     var tvBoxRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var tvBoxFailedRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tvBoxImportJsonRequest by remember { mutableStateOf<String?>(null) }
     var tvBoxLoadEpoch by remember { zeroIntState() }
     var tvBoxStatus by remember { mutableStateOf("TVBox 多仓仅读取配置元数据，需手动输入并点击读取") }
@@ -728,12 +737,13 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     LaunchedEffect(Unit) {
+        val startupLoadEpoch = tvBoxLoadEpoch
         val pending = phoneSourceImport.current()?.takeIf { it.state in setOf("SAVED", "AWAITING_SITE") }
         if (pending != null) {
             phoneSourceId = pending.id
             tvBoxUrlDraft = pending.displayUrl
             snapshotFlow { startup.networkReady }.first { it }
-            if (phoneSourceImport.current()?.id != pending.id) return@LaunchedEffect
+            if (tvBoxLoadEpoch != startupLoadEpoch || phoneSourceImport.current()?.id != pending.id) return@LaunchedEffect
             tvBoxRequest = pending.url to true
             tvBoxLoadEpoch++
         } else if (configuredTvBoxUrl.isNotBlank()) {
@@ -741,12 +751,14 @@ private fun Herrin(startup: StartupPresentation) {
                 TvBoxCatalogSnapshot(context).load(
                     configuredTvBoxUrl, prefs.tvBoxLastWorkingSiteId)
             }
+            if (tvBoxLoadEpoch != startupLoadEpoch) return@LaunchedEffect
             if (saved.isNotEmpty()) {
                 providerFilms = saved
                 filmId = saved.first().id
                 providerStatus = "已恢复上次片库 · 正在连接来源以获取实时选集"
             }
             snapshotFlow { startup.networkReady }.first { it }
+            if (tvBoxLoadEpoch != startupLoadEpoch) return@LaunchedEffect
             tvBoxColdStartRequest = true
             tvBoxRequest = configuredTvBoxUrl to true
             tvBoxLoadEpoch++
@@ -755,6 +767,7 @@ private fun Herrin(startup: StartupPresentation) {
     LaunchedEffect(tvBoxLoadEpoch, startup.networkReady) {
         if(!startup.networkReady)return@LaunchedEffect
         val (address, isRoot) = tvBoxRequest ?: return@LaunchedEffect
+        tvBoxFailedRequest = null
         val nodeSelectionTicket = siteChoiceEpoch.incrementAndGet()
         siteActivationJob[0]?.cancel()
         autoCmsRequest = null
@@ -775,6 +788,7 @@ private fun Herrin(startup: StartupPresentation) {
         if (nodeSelectionTicket != siteChoiceEpoch.get() ||
             phoneSourceImport.current()?.id != phoneIdAtStart || phoneSourceId != pendingImportId) return@LaunchedEffect
         if (loadedConfig is TvBoxConfig.Error) {
+            tvBoxFailedRequest = address to isRoot
             HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_LOAD_FAILED")
             tvBoxStatus = loadedConfig.reason
             vodImportFeedback = "配置读取失败"
@@ -3269,7 +3283,8 @@ private fun Herrin(startup: StartupPresentation) {
     val playerBackGate = remember(screen, film.id, episode, line) { PlaybackBackGate() }
     fun playerBack(downTime: Long? = null, closeTopLayer: () -> Unit = {}) {
         if (screen != "player") return
-        playerBackGate.press(downTime, SystemClock.uptimeMillis(), closeTopLayer) {
+        val key = downTime ?: (context as? MainActivity)?.dispatchingBackKey
+        playerBackGate.press(key, SystemClock.uptimeMillis(), closeTopLayer) {
             playbackPicker = null
             back()
         }
@@ -4927,9 +4942,13 @@ private fun Herrin(startup: StartupPresentation) {
                                 itemsIndexed(tvBoxWarehouses) { index, warehouse ->
                                     TvButton(warehouse.name, modifier = Modifier.testTag("tvbox-entry-$index"),
                                         reduced = reduceMotion, selected = tvBoxSelectedName == warehouse.name) {
-                                        tvBoxSelectedName = warehouse.name
-                                        tvBoxRequest = warehouse.url to false
-                                        tvBoxLoadEpoch++
+                                        val request = warehouse.url to false
+                                        if (request != tvBoxRequest || request == tvBoxFailedRequest) {
+                                            tvBoxSelectedName = warehouse.name
+                                            tvBoxFailedRequest = null
+                                            tvBoxRequest = request
+                                            tvBoxLoadEpoch++
+                                        }
                                     }
                                 }
                             } }

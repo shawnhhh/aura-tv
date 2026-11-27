@@ -52,7 +52,7 @@ internal class RemoteHoldSeek {
     }
     fun up(value: Int, now: Long, position: Long, duration: Long, physicalDownTime: Long? = null): Long? {
         require(value == -1 || value == 1)
-        if (direction != value || physicalDownTime != null && downTime != physicalDownTime) return null
+        if (direction != value || now < downTime || physicalDownTime != null && downTime != physicalDownTime) return null
         val target = preview(now) ?: SeekBounds.offset(position, INITIAL_STEP_MS * direction, duration)
         reset()
         return target

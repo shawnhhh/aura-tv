@@ -748,6 +748,12 @@ internal class TvBoxSpiderBridge(context: Context) {
             val authority=kotlinx.coroutines.currentCoroutineContext()[SpiderSearchAuthority]
             if(authority!=null &&authority.configuration!=configurationEpoch.get())
                 return@withLock SpiderResult.Failure("来源配置已改变，已取消旧检索")
+            // Process death is observable before onServiceDisconnected arrives.
+            // Retire its registration before taking the new operation's generation.
+            withContext(Dispatchers.Main.immediate) {
+                if (remote?.binder?.isBinderAlive == false)
+                    invalidate("Spider 子进程异常退出；正在恢复站点", TransportFault.PROCESS_EXITED)
+            }
             if (operation == SpiderIpc.BROWSE) {
                 val started = withContext(Dispatchers.Main.immediate) {
                     if(authority!=null &&authority.configuration!=configurationEpoch.get())return@withContext null
@@ -919,7 +925,6 @@ internal class TvBoxSpiderBridge(context: Context) {
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single, searchOnly: Boolean = false): SpiderResult<List<Film>> {
         kernelPages?.let { configurationEpoch.incrementAndGet(); return it.browse(site, config) }
         val invocation = sourceSession.snapshot()
-        withContext(Dispatchers.Main.immediate) { SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge) }
         val payload = JSONObject().put("site", SpiderIpc.site(site))
             .put("searchOnly", searchOnly)
             .put("originSecret", sourceSession.filmSecret(invocation)

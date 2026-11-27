@@ -127,6 +127,14 @@ internal class PersonalLibrary(context: Context) {
             } catch(error: Exception) {
                 connections.status(c.id, "failed")
                 index.state(f.id, "offline"); progress = PersonalRemoteFiles.message(error)
+                val diagnostic = when (error) {
+                    is SourceHttpFailure -> "HTTP=${error.code}"
+                    is java.net.SocketTimeoutException -> "TIMEOUT"
+                    is java.net.UnknownHostException -> "DNS"
+                    is java.io.IOException -> "IO"
+                    else -> "DIRECTORY"
+                }
+                HerrinPlaybackDiagnosticJournal.record("PERSONAL", "SCAN_FAILED", diagnostic)
                 // No deletion on failure, cancellation, limits or an offline server.
             } finally { publishIndexChange() }
         }

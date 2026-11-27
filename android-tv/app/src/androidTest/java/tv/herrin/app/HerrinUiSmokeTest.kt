@@ -1021,17 +1021,15 @@ http://example.org/live/channel.m3u8
             // button's accessible click directly for this keyboard handoff only.
             focus("tvbox-warehouse-load")
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            // HTTP is accepted by default; there is no extra enable switch.
-            settings.performScrollToNode(hasTestTag("tvbox-status"))
-            compose.waitUntil(8000) {
-                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库", substring = true) }.isSuccess
-            }
-            settings.performScrollToNode(hasTestTag("tvbox-entry-0"))
-            focus("tvbox-entry-0"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            // HTTP is accepted by default, and the first child is loaded automatically.
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓", substring = true) }.isSuccess
             }
+            settings.performScrollToNode(hasTestTag("tvbox-entry-0"))
+            focus("tvbox-entry-0"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            settings.performScrollToNode(hasTestTag("tvbox-status"))
+            compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓", substring = true)
             settings.performScrollToNode(hasTestTag("tvbox-site-preview"))
             compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示", substring = true)
             settings.performScrollToNode(hasTestTag("tvbox-site-capabilities"))
@@ -1055,6 +1053,8 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-status").assertTextContains("Java Spider", substring = true)
             compose.onNodeWithTag("tvbox-spider-consent").assertDoesNotExist()
             assertEquals(2, server.requestCount)
+            assertEquals("/multi.json", server.takeRequest().path)
+            assertEquals("/single.json", server.takeRequest().path)
             capture("settings-tvbox-multiwarehouse")
         }
     }

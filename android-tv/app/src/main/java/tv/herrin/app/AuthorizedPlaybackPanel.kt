@@ -166,11 +166,13 @@ private fun AuthorizedPlaybackSession(
     var focusControlsEpoch by remember { mutableIntStateOf(0) }
     LaunchedEffect(media) { DetailPlaybackMetrics.timeline.mediaReady(metricToken) }
     val remoteHoldSeek = remember(media) { RemoteHoldSeek() }
+    var seekKeyCode by remember(media) { mutableIntStateOf(KeyEvent.KEYCODE_UNKNOWN) }
     var seekPreview by remember(media) { mutableStateOf<Long?>(null) }
     var seekGestureEpoch by remember(media) { mutableIntStateOf(0) }
     var resumeAfterSeek by remember(media) { mutableStateOf<(() -> Unit)?>(null) }
     fun discardHoldSeek() {
         remoteHoldSeek.reset(); seekPreview = null; kernelRemoteHeld = false; seekGestureEpoch++
+        seekKeyCode = KeyEvent.KEYCODE_UNKNOWN
         resumeAfterSeek = null
     }
     fun resetHoldSeek() {
@@ -580,6 +582,11 @@ private fun AuthorizedPlaybackSession(
         if (!player.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) { resetHoldSeek(); return true }
         when (key.action) {
             KeyEvent.ACTION_DOWN -> {
+                if (key.repeatCount == 0 && seekKeyCode != key.keyCode) {
+                    if (remoteHoldSeek.isHeld) resetHoldSeek()
+                    seekKeyCode = key.keyCode
+                }
+                if (seekKeyCode != key.keyCode) return true
                 val becameHold = remoteHoldSeek.down(direction, key.repeatCount, key.eventTime,
                     player.currentPosition, player.duration, key.downTime)
                 if (remoteHoldSeek.isHeld) kernelRemoteHeld = true
@@ -594,10 +601,16 @@ private fun AuthorizedPlaybackSession(
                 if (!isLive) controlsVisible = true
             }
             KeyEvent.ACTION_UP -> {
-                if (!remoteHoldSeek.owns(direction)) return true
+                if (seekKeyCode != key.keyCode || !remoteHoldSeek.owns(direction)) return true
                 if (key.isCanceled) { resetHoldSeek(); return true }
-                val target = remoteHoldSeek.up(direction, key.eventTime, player.currentPosition, player.duration, key.downTime)
+                // Virtual keyboard taps can deliver an UP stamped with its own
+                // event time. Hardware repeats and releases keep the DOWN time.
+                val downTime = key.downTime.takeUnless {
+                    key.deviceId == android.view.KeyCharacterMap.VIRTUAL_KEYBOARD && it == key.eventTime
+                }
+                val target = remoteHoldSeek.up(direction, key.eventTime, player.currentPosition, player.duration, downTime)
                 if (target == null) return true
+                seekKeyCode = KeyEvent.KEYCODE_UNKNOWN
                 seekPreview = null; kernelRemoteHeld = false; seekGestureEpoch++
                 shownPosition = playback.manager.seekTo(target)
                 controlsInteractionEpoch++

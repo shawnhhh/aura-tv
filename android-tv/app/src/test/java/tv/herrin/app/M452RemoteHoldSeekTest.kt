@@ -68,6 +68,13 @@ class M452RemoteHoldSeekTest {
         assertFalse(seek.down(1,0,1600,20000,-1,1000))
         assertEquals(21000L,seek.up(1,1600,20000,-1))
     }
+    @Test fun independentlyTimestampedReleaseCommitsOnceAndRejectsAnOlderEvent() {
+        val seek = RemoteHoldSeek()
+        seek.down(1, 0, 1000, 12000, 100000)
+        assertNull(seek.up(1, 999, 12000, 100000))
+        assertEquals(22000L, seek.up(1, 1050, 12000, 100000))
+        assertNull(seek.up(1, 1051, 22000, 100000))
+    }
     @Test fun sustainedPreviewAcceleratesSymmetricallyAndReleasesAtThePreview() {
         val forward = RemoteHoldSeek()
         val reverse = RemoteHoldSeek()
