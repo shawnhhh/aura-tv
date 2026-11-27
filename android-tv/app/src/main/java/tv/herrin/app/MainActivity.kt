@@ -718,6 +718,11 @@ private fun Herrin(startup: StartupPresentation) {
     var tvBoxSelectedName by remember { mutableStateOf("") }
     LaunchedEffect(personalSourceConfigEpoch,tvBoxSingle,tvBoxWarehouses){
         tmdbState.tmdbPlaybackRoutes.clear();tmdbState.tmdbPersonalPlayback.clear()
+        tmdbState.selectedDiscoveryNode.clear()
+        tmdbState.requestedDiscoveryHits.clear()
+        tmdbState.loadedDiscoveryHits.clear()
+        tmdbState.autoLayoutSelected.clear()
+        tmdbState.discoveredSources.clear()
         for(id in tmdbState.tmdbResolved.keys.toList())tmdbState.tmdbResolved[id]?.let{old->
             tmdbState.tmdbResolved[id]=old.copy(playbackEpisodes=emptyList(),cmsVodId=null,spiderVodId=null)
         }
@@ -1758,12 +1763,12 @@ private fun Herrin(startup: StartupPresentation) {
                                 HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_FIRST_NODE",
                                     "MS=${(System.nanoTime() - tmdbState.tmdbSearchStarted) / 1_000_000}")
                             }
-                            tmdbState.discoveredSources[targetId] = snapshot
+                            if (previous != snapshot) tmdbState.discoveredSources[targetId] = snapshot
                             if (snapshot.hits.any { it.relevance == SourceRelevance.CONFIRMED }) DetailPlaybackMetrics.timeline.hit()
                             if (snapshot.hits.any { it.episodes.isNotEmpty() }) DetailPlaybackMetrics.timeline.details()
                             if (screen in setOf("detail", "play-intent") && tmdbState.autoLayoutSelected[targetId] != planRevision &&
                                 tmdbState.discoverySelection == null && tmdbState.discoveryLoadingFilm != targetId &&
-                                tmdbState.selectedDiscoveryNode[targetId] !in snapshot.selectableNodeIds) {
+                                tmdbState.selectedDiscoveryNode[targetId]?.let(snapshot.selectableNodeIds::contains) != true) {
                                 snapshot.readyRoutes.firstOrNull { it.nodeId in snapshot.selectableNodeIds }
                                     ?.let { route -> snapshot.hits.firstOrNull { it.key == route.hitKey } }?.let { ready ->
                                     tmdbState.autoLayoutSelected[targetId] = planRevision
@@ -4674,7 +4679,7 @@ private fun Herrin(startup: StartupPresentation) {
                         item {
                             if (settingsTvBoxOnly) TvSourceInput(
                                 tvBoxUrlDraft, { tvBoxUrlDraft = it },
-                                "影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址",
+                                "影视源地址",
                                 fieldTag = "tvbox-warehouse-url", navTag = "tvbox-warehouse-nav",
                                 navRequester = requester("tvbox-warehouse-url"),
                                 editRequester = requester("tvbox-warehouse-editor"),
@@ -4716,7 +4721,10 @@ private fun Herrin(startup: StartupPresentation) {
                                     val activeNode = tvBoxSingle?.sites?.firstOrNull {
                                         it.key == activeCmsSite?.key || it.key == spiderBridge.approvedActiveSiteKey() ||
                                             (it.key == autoCmsRequest?.key && it.apiUrl == autoCmsRequest?.apiUrl)
-                                    }
+                                    } ?: tvBoxSingle?.let { config -> config.sites.firstOrNull {
+                                        prefs.tvBoxPreferredRootId == SourceHealthIndex.digest(configuredTvBoxUrl) &&
+                                            TvBoxAutoSites.identity(it, config.spiderJar) == prefs.tvBoxPreferredSiteId
+                                    } }
                                     TvButton((activeNode?.name ?: "影视节点") + " ▾",
                                         modifier = Modifier.testTag("settings-source-sites")
                                             .focusRequester(requester("settings-source-sites")),
@@ -5308,14 +5316,14 @@ private fun Herrin(startup: StartupPresentation) {
                                             // Keep the requested line while one detail rebind is
                                             // in flight. Never cancel/restart the same request.
                                             tmdbState.discoveryLine = selectedLine
-                                            tmdbState.requestDiscoveryPlay(film.id, hit.key)
+                                            tmdbState.requestDiscoveryPlay(film.id, hit.key, chosen?.number)
                                             return@herrinDiscoveryItems
                                         }
                                         tmdbState.requestedDiscoveryHits[film.id] = hit.key
                                         tmdbState.discoveryLine = selectedLine
                                         tmdbState.discoverySelection = film.id to hit.key
                                         tmdbState.discoverySelectionEpoch++
-                                        tmdbState.requestDiscoveryPlay(film.id, hit.key)
+                                        tmdbState.requestDiscoveryPlay(film.id, hit.key, chosen?.number)
                                     }, resume = { failedNode ->
                                         tmdbState.discoverySelection = null
                                         val node = failedNode ?: tmdbState.selectedDiscoveryNode[film.id]

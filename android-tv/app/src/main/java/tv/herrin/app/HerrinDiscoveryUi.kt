@@ -43,8 +43,8 @@ internal fun LazyListScope.herrinDiscoveryItems(
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Box {
                     TvButton(
-                        (groups[current]?.firstOrNull()?.node?.name ?: "节点") + " ▾",
-                        modifier = Modifier.testTag("source-node-menu"),
+                        (current?.let(groups::get)?.firstOrNull()?.node?.name ?: "节点") + " ▾",
+                        modifier = Modifier.testTag(if (groups.isEmpty()) "source-node-wait" else "source-node-menu"),
                         reduced = reduced
                     ) {
                         if (groups.isNotEmpty()) expanded = true

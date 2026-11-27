@@ -267,7 +267,10 @@ internal class HerrinSourceDiscovery {
             unique.firstOrNull { it.id == preferred && it !in personal }?.let { node ->
                 launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { run(node) }
             }
-            unique.filter { it !in personal && it.id != preferred }.forEach { node -> launch { run(node) } }
+            unique.filter { it !in personal && it.id != preferred }.forEach { node ->
+                // Claim the bounded slots in ranked order, independent of IO scheduling.
+                launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { run(node) }
+            }
             if (expand != null) launch {
                 val failures = expand { additions ->
                     val fresh = mutations.withLock {

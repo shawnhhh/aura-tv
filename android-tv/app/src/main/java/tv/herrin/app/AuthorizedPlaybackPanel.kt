@@ -186,8 +186,10 @@ private fun AuthorizedPlaybackSession(
                 seekPreview = remoteHoldSeek.preview(android.os.SystemClock.uptimeMillis())
         }
     }
-    LaunchedEffect(kernelPanelOpen, externalPanelOpen, playbackState) {
-        if (kernelPanelOpen || externalPanelOpen || playbackState == Player.STATE_ENDED) resetHoldSeek()
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(kernelPanelOpen, externalPanelOpen, playbackState, windowFocused) {
+        if (!windowFocused || kernelPanelOpen || externalPanelOpen || playbackState == Player.STATE_ENDED)
+            resetHoldSeek()
     }
     // Keep updates within one media session, while retaining the old session's
     // callbacks until its DisposableEffect has persisted and released its player.
