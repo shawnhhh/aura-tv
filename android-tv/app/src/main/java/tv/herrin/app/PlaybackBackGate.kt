@@ -4,6 +4,21 @@ package tv.herrin.app
 internal class PlaybackBackGate {
     private var key: Long? = null
     private var at: Long? = null
+    private var firstPressAt: Long? = null
+    private var exited = false
+
+    fun press(downTime: Long?, now: Long, closeTopLayer: () -> Unit, exit: () -> Unit) {
+        if (exited || !accept(downTime, now)) return
+        if (firstPressAt?.let { now - it in 0..500 } == true) {
+            firstPressAt = null
+            exited = true
+            exit()
+        } else {
+            firstPressAt = now
+            closeTopLayer()
+        }
+    }
+
     fun accept(downTime: Long?, now: Long): Boolean {
         if (downTime != null && downTime == key) return false
         // Dispatcher callbacks carry no KeyEvent. Coalesce both arrival orders;

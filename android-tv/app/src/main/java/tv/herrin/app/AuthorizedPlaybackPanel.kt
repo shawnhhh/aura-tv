@@ -89,7 +89,8 @@ fun AuthorizedPlaybackPanel(
     recoverySession: FongMiPlaybackRecovery.Session = remember(media) { FongMiPlaybackRecovery.Session() },
     externalPanelOpen: Boolean = false,
     /** Private indexed media must reacquire its saved connection, not replay a signed CDN URL. */
-    onRetryMedia: (() -> Unit)? = null
+    onRetryMedia: (() -> Unit)? = null,
+    onRemoteBack: ((Long?, () -> Unit) -> Unit)? = null
 ) {
     // A media replacement owns a fresh composition, including callbacks,
     // effects, focus nodes and native surfaces. No outgoing resource can be
@@ -98,7 +99,7 @@ fun AuthorizedPlaybackPanel(
         AuthorizedPlaybackSession(media, onPlayer, startPositionMs, onPlaybackProgress,
             onMediaSpecDetected, isLive, onLiveMenu, focusRestoreEpoch,
             onLineSelection, onEpisodeSelection, onRefreshSource, onTryOtherSource, onSourceExhausted, onBack,
-            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode, externalPanelOpen, onRetryMedia)
+            testDiagnostics, recoverySession, onNextEpisode, onPreviousEpisode, externalPanelOpen, onRetryMedia, onRemoteBack)
     }
 }
 
@@ -124,7 +125,8 @@ private fun AuthorizedPlaybackSession(
     onNextEpisode: (() -> Unit)?,
     onPreviousEpisode: (() -> Unit)?,
     externalPanelOpen: Boolean,
-    onRetryMedia: (() -> Unit)?
+    onRetryMedia: (() -> Unit)?,
+    onRemoteBack: ((Long?, () -> Unit) -> Unit)?
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -544,9 +546,23 @@ private fun AuthorizedPlaybackSession(
         }
     }
     val backGate = remember(playback) { PlaybackBackGate() }
-    fun requestBack(source: String, physicalKey: Long? = null) {
+    fun requestBack(source: String, physicalKey: Long? = null, closePanel: (() -> Unit)? = null) {
         if (playback.isClosed) return
+        if (onRemoteBack != null) {
+            resetHoldSeek()
+            onRemoteBack(physicalKey, closePanel ?: {
+                when {
+                    showVerification -> showVerification = false
+                    controlsVisible -> {
+                        controlsVisible = false
+                        playerRootFocus.requestFocus()
+                    }
+                }
+            })
+            return
+        }
         if (!backGate.accept(physicalKey, android.os.SystemClock.uptimeMillis())) return
+        if (closePanel != null) { closePanel(); return }
         android.util.Log.i("HerrinPlayerBack",
             "source=$source focus=${context.javaClass.simpleName} released=${playback.isClosed}")
         onBack()
@@ -578,9 +594,10 @@ private fun AuthorizedPlaybackSession(
             KeyEvent.ACTION_UP -> {
                 if (!remoteHoldSeek.owns(direction)) return true
                 if (key.isCanceled) { resetHoldSeek(); return true }
-                val target = remoteHoldSeek.up(direction, key.eventTime, player.currentPosition, player.duration)
+                val target = remoteHoldSeek.up(direction, key.eventTime, player.currentPosition, player.duration, key.downTime)
+                if (target == null) return true
                 seekPreview = null; kernelRemoteHeld = false; seekGestureEpoch++
-                if (target != null) shownPosition = playback.manager.seekTo(target)
+                shownPosition = playback.manager.seekTo(target)
                 controlsInteractionEpoch++
                 val resume = resumeAfterSeek; resumeAfterSeek = null; resume?.invoke()
             }
@@ -610,7 +627,7 @@ private fun AuthorizedPlaybackSession(
         if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0)
             controlsInteractionEpoch++
         if (key.keyCode == KeyEvent.KEYCODE_BACK) {
-            if (key.action == KeyEvent.ACTION_UP) requestBack("compose-preview", key.downTime)
+            if (key.action == KeyEvent.ACTION_UP && !key.isCanceled) requestBack("compose-preview", key.downTime)
             true
         } else if (!isLive && transportFocused && mainTransportRowFocused &&
             key.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
@@ -665,7 +682,7 @@ private fun AuthorizedPlaybackSession(
                 // The shared handler closes Compose controls before leaving playback.
                 override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                     if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                        if (event.action == KeyEvent.ACTION_UP) requestBack("native-player-view", event.downTime)
+                        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) requestBack("native-player-view", event.downTime)
                         return true
                     }
                     if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
@@ -809,7 +826,8 @@ private fun AuthorizedPlaybackSession(
             initialControl, moreControl, ::applyRemoteSeek,
             { controlsInteractionEpoch++ }, { kernelPanelOpen = it; if (it) resetHoldSeek() },
             { transportFocused = it; mainTransportRowFocused = it }, onEpisodeSelection ?: onLineSelection,
-            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek, specsReady = if (playback.whole) kernelFirstFrame || frameSinceSelection && kernelSelectedEpisode == media.kernelPlayback?.episode else frameSinceSelection)
+            onHoldSeek = ::holdSeek, resetHoldSeek = ::resetHoldSeek,
+            onPanelBack = { downTime, close -> requestBack("control-popup", downTime, close) }, specsReady = if (playback.whole) kernelFirstFrame || frameSinceSelection && kernelSelectedEpisode == media.kernelPlayback?.episode else frameSinceSelection)
         if (testDiagnostics && !playback.whole && PlayerRemoteFocusPolicy.showTransport(
                 live = isLive, controlsVisible = controlsVisible,
                 errorVisible = errorMessage != null)) Column(

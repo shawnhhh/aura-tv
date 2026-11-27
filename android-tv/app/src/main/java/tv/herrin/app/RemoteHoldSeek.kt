@@ -7,6 +7,9 @@ internal class RemoteHoldSeek {
     companion object {
         const val INITIAL_STEP_MS = 10_000L
         const val PREVIEW_MS_PER_SECOND = 10_000L
+        private const val ACCELERATION_DELAY_SECONDS = 1.5
+        private const val ACCELERATION_RAMP_SECONDS = 4.0
+        private const val MAX_PREVIEW_MS_PER_SECOND = 120_000L
     }
     private var direction = 0
     private var downTime = 0L
@@ -35,13 +38,21 @@ internal class RemoteHoldSeek {
     }
     fun preview(now: Long): Long? {
         val began = repeatAt ?: return null
-        val elapsed = (now - began).coerceIn(0, Long.MAX_VALUE / PREVIEW_MS_PER_SECOND)
-        val delta = elapsed * PREVIEW_MS_PER_SECOND / 1000 * direction
+        val seconds = (now - began).coerceAtLeast(0) / 1000.0
+        val accelerating = (seconds - ACCELERATION_DELAY_SECONDS).coerceAtLeast(0.0)
+        val t = (accelerating / ACCELERATION_RAMP_SECONDS).coerceAtMost(1.0)
+        // Integral of smoothstep speed. Speed and acceleration join smoothly
+        // at both ends of the ramp and never depend on the repeat frequency.
+        val ramp = ACCELERATION_RAMP_SECONDS * (t * t * t - 0.5 * t * t * t * t)
+        val cruise = (accelerating - ACCELERATION_RAMP_SECONDS).coerceAtLeast(0.0)
+        val distance = seconds * PREVIEW_MS_PER_SECOND +
+            (MAX_PREVIEW_MS_PER_SECOND - PREVIEW_MS_PER_SECOND) * (ramp + cruise)
+        val delta = distance.toLong() * direction
         return SeekBounds.offset(origin, delta, duration)
     }
-    fun up(value: Int, now: Long, position: Long, duration: Long): Long? {
+    fun up(value: Int, now: Long, position: Long, duration: Long, physicalDownTime: Long? = null): Long? {
         require(value == -1 || value == 1)
-        if (direction != value) return null
+        if (direction != value || physicalDownTime != null && downTime != physicalDownTime) return null
         val target = preview(now) ?: SeekBounds.offset(position, INITIAL_STEP_MS * direction, duration)
         reset()
         return target

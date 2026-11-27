@@ -3243,6 +3243,14 @@ private fun Herrin(startup: StartupPresentation) {
             }
         }
     }
+    val playerBackGate = remember(screen, film.id, episode, line) { PlaybackBackGate() }
+    fun playerBack(downTime: Long? = null, closeTopLayer: () -> Unit = {}) {
+        if (screen != "player") return
+        playerBackGate.press(downTime, SystemClock.uptimeMillis(), closeTopLayer) {
+            playbackPicker = null
+            back()
+        }
+    }
     fun finishLiveSearchInput() {
         keyboard?.hide()
         inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
@@ -3262,6 +3270,7 @@ private fun Herrin(startup: StartupPresentation) {
                 focusId = "search"
                 uiScope.launch { withFrameNanos { }; runCatching { requester("search").requestFocus() } }
             }
+            screen == "player" -> playerBack { playbackPicker = null }
             else -> back()
         }
     }
@@ -4458,7 +4467,8 @@ private fun Herrin(startup: StartupPresentation) {
                             watchHistory.updateSession(historyTicket, historyScope, film.id, historyEpisode, historyLine,
                                 position, duration, finished)
                         },
-                        onBack = { if (screen == "player") back() }
+                        onBack = { if (screen == "player") back() },
+                        onRemoteBack = { key, close -> playerBack(key, close) }
                     )
                     }
                     if (playbackPicker != null) PlaybackSelectionDialog(
@@ -4476,7 +4486,8 @@ private fun Herrin(startup: StartupPresentation) {
                             episode = selectedEpisode
                             line = selectedLine
                             playbackPicker = null
-                        }, onDismiss = { playbackPicker = null })
+                        }, onDismiss = { playbackPicker = null },
+                        onBack = { key -> playerBack(key) { playbackPicker = null } })
                 } else if (screen == "player") {
                     val playbackUnavailable = tmdbState.automaticSearch == null &&
                         (currentSpiderResult is PlaybackResult.Unavailable ||
@@ -4531,10 +4542,7 @@ private fun Herrin(startup: StartupPresentation) {
                         },
                         onTryOtherSource = tryOtherTmdbSource.takeUnless { personalRoute },
                         onBack = {
-                            if (screen == "player") {
-                                if (cmsFailed) { cmsPlaybackPendingId = null; cmsPlaybackFailedId = null }
-                                back()
-                            }
+                            playerBack()
                         }
                     )
                 } else {

@@ -44,7 +44,8 @@ internal fun KernelMinimalControls(
     initialFocus: FocusRequester, speedFocus: FocusRequester,
     onSeek: (Long) -> Unit, onInteraction: () -> Unit,
     onPanel: (Boolean) -> Unit, onTransportFocus: (Boolean) -> Unit, onEpisodes: (() -> Unit)?,
-    onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit, specsReady: Boolean
+    onHoldSeek: (Int, KeyEvent) -> Boolean, resetHoldSeek: () -> Unit,
+    onPanelBack: (Long?, () -> Unit) -> Unit, specsReady: Boolean
 ) {
     val player = session.player
     // Media3 is not Compose snapshot state: pause/resume can change without a position tick.
@@ -143,9 +144,9 @@ internal fun KernelMinimalControls(
     panel?.let { name ->
         Popup(alignment = when (name) { "倍速" -> Alignment.BottomStart; "选集" -> Alignment.CenterStart; else -> Alignment.CenterEnd },
             offset = if (name == "倍速") speedOffset else IntOffset.Zero,
-            onDismissRequest = ::close, properties = PopupProperties(focusable = true)) {
-            BackHandler { close() }
-            Box(Modifier.testTag("player-menu-popup")) {
+            onDismissRequest = ::close, properties = PopupProperties(focusable = true, dismissOnBackPress = false)) {
+            BackHandler { onPanelBack(null, ::close) }
+            Box(Modifier.testTag("player-menu-popup").onPlaybackPopupBack { onPanelBack(it, ::close) }) {
             AnimatedVisibility(visibility, enter = slideInHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else if (name == "选集") -it else it },
                 exit = slideOutHorizontally(tween(if (reduced) 0 else 180)) { if (name == "倍速") 0 else if (name == "选集") -it else it }) {
             Surface(color = Color(0xD9111111), tonalElevation = 0.dp) {

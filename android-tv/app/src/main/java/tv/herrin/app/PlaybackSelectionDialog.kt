@@ -20,6 +20,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -31,7 +32,8 @@ import androidx.compose.ui.window.PopupProperties
 @Composable
 internal fun PlaybackSelectionDialog(
     film: Film, episode: Int, line: String, linesOnly: Boolean,
-    onSelect: (Int, String) -> Unit, onDismiss: () -> Unit, reduced: Boolean = false
+    onSelect: (Int, String) -> Unit, onDismiss: () -> Unit, reduced: Boolean = false,
+    onBack: (Long?) -> Unit = { onDismiss() }
 ) {
     val movie = film.category == "电影"
     val layout = remember(film) { SeasonEpisodes.fromFilm(film, allowSingleSeason = true) }
@@ -60,11 +62,11 @@ internal fun PlaybackSelectionDialog(
     var visible by remember { mutableStateOf(reduced) }
     LaunchedEffect(Unit) { visible = true }
     val width = (LocalConfiguration.current.screenWidthDp * .30f).dp
-    Popup(alignment = Alignment.CenterStart, properties = PopupProperties(focusable = true), onDismissRequest = onDismiss) {
-        BackHandler(onBack = onDismiss)
+    Popup(alignment = Alignment.CenterStart, properties = PopupProperties(focusable = true, dismissOnBackPress = false), onDismissRequest = onDismiss) {
+        BackHandler { onBack(null) }
         AnimatedVisibility(visible, enter = slideInHorizontally(tween(if (reduced) 0 else 180)) { -it },
             exit = slideOutHorizontally(tween(if (reduced) 0 else 180)) { -it }) {
-            Surface(color = Color(0xD9111111)) {
+            Surface(modifier = Modifier.onPlaybackPopupBack(onBack), color = Color(0xD9111111)) {
                 Column(Modifier.width(width).fillMaxHeight().padding(24.dp).testTag("playback-selection"),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(if (movie) "版本与线路" else if (showLines) "线路" else "选集", fontSize = 24.sp, color = Color.White)
@@ -109,3 +111,11 @@ internal fun PlaybackSelectionDialog(
 }
 
 private data class PlaybackLineChoice(val episode: Int, val line: PlaybackLine, val label: String)
+
+
+internal fun Modifier.onPlaybackPopupBack(onBack: (Long) -> Unit): Modifier = onPreviewKeyEvent { event ->
+    val key = event.nativeKeyEvent
+    if (key.keyCode != android.view.KeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
+    if (key.action == android.view.KeyEvent.ACTION_UP && !key.isCanceled) onBack(key.downTime)
+    true
+}
