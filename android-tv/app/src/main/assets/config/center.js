@@ -138,7 +138,7 @@ async function refreshPersonal(){
   const name=document.createElement('span');name.className='name';name.textContent=c.name;row.append(name);
   const actions=document.createElement('div');actions.className='actions';row.append(actions);
   button(actions,'编辑',()=>{const f=$('#personal-edit');switchProtocol(protocol);
-   for(const key of ['id','name','username','path'])f.elements[key].value=c[key]||'';
+   for(const key of ['id','name','username','path','domain','encryption'])f.elements[key].value=c[key]||'';
    f.elements.address.value=protocol==='SMB'?c.host:(c.address||'');
    f.elements.port.value=c.port||'';
   });
@@ -182,7 +182,10 @@ $('#personal-edit').onsubmit=async e=>{
 };
 function renderDirectories(r){
  const el=$('#personal-directories');el.replaceChildren();
- for(const f of r.files||[])button(el,f.name,async()=>{$('#personal-edit').elements.path.value=f.path;directoryPage=0;await browsePersonal()});
+ for(const f of r.files||[])button(el,f.name,()=>{
+  $('#personal-edit').elements.path.value=f.path;directoryPage=0;
+  browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
+ });
  $('#personal-directory-previous').disabled=directoryPage===0;
  $('#personal-directory-next').disabled=(directoryPage+1)*100>=(r.total||0);
 }

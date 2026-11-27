@@ -22,7 +22,7 @@
  <div id="module-content">
   <div id="module-toast" role="status" aria-live="polite" hidden></div>
   <form id="sources">
-   <input name="url" type="url" placeholder="影视仓地址" required autocomplete="url">
+   <input name="url" type="text" inputmode="url" maxlength="2048" placeholder="影视仓地址" required autocomplete="url">
    <select id="source-node" aria-label="影视节点"><option value="first">第一个节点（默认）</option></select>
    <button type="submit">应用影视源</button>
   </form>
@@ -47,14 +47,14 @@
     <label>密码<input name="password" type="password" maxlength="2048" autocomplete="off"></label>
     <button id="personal-browse" type="button">浏览目录</button>
     <div id="personal-browser" hidden>
-    <div class="actions">
-     <button id="personal-parent" type="button" class="secondary">上级</button>
-    </div>
-    <div id="personal-directories"></div>
-    <div class="actions">
-     <button type="button" id="personal-directory-previous" class="secondary">上一页</button>
-     <button type="button" id="personal-directory-next" class="secondary">下一页</button>
-    </div>
+     <div class="actions">
+      <button id="personal-parent" type="button" class="secondary">上级</button>
+     </div>
+     <div id="personal-directories"></div>
+     <div class="actions">
+      <button type="button" id="personal-directory-previous" class="secondary">上一页</button>
+      <button type="button" id="personal-directory-next" class="secondary">下一页</button>
+     </div>
     </div>
     <button type="submit">添加</button>
    </form>

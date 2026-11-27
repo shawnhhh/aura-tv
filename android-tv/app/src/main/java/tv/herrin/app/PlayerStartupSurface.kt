@@ -46,7 +46,8 @@ internal fun PlayerStartupSurface(
     personal: Boolean = false,
     onRetry: () -> Unit,
     onBack: () -> Unit,
-    onTryOtherSource: (() -> Unit)? = null
+    onTryOtherSource: (() -> Unit)? = null,
+    onRemoteBack: ((Long) -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     LaunchedEffect(loading, failureDiagnostic) {
@@ -64,7 +65,8 @@ internal fun PlayerStartupSurface(
         if(personalNotice) { delay(2400); personalNotice = false }
     }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
-        .testTag("player-startup-surface"), contentAlignment = Alignment.Center) {
+        .testTag("player-startup-surface")
+        .then(if (onRemoteBack != null) Modifier.onPlaybackPopupBack(onRemoteBack) else Modifier), contentAlignment = Alignment.Center) {
         if(personalNotice) Text(failureHint ?: "个人媒体连接失败",
             color = Color.White, modifier = Modifier.align(Alignment.TopEnd).padding(24.dp)
                 .testTag("personal-playback-result"))

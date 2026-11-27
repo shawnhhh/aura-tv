@@ -4568,9 +4568,8 @@ private fun Herrin(startup: StartupPresentation) {
                             playerRetryEpoch++
                         },
                         onTryOtherSource = tryOtherTmdbSource.takeUnless { personalRoute },
-                        onBack = {
-                            playerBack()
-                        }
+                        onBack = { playerBack() },
+                        onRemoteBack = { key -> playerBack(key) }
                     )
                 } else {
                     // Isolate these large DSL blocks into independent methods.
@@ -5270,7 +5269,7 @@ private fun Herrin(startup: StartupPresentation) {
                         if(film.id.startsWith("tmdb-") && screen == "detail") {
                             val sourceSnapshot = tmdbState.discoveredSources[film.id] ?: HerrinSourceDiscovery.Snapshot("pending-" + film.id, 0)
                             sourceSnapshot.let { discovery ->
-                                herrinDiscoveryItems(discovery, tmdbState.tmdbSearchRunning || tmdbState.discoveryLoadingFilm == film.id, reduceMotion,
+                                herrinDiscoveryItems(discovery, tmdbState.tmdbSearchRunning, reduceMotion,
                                     select = { hit, selectedLine ->
                                         if (hit.node.id !in discovery.selectableNodeIds ||
                                             hit.episodes.isEmpty()) return@herrinDiscoveryItems
