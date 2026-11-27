@@ -49,16 +49,6 @@ internal class HerrinSourceDiscovery {
                     hit.episodes.isNotEmpty() && hit.episodes.all { it.lines.isNotEmpty() }
             }.map { it.node.id }.toSet()
         }
-        val confirmed = hits.filter { it.relevance == SourceRelevance.CONFIRMED }
-            confirmed.groupBy { it.node.id }.filter { (nodeId, candidates) ->
-                val required = if (candidates.first().node.bundledPersonalLayout)
-                    candidates.take(1) else candidates
-                required.all { it.key in detailed && it.key !in failedDetails } &&
-                    required.any { it.episodes.isNotEmpty() &&
-                        it.episodes.all { ep -> ep.lines.isNotEmpty() } &&
-                        readyRoutes.any { route -> route.nodeId == nodeId && route.hitKey == it.key } }
-            }.keys
-        }
         val confirmed get() = hits.count { it.relevance == SourceRelevance.CONFIRMED }
         val possible get() = hits.count { it.relevance == SourceRelevance.POSSIBLE }
         val excluded get() = hits.count { it.relevance == SourceRelevance.OTHER }
