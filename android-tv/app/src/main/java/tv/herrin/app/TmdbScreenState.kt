@@ -42,12 +42,16 @@ internal class TmdbScreenState {
         tmdbPlaybackRoutes.forget(id)
     }
     private var discoveryPlayRequest: Triple<String, String, Int>? = null
-    fun requestDiscoveryPlay(film: String, hit: String) {
+    var discoveryRequestedEpisode: Int? = null
+        private set
+    fun requestDiscoveryPlay(film: String, hit: String, episode: Int? = null) {
+        discoveryRequestedEpisode = episode
         discoveryPlayRequest = Triple(film, hit, discoverySelectionEpoch)
     }
     fun consumeDiscoveryPlay(film: String, hit: String, epoch: Int): Boolean {
         if (discoveryPlayRequest != Triple(film, hit, epoch)) return false
         discoveryPlayRequest = null
+        discoveryRequestedEpisode = null
         return true
     }
     fun discardDiscoveryPlay(film: String, hit: String, epoch: Int) {
@@ -105,6 +109,7 @@ internal class TmdbScreenState {
         sourceSearchJob = null
         discoverySelection = null
         discoveryPlayRequest = null
+        discoveryRequestedEpisode = null
         discoverySelectionEpoch++
         discoveryLoadingEpoch++
         discoveryLoadingFilm = null

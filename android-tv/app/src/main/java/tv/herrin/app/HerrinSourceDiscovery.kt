@@ -40,14 +40,15 @@ internal class HerrinSourceDiscovery {
             val ids = hits.associate { hit -> hit.key to hit.episodes.flatMap { it.lines }.map { it.first }.toSet() }
             routes.filter { it.lineId in ids[it.hitKey].orEmpty() }
         }
-        /**
-         * A node must not be selectable when only its search result is known.
-         * All confirmed VOD details for that node must finish first, so each
-         * advertised line already has an episode list when the menu opens.
-         * A bundled NAS playlist comes from the first hit's single detail call.
-         */
         val selectableNodeIds: Set<String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-            val confirmed = hits.filter { it.relevance == SourceRelevance.CONFIRMED }
+            val ready = readyRoutes.mapTo(hashSetOf()) { it.hitKey }
+            hits.asSequence().filter { hit ->
+                hit.relevance == SourceRelevance.CONFIRMED && hit.key in ready &&
+                    hit.key in detailed && hit.key !in failedDetails &&
+                    hit.episodes.isNotEmpty() && hit.episodes.all { it.lines.isNotEmpty() }
+            }.map { it.node.id }.toSet()
+        }
+        val confirmed = hits.filter { it.relevance == SourceRelevance.CONFIRMED }
             confirmed.groupBy { it.node.id }.filter { (nodeId, candidates) ->
                 val required = if (candidates.first().node.bundledPersonalLayout)
                     candidates.take(1) else candidates
@@ -62,7 +63,9 @@ internal class HerrinSourceDiscovery {
         val excluded get() = hits.count { it.relevance == SourceRelevance.OTHER }
         val checked get() = outcomes.count { it.value != Outcome.SEARCHING }
         val remaining get() = (nodes - checked).coerceAtLeast(0)
-        val hasRemaining get() = remaining > 0 || expanding || warehouseFailures > 0
+        val hasRemaining get() = remaining > 0 || expanding || hits.any {
+            it.relevance == SourceRelevance.CONFIRMED && !it.node.bundledPersonalLayout && it.key !in detailed
+        }
         fun text() = "已检查 $checked/$nodes · 原始搜索命中 ${outcomes.count { it.value == Outcome.FOUND }} 站 · 原始条目 ${hits.size} · 确认匹配 $confirmed · 可能相关 $possible · 排除 $excluded · " +
             "无结果 ${outcomes.count { it.value == Outcome.EMPTY }} · 失败 ${outcomes.count { it.value == Outcome.FAILED }} · " +
             "超时 ${outcomes.count { it.value == Outcome.TIMEOUT }} · 剩余 $remaining" +
@@ -127,9 +130,19 @@ internal class HerrinSourceDiscovery {
             routes = snapshot.routes.filter { it.nodeId in known },
             detailed = snapshot.detailed.intersect(snapshot.hits.filter { it.node.id in known }.map { it.key }.toSet()))
         snapshot = snapshot.copy(expanding = expand != null, warehouseFailures = 0)
-        publish(snapshot)
-        val cmsSlots = Semaphore(4)
-        val detailSlots = Semaphore(2)
+        val startedAt = System.nanoTime()
+        var firstReady = false
+        suspend fun deliver() {
+            if (!firstReady && snapshot.selectableNodeIds.isNotEmpty()) {
+                firstReady = true
+                HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_FIRST_PLAYABLE_LAYOUT",
+                    "MS=${(System.nanoTime() - startedAt) / 1_000_000}")
+            }
+            publish(snapshot)
+        }
+        deliver()
+        val cmsSlots = Semaphore(6)
+        val detailSlots = Semaphore(3)
         suspend fun spiderOperation(block: suspend () -> Unit) {
             while (true) {
                 while (spiderPaused) { coroutineContext.ensureActive(); kotlinx.coroutines.delay(100) }
@@ -148,18 +161,19 @@ internal class HerrinSourceDiscovery {
                 try {
                     val detail = withTimeoutOrNull(node.timeoutMs) { node.details(hit.movie) }
                     coroutineContext.ensureActive()
-                    if (detail != null) retainEpisodes(revision, hit.key, detail.film, ticket)?.let {
-                        mutations.withLock {
-                            if (snapshot.revision == revision && version.get() == ticket) publish(snapshot)
+                    if (detail != null) {
+                        retainEpisodes(revision, hit.key, detail.film, ticket)?.let {
+                            mutations.withLock {
+                                if (snapshot.revision == revision && version.get() == ticket) deliver()
+                            }
+                            HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
+                                "MS=${(System.nanoTime() - started) / 1_000_000}")
                         }
-                        HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_LAYOUT_READY",
-                            "MS=${(System.nanoTime()-started)/1_000_000}")
-                    }
-                    mutations.withLock {
+                    } else mutations.withLock {
                         if (snapshot.revision == revision && version.get() == ticket) {
                             snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key,
-                                failedDetails = if (detail == null) snapshot.failedDetails + hit.key else snapshot.failedDetails - hit.key)
-                            publish(snapshot)
+                                failedDetails = snapshot.failedDetails + hit.key)
+                            deliver()
                         }
                     }
                 } catch (cancelled: CancellationException) { throw cancelled }
@@ -169,7 +183,7 @@ internal class HerrinSourceDiscovery {
                     mutations.withLock {
                         if (snapshot.revision == revision && version.get() == ticket) {
                             snapshot = snapshot.copy(detailed = snapshot.detailed + hit.key, failedDetails = snapshot.failedDetails + hit.key)
-                            publish(snapshot)
+                            deliver()
                         }
                     }
                 }
@@ -209,7 +223,7 @@ internal class HerrinSourceDiscovery {
                         // hold the mutation lock and a network slot for a Main
                         // roundtrip before each request has even started.
                         // Results/ready layouts/failures still publish immediately.
-                        if (outcome != Outcome.SEARCHING) publish(snapshot)
+                        if (outcome != Outcome.SEARCHING) deliver()
                     }
                 }
                 suspend fun execute() {
@@ -261,7 +275,7 @@ internal class HerrinSourceDiscovery {
                         val added = additions.distinctBy { it.id }.filter { it.id !in known }
                         added.forEach { known[it.id] = it }
                         snapshot = snapshot.copy(nodes = known.size)
-                        publish(snapshot)
+                        deliver()
                         added
                     }
                     fresh.forEach { node -> launch { run(node) } }
@@ -269,10 +283,12 @@ internal class HerrinSourceDiscovery {
                 mutations.withLock {
                     if (version.get() != ticket || snapshot.revision != revision) return@withLock
                     snapshot = snapshot.copy(expanding = false, warehouseFailures = failures)
-                    publish(snapshot)
+                    deliver()
                 }
             }
         }
+        HerrinPlaybackDiagnosticJournal.record("LOOKUP", "DISCOVERY_ALL_NODES_FINISHED",
+            "MS=${(System.nanoTime() - startedAt) / 1_000_000}")
         }
     }
 }
