@@ -1553,7 +1553,9 @@ private fun Herrin(startup: StartupPresentation) {
                 episodes = detailed.playbackEpisodes.size)
             val requestedLine = tmdbState.discoveryLine
             tmdbState.discoveryLine = null
-            val requestedNumber = tmdbState.discoveryRequestedEpisode
+            val requestedNumber = tmdbState.discoveryRequestedEpisode.takeIf {
+                tmdbState.hasDiscoveryPlay(targetFilmId, hit.key, detailTicket)
+            }
             val requestedEpisode = detailed.playbackEpisodes.firstOrNull { ep ->
                 (requestedNumber == null || ep.number == requestedNumber) && ep.lines.any { it.id == requestedLine }
             }
@@ -1796,11 +1798,7 @@ private fun Herrin(startup: StartupPresentation) {
                                     // A selectable node has its real episode/line layout already.
                                     // Publish only a media-free view projection immediately.
                                     val metadataForPreview = tmdbState.tmdbResolved[targetId] ?: tmdbFilm
-                                    val previewEpisodes = ready.episodes.map { ep ->
-                                        PlaybackEpisode(ep.number, ep.title, ep.lines.map { (id, title) ->
-                                            PlaybackLine(id, title, "")
-                                        })
-                                    }
+                                    val previewEpisodes = ready.previewEpisodes()
                                     tmdbState.tmdbResolved[targetId] = metadataForPreview.copy(
                                         cmsVodId = ready.movie.film.cmsVodId,
                                         spiderVodId = ready.movie.film.spiderVodId,
@@ -1811,8 +1809,10 @@ private fun Herrin(startup: StartupPresentation) {
                                         }
                                     }
                                     tmdbState.requestedDiscoveryHits[targetId] = ready.key
-                                    tmdbState.discoverySelection = targetId to ready.key
-                                    tmdbState.discoverySelectionEpoch++
+                                    if (screen == "play-intent" || tmdbState.resumeSourceFilm == targetId) {
+                                        tmdbState.discoverySelection = targetId to ready.key
+                                        tmdbState.discoverySelectionEpoch++
+                                    }
                                 }
                             }
                             if (screen == "play-intent" && tmdbState.rejectedDiscoveryHits.isNotEmpty() &&
@@ -2670,7 +2670,17 @@ private fun Herrin(startup: StartupPresentation) {
     }
     val currentEpisode = film.playbackEpisodes.firstOrNull { it.number == episode }
     val currentLines = currentEpisode?.lines.orEmpty()
-    val seasonLayout = remember(film.id, film.playbackEpisodes) { SeasonEpisodes.fromFilm(film) }
+    val externalLines = remember(film.cmsVodId, film.spiderVodId, film.playbackEpisodes) {
+        if (film.cmsVodId == null && film.spiderVodId == null) emptyList()
+        else film.playbackEpisodes.flatMap { it.lines }.distinctBy { it.id }
+    }
+    val detailLine = externalLines.firstOrNull { it.id == line }?.id ?: externalLines.firstOrNull()?.id
+    val detailEpisodes = remember(film.playbackEpisodes, detailLine) {
+        detailLine?.let { film.playbackEpisodes.episodesOnLine(it) } ?: film.playbackEpisodes
+    }
+    val seasonLayout = remember(film.id, detailEpisodes) {
+        SeasonEpisodes.fromFilm(film.copy(playbackEpisodes = detailEpisodes))
+    }
     val groupLayout = remember(showGroup) { showGroup?.let(GroupSeasonIndex::from) }
     val unmappedGroupMembers = showGroup?.members?.filter { member ->
         groupLayout?.sections?.any { section ->
@@ -2707,7 +2717,9 @@ private fun Herrin(startup: StartupPresentation) {
     val detailSeasonSource = detailSeasonEntries.firstOrNull { entry ->
         entry.source.number == episode && entry.lines.any { it.id == line }
     }
-    val displayedLines = (detailSeasonSource ?: detailSeasonEntries.firstOrNull())?.lines ?: currentLines
+    val displayedLines = externalLines.ifEmpty {
+        (detailSeasonSource ?: detailSeasonEntries.firstOrNull())?.lines ?: currentLines
+    }
     val detailSeasonRowState = remember(film.id, detailSeason?.number) { LazyListState() }
     var seasonOfficialEpisodes by remember(film.id, film.tmdbTvId, detailSeason?.number, metadataToken) {
         mutableStateOf<Map<Int, TmdbEpisodeDisplay>>(emptyMap())
@@ -3052,7 +3064,16 @@ private fun Herrin(startup: StartupPresentation) {
         val hit = tmdbState.discoveredSources[film.id]?.hits?.firstOrNull { it.key == hitKey }
             ?: return false
         if (hit.episodes.none { it.number == number && it.lines.any { pair -> pair.first == lineId } }) return false
-        if (tmdbState.discoveryLoadingFilm != film.id && tmdbState.discoverySelection != (film.id to hitKey)) {
+        if (tmdbState.loadedDiscoveryHits[film.id] == hit.key && tmdbState.sourceSelectionReady(film.id)) {
+            episode = number
+            line = lineId
+            tmdbState.sourceDiscoveries[film.id]?.spiderPaused = hit.node.type == HerrinSourceType.TVBOX_SPIDER
+            screen = "player"
+            return true
+        }
+        val loading = tmdbState.discoveryLoadingFilm == film.id &&
+            tmdbState.discoveryLoadingEpoch == tmdbState.discoverySelectionEpoch
+        if (!loading && tmdbState.discoverySelection != (film.id to hitKey)) {
             tmdbState.discoverySelection = film.id to hitKey
             tmdbState.discoverySelectionEpoch++
         }
@@ -5299,56 +5320,32 @@ private fun Herrin(startup: StartupPresentation) {
                                     select = { hit, selectedLine ->
                                         if (hit.node.id !in discovery.selectableNodeIds ||
                                             hit.episodes.isEmpty()) return@herrinDiscoveryItems
-                                        DetailPlaybackMetrics.timeline.click()
+                                        val same = tmdbState.loadedDiscoveryHits[film.id] == hit.key &&
+                                            tmdbState.sourceSelectionReady(film.id)
+                                        val preview = hit.previewEpisodes()
+                                        val chosenLine = selectedLine ?: preview.firstOrNull()?.lines?.firstOrNull()?.id
+                                            ?: return@herrinDiscoveryItems
+                                        val choices = preview.episodesOnLine(chosenLine)
+                                        val chosen = choices.firstOrNull { it.number == episode && line == chosenLine }
+                                            ?: choices.firstOrNull() ?: return@herrinDiscoveryItems
+                                        tmdbState.discoverySelection = null
+                                        tmdbState.discoverySelectionEpoch++
+                                        tmdbState.clearDiscoveryPlay()
+                                        tmdbState.discoveryLine = null
                                         tmdbState.discoveryRecovery = null
                                         tmdbState.rejectedDiscoveryHits.clear()
                                         pendingHistoryFilm = null
-                                        // Reuse the real, already fetched line/episode layout.
-                                        // The preview has no URI, headers or playback authority.
-                                        val preview = hit.episodes.map { ep ->
-                                            PlaybackEpisode(ep.number, ep.title, ep.lines.map { (id, title) ->
-                                                PlaybackLine(id, title, "")
-                                            })
-                                        }
-                                        val previous = tmdbState.tmdbResolved[film.id] ?: film
-                                        val same = tmdbState.loadedDiscoveryHits[film.id] == hit.key &&
-                                            tmdbState.sourceSelectionReady(film.id)
+                                        tmdbState.requestedDiscoveryHits[film.id] = hit.key
                                         if (!same) {
+                                            tmdbState.loadedDiscoveryHits.remove(film.id)
+                                            val previous = tmdbState.tmdbResolved[film.id] ?: film
                                             tmdbState.tmdbResolved[film.id] = previous.copy(
                                                 playbackEpisodes = preview, episodes = preview.size,
                                                 cmsVodId = hit.movie.film.cmsVodId,
                                                 spiderVodId = hit.movie.film.spiderVodId)
                                         }
-                                        val chosen = preview.firstOrNull { ep -> same && ep.number == episode &&
-                                            ep.lines.any { it.id == selectedLine }
-                                        } ?: preview.firstOrNull { ep ->
-                                            ep.lines.any { it.id == selectedLine }
-                                        } ?: preview.firstOrNull()
-                                        if (chosen != null) {
-                                            episode = chosen.number
-                                            line = selectedLine?.takeIf { id ->
-                                                chosen.lines.any { it.id == id }
-                                            } ?: chosen.lines.firstOrNull()?.id.orEmpty()
-                                        }
-                                        if (same) {
-                                            // A different already-loaded line needs no detail fetch.
-                                            tmdbState.discoveryLine = null
-                                            screen = "player"
-                                            return@herrinDiscoveryItems
-                                        }
-                                        if (tmdbState.requestedDiscoveryHits[film.id] == hit.key &&
-                                            tmdbState.discoveryLoadingFilm == film.id) {
-                                            // Keep the requested line while one detail rebind is
-                                            // in flight. Never cancel/restart the same request.
-                                            tmdbState.discoveryLine = selectedLine
-                                            tmdbState.requestDiscoveryPlay(film.id, hit.key, chosen?.number)
-                                            return@herrinDiscoveryItems
-                                        }
-                                        tmdbState.requestedDiscoveryHits[film.id] = hit.key
-                                        tmdbState.discoveryLine = selectedLine
-                                        tmdbState.discoverySelection = film.id to hit.key
-                                        tmdbState.discoverySelectionEpoch++
-                                        tmdbState.requestDiscoveryPlay(film.id, hit.key, chosen?.number)
+                                        episode = chosen.number
+                                        line = chosenLine
                                     }, resume = { failedNode ->
                                         tmdbState.discoverySelection = null
                                         val node = failedNode ?: tmdbState.selectedDiscoveryNode[film.id]
@@ -5372,7 +5369,8 @@ private fun Herrin(startup: StartupPresentation) {
                                         lastDetailLineFocus = if (index == 0)
                                             "detail-first-line" else "detail-line-$index"
                                     },
-                                    onDown = ::enterDetailEpisodes)
+                                    onDown = ::enterDetailEpisodes, selectedLine = line,
+                                    selectedHit = tmdbState.requestedDiscoveryHits[film.id])
                             }
                         }
                         if (showGroup != null && screen == "detail") item {
@@ -5462,11 +5460,20 @@ private fun Herrin(startup: StartupPresentation) {
                                 DetailLineRow(
                                     if (displayedLines.isEmpty()) listOf("演示线路 A" to "演示线路 A", "演示线路 B" to "演示线路 B")
                                     else displayedLines.map { it.id to it.title },
-                                    line, reduceMotion,
+                                    detailLine ?: line, reduceMotion,
                                     requester = { index -> requester(if (index == 0) "detail-first-line" else "detail-line-$index") },
                                     onFocus = { index -> lastDetailLineFocus = if (index == 0) "detail-first-line" else "detail-line-$index" },
                                     onDown = ::enterDetailEpisodes,
-                                    onSelect = { id -> pendingHistoryFilm = null; line = id; detailSeason?.let { detailSeasonLines[it.number] = id } })
+                                    onSelect = { id ->
+                                        pendingHistoryFilm = null
+                                        if (externalLines.isNotEmpty()) {
+                                            val choices = film.playbackEpisodes.episodesOnLine(id)
+                                            if (choices.none { it.number == episode })
+                                                choices.firstOrNull()?.let { episode = it.number }
+                                        }
+                                        line = id
+                                        detailSeason?.let { detailSeasonLines[it.number] = id }
+                                    })
                             }
 
                             if (showGroup != null && groupLayout != null && groupSection != null) {
@@ -5547,7 +5554,7 @@ private fun Herrin(startup: StartupPresentation) {
                                             }
                                         }
                                     } else {
-                                        film.playbackEpisodes.forEach { entry ->
+                                        detailEpisodes.forEach { entry ->
                                             TvButton("第 ${entry.number} 集 · ${entry.title}",
                                                 modifier = Modifier.testTag("episode-${entry.number}")
                                                     .then(if (entry.number == episode) Modifier.focusRequester(requester("detail-current-episode")) else Modifier)

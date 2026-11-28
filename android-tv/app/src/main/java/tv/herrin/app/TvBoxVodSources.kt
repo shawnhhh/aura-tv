@@ -169,10 +169,11 @@ internal object TvBoxVodCodec {
                 val url = if(allowOpaque) address.takeIf { it.isNotBlank() && it.length <= 2048 }
                     else TvBoxUrl.normalize(address, allowHttp)
                 if(url == null) return@forEachIndexed
-                if (separator > 0 && !titles.containsKey(episodeIndex + 1))
-                    titles[episodeIndex + 1] = entry.substring(0, separator).trim().take(80)
+                val title = (if (separator > 0) entry.substring(0, separator).trim().take(80) else "")
+                    .ifBlank { "第 ${episodeIndex + 1} 集" }
+                titles.putIfAbsent(episodeIndex + 1, title)
                 merged.getOrPut(episodeIndex + 1) { mutableListOf() } += PlaybackLine(
-                    "cms-$sourceIndex", name, url)
+                    "cms-$sourceIndex", name, url, episodeTitle = title)
             }
         }
         return merged.entries.sortedBy { it.key }.map { (index, lines) ->

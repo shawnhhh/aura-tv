@@ -735,6 +735,11 @@ http://example.org/live/channel.m3u8
             }
             assertEquals("Background trusted layout prefetch must never open media",0,mediaCalls.get())
             fun frames() = HerrinPlaybackDiagnosticJournal.export().lineSequence().count { "CLICK_TO_FIRST_FRAME" in it }
+            fun playFirstEpisode() {
+                compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
+                list.performScrollToNode(hasTestTag("episode-1"))
+                compose.onNodeWithTag("episode-1").performClick()
+            }
             fun awaitSelectedFrame(before: Int) {
                 compose.waitUntil(30000) { frames() > before }
                 compose.onNodeWithTag("player-root-focus").assertIsDisplayed()
@@ -749,6 +754,7 @@ http://example.org/live/channel.m3u8
                 compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(nodeTag).assertExists() }.isSuccess }
                 val beforeFrame = frames()
                 compose.onNodeWithTag(nodeTag).performClick()
+                playFirstEpisode()
                 awaitSelectedFrame(beforeFrame)
                 assertTrue("Playback must use a previously confirmed detail", details.contains("$source:local-$source"))
             }
@@ -772,6 +778,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("source-node-menu").performClick()
             val beforeA = frames()
             compose.onNodeWithTag("source-node-$aNode").performClick()
+            playFirstEpisode()
             awaitSelectedFrame(beforeA)
             compose.waitUntil(10000) { runCatching {
                 list.performScrollToNode(hasTestTag("detail-play-cta"))
@@ -783,6 +790,7 @@ http://example.org/live/channel.m3u8
             list.performScrollToNode(hasTestTag("source-region"))
             compose.onNodeWithTag("source-node-menu").performClick()
             compose.onNodeWithTag("source-node-$bNode").performClick()
+            playFirstEpisode()
             compose.waitUntil(10000) { details.count { it == "b:local-b" } > bReadsBeforeFailure }
             compose.waitUntil(10000) { runCatching {
                 compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS A ▾")
@@ -806,6 +814,7 @@ http://example.org/live/channel.m3u8
             assertEquals("Retrying a layout must not resolve media",mediaBeforeRetry,mediaCalls.get())
             val beforeRetryFrame = frames()
             compose.onNodeWithText("线路 1").performClick()
+            playFirstEpisode()
             awaitSelectedFrame(beforeRetryFrame)
             try {
                 compose.waitUntil(10000) { runCatching {

@@ -54,6 +54,11 @@ class TvBoxSpiderBridgeTest {
         assertEquals("第二集", detailed.playbackEpisodes[1].title)
         assertEquals("opaque-id", detailed.playbackEpisodes[0].lines[1].uri)
         assertEquals("B", detailed.playbackEpisodes[0].lines[1].title)
+        assertEquals(listOf("第一集", "第二集"), detailed.playbackEpisodes.episodesOnLine("spider-0").map { it.title })
+        val restored = SpiderIpc.readFilm(SpiderIpc.film(detailed))
+        val alternate = restored.playbackEpisodes.episodesOnLine("spider-1").single()
+        assertEquals("正片", alternate.title)
+        assertEquals("opaque-id", alternate.lines.single().uri)
     }
 
     @Test fun `spider detail enriches missing poster and metadata without changing opaque identifiers`() {

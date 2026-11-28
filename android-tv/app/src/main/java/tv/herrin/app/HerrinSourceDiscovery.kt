@@ -27,10 +27,17 @@ internal class HerrinSourceDiscovery {
         /** Personal adapter already returns the entire matched file playlist. */
         val bundledPersonalLayout: Boolean = false
     )
-    data class EpisodeLayout(val number: Int, val title: String, val lines: List<Pair<String,String>>)
+    data class EpisodeLayout(val number: Int, val title: String, val lines: List<Pair<String,String>>,
+        val lineEpisodeTitles: Map<String, String> = emptyMap())
     data class Hit(val key: String, val node: Node, val movie: HerrinSourceMovie,
         val episodes: List<EpisodeLayout> = emptyList(),
-        val relevance: SourceRelevance = SourceRelevance.CONFIRMED)
+        val relevance: SourceRelevance = SourceRelevance.CONFIRMED) {
+        fun previewEpisodes(): List<PlaybackEpisode> = episodes.map { episode ->
+            PlaybackEpisode(episode.number, episode.title, episode.lines.map { (id, title) ->
+                PlaybackLine(id, title, "", episodeTitle = episode.lineEpisodeTitles[id])
+            })
+        }
+    }
     data class Route(val nodeId: String, val hitKey: String, val lineId: String)
     data class Snapshot(val revision: String, val nodes: Int,
         val outcomes: Map<String, Outcome> = emptyMap(), val hits: List<Hit> = emptyList(),
@@ -85,8 +92,11 @@ internal class HerrinSourceDiscovery {
         require(expected.cmsVodId == detailed.cmsVodId && expected.spiderVodId == detailed.spiderVodId)
         require(expected.spiderOrigin?.site == detailed.spiderOrigin?.site &&
             expected.spiderOrigin?.runtime == detailed.spiderOrigin?.runtime)
-        val layout=detailed.playbackEpisodes.map { episode ->
-            EpisodeLayout(episode.number,episode.title,episode.lines.map { it.id to it.title })
+        val layout=detailed.playbackEpisodes.mapNotNull { episode ->
+            val lines = episode.lines.filter { it.id.isNotBlank() && it.uri.isNotBlank() }
+            if (lines.isEmpty()) return@mapNotNull null
+            EpisodeLayout(episode.number, episode.title, lines.map { it.id to it.title },
+                lines.mapNotNull { line -> line.episodeTitle?.let { line.id to it } }.toMap())
         }
         val routes = layout.flatMap { it.lines }.map { Route(hit.node.id, key, it.first) }.distinct()
         snapshot=snapshot.copy(hits=snapshot.hits.map{if(it.key==key)it.copy(episodes=layout) else it},

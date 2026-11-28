@@ -10,8 +10,14 @@ data class AuthorizedSubtitle(val language: String, val title: String, val uri: 
     val rawFlag: Int = 0, val mimeType: String? = null)
 data class PlaybackLine(val id: String, val title: String, val uri: String,
                         val subtitles: List<AuthorizedSubtitle> = emptyList(),
-                        val spiderProof: SpiderRouteProof? = null)
+                        val spiderProof: SpiderRouteProof? = null,
+                        val episodeTitle: String? = null)
 data class PlaybackEpisode(val number: Int, val title: String, val lines: List<PlaybackLine>)
+
+internal fun List<PlaybackEpisode>.episodesOnLine(line: String): List<PlaybackEpisode> = mapNotNull { episode ->
+    val source = episode.lines.firstOrNull { it.id == line } ?: return@mapNotNull null
+    episode.copy(title = source.episodeTitle ?: episode.title, lines = listOf(source))
+}
 
 object PlaybackCatalogJson {
     private val identifier = Regex("^[A-Za-z0-9._-]{1,64}$")

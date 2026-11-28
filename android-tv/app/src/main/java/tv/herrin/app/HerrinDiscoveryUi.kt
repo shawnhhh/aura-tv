@@ -21,7 +21,8 @@ internal fun LazyListScope.herrinDiscoveryItems(
     select: (HerrinSourceDiscovery.Hit, String?) -> Unit,
     resume: (String?) -> Unit, selectedNode: String?, onNode: (String) -> Unit,
     lineFocus: (Int) -> FocusRequester,
-    onLineFocus: (Int) -> Unit, onDown: () -> Unit
+    onLineFocus: (Int) -> Unit, onDown: () -> Unit,
+    selectedLine: String? = null, selectedHit: String? = null
 ) {
     item(key = "source-region") {
         val groups = remember(snapshot.hits, snapshot.selectableNodeIds) {
@@ -103,6 +104,7 @@ internal fun LazyListScope.herrinDiscoveryItems(
                                 } else false
                             },
                         reduced = reduced,
+                        selected = route.lineId == selectedLine && route.hitKey == selectedHit,
                         onFocus = { onLineFocus(indexed.index) }
                     ) { select(hit, route.lineId) }
                 }

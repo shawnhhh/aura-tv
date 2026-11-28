@@ -86,10 +86,11 @@ internal object SpiderVodCodec {
                 val episodeName = if (separator >= 0) entry.substring(0, separator).trim() else ""
                 val opaqueId = (if (separator >= 0) entry.substring(separator + 1) else entry).trim()
                 if (opaqueId.isNotEmpty() && opaqueId.length <= 2_048) {
-                    if (episodeName.isNotEmpty() && index + 1 !in episodeTitles)
-                        episodeTitles[index + 1] = episodeName.replace(Regex("<[^>]*>"), " ").take(80)
+                    val title = episodeName.replace(Regex("<[^>]*>"), " ").trim().take(80)
+                        .ifBlank { "第 ${index + 1} 集" }
+                    episodeTitles.putIfAbsent(index + 1, title)
                     episodes.getOrPut(index + 1) { mutableListOf() }.add(
-                        PlaybackLine("spider-$lineIndex", flag, opaqueId))
+                        PlaybackLine("spider-$lineIndex", flag, opaqueId, episodeTitle = title))
                 }
             }
         }

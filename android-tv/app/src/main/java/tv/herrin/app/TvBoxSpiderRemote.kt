@@ -142,6 +142,7 @@ internal object SpiderIpc {
             val lines = JSONArray()
             ep.lines.take(12).forEach { line ->
                 lines.put(JSONObject().put("id", line.id).put("title", line.title).put("uri", line.uri)
+                    .put("episodeTitle", line.episodeTitle)
                     .put("proof", line.spiderProof?.value))
             }
             val encoded = JSONObject().put("number", ep.number).put("title", ep.title).put("lines", lines)
@@ -172,7 +173,8 @@ internal object SpiderIpc {
             val lines = (0 until minOf(linesArray.length(), 12)).mapNotNull { i ->
                 val line = linesArray.optJSONObject(i) ?: return@mapNotNull null
                 PlaybackLine(line.optString("id"), line.optString("title"), line.optString("uri"),
-                    spiderProof = line.optString("proof").takeIf { it.length == 64 }?.let(::SpiderRouteProof))
+                    spiderProof = line.optString("proof").takeIf { it.length == 64 }?.let(::SpiderRouteProof),
+                    episodeTitle = line.optString("episodeTitle").takeIf(String::isNotBlank))
             }
             PlaybackEpisode(ep.optInt("number", 1), ep.optString("title"), lines)
         }
