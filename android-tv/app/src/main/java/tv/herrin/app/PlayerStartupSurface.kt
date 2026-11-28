@@ -74,9 +74,7 @@ internal fun PlayerStartupSurface(
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (loading) {
                 CircularProgressIndicator(
-                    color = Color.White, modifier = Modifier.size(40.dp))
-                Text("正在打开影片…", fontSize = 21.sp,
-                    modifier = Modifier.testTag("player-startup-label"))
+                    color = Color.White, modifier = Modifier.size(40.dp).testTag("player-startup-label"))
             } else {
                 Text(if(personal) "个人媒体" else if (offlineDemonstration) "播放演示" else "暂时无法播放",
                     fontSize = 24.sp,

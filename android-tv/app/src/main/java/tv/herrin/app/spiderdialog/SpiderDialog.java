@@ -81,6 +81,8 @@ public final class SpiderDialog implements LifecycleEventObserver {
     private ImageView qrcode;
     private ImageView image;
     private RequestManager images;
+    private String qrValue;
+    private String providerMessage = "";
 
     public static CompletableFuture<String> show(String options) {
         return show(options, null);
@@ -113,7 +115,8 @@ public final class SpiderDialog implements LifecycleEventObserver {
             activity = owner;
             if (options.length() > 350_000) throw new IllegalArgumentException("Dialog payload too large");
             JSONObject json = new JSONObject(options);
-            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity).setTitle(json.optString("title"));
+            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity)
+                    .setTitle(json.has("qrcode") ? "扫码授权" : "网盘访问授权");
             bindContent(builder, json);
             bindButtons(builder, json.has("buttons") ? json.getJSONArray("buttons") : null);
             dialog = builder.create();
@@ -191,8 +194,10 @@ public final class SpiderDialog implements LifecycleEventObserver {
     }
 
     private void setMessage(String text) {
-        message.setText(text);
-        message.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
+        providerMessage = text;
+        String instruction = AuthorizationPrompt.instruction(qrValue, providerMessage);
+        message.setText(instruction);
+        message.setVisibility(instruction.isEmpty() ? View.GONE : View.VISIBLE);
         if (copy != null) copy.setVisibility(message.getVisibility());
     }
 
@@ -215,6 +220,8 @@ public final class SpiderDialog implements LifecycleEventObserver {
         if (value.length() > 4096) throw new IllegalArgumentException("Dialog QR payload too large");
         Bitmap bitmap = QRCode.getBitmap(value, 220, 4);
         if (bitmap == null) throw new IllegalArgumentException("Dialog qrcode cannot be encoded");
+        qrValue = value;
+        setMessage(providerMessage);
         qrcode.setImageBitmap(bitmap);
         qrcode.setContentDescription("授权二维码");
         qrcode.setVisibility(View.VISIBLE);

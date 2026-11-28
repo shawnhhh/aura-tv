@@ -58,7 +58,6 @@ internal object FongMiExoPlayerFactory {
             .experimentalSetEnableMediaCodecVideoRendererPrewarming(true)
         val selector = DefaultTrackSelector(appContext)
         selector.setParameters(selector.buildUponParameters().apply {
-            setForceHighestSupportedBitrate(true)
             setTunnelingEnabled(settings.tunneling)
             setPreferredTextLanguages(*settings.preferredTextLanguages.toTypedArray())
             if (settings.preferAac) setPreferredAudioMimeType("audio/mp4a-latm")

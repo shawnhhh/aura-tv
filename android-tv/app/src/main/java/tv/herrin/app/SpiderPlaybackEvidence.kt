@@ -42,6 +42,8 @@ internal object SpiderPlaybackEvidence {
         })
     }
     fun parser(type: Int) = add("SPIDER", "PARSER_SELECTED", "TYPE=" + type.coerceIn(0, 9))
+    fun quality(choices: Int, declaredHeight: Int?) =
+        add("SPIDER", "MEDIA_VARIANTS_SELECTED", "COUNT=$choices CLAIMED_HEIGHT=${declaredHeight ?: 0}")
     fun failure(error: Throwable) = add("SPIDER", "PARSER_CAUSE_" + when(error) {
         is java.net.SocketTimeoutException, is java.util.concurrent.TimeoutException -> "TIMEOUT"
         is java.net.UnknownHostException -> "DNS"

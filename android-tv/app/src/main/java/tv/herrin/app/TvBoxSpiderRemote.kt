@@ -755,6 +755,20 @@ internal class TvBoxSpiderBridge(context: Context) {
                     invalidate("Spider 子进程异常退出；正在恢复站点", TransportFault.PROCESS_EXITED)
             }
             if (operation == SpiderIpc.BROWSE) {
+                if (payload.optBoolean("searchOnly") && sourceSession.isCurrent(invocation) &&
+                    withContext(Dispatchers.Main.immediate) {
+                        remote != null && hydratedGeneration == generation &&
+                            sourceSession.isCurrent(invocation) &&
+                            (authority == null || authority.configuration == configurationEpoch.get()) &&
+                            lastBrowse?.let { previous ->
+                                val applied = JSONObject(previous).apply { remove("searchOnly") }
+                                val requested = JSONObject(payload.toString()).apply { remove("searchOnly") }
+                                applied.toString() == requested.toString()
+                            } == true
+                    }) {
+                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "INITIALIZE_REUSED")
+                    return@withLock SpiderResult.Ready(JSONObject().put("films", JSONArray()))
+                }
                 val started = withContext(Dispatchers.Main.immediate) {
                     if(authority!=null &&authority.configuration!=configurationEpoch.get())return@withContext null
                     sourceSession.beginBrowse(invocation)?.let { ticket ->

@@ -2,6 +2,7 @@ package tv.herrin.app
 
 import org.json.JSONArray
 import org.json.JSONObject
+import tv.herrin.app.spiderdialog.AuthorizationPrompt
 import java.util.concurrent.CompletableFuture
 import java.util.function.Function
 
@@ -22,7 +23,8 @@ internal object SpiderAuthorizationProtocol {
                 val initial: String = "", val choices: List<String> = emptyList(),
                 val choiceLabels: List<String> = emptyList())
     class Options(val qr: String?, val image: String?, val buttons: List<Button>,
-                  val inputs: List<Input> = emptyList(), val busy: Boolean = false, val invalid: Boolean = false)
+                  val inputs: List<Input> = emptyList(), val busy: Boolean = false, val invalid: Boolean = false,
+                  val instruction: String = "")
 
     fun parse(raw: String): Options {
         require(raw.length <= MAX_CHARS) { "Authorization payload too large" }
@@ -86,7 +88,8 @@ internal object SpiderAuthorizationProtocol {
             Button(id, label, button.optBoolean("close", true), button.optBoolean("enabled", true), validate)
         }
         require(buttons.map { it.id }.distinct().size == buttons.size) { "Duplicate authorization action" }
-        return Options(qr, image, buttons, inputs, invalid = json.optBoolean("invalid"))
+        val instruction = AuthorizationPrompt.instruction(qr, json.optString("message", json.optString("instruction")))
+        return Options(qr, image, buttons, inputs, invalid = json.optBoolean("invalid"), instruction = instruction)
     }
 
     fun publicPayload(raw: String): String {
@@ -94,6 +97,7 @@ internal object SpiderAuthorizationProtocol {
         return JSONObject().apply {
             options.qr?.let { put("qrcode", it) }
             options.image?.let { put("image", it) }
+            options.instruction.takeIf(String::isNotBlank)?.let { put("instruction", it) }
             put("invalid", options.invalid)
             put("inputs", JSONArray().apply { options.inputs.forEach { field ->
                 put(JSONObject().put("name", field.name).put("label", field.label)

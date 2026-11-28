@@ -112,16 +112,16 @@ internal fun SpiderAuthorizationHost() {
             .testTag("spider-authorization-dialog"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(if (bitmap != null) "扫码授权" else "网盘访问授权",
                 style = MaterialTheme.typography.headlineSmall, color = Color.White)
-            Text(if (busy) "正在确认授权状态…" else if (current.options.inputs.isNotEmpty())
-                "请填写来源要求的访问码；若同时提供二维码，也可以扫码授权。"
-                else if (bitmap != null) "请使用对应平台扫描二维码，完成后选择确认。授权等待最多两分钟。"
-                else "请按来源提供的操作完成授权；本次来源未提供二维码。",
+            Text(current.options.instruction.ifBlank {
+                when {
+                    current.options.inputs.isNotEmpty() -> "请填写来源要求的授权信息。"
+                    bitmap != null -> "请按来源要求扫描二维码。"
+                    else -> "请按来源要求完成授权。"
+                }
+            },
                 color = Color.White, modifier = Modifier.testTag("spider-authorization-status"))
             if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = "授权二维码",
                 modifier = Modifier.size(240.dp).testTag("spider-authorization-qr"))
-            else if (current.options.inputs.isEmpty())
-                Text("来源未提供二维码；如需扫码，请在源站点的登录入口发起授权。",
-                    color = Color.White)
             current.options.inputs.forEachIndexed { index, input ->
                 if(input.type == "select") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

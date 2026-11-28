@@ -6,6 +6,17 @@ import org.junit.Test
 import java.util.concurrent.CompletableFuture
 
 class SpiderAuthorizationProtocolTest {
+    @Test fun scansUseTheActualProviderAndPreserveAnUnknownSourceInstruction() {
+        fun prompt(qr: String, message: String): String {
+            val raw = JSONObject().put("qrcode", qr).put("message", message).toString()
+            return SpiderAuthorizationProtocol.parse(SpiderAuthorizationProtocol.publicPayload(raw)).instruction
+        }
+        assertEquals("请使用夸克 APP 扫码。", prompt("https://su.quark.cn/login?token=fixture", "请扫码（DNS/DoH）"))
+        assertEquals("请使用百度网盘 APP 扫码。", prompt("https://pan.baidu.com/login", "请扫码"))
+        assertEquals("请使用阿里云盘 APP 扫码。", prompt("https://www.alipan.com/login", "请扫码"))
+        assertEquals("请打开来源应用扫码。", prompt("https://su.quark.cn.example.org/scan", "请打开来源应用扫码（使用 DoH）"))
+    }
+
     @Test fun originalSelectAndSourceValuesAreRetainedWithoutInventingAnAuthorizationResult() {
         val raw = """{"qrcode":"fixture-qr-payload","inputs":[{"name":"provider","type":"select","options":[{"label":"one","value":"a"},"b"],"value":"a"}]}"""
         val options = SpiderAuthorizationProtocol.parse(SpiderAuthorizationProtocol.publicPayload(raw))
