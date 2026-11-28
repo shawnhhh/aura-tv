@@ -17,10 +17,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setText
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import kotlinx.coroutines.delay
 
 internal class TvEditSession {
     var editing by mutableStateOf(false)
@@ -33,15 +38,22 @@ internal class TvEditSession {
 internal fun rememberTvEditSession(onFinish: () -> Unit = {}): TvEditSession {
     val state = remember { TvEditSession() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val view = LocalView.current
     val completed by rememberUpdatedState(onFinish)
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    var observedIme by remember { mutableStateOf(false) }
-    LaunchedEffect(state.editing, imeVisible) {
-        if (!state.editing) observedIme = false
-        else if (imeVisible) observedIme = true
-        else if (observedIme) {
-            state.stop()
-            completed()
+    val composeImeVisible by rememberUpdatedState(WindowInsets.ime.getBottom(LocalDensity.current) > 0)
+    LaunchedEffect(state.editing, view) {
+        var shown = false
+        while (state.editing) {
+            val windowImeVisible = ViewCompat.getRootWindowInsets(view)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+            if (windowImeVisible || composeImeVisible) shown = true
+            else if (shown) {
+                // The IME window itself can consume Back before the Activity.
+                state.stop()
+                completed()
+                break
+            }
+            delay(40)
         }
     }
     BackHandler(state.editing) {
@@ -126,7 +138,10 @@ internal fun TvInputField(
         }
         .semantics {
             // Accessibility can set an editable value directly without a hardware OK gesture.
-            if (enabled) setText { next -> onValueChange(next.text); true }
+            if (enabled) {
+                this[SemanticsProperties.IsEditable] = true
+                setText { next -> onValueChange(next.text); true }
+            }
         },
         label = label, singleLine = singleLine, minLines = minLines, maxLines = maxLines,
         enabled = enabled, readOnly = !session.editing,

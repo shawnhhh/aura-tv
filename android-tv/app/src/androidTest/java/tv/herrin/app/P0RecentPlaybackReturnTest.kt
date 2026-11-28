@@ -151,10 +151,10 @@ class P0RecentPlaybackReturnTest {
         compose.onNodeWithTag("play").assertDoesNotExist()
         compose.onNodeWithTag("details").performClick()
         compose.waitUntil(10000) { runCatching {
-            compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("detail-play-cta"))
-            compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+            compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("episode-1"))
+            compose.onNodeWithTag("episode-1").assertIsDisplayed()
         }.isSuccess }
-        compose.onNodeWithTag("detail-play-cta").performClick()
+        compose.onNodeWithTag("episode-1").performClick()
         compose.waitUntil(30000) { runCatching { compose.onNodeWithTag("player-root-focus").assertIsDisplayed() }.isSuccess }
         compose.waitUntil(30000) { HerrinPlaybackDiagnosticJournal.export().contains("CLICK_TO_FIRST_FRAME") }
         assertResumedPosition()

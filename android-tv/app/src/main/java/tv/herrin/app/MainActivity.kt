@@ -1569,6 +1569,14 @@ private fun Herrin(startup: StartupPresentation) {
             tmdbState.tmdbResolved[targetFilmId] = metadata.copy(cmsVodId = detailed.cmsVodId,
                 spiderVodId = detailed.spiderVodId, playbackEpisodes = detailed.playbackEpisodes,
                 episodes = detailed.playbackEpisodes.size)
+            val playbackResume = if (screen == "detail" && tmdbState.hasDiscoveryPlay(targetFilmId, hit.key, detailTicket)) {
+                val bound = tmdbState.tmdbResolved[targetFilmId]
+                withContext(Dispatchers.IO) {
+                    bound?.let { watchHistory.resolveIndexed(it, catalogScope,
+                        personalFileRoutes = hit.node.type == HerrinSourceType.NAS) }
+                }
+            } else null
+            if (!publicationAllowed()) return@LaunchedEffect
             val requestedLine = tmdbState.discoveryLine
             tmdbState.discoveryLine = null
             val requestedNumber = tmdbState.discoveryRequestedEpisode.takeIf {
@@ -1593,9 +1601,13 @@ private fun Herrin(startup: StartupPresentation) {
             tmdbState.sourceDiscoveries[targetFilmId]?.spiderPaused =
                 screen == "play-intent" && hit.node.type == HerrinSourceType.TVBOX_SPIDER
             HerrinPlaybackDiagnosticJournal.record("SOURCE", "DISCOVERY_DETAIL_READY", "EPISODES=${detailed.playbackEpisodes.size}")
-            if (tmdbState.consumeDiscoveryPlay(targetFilmId, hit.key, detailTicket) && screen == "detail") {
-                // A click on a fully ready node/line is the play intent. Do not
-                // wait for unrelated searches or require a second play button.
+            if (screen == "detail" && tmdbState.consumeDiscoveryPlay(targetFilmId, hit.key, detailTicket)) {
+                // Preserve the user's exact line and episode. The history
+                // position can follow that same episode across an authorized rebind.
+                if (playbackResume != null && playbackResume.first.episode == episode) {
+                    tmdbState.automaticResume = HerrinAutomaticPlayback.Resume(
+                        targetFilmId, episode, line, playbackResume.second)
+                }
                 tmdbState.sourceDiscoveries[targetFilmId]?.spiderPaused = hit.node.type == HerrinSourceType.TVBOX_SPIDER
                 screen = "player"
             }

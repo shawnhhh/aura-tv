@@ -28,7 +28,7 @@ class PlayerControlsUiTest {
         }
     }
 
-    @Test fun semanticIconsAndSizeHierarchyKeepTransportAtTheScreenCenter() {
+    @Test fun semanticIconsAndUniformFocusKeepTransportAtTheScreenCenter() {
         showBar()
         val icons = mapOf("episodes" to "list-video", "rewind" to "rotate-ccw", "toggle" to "play",
             "forward" to "rotate-cw", "audio" to "audio-lines", "subtitle" to "subtitles")
@@ -37,11 +37,11 @@ class PlayerControlsUiTest {
         val root = compose.onNodeWithTag("player-control-bar").fetchSemanticsNode().boundsInRoot
         val primary = compose.onNodeWithTag("transport-toggle").fetchSemanticsNode().boundsInRoot
         val seek = compose.onNodeWithTag("transport-rewind").fetchSemanticsNode().boundsInRoot
-        val side = compose.onNodeWithTag("transport-audio").fetchSemanticsNode().boundsInRoot
-        assertTrue(primary.height > seek.height && seek.height > side.height)
-        // Central control stays dominant but must not be a giant tile on television.
-        assertTrue("Playback toggle is oversized relative to secondary controls",
-            primary.height < side.height * 1.55f)
+        (icons.keys + "speed").forEach { control ->
+            val bounds = compose.onNodeWithTag("transport-$control").fetchSemanticsNode().boundsInRoot
+            assertEquals(primary.width, bounds.width, 1f)
+            assertEquals(primary.height, bounds.height, 1f)
+        }
         assertEquals(root.center.x.toDouble(), primary.center.x.toDouble(), 1.0)
         compose.onNodeWithTag("transport-audio").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         assertEquals(seek, compose.onNodeWithTag("transport-rewind").fetchSemanticsNode().boundsInRoot)
