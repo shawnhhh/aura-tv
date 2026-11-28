@@ -45,6 +45,7 @@ class SpiderRuntimeActivity : FragmentActivity() {
 /** Operation-scoped capability, never an Application cast or cross-process Activity object. */
 internal object SpiderRuntimeActivityHost {
     private class Owner(val operation: Int, val request: (String) -> Unit, val cancel: () -> Unit) {
+        val started = android.os.SystemClock.elapsedRealtime()
         val ticket = UUID.randomUUID().toString()
         val result = CompletableFuture<Activity>()
         var requested = false
@@ -110,7 +111,10 @@ internal object SpiderRuntimeActivityHost {
                         CompletableFuture<String>().apply { cancel(true) }
                     else action.apply(event)
                 } }
-                val original = tv.herrin.app.spiderdialog.SpiderDialog.show(window as FragmentActivity, options, guarded)
+                val original = tv.herrin.app.spiderdialog.SpiderDialog.show(window as FragmentActivity, options, guarded) {
+                    val elapsed = android.os.SystemClock.elapsedRealtime() - current.started
+                    android.util.Log.i("HerrinSpiderAuth", "event=AUTH_WINDOW_SHOWN operation_to_window_ms=$elapsed")
+                }
                 result.whenComplete { _, _ -> if (!original.isDone) original.cancel(true) }
                 original.whenComplete { value, failure ->
                     when {

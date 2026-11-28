@@ -72,6 +72,7 @@ public final class SpiderDialog implements LifecycleEventObserver {
     private final Map<String, Input> inputs = new LinkedHashMap<>();
     private final Map<Integer, ButtonOptions> buttons = new LinkedHashMap<>();
     private final Function<String, CompletableFuture<String>> callback;
+    private final Runnable onShown;
     private CompletableFuture<String> action;
     private FragmentActivity activity;
     private AlertDialog dialog;
@@ -94,7 +95,12 @@ public final class SpiderDialog implements LifecycleEventObserver {
 
     public static CompletableFuture<String> show(FragmentActivity owner, String options,
             Function<String, CompletableFuture<String>> callback) {
-        SpiderDialog request = new SpiderDialog(callback);
+        return show(owner, options, callback, () -> {});
+    }
+
+    public static CompletableFuture<String> show(FragmentActivity owner, String options,
+            Function<String, CompletableFuture<String>> callback, Runnable onShown) {
+        SpiderDialog request = new SpiderDialog(callback, onShown);
         CompletableFuture<String> completion = request.result.whenCompleteAsync((value, error) -> request.close(), App::post);
         completion.whenComplete((value, error) -> {
             if (completion.isCancelled()) request.cancel();
@@ -103,8 +109,9 @@ public final class SpiderDialog implements LifecycleEventObserver {
         return completion;
     }
 
-    private SpiderDialog(Function<String, CompletableFuture<String>> callback) {
+    private SpiderDialog(Function<String, CompletableFuture<String>> callback, Runnable onShown) {
         this.callback = callback;
+        this.onShown = onShown;
     }
 
     private void showDialog(FragmentActivity expectedOwner, String options) {
@@ -132,6 +139,7 @@ public final class SpiderDialog implements LifecycleEventObserver {
     private void showDialog() {
         dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         dialog.show();
+        App.post(onShown);
         for (Map.Entry<Integer, ButtonOptions> button : buttons.entrySet()) dialog.getButton(button.getKey()).setOnClickListener(view -> onButton(button.getKey(), button.getValue()));
         setEnabled(true);
         dialog.getWindow().getDecorView().post(this::focusInput);

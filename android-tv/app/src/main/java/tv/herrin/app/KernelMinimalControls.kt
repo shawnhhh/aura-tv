@@ -107,9 +107,9 @@ internal fun KernelMinimalControls(
         Row(Modifier.align(Alignment.TopCenter).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically) {
             Text(title, color = Color.White, fontSize = 20.sp, modifier = Modifier.widthIn(max = 520.dp).testTag("player-title"), maxLines = 1)
-            val format = ui.videoFormat
-            if (specsReady && format != null && format.width > 0 && format.height > 0) {
-                Text("  " + PlayerQualityLabel.fromSize(format.width, format.height), color = Color.White,
+            val decoded = player.videoSize
+            if (specsReady && decoded.width > 0 && decoded.height > 0) {
+                Text("  " + PlayerQualityLabel.fromSize(decoded.width, decoded.height), color = Color.White,
                     modifier = Modifier.testTag("player-decoded-quality"))
                 // Playback chrome only shows the title and decoded resolution;
                 // HDR/Dolby capability stays available in internal diagnostics.

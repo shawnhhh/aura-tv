@@ -225,6 +225,7 @@ fs.mkdirSync(evidence,{recursive:true});
   // Deterministic client deadline check only; this is not a network/performance measurement.
   await page.evaluate(()=>{window.__realDateNow=Date.now;window.__deadlineOffset=0;Date.now=()=>window.__realDateNow()+window.__deadlineOffset});
   sourceState='SAVED';
+  await page.locator('#sources [name=url]').fill('https://example.invalid/deadline-fixture');
   const processing=page.waitForResponse(r=>new URL(r.url()).pathname==='/sources/status');
   await page.locator('#sources button').click();await processing;
   await page.evaluate(()=>{window.__deadlineOffset=51000});
