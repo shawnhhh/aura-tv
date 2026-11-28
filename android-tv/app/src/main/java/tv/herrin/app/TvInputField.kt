@@ -63,6 +63,8 @@ internal fun TvInputField(
     modifier: Modifier = Modifier,
     label: (@Composable () -> Unit)? = null,
     singleLine: Boolean = false,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
     enabled: Boolean = true,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
@@ -73,7 +75,7 @@ internal fun TvInputField(
     val useRemote = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
     if (!useRemote) {
         OutlinedTextField(value, onValueChange, modifier, enabled = enabled, label = label,
-            singleLine = singleLine, visualTransformation = visualTransformation,
+            singleLine = singleLine, minLines = minLines, maxLines = maxLines, visualTransformation = visualTransformation,
             keyboardOptions = keyboardOptions, keyboardActions = keyboardActions)
         return
     }
@@ -126,7 +128,8 @@ internal fun TvInputField(
             // Accessibility can set an editable value directly without a hardware OK gesture.
             if (enabled) setText { next -> onValueChange(next.text); true }
         },
-        label = label, singleLine = singleLine, enabled = enabled, readOnly = !session.editing,
+        label = label, singleLine = singleLine, minLines = minLines, maxLines = maxLines,
+        enabled = enabled, readOnly = !session.editing,
         visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions.copy(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = {

@@ -139,9 +139,9 @@ internal fun PlayerControlBar(playing: Boolean, speed: Float, whole: Boolean,
             }
             Row(Modifier.weight(1f).testTag("player-controls-right"), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically) {
-                PlayerControlButton("音轨", "transport-audio", side,
+                PlayerControlButton("音轨", "transport-audio", side, side,
                     Modifier.focusRequester(audioFocus).neighbours(forwardFocus, subtitleFocus), onAudio) { icon(PlayerSymbol.Audio, 25f) }
-                PlayerControlButton("字幕", "transport-subtitle", side,
+                PlayerControlButton("字幕", "transport-subtitle", side, side,
                     Modifier.focusRequester(subtitleFocus).neighbours(audioFocus, FocusRequester.Cancel), onSubtitles) { icon(PlayerSymbol.Subtitles, 25f) }
             }
         }
