@@ -1,0 +1,29 @@
+{
+  "startup_only": true,
+  "checkout_sha": "ec40e7b988b19a7abe3046186663b7c3a1e7ad8f",
+  "reused_app_sha": "3e1da7241b7ec2645cb19450695fe0e23a33bdc2",
+  "reused_validation_run": 44714558232,
+  "changed_paths_since_validated_app": [
+    ".github/scripts/p0_verification_scope.py",
+    ".github/scripts/test_p0_verification_scope.py",
+    ".github/workflows/android-startup.yml",
+    ".github/workflows/p0-playback.yml",
+    "android-tv/docs/detail-player/H-001-H-009-20261120-HISTORY.md",
+    "android-tv/docs/detail-player/H-001-H-009-20261120.md",
+    "android-tv/docs/detail-player/PROGRESS.md",
+    "android-tv/docs/detail-player/validation-20261120-round2/DiscoveryInvalidationTest.xml",
+    "android-tv/docs/detail-player/validation-20261120-round2/DiscoverySelectionFailureTest.xml",
+    "android-tv/docs/detail-player/validation-20261120-round2/ci-3e1-debug.json",
+    "android-tv/docs/detail-player/validation-20261120-round2/ci-3e1-debug.log",
+    "android-tv/docs/detail-player/validation-20261120-round2/ci-cb1-debug.json",
+    "android-tv/docs/detail-player/validation-20261120-round2/ci-cb1-debug.log",
+    "android-tv/docs/detail-player/validation-20261120-round2/ci-cb1-detail-failure.json",
+    "android-tv/docs/detail-player/validation-20261120-round2/discovery-resume-targeted.log",
+    "android-tv/docs/detail-player/validation-20261120-round2/projection-targeted.log",
+    "android-tv/docs/personal-library/DELIVERY.md",
+    "android-tv/scripts/check_startup_probe.py",
+    "android-tv/scripts/startup_probe.sh",
+    "android-tv/scripts/test_check_startup_probe.py"
+  ],
+  "note": "Reused JVM/TV results are from the stated SHA, not new executions."
+}

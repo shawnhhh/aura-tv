@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,7 +71,7 @@ internal fun SpiderAuthorizationHost() {
     val notice by SpiderAuthorizationUi.notice.collectAsState()
     LaunchedEffect(notice) { if (notice != null) { delay(4000); SpiderAuthorizationUi.notice.value = null } }
     if (request == null) {
-        notice?.let { message -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        notice?.let { message -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopEnd) {
             Text(message, color = Color.White, modifier = Modifier.padding(32.dp).background(Color(0xEE17191D))
                 .padding(16.dp).testTag("spider-authorization-result"))
         } }
@@ -84,10 +83,19 @@ internal fun SpiderAuthorizationHost() {
     val focus = remember(current.dialog) { FocusRequester() }
     val inputFocus = remember(current.dialog) { FocusRequester() }
     var formValues by remember(current.owner, current.operation, current.dialog) {
-        mutableStateOf<Map<String, String>>(emptyMap())
+        mutableStateOf(current.options.inputs.associate { it.name to it.initial })
+    }
+    var sourceValues by remember(current.owner, current.operation, current.dialog) {
+        mutableStateOf(current.options.inputs.associate { it.name to it.initial })
+    }
+    LaunchedEffect(current.options) {
+        val values = current.options.inputs.associate { it.name to it.initial }
+        formValues = formValues + values.filter { (name, value) -> sourceValues[name] != value }
+        sourceValues = values
     }
     var formFeedback by remember(current.dialog) { mutableStateOf("") }
     val focusIndex = current.options.buttons.indexOfFirst { it.enabled }
+    val inputIndex = current.options.inputs.indexOfFirst { it.enabled }
     val bitmap = remember(current.options) { authorizationBitmap(current.options) }
     LaunchedEffect(current.owner, current.operation, current.dialog) {
         delay(SpiderAuthorizationProtocol.TIMEOUT_MS)
@@ -101,19 +109,31 @@ internal fun SpiderAuthorizationHost() {
         Column(Modifier.width(560.dp).heightIn(max = 620.dp)
             .background(Color(0xFF17191D)).verticalScroll(rememberScrollState()).padding(28.dp)
             .testTag("spider-authorization-dialog"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(if (current.options.inputs.isNotEmpty()) "网盘访问授权" else "扫码授权",
+            Text(if (bitmap != null) "扫码授权" else "网盘访问授权",
                 style = MaterialTheme.typography.headlineSmall, color = Color.White)
-            Text(if (busy) "正在确认授权状态…" else if (current.options.inputs.isNotEmpty())
-                "请填写来源要求的访问码；若同时提供二维码，也可以扫码授权。"
-                else "请使用对应平台扫描二维码，完成后选择确认。二维码将在两分钟后失效。",
+            Text(current.options.instruction.ifBlank {
+                when {
+                    current.options.inputs.isNotEmpty() -> "请填写来源要求的授权信息。"
+                    bitmap != null -> "请按来源要求扫描二维码。"
+                    else -> "请按来源要求完成授权。"
+                }
+            },
                 color = Color.White, modifier = Modifier.testTag("spider-authorization-status"))
             if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = "授权二维码",
                 modifier = Modifier.size(240.dp).testTag("spider-authorization-qr"))
-            else if (current.options.inputs.isEmpty())
-                Text("来源未提供二维码；如需扫码，请在源站点的登录入口发起授权。",
-                    color = Color.White)
             current.options.inputs.forEachIndexed { index, input ->
-                OutlinedTextField(
+                if(input.type == "select") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        input.choices.forEachIndexed { choiceIndex, value ->
+                            Button(onClick = { formValues = formValues + (input.name to value) },
+                                enabled = input.enabled && !busy,
+                                modifier = if(index == inputIndex && choiceIndex == 0) Modifier.focusRequester(inputFocus) else Modifier) {
+                                Text(input.choiceLabels[choiceIndex] + if(formValues[input.name] == value) " ✓" else "")
+                            }
+                        }
+                    }
+                } else {
+                TvInputField(
                     value = formValues[input.name].orEmpty(),
                     onValueChange = { new ->
                         if (new.length <= input.maxLength) {
@@ -122,21 +142,22 @@ internal fun SpiderAuthorizationHost() {
                         }
                     },
                     enabled = !busy && input.enabled,
-                    singleLine = true,
+                    singleLine = input.type != "textarea",
                     visualTransformation = if (input.type == "password")
                         PasswordVisualTransformation() else VisualTransformation.None,
                     label = { Text(input.label, color = Color.White) },
-                    modifier = (if (index == 0) Modifier.fillMaxWidth().focusRequester(inputFocus)
+                    modifier = (if (index == inputIndex) Modifier.fillMaxWidth().focusRequester(inputFocus)
                         else Modifier.fillMaxWidth()).testTag("spider-authorization-input-${index}")
                 )
+                }
             }
-            if (formFeedback.isNotBlank()) Text(formFeedback, color = Color(0xFFFFB7A5),
+            if (formFeedback.isNotBlank() || current.options.invalid) Text(formFeedback.ifBlank { "来源未接受授权内容，请核对后重试" }, color = Color(0xFFFFB7A5),
                 modifier = Modifier.testTag("spider-authorization-form-feedback"))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 current.options.buttons.forEachIndexed { index, button ->
                     Button(onClick = {
-                        if (!button.skipValidation && current.options.inputs.any {
-                                it.enabled && it.required && formValues[it.name].isNullOrBlank()
+                        if (current.options.inputs.any {
+                                button.validates(it.name) && it.enabled && it.required && formValues[it.name].isNullOrBlank()
                             }) {
                             formFeedback = "请填写来源要求的网盘访问码或授权内容"
                         } else {
@@ -158,7 +179,7 @@ internal fun SpiderAuthorizationHost() {
         // before requesting focus; an effect in the Activity composition races it.
         LaunchedEffect(current, focusIndex) {
             withFrameNanos { }
-            if (current.options.inputs.isNotEmpty()) inputFocus.requestFocus() else focus.requestFocus()
+            if (inputIndex >= 0) inputFocus.requestFocus() else focus.requestFocus()
         }
     }
 }

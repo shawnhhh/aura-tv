@@ -1,7 +1,7 @@
 name: HERRIN P0 Serial Verification
 on:
   push:
-    branches: ['codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106', 'codex/herrin-startup-source-health-20261107']
+    branches: ['codex/herrin-p0-live-playback-20261110', 'codex/m471-tmdb-personal-to-tvbox-playback-20261102', 'codex/herrin-responsive-config-20261106', 'codex/herrin-startup-source-health-20261107']
     paths:
       - 'android-tv/**'
       - '!android-tv/docs/**'
@@ -14,14 +14,56 @@ permissions:
   contents: read
 concurrency:
   group: p0-playback-${{ github.ref }}-${{ github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' && github.sha || 'latest' }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' || github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110' || github.ref == 'refs/heads/codex/herrin-responsive-config-20261106' || github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' }}
 jobs:
+  verification-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      startup_only: ${{ steps.scope.outputs.startup_only }}
+      abba_only: ${{ steps.scope.outputs.abba_only }}
+      tv_only: ${{ steps.scope.outputs.tv_only }}
+      reuse_abba: ${{ steps.scope.outputs.reuse_abba }}
+      reuse_api31: ${{ steps.scope.outputs.reuse_api31 }}
+      tv_mode: ${{ steps.scope.outputs.tv_mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check verification reuse boundaries
+        run: |
+          python3 -m unittest discover -s .github/scripts -p test_p0_verification_scope.py -v
+          python3 -m unittest discover -s android-tv/scripts -p test_check_startup_probe.py -v
+          python3 -m unittest discover -s android-tv/scripts -p test_capture_startup_ui.py -v
+          python3 -m unittest discover -s android-tv/scripts -p test_await_startup_home.py -v
+      - id: scope
+        run: python3 .github/scripts/p0_verification_scope.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HERRIN-verification-scope
+          path: verification-scope.json
   debug:
+    needs: verification-scope
+    if: needs['verification-scope'].outputs.startup_only != 'true' && needs['verification-scope'].outputs.tv_only != 'true'
     uses: ./.github/workflows/android-debug.yml
+  native-bridge-check:
+    needs: [verification-scope, debug]
+    if: ${{ !cancelled() && needs.debug.result == 'success' && contains(github.event.head_commit.message, '[kernel-bridge-check]') }}
+    uses: ./.github/workflows/herrin-fongmi-native-source-build.yml
+    with:
+      build_original_bridge_adapter: true
   emulator:
-    needs: debug
+    needs: [verification-scope, debug, native-bridge-check]
+    if: ${{ !cancelled() && needs['verification-scope'].outputs.startup_only != 'true' && (needs.debug.result == 'success' || (needs['verification-scope'].outputs.tv_only == 'true' && needs.debug.result == 'skipped')) }}
     uses: ./.github/workflows/android-emulator.yml
+    with:
+      tv_mode: ${{ needs['verification-scope'].outputs.tv_mode }}
+  # These independent probes still run after a test failure. The failed TV or
+  # startup job remains failed; no continue-on-error or acceptance bypass.
   startup-api31:
-    if: github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107'
-    needs: debug
+    if: ${{ !cancelled() && needs['verification-scope'].outputs.reuse_api31 != 'true' && needs['verification-scope'].outputs.abba_only != 'true' && (github.ref == 'refs/heads/codex/herrin-startup-source-health-20261107' || github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110') && (needs.emulator.result == 'success' || needs.emulator.result == 'failure' || (needs['verification-scope'].outputs.startup_only == 'true' && needs.emulator.result == 'skipped')) }}
+    needs: [verification-scope, emulator]
     uses: ./.github/workflows/android-startup.yml
+  tmdb-abba:
+    if: ${{ !cancelled() && needs['verification-scope'].outputs.tv_mode != 'recent-diagnostic' && needs['verification-scope'].outputs.reuse_abba != 'true' && github.ref == 'refs/heads/codex/herrin-p0-live-playback-20261110' && (needs['startup-api31'].result == 'success' || needs['startup-api31'].result == 'failure' || ((needs['verification-scope'].outputs.abba_only == 'true' || needs['verification-scope'].outputs.reuse_api31 == 'true') && needs['startup-api31'].result == 'skipped')) }}
+    needs: [verification-scope, startup-api31]
+    uses: ./.github/workflows/tmdb-browse-performance.yml

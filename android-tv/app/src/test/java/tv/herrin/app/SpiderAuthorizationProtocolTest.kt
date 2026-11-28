@@ -6,6 +6,31 @@ import org.junit.Test
 import java.util.concurrent.CompletableFuture
 
 class SpiderAuthorizationProtocolTest {
+    @Test fun scansUseTheActualProviderAndPreserveAnUnknownSourceInstruction() {
+        fun prompt(qr: String, message: String): String {
+            val raw = JSONObject().put("qrcode", qr).put("message", message).toString()
+            return SpiderAuthorizationProtocol.parse(SpiderAuthorizationProtocol.publicPayload(raw)).instruction
+        }
+        assertEquals("请使用夸克 APP 扫码。", prompt("https://su.quark.cn/login?token=fixture", "请扫码（DNS/DoH）"))
+        assertEquals("请使用百度网盘 APP 扫码。", prompt("https://pan.baidu.com/login", "请扫码"))
+        assertEquals("请使用阿里云盘 APP 扫码。", prompt("https://www.alipan.com/login", "请扫码"))
+        assertEquals("请打开来源应用扫码。", prompt("https://su.quark.cn.example.org/scan", "请打开来源应用扫码（使用 DoH）"))
+    }
+
+    @Test fun originalSelectAndSourceValuesAreRetainedWithoutInventingAnAuthorizationResult() {
+        val raw = """{"qrcode":"fixture-qr-payload","inputs":[{"name":"provider","type":"select","options":[{"label":"one","value":"a"},"b"],"value":"a"}]}"""
+        val options = SpiderAuthorizationProtocol.parse(SpiderAuthorizationProtocol.publicPayload(raw))
+        assertEquals(listOf("a","b"), options.inputs.single().choices)
+        assertEquals(listOf("one","b"), options.inputs.single().choiceLabels)
+        assertEquals("a", options.inputs.single().initial)
+        assertNull(SpiderAuthorizationProtocol.validatedEvent(options,
+            SpiderAuthorizationProtocol.event("ok", JSONObject().put("provider","unoffered"))))
+        val session = SpiderAuthorizationSession { _, _ -> }
+        val pending = session.show(raw, null)
+        assertFalse(pending.isDone)
+        session.cancel()
+        assertNull(pending.get())
+    }
     private val qr = """{"title":"token=private-token","message":"Cookie: private-cookie","qrcode":"https://example.invalid/original-test-scan","buttons":[{"id":"check","label":"确认","close":false}]}"""
 
     @Test fun documentedQrProtocolPublishesNoCredentialText() {
@@ -102,6 +127,46 @@ class SpiderAuthorizationProtocolTest {
             SpiderAuthorizationProtocol.event("ok", JSONObject().put("other", "secret"))))
         assertNotNull(SpiderAuthorizationProtocol.validatedEvent(options,
             SpiderAuthorizationProtocol.event("ok", JSONObject().put("passcode", "1234"))))
+    }
+
+    @Test fun validationScopeSurvivesIpcAndRefreshDoesNotRequireAnUnrelatedPassword() {
+        val raw = """{"inputs":[{"name":"password","type":"password","required":true},
+            {"name":"phone","required":true}],"buttons":[
+            {"id":"refresh","label":"刷新","close":false,"validate":[]},
+            {"id":"phone","label":"确认","validate":["phone"]}]}"""
+        val options = SpiderAuthorizationProtocol.parse(SpiderAuthorizationProtocol.publicPayload(raw))
+        assertTrue(options.buttons.first().skipValidation)
+        assertNotNull(SpiderAuthorizationProtocol.validatedEvent(options, "refresh"))
+        assertNotNull(SpiderAuthorizationProtocol.validatedEvent(options,
+            SpiderAuthorizationProtocol.event("phone", JSONObject().put("phone", "123"))))
+        assertNull(SpiderAuthorizationProtocol.validatedEvent(options, "phone"))
+    }
+
+    @Test fun callbackCanEnableNextLoginStepAndEmptyErrorsPermitCompletion() {
+        val published = mutableListOf<Pair<Int,String?>>()
+        val broker = SpiderAuthorizationSession { id, raw -> published += id to raw }
+        val initial = """{"inputs":[{"name":"password","type":"password","required":true,"enabled":false}],
+            "buttons":[{"id":"refresh","label":"刷新","close":false,"validate":[]},
+            {"id":"login","label":"确认","enabled":false}]}"""
+        val result = broker.show(initial) { event ->
+            if (JSONObject(event).getString("button") == "refresh") CompletableFuture.completedFuture(
+                """{"inputs":[{"name":"password","enabled":true}],"buttons":[{"id":"refresh","enabled":false},
+                    {"id":"login","enabled":true}],"errors":{"password":"private error text"},"close":false}""")
+            else CompletableFuture.completedFuture("""{"close":true,"errors":{"password":""}}""")
+        }
+        broker.action(1, "refresh")
+        val public = published.last().second!!
+        assertFalse(public.contains("private error text"))
+        val options = SpiderAuthorizationProtocol.parse(public)
+        assertTrue(options.invalid)
+        assertTrue(options.inputs.single().enabled)
+        assertFalse(options.buttons.first().enabled)
+        assertTrue(options.buttons.last().enabled)
+        broker.action(1, "refresh") // Disabled action is ignored.
+        assertFalse(result.isDone)
+        broker.action(1, SpiderAuthorizationProtocol.event("login", JSONObject().put("password", "original-fixture")))
+        assertEquals("login", JSONObject(result.get()).getString("button"))
+        assertNull(published.last().second)
     }
 
     @Test fun unsupportedFormsRemoteImagesOversizeAndDuplicateButtonsFailExplicitly() {

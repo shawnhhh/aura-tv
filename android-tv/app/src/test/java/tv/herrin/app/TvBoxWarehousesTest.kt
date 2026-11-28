@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TvBoxWarehousesTest {
+    @Test fun redirectedRelativeWarehousesAndJarsKeepTheirRealOrigin() {
+        val origin = "https://config.example/actual/config.json"
+        val list = TvBoxConfigParser.parse("""{"urls":[{"name":"Relative","url":"../box.json"}]}""",origin) as TvBoxConfig.Warehouses
+        assertEquals("https://config.example/box.json",list.entries.single().url)
+        val single = TvBoxConfigParser.parse("""{"spider":"./engine.jar;md5;original","sites":[{"name":"Java","api":"csp_Real"},{"name":"Script","api":"./rule.js"}]}""",origin) as TvBoxConfig.Single
+        assertEquals("https://config.example/actual/engine.jar;md5;original",single.spiderJar)
+        assertEquals("csp_Real",single.sites.first().spiderApi)
+        assertNull(single.sites.first().apiUrl)
+        assertEquals("https://config.example/actual/rule.js",single.sites.last().scriptApi)
+    }
     @Test fun manualWarehouseConsentIsExplicitAndFormatErrorsAreNotReportedAsHttpDenial(): Unit = kotlinx.coroutines.runBlocking {
         val repo = TvBoxConfigRepository()
         assertTrue((repo.load("not a URL", true) as TvBoxConfig.Error).reason.startsWith("WAREHOUSE_URL_INVALID"))
@@ -160,5 +170,13 @@ class TvBoxWarehousesTest {
         assertEquals(100, result.entries.size)
         assertEquals(20, result.ignored)
         assertEquals(48, result.entries.first().name.length)
+    }
+    @Test fun initialSelectionKeepsDeclaredOrderAndNeverImpliesSpiderAuthorization() {
+        val spider = TvBoxSite("First",true,key="first",spiderApi="csp_Fixture")
+        val cms = TvBoxSite("Second",false,"https://cms.invalid/api",key="second")
+        val config = TvBoxConfig.Single(listOf(spider,cms),emptyList(),true,spiderJar="https://jar.invalid/site.jar")
+        assertSame(spider,TvBoxAutoSites.initialSelection(config,""))
+        assertSame(cms,TvBoxAutoSites.initialSelection(config,TvBoxAutoSites.identity(cms,config.spiderJar)))
+        assertFalse(TvBoxSpiderPolicy.mayRun(false,"https://root.invalid/box",config.spiderJar!!,"",""))
     }
 }

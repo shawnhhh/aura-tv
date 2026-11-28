@@ -3,7 +3,6 @@ package tv.herrin.app
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -78,7 +77,7 @@ internal fun TmdbTokenEntryFields(
                         onMoveUp = { remoteNavigation.onMoveUp(id) },
                         onMoveDown = { remoteNavigation.onMoveDown(id) })
                 } else {
-                    OutlinedTextField(value, changeBounded,
+                    TvInputField(value, changeBounded,
                         modifier = Modifier.fillMaxWidth().testTag(tag),
                         label = { Text(label) },
                         visualTransformation = VisualTransformation.None, singleLine = true)
@@ -97,7 +96,7 @@ internal fun TmdbTokenEntryFields(
                     onMoveUp = { remoteNavigation.onMoveUp(id) },
                     onMoveDown = { remoteNavigation.onMoveDown(id) })
             } else {
-                OutlinedTextField(single, { onSingle(it.take(TmdbTokenEntry.MAX_LENGTH)) },
+                TvInputField(single, { onSingle(it.take(TmdbTokenEntry.MAX_LENGTH)) },
                     modifier = Modifier.fillMaxWidth().testTag(
                         if (compact) "compact-tmdb-token" else "tmdb-token-input"),
                     label = { Text("TMDB API Read Access Token（测试明文）") },

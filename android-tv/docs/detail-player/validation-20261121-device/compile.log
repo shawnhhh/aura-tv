@@ -1,0 +1,33 @@
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :kernel-contract:compileJava UP-TO-DATE
+> Task :kernel-contract:processResources NO-SOURCE
+> Task :kernel-contract:classes UP-TO-DATE
+> Task :kernel-contract:jar UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/CmsOneTapPlaybackEffect.kt:55:31 Condition is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/DeviceMediaCapabilitiesAndroid.kt:21:59 'val supportedHdrTypes: IntArray!' is deprecated. Deprecated in Java.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:5194:41 Check for instance is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:5195:41 Check for instance is always 'false'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/PersonalLibrary.kt:166:77 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxSpiderBridge.kt:609:91 Unchecked cast of 'kotlin.Any!' to 'kotlin.Array<kotlin.Any?>'.
+
+BUILD SUCCESSFUL in 1m 13s
+16 actionable tasks: 1 executed, 15 up-to-date

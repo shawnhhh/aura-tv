@@ -169,10 +169,11 @@ internal object TvBoxVodCodec {
                 val url = if(allowOpaque) address.takeIf { it.isNotBlank() && it.length <= 2048 }
                     else TvBoxUrl.normalize(address, allowHttp)
                 if(url == null) return@forEachIndexed
-                if (separator > 0 && !titles.containsKey(episodeIndex + 1))
-                    titles[episodeIndex + 1] = entry.substring(0, separator).trim().take(80)
+                val title = (if (separator > 0) entry.substring(0, separator).trim().take(80) else "")
+                    .ifBlank { "第 ${episodeIndex + 1} 集" }
+                titles.putIfAbsent(episodeIndex + 1, title)
                 merged.getOrPut(episodeIndex + 1) { mutableListOf() } += PlaybackLine(
-                    "cms-$sourceIndex", name, url)
+                    "cms-$sourceIndex", name, url, episodeTitle = title)
             }
         }
         return merged.entries.sortedBy { it.key }.map { (index, lines) ->
@@ -223,8 +224,9 @@ internal class TvBoxVodRepository {
             ?: return@withContext TvBoxVodResult.Error("该站点不是可识别的 HTTP(S) CMS，或尚未授权 HTTP")
         try {
             val films = TvBoxVodCodec.decode(responseJson(fetchJson(endpoint,site.headers),site), allowHttp, allowOpaque = site.apiType == 4)
-            if (films.isEmpty()) TvBoxVodResult.Error("接口没有返回可识别的影视条目")
-            else TvBoxVodResult.Ready(films)
+            // A parsed CMS list may legitimately be empty before login or
+            // before catalog publication. Parsing/auth/HTTP failures still fail.
+            TvBoxVodResult.Ready(films)
         } catch (error: Exception) {
             if(error is kotlinx.coroutines.CancellationException)throw error
             TvBoxVodResult.Error("CMS 列表读取失败：${error.message.orEmpty().take(110)}")

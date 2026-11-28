@@ -34,9 +34,12 @@ class P0StartupFrameProbeTest {
             if(first==0L)first=timestamp
             val since=(timestamp-first)/1_000_000
             val duration=frame.getMetric(FrameMetrics.TOTAL_DURATION)
-            if(duration>0 &&since in 0..1799)reveal.add(duration)
-            else if(duration>0 &&since in 1800..4199)breathing.add(duration)
-            else if(duration>0 &&since in 4200..6500)handoff.add(duration)
+            // Fixed V13 windows relative to first observed VSync: breathing overlaps
+            // reveal from 1200ms, reveal ends at 2250ms, then the curtain fades.
+            // The old 4200ms handoff window sampled only the static home.
+            if(duration>0 &&since in 0..1199)reveal.add(duration)
+            else if(duration>0 &&since in 1200..2249)breathing.add(duration)
+            else if(duration>0 &&since in 2250..6500)handoff.add(duration)
         }
         val callback=ActivityLifecycleCallback{activity:Activity,stage:Stage->
             if(activity.javaClass.name=="tv.herrin.app.MainActivity" &&stage==Stage.CREATED){

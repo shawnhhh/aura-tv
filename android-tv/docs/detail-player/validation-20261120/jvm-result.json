@@ -1,0 +1,36 @@
+{
+  "tests": 784,
+  "failures": 5,
+  "errors": 0,
+  "skipped": 0,
+  "passed": 779,
+  "failures_detail": [
+    {
+      "class": "tv.herrin.app.SmbProtocolIntegrationTest",
+      "test": "invalidAuthenticationDoesNotReturnUsableMediaOrLeakItsSecret",
+      "message": "java.lang.AssertionError: expected:<AUTH_REQUIRED> but was:<NETWORK>"
+    },
+    {
+      "class": "tv.herrin.app.SmbProtocolIntegrationTest",
+      "test": "realSmb2AndEncryptedSmb3ReadTheOriginalMedia",
+      "message": "java.net.ConnectException: Connection refused"
+    },
+    {
+      "class": "tv.herrin.app.SmbProtocolIntegrationTest",
+      "test": "sourceSearchRangeSeekAndLargeFileUseTheActualSmbServer",
+      "message": "java.net.ConnectException: Connection refused"
+    },
+    {
+      "class": "tv.herrin.app.SmbProtocolIntegrationTest",
+      "test": "aDroppedSmbReadReconnectsAtTheSameOffsetAndAllHandlesClose",
+      "message": "java.lang.AssertionError: expected:<206> but was:<503>"
+    },
+    {
+      "class": "tv.herrin.app.SmbProtocolIntegrationTest",
+      "test": "realEncryptedBdavReadsMatchEveryOriginalTsByteAndUnalignedSeekRanges",
+      "message": "java.lang.AssertionError: expected:<200> but was:<503>"
+    }
+  ],
+  "source": "c6a83c12c9af66cf357eed6abade4bcb493215d7",
+  "all_passed": false
+}

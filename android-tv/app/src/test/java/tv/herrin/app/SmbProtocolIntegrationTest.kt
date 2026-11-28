@@ -66,7 +66,7 @@ class SmbProtocolIntegrationTest {
             assertEquals(1,tv.season);assertEquals(1,tv.episode)
             val cloudCalls=AtomicInteger()
             val cloud=object:HerrinFilmSource {
-                override val id="unneeded-cloud";override val type=HerrinSourceType.CLOUD
+                override val id="unneeded-cloud";override val type=HerrinSourceType.TVBOX_CMS
                 override suspend fun search(identity:HerrinFilmIdentity):List<HerrinSourceMovie>{cloudCalls.incrementAndGet();error("NAS must win")}
             }
             val chosen=HerrinVerifiedSourceResolver(listOf(cloud,source)).find(

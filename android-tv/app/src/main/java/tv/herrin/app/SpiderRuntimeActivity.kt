@@ -1,0 +1,199 @@
+package tv.herrin.app
+
+import android.app.Activity
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.view.WindowManager
+import androidx.fragment.app.FragmentActivity
+import androidx.activity.OnBackPressedCallback
+import java.lang.ref.WeakReference
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+
+/** Real same-:spider-process window for provider code using CatVod Runtime.activity().
+ * It renders no QR, login state or media. Only the provider owns those operations. */
+class SpiderRuntimeActivity : FragmentActivity() {
+    private var ticket: String? = null
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        ticket = intent.getStringExtra(EXTRA_TICKET)
+        if (!SpiderRuntimeActivityHost.attach(ticket, this)) { finish(); return }
+        setContentView(View(this))
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { SpiderRuntimeActivityHost.cancel(ticket, this@SpiderRuntimeActivity) }
+        })
+    }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && window.decorView.windowToken != null) SpiderRuntimeActivityHost.ready(ticket, this)
+    }
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) SpiderRuntimeActivityHost.cancel(ticket, this)
+    }
+    override fun onDestroy() {
+        SpiderRuntimeActivityHost.cancel(ticket, this)
+        super.onDestroy()
+    }
+    companion object { internal const val EXTRA_TICKET = "spider.activity.ticket" }
+}
+
+/** Operation-scoped capability, never an Application cast or cross-process Activity object. */
+internal object SpiderRuntimeActivityHost {
+    private class Owner(val operation: Int, val request: (String) -> Unit, val cancel: () -> Unit) {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val ticket = UUID.randomUUID().toString()
+        val result = CompletableFuture<Activity>()
+        var requested = false
+        var activity = WeakReference<Activity>(null)
+        val dialogs = java.util.concurrent.CopyOnWriteArrayList<CompletableFuture<String>>()
+    }
+    private val lock = Any()
+    private val main by lazy { Handler(Looper.getMainLooper()) }
+    private var owner: Owner? = null
+
+    fun begin(operation: Int, request: (String) -> Unit, cancel: () -> Unit) {
+        val previous = synchronized(lock) { owner.also { owner = Owner(operation, request, cancel) } }
+        previous?.let(::finish)
+    }
+    fun end(operation: Int? = null) {
+        val previous = synchronized(lock) {
+            owner?.takeIf { operation == null || it.operation == operation }?.also { owner = null }
+        }
+        previous?.let(::finish)
+    }
+    private fun finish(value: Owner) {
+        value.dialogs.forEach { it.cancel(true) }
+        value.result.completeExceptionally(IllegalStateException("Spider activity operation ended"))
+        main.post { value.activity.get()?.takeUnless { it.isFinishing || it.isDestroyed }?.finish() }
+    }
+
+    /** Original provider dialog, bound to this operation and its real window.
+     * 未测试，待后续统一验证。 No host interpretation of login/cookies. */
+    fun dialog(options: String, callback: java.util.function.Function<String, CompletableFuture<String>>?): CompletableFuture<String> {
+        val current = synchronized(lock) { owner }
+        val result = CompletableFuture<String>()
+        if (current == null) {
+            result.completeExceptionally(IllegalStateException("No active Spider operation"))
+            return result
+        }
+        synchronized(lock) {
+            if (owner !== current || current.dialogs.isNotEmpty()) {
+                result.completeExceptionally(IllegalStateException("Spider authorization window is unavailable"))
+                return result
+            }
+            current.dialogs.add(result)
+        }
+        val timeout = Runnable { abort(current, "AUTH_DIALOG_TIMEOUT") }
+        main.postDelayed(timeout, SpiderAuthorizationProtocol.TIMEOUT_MS)
+        result.whenComplete { _, _ ->
+            main.removeCallbacks(timeout)
+            current.dialogs.remove(result)
+            if (result.isCancelled) abort(current, "AUTH_DIALOG_CANCELLED")
+        }
+        CompletableFuture.runAsync {
+            if (result.isDone) return@runAsync
+            val window = activity(current)
+            main.post {
+                if (result.isDone) return@post
+                if (window == null || synchronized(lock) { owner !== current } ||
+                    window.isFinishing || window.isDestroyed) {
+                    abort(current, "AUTH_WINDOW_UNAVAILABLE")
+                    result.cancel(true)
+                    return@post
+                }
+                val guarded = callback?.let { action -> java.util.function.Function<String, CompletableFuture<String>> { event ->
+                    if (synchronized(lock) { owner !== current } || result.isDone)
+                        CompletableFuture<String>().apply { cancel(true) }
+                    else action.apply(event)
+                } }
+                val original = tv.herrin.app.spiderdialog.SpiderDialog.show(window as FragmentActivity, options, guarded) {
+                    val elapsed = android.os.SystemClock.elapsedRealtime() - current.started
+                    android.util.Log.i("HerrinSpiderAuth", "event=AUTH_WINDOW_SHOWN operation_to_window_ms=$elapsed")
+                }
+                result.whenComplete { _, _ -> if (!original.isDone) original.cancel(true) }
+                original.whenComplete { value, failure ->
+                    when {
+                        result.isDone -> Unit
+                        failure != null -> abort(current, "AUTH_DIALOG_FAILED")
+                        value == null -> abort(current, "AUTH_DIALOG_DISMISSED")
+                        else -> result.complete(value)
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    fun activity(): Activity? = synchronized(lock) { owner }?.let(::activity)
+
+    private fun activity(current: Owner): Activity? {
+        if (synchronized(lock) { owner !== current }) return null
+        current.activity.get()?.takeUnless { it.isFinishing || it.isDestroyed }?.let {
+            // The real window must have completed attachment before first use.
+            if (current.result.isDone && !current.result.isCompletedExceptionally) return it
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            // Blocking this looper would prevent the requested Activity attaching.
+            SpiderNetworkTrace.event("ACTIVITY_REQUIRES_WORKER_THREAD"); return null
+        }
+        val start = synchronized(lock) {
+            if (owner !== current) return null
+            if (current.requested) false else { current.requested = true; true }
+        }
+        if (start) try {
+            current.request(current.ticket)
+            SpiderNetworkTrace.event("ACTIVITY_HOST_REQUESTED")
+        } catch (_: Exception) {
+            abort(current, "ACTIVITY_HOST_SEND_FAILED"); return null
+        }
+        return try {
+            current.result.get(10, TimeUnit.SECONDS).takeUnless { it.isFinishing || it.isDestroyed }
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
+            abort(current, "ACTIVITY_HOST_INTERRUPTED"); null
+        } catch (_: java.util.concurrent.TimeoutException) {
+            abort(current, "ACTIVITY_HOST_TIMEOUT"); null
+        } catch (_: java.util.concurrent.ExecutionException) {
+            SpiderNetworkTrace.event("ACTIVITY_HOST_UNAVAILABLE"); null
+        }
+    }
+    fun denied(operation: Int, ticket: String?) {
+        val current = synchronized(lock) { owner?.takeIf { it.operation == operation && it.ticket == ticket } } ?: return
+        abort(current, "ACTIVITY_FOREGROUND_HOST_DENIED")
+    }
+    fun attach(ticket: String?, activity: Activity): Boolean = synchronized(lock) {
+        val current = owner?.takeIf { it.requested && it.ticket == ticket && !it.result.isCompletedExceptionally }
+            ?: return false
+        if (current.activity.get()?.let { it !== activity } == true) return false
+        current.activity = WeakReference(activity)
+        true
+    }
+    fun ready(ticket: String?, activity: Activity) = synchronized(lock) {
+        owner?.takeIf { it.ticket == ticket && it.activity.get() === activity }?.let {
+            if (it.result.complete(activity)) SpiderNetworkTrace.event("ACTIVITY_REAL_WINDOW_READY")
+        }
+    }
+    private fun abort(current: Owner, reason: String) {
+        synchronized(lock) {
+            if (owner !== current) return
+            owner = null
+        }
+        SpiderNetworkTrace.event(reason)
+        // Retire the operation before waking a provider waiting on its dialog.
+        // A provider swallowing cancellation cannot return admitted media.
+        current.cancel()
+        finish(current)
+    }
+
+    fun cancel(ticket: String?, activity: Activity) {
+        val current = synchronized(lock) {
+            owner?.takeIf { it.ticket == ticket && it.activity.get() === activity }
+        } ?: return
+        abort(current, "ACTIVITY_AUTH_CANCELLED")
+    }
+}

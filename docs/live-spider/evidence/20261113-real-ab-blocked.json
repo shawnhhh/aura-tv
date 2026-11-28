@@ -1,0 +1,102 @@
+{
+  "checked_date_utc": "2026-11-13",
+  "source_head": "86ec4d419b6706be752967dd54cc499249e1d1d5",
+  "branch": "codex/herrin-p0-live-playback-20261110",
+  "new_provider_requests": 0,
+  "new_playback_evidence": false,
+  "pr": {
+    "number": 84,
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "head": "08f6640f8f3db9323fe0e08ac295c8aaa69ffaa7",
+    "head_branch": "codex/herrin-global-search-20261107"
+  },
+  "last_host_ci": {
+    "run_id": 43378025637,
+    "job_id": 131729029449,
+    "head": "83288e1a40eb3fd931a8e37b794bb037a3041ef7",
+    "conclusion": "failure",
+    "compile_lint_assemble": "success",
+    "jvm": "failure",
+    "whole_kernel_acceptance": false
+  },
+  "last_passive_diagnostic_attempt": {
+    "run_id": 42882067450,
+    "job_id": 130060627476,
+    "head": "d7ad546f2c5cce23f5e53e2d07bfe2e00d8522b4",
+    "targeted_tests": 75,
+    "failed_tests": 1,
+    "failure": "M476RemoteMediaProbeTest.delayedHeadersAndBodyHaveDifferentIoFailureStages",
+    "emulator_step": "skipped",
+    "real_node_step": "skipped",
+    "provider_verdict": null
+  },
+  "official_reference": {
+    "run_id": 42867039176,
+    "job_id": 130008047096,
+    "workflow_conclusion": "success",
+    "provider_verdict": "REFERENCE_BLOCKED",
+    "failure_stage": "restrict_search_to_two_authorized_nodes",
+    "failure_code": "REFERENCE_UI_TARGET_NOT_REACHED",
+    "target_results": [],
+    "apk_sha256": "f633039fc94bac9897c5933c61a18aabfde3c1e95ab16b26796c84b9a35439d9"
+  },
+  "nodes": {
+    "cheese": {
+      "current_attempt": "ENVIRONMENT_BLOCKED",
+      "last_main_ui_evidence": "0ada209-main-ui-cheese.json",
+      "historical_result": "Search, 2026 identity, 29 episodes and playerContent succeeded; pre-Media3 probe failed without response headers",
+      "earlier_http_evidence": "86d3192-cheese-armv7-http-first.json",
+      "earlier_http_result": "Local 502; upstream HLS URL reference returned 403 HTML",
+      "source_blocked_proven_by_ab": false,
+      "decoded_first_frame": false,
+      "acceptance_passed": false
+    },
+    "wanou": {
+      "current_attempt": "ENVIRONMENT_BLOCKED",
+      "last_main_ui_evidence": "0ada209-main-ui-wanou.json",
+      "historical_result": "SOURCE_EMPTY_RESPONSE for ordinary and quick searches",
+      "qr_observed": false,
+      "authentication_required_proven": false,
+      "decoded_first_frame": false,
+      "acceptance_passed": false
+    }
+  },
+  "runtime": {
+    "adb": "absent",
+    "android_sdk": "not_found",
+    "emulator": "absent",
+    "dev_kvm": "absent",
+    "javac": "absent",
+    "java": "OpenJDK JRE 21.0.12.1",
+    "github_cli_actions_read": "Forbidden",
+    "connector_actions_read": "available",
+    "connector_workflow_dispatch": "not_available",
+    "configured_secrets": 0,
+    "custom_allowed_hosts": [],
+    "network_policy": "restricted/enforced"
+  },
+  "local_full_validation": {
+    "command": "cd android-tv && GRADLE_USER_HOME=/tmp/herrin-p0-gradle ./gradlew --continue :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:connectedDebugAndroidTest",
+    "sandbox_result": "Gradle wrapper SocketException: Operation not permitted",
+    "outside_sandbox_result": "Gradle wrapper UnknownHostException: services.gradle.org",
+    "tasks_executed": false,
+    "note": "Wrapper JVM did not use inherited HTTP proxy automatically; this does not prove Gradle host is denied by policy. Android SDK/device prerequisites are also missing."
+  },
+  "whole_kernel_dependency_check": {
+    "status": "INVALID",
+    "upstream_checkout": "absent",
+    "required_aars": "four missing",
+    "locked_artifacts": 0,
+    "missing_media3_api_count": 4
+  },
+  "static_comparison_only": {
+    "upstream": "FongMi/TV@305dff233cde512e2c83f71529b7c3ecfd61fefc/app/src/main/java/com/fongmi/android/tv/server/process/Proxy.java",
+    "original": "createResponse wraps Spider InputStream in a chunked response without HLS pre-read or URL-reference fetching",
+    "herrin": "NativeFongMiProxy.rewriteHls pre-reads playlist and optionally resolves a single URL reference before constructing response",
+    "earliest_runtime_divergence": "UNKNOWN: original target calls have not been observed",
+    "causality_proven": false,
+    "production_changes": 0
+  }
+}

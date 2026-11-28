@@ -1,0 +1,15 @@
+test_confirmed_details_only_home_requires_real_focus_and_completion (test_check_startup_probe.StartupProbeTest.test_confirmed_details_only_home_requires_real_focus_and_completion) ... ok
+test_deferred_network_or_incomplete_reveal_is_rejected (test_check_startup_probe.StartupProbeTest.test_deferred_network_or_incomplete_reveal_is_rejected) ... ok
+test_disabled_or_unclickable_details_is_rejected (test_check_startup_probe.StartupProbeTest.test_disabled_or_unclickable_details_is_rejected) ... ok
+test_fatal_error_cannot_be_hidden_by_home_markers (test_check_startup_probe.StartupProbeTest.test_fatal_error_cannot_be_hidden_by_home_markers) ... ok
+test_hot_resume_requires_real_movie_navigation_and_no_replay (test_check_startup_probe.StartupProbeTest.test_hot_resume_requires_real_movie_navigation_and_no_replay) ... ok
+test_launcher_or_wrong_navigation_focus_is_rejected (test_check_startup_probe.StartupProbeTest.test_launcher_or_wrong_navigation_focus_is_rejected) ... ok
+test_missing_brand_is_rejected (test_check_startup_probe.StartupProbeTest.test_missing_brand_is_rejected) ... ok
+test_nested_label_uses_its_actual_clickable_owner (test_check_startup_probe.StartupProbeTest.test_nested_label_uses_its_actual_clickable_owner) ... ok
+test_old_play_button_cannot_satisfy_the_home_contract (test_check_startup_probe.StartupProbeTest.test_old_play_button_cannot_satisfy_the_home_contract) ... ok
+test_visible_underlay_without_completion_is_rejected (test_check_startup_probe.StartupProbeTest.test_visible_underlay_without_completion_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK

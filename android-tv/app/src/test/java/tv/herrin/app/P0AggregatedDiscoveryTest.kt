@@ -220,4 +220,25 @@ class P0AggregatedDiscoveryTest {
         assertTrue(runCatching{service.retainEpisodes("r",a.key,detailed.copy(cmsVodId="wrong-vod"))}.isFailure)
     }
 
+    @Test fun renderingPendingProgressCannotHoldEveryNetworkSlotBeforeSearchStarts() = runBlocking {
+        val started = AtomicInteger()
+        val allStarted = CompletableDeferred<Unit>()
+        val sources = (1..4).map { number -> node("parallel-$number") {
+            if (started.incrementAndGet() == 4) allStarted.complete(Unit)
+            allStarted.await()
+            emptyList()
+        } }
+        var final = HerrinSourceDiscovery.Snapshot("",0)
+        withTimeout(2000) {
+            HerrinSourceDiscovery().search("ui-not-a-network-barrier",sources,null,Mutex()) { snapshot ->
+                // A slow initial progress renderer must not own the network
+                // scheduler's mutation lock before any HTTP work can begin.
+                if (snapshot.checked == 0 && snapshot.outcomes.isNotEmpty()) allStarted.await()
+                final = snapshot
+            }
+        }
+        assertEquals(4,started.get())
+        assertEquals(4,final.checked)
+        assertTrue(final.outcomes.values.all { it == HerrinSourceDiscovery.Outcome.EMPTY })
+    }
 }

@@ -33,10 +33,10 @@ class TvFocusRoutesTest {
             assertEquals("nav-首页", TvFocusRoutes.posterUp("首页", index, false))
     }
 
-    @Test fun ordinaryMovieHeroRetainsItsPlayAndDetailsNavigation() {
-        assertEquals("play", TvFocusRoutes.posterUp("电影", 0, true))
-        assertEquals("details", TvFocusRoutes.posterUp("电影", 9, true))
-        assertEquals("play", TvFocusRoutes.posterUp("首页", 0, true))
+    @Test fun ordinaryMoviePostersReturnToDetailsAfterHeroDirectPlayRemoval() {
+        for (category in listOf("首页", "电影", "剧集", "动漫", "综艺", "纪录片"))
+            for (index in listOf(0, 1, 9, 49))
+                assertEquals("details", TvFocusRoutes.posterUp(category, index, true))
     }
 
     @Test fun compactSettingsHasReversibleVerticalPathIncludingTmdbEditor() {

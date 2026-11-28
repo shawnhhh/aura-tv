@@ -1,0 +1,66 @@
+{
+  "node": "奶酪",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 4972
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 5593
+    },
+    {
+      "stage": "search",
+      "result": "FAILED",
+      "failure_code": "STAGE_TIMEOUT",
+      "elapsed_ms": 30076
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": false,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "奶酪",
+  "spider_api": "csp_T4Guard",
+  "node_count": 48,
+  "config_saved": true,
+  "declared_jar_md5": "9d5f341aa5f3353b50cc3bc16b4f3e8a",
+  "failure_stage": "search",
+  "failure_code": "STAGE_TIMEOUT",
+  "search_input_length": 4,
+  "search_input_matches_authorized_title": true,
+  "main_activity_lifecycle": "RESUMED",
+  "sdk_network_scope": "SDK_OKHTTP_ONLY",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+46917ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+48153ms SPIDER INITIALIZE_STARTED\nT+52622ms SPIDER INITIALIZE_RETURNED MS=4469\nT+55501ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 43171,
+  "evidence_review": {
+    "source_commit": "e0c4c478de18c2283a36455bd19b45049d25585e",
+    "run_id": 42877324522,
+    "job_id": 130043995491,
+    "interpretation": "Input retained, activity RESUMED, selected Spider route observed. Manual Thread.sleep step loop does not advance Compose frame clock, freezing LaunchedEffect debounce. No Spider SEARCH_STARTED; not provider search/403 evidence."
+  }
+}

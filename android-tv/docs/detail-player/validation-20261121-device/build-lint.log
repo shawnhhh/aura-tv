@@ -1,0 +1,150 @@
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :kernel-contract:compileJava UP-TO-DATE
+> Task :kernel-contract:processResources NO-SOURCE
+> Task :kernel-contract:classes UP-TO-DATE
+> Task :kernel-contract:jar UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/CmsOneTapPlaybackEffect.kt:55:31 Condition is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/DeviceMediaCapabilitiesAndroid.kt:21:59 'val supportedHdrTypes: IntArray!' is deprecated. Deprecated in Java.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:5200:41 Check for instance is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:5201:41 Check for instance is always 'false'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/PersonalLibrary.kt:167:77 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxSpiderBridge.kt:609:91 Unchecked cast of 'kotlin.Any!' to 'kotlin.Array<kotlin.Any?>'.
+
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:generateDebugLintReportModel
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:lintAnalyzeDebug
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:lintAnalyzeDebugUnitTest
+
+> Task :app:lintReportDebug
+Wrote HTML report to file:///workspace/aura-tv/android-tv/app/build/reports/lint-results-debug.html
+
+> Task :app:lintDebug FAILED
+Lint found 1 errors, 46 warnings. First failure:
+
+/workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxWarehouses.kt:378: Error: Suspicious indentation: This is indented but is not nested under the previous expression (if (!response.isSucc...) [SuspiciousIndentation]
+                if (!response.isSuccessful) return@readSourceResponse cached(valid)
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    /workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxWarehouses.kt:376: Previous statement here
+
+   Explanation for issues of type "SuspiciousIndentation":
+   This check looks for cases where the indentation suggests a grouping that
+   isn't actually there in the code. A common example of this would be
+   something like
+   if (column > width)
+       line++
+       column = 0
+   Here, the column = 0 line will be executed every single time, not just if
+   the condition is true.
+
+   Available options:
+
+   **always-run** (default is false):
+   Whether this check should be included while editing.
+
+   While you're editing, it's common to have a temporary situation where you have suspicious indentation scenarios -- e.g. you start typing an `if` statement on the line above something you want to make conditional, and you haven't indented it yet. It can be distracting and misleading to suddenly have both statements light up as errors. Therefore, lint will avoid including this check when running on the fly in the editor, unless it looks like the file has not been recently edited. With this option, you can turn it on in all cases.
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="SuspiciousIndentation">
+           <option name="always-run" value="false" />
+       </issue>
+   </lint>
+   ```
+
+
+The full lint text report is located at:
+  /workspace/aura-tv/android-tv/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:lintDebug'.
+> Lint found errors in the project; aborting build.
+
+  Fix the issues identified by lint, or create a baseline to see only new errors.
+  To create a baseline, run `gradlew updateLintBaseline` after adding the following to the module's build.gradle file:
+  ```
+  android {
+      lint {
+          baseline = file("lint-baseline.xml")
+      }
+  }
+  ```
+  For more details, see https://developer.android.com/studio/write/lint#snapshot
+
+  Lint found 1 errors, 46 warnings. First failure:
+
+  /workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxWarehouses.kt:378: Error: Suspicious indentation: This is indented but is not nested under the previous expression (if (!response.isSucc...) [SuspiciousIndentation]
+                  if (!response.isSuccessful) return@readSourceResponse cached(valid)
+                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      /workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxWarehouses.kt:376: Previous statement here
+
+     Explanation for issues of type "SuspiciousIndentation":
+     This check looks for cases where the indentation suggests a grouping that
+     isn't actually there in the code. A common example of this would be
+     something like
+     if (column > width)
+         line++
+         column = 0
+     Here, the column = 0 line will be executed every single time, not just if
+     the condition is true.
+
+     Available options:
+
+     **always-run** (default is false):
+     Whether this check should be included while editing.
+
+     While you're editing, it's common to have a temporary situation where you have suspicious indentation scenarios -- e.g. you start typing an `if` statement on the line above something you want to make conditional, and you haven't indented it yet. It can be distracting and misleading to suddenly have both statements light up as errors. Therefore, lint will avoid including this check when running on the fly in the editor, unless it looks like the file has not been recently edited. With this option, you can turn it on in all cases.
+
+     To configure this option, use a `lint.xml` file with an <option> like this:
+
+     ```xml
+     <lint>
+         <issue id="SuspiciousIndentation">
+             <option name="always-run" value="false" />
+         </issue>
+     </lint>
+     ```
+
+
+  The full lint text report is located at:
+    /workspace/aura-tv/android-tv/app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 4m 23s
+29 actionable tasks: 10 executed, 19 up-to-date

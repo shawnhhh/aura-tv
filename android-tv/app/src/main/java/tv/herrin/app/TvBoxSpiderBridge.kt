@@ -32,7 +32,7 @@ import java.util.zip.ZipFile
  */
 internal sealed interface SpiderResult<out T> {
     data class Ready<T>(val value: T) : SpiderResult<T>
-    data class Failure(val message: String) : SpiderResult<Nothing>
+    data class Failure(val message: String, val authorizationEnded: Boolean = false) : SpiderResult<Nothing>
 }
 
 internal object SpiderVodCodec {
@@ -86,10 +86,11 @@ internal object SpiderVodCodec {
                 val episodeName = if (separator >= 0) entry.substring(0, separator).trim() else ""
                 val opaqueId = (if (separator >= 0) entry.substring(separator + 1) else entry).trim()
                 if (opaqueId.isNotEmpty() && opaqueId.length <= 2_048) {
-                    if (episodeName.isNotEmpty() && index + 1 !in episodeTitles)
-                        episodeTitles[index + 1] = episodeName.replace(Regex("<[^>]*>"), " ").take(80)
+                    val title = episodeName.replace(Regex("<[^>]*>"), " ").trim().take(80)
+                        .ifBlank { "第 ${index + 1} 集" }
+                    episodeTitles.putIfAbsent(index + 1, title)
                     episodes.getOrPut(index + 1) { mutableListOf() }.add(
-                        PlaybackLine("spider-$lineIndex", flag, opaqueId))
+                        PlaybackLine("spider-$lineIndex", flag, opaqueId, episodeTitle = title))
                 }
             }
         }
@@ -114,24 +115,25 @@ internal object SpiderVodCodec {
     fun player(json: String, allowHttp: Boolean,
                siteHeaders: Map<String, String> = emptyMap()): PlaybackResult {
         val data = JSONObject(json)
-        val options = playerUrls(data.opt("url")).mapNotNull {
-            TvBoxUrl.normalize(it, allowHttp)
-        }.distinct().take(8)
+        val options = playerUrls(data.opt("url")).mapNotNull { choice ->
+            TvBoxUrl.normalize(choice.uri, allowHttp)?.let { choice.copy(uri = it) }
+        }.distinctBy(PlayerUrl::uri).take(8)
         val needsWebParser = data.optInt("parse", 0) != 0 || data.optInt("jx", 0) != 0
         val declaredMime = PlaybackFormatRetry.declaredMime(data.optString("format"))
         // Spider may mark parse=1 for a signed extensionless *media* endpoint.
         // Accept that URL only when Spider explicitly declares a Media3 media
         // format. Without that evidence, a JX webpage is not a direct stream.
-        val playable = if (!needsWebParser) options else options.filterIndexed { index, url ->
+        val candidates = if (!needsWebParser) options else options.filterIndexed { index, choice ->
+            val url = choice.uri
             val path = url.substringBefore('?').lowercase(java.util.Locale.ROOT)
             path.endsWith(".m3u8") || path.endsWith(".mp4") ||
                 path.endsWith(".mpd") ||
                 NativeFongMiRoute.isNativeProxy(url) ||
                 (index == 0 && declaredMime != null)
         }
-        if (needsWebParser && playable.isEmpty())
+        if (needsWebParser && candidates.isEmpty())
             return PlaybackResult.Unavailable("PARSE_WEB_REQUIRED：此线路需要网页解析器，请切换返回直链的授权线路")
-        val uri = playable.firstOrNull()
+        val preferred = candidates.firstOrNull()
             ?: return PlaybackResult.Unavailable("PARSE_NO_MEDIA_URL：Spider 没有返回本次授权的 HTTP(S) 直链")
         val responseHeaders = TvBoxHeaderCodec.decode(
             data.optJSONObject("header") ?: data.optString("header").trim().takeIf { it.startsWith("{") }
@@ -140,14 +142,20 @@ internal object SpiderVodCodec {
         // the player result supplies no explicit headers. Avoid key-by-key
         // merging: it could accidentally forward stale authentication values.
         val headers = responseHeaders.ifEmpty { siteHeaders }
+        val best = if (preferred.height == null || needsWebParser) preferred else
+            candidates.filter { headers.isEmpty() || sameMediaOrigin(preferred.uri, it.uri) }
+                .maxByOrNull { it.height ?: 0 } ?: preferred
+        val uri = best.uri
+        val alternatives = candidates.map(PlayerUrl::uri).filter { it != uri }
+        SpiderPlaybackEvidence.quality(candidates.size, best.height)
         val subtitles = subtitles(data, allowHttp)
         // These URLs are explicitly supplied by this approved player's result.
         // If no origin-specific headers are required, a dead 404/410 primary
         // must not prevent Media3 trying the next authorized backup address.
         // Authenticated results and HTTP 401/403/429 remain non-fallback.
-        val safeNotFoundFallback = playable.size > 1 && headers.isEmpty()
+        val safeNotFoundFallback = alternatives.isNotEmpty() && headers.isEmpty()
         return PlaybackResult.Ready(PlaybackMedia(uri, headers, subtitles,
-            alternateUris = playable.drop(1), allowHttpRedirects = allowHttp,
+            alternateUris = alternatives, allowHttpRedirects = allowHttp,
             declaredMime = declaredMime,
             safeNotFoundFallback = safeNotFoundFallback,
             danmakuSources = DanmakuProtocol.decodeSources(data.opt("danmaku"))))
@@ -169,20 +177,37 @@ internal object SpiderVodCodec {
         }
     }
 
+    private data class PlayerUrl(val uri: String, val height: Int? = null)
+    private val explicitHeight = Regex("""(?i)(?<!\d)(\d{3,4})p(?!\d)""")
+    private fun quality(label: String): Int? =
+        explicitHeight.find(label)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 100..4320 }
+            ?: HerrinFilmIdentityMatch.resolutionClaim(label)
+            ?: when (label.trim().lowercase(java.util.Locale.ROOT)) {
+                "preview", "预览", "低画质", "流畅", "标清" -> 360
+                "高清", "hd" -> 720
+                else -> null
+            }
+
+    private fun sameMediaOrigin(first: String, second: String): Boolean = runCatching {
+        val primary = java.net.URI(first)
+        val candidate = java.net.URI(second)
+        primary.scheme.equals(candidate.scheme, true) &&
+            primary.rawAuthority.equals(candidate.rawAuthority, true)
+    }.getOrDefault(false)
+
     /** FongMi CatVod permits a URL string, alternating label/URL pairs, or Url.values. */
-    private fun playerUrls(raw: Any?): List<String> = when (raw) {
-        is String -> listOf(raw)
-        // Some CatVod spiders return [url] or [url1, url2] instead of
-        // [qualityLabel, url] pairs. Safe URL normalization below discards labels.
-        is JSONArray -> (0 until minOf(raw.length(), 32)).map { raw.optString(it) }
+    private fun playerUrls(raw: Any?): List<PlayerUrl> = when (raw) {
+        is String -> listOf(PlayerUrl(raw))
+        is JSONArray -> (0 until minOf(raw.length(), 32)).map { index ->
+            PlayerUrl(raw.optString(index), raw.optString(index - 1).let(::quality))
+        }
         is JSONObject -> {
             val choices = raw.optJSONArray("values") ?: JSONArray()
-            val urls = (0 until minOf(choices.length(), 20)).mapNotNull {
-                choices.optJSONObject(it)?.optString("v")
+            val urls = (0 until minOf(choices.length(), 20)).map { index ->
+                choices.optJSONObject(index)?.let { PlayerUrl(it.optString("v"), quality(it.optString("n"))) }
             }
             val selected = raw.optInt("position", 0)
-            if (selected in urls.indices) listOf(urls[selected]) + urls.filterIndexed { i, _ -> i != selected }
-            else urls
+            (listOfNotNull(urls.getOrNull(selected)) + urls.filterIndexed { i, _ -> i != selected }.filterNotNull())
         }
         else -> emptyList()
     }
@@ -461,6 +486,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         checkOpen(ticket)
         proxy.setDiagnostic(object : NativeFongMiProxy.Diagnostic {
             override fun httpResponse(status: Int, range: Boolean) {
+                SpiderProxyDiagnostics.response(context, status, range)
                 HerrinPlaybackDiagnosticJournal.record("PROXY", "HTTP_RESPONSE", "STATUS=$status")
                 if (range) HerrinPlaybackDiagnosticJournal.record("PROXY", "RANGE_REQUEST")
             }
@@ -548,7 +574,7 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             synchronized(lifecycle) { checkOpen(ticket); activeNetworkTrace=SpiderNetworkTrace.start(context) }
             if (scriptApi != null) {
                 Runtime.set(context.applicationContext)
-                Runtime.setActivity { SpiderNetworkTrace.event("ACTIVITY_REQUEST_UNAVAILABLE"); null }
+                Runtime.setActivity(SpiderRuntimeActivityHost::activity)
                 val host = SpiderHttpSessionHost()
                 val runtime = FongMiScriptRuntimes(context)
                 try {
@@ -579,9 +605,9 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // One ephemeral cookie jar per active site; never shared across source changes.
             val httpHost = SpiderHttpSessionHost()
             Runtime.set(context.applicationContext)
-            // An isolated Service cannot provide the foreground Activity from
-            // the main process. Do not pretend the Application is an Activity.
-            Runtime.setActivity { SpiderNetworkTrace.event("ACTIVITY_REQUEST_UNAVAILABLE"); null }
+            // Obtain an operation-owned real window in this same :spider process.
+            // The foreground main Activity approves its launch; no Activity crosses Binder.
+            Runtime.setActivity(SpiderRuntimeActivityHost::activity)
             Runtime.setToast { text ->
                 SpiderNetworkTrace.event(if(listOf("登录","扫码","授权").any(text::contains)) "PLUGIN_AUTH_NOTIFICATION" else "PLUGIN_NOTIFICATION")
             }
@@ -731,7 +757,8 @@ internal class TvBoxSpiderWorker(private val context: Context) {
         SpiderResult.Failure("Spider ${SpiderFailureDetails.message(error)}")
     }
 
-    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
+    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean,
+                     foregroundPlayback: Boolean = false): PlaybackResult {
         val attemptResult = attemptPlayback {
             SpiderStartupTrace.mark(context, SpiderStartupTrace.Stage.PLAYER)
             val spider = active ?: error("站点 Spider 尚未加载")
@@ -743,6 +770,12 @@ internal class TvBoxSpiderWorker(private val context: Context) {
             // or plugin code. Keep it interruptible without wrapping the later
             // suspending ParseJob in runBlocking (which breaks cancellation).
             val raw = PlaybackDiagnosticSession.stage("SPIDER", "PLAYER_CONTENT") { runInterruptible(Dispatchers.IO) {
+                // Legacy providers may call getActivity from their own main-thread
+                // callback. Attach the real host before entering playerContent, but
+                // only for explicitly admitted foreground playback.
+                if (foregroundPlayback && SpiderRuntimeActivityHost.activity() == null)
+                    error("播放授权窗口无法打开，请重试")
+                SpiderNetworkTrace.event("PLAYER_CONTENT_ENTERED")
                 HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_STARTED")
                 spider.playerContent(selected.title, selected.uri, activeVipFlags)
             } }

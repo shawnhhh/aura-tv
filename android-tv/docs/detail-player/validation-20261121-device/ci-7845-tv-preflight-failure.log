@@ -1,0 +1,29 @@
+2026-11-22T01:10:42.5637523Z INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Failed to inject touch input.
+2026-11-22T01:10:42.5638998Z Reason: Expected exactly '1' node but could not find any node that satisfies: (TestTag = 'source-node-menu')
+2026-11-22T01:10:42.5639886Z
+2026-11-22T01:10:42.5640727Z 	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+2026-11-22T01:10:42.5650831Z 	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+2026-11-22T01:10:42.5687739Z 	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+2026-11-22T01:10:42.5689693Z 	at androidx.compose.ui.test.ActionsKt.performTouchInput(Actions.kt:394)
+2026-11-22T01:10:42.5691263Z 	at androidx.compose.ui.test.Actions_androidKt.performClickImpl(Actions.android.kt:20)
+2026-11-22T01:10:42.5692734Z 	at androidx.compose.ui.test.ActionsKt.performClick(Actions.kt:54)
+2026-11-22T01:10:42.5694773Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:714)
+2026-11-22T01:10:42.5696504Z
+2026-11-22T01:10:42.5696888Z INSTRUMENTATION_STATUS: stream=
+2026-11-22T01:10:42.5698447Z Error in tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(tv.herrin.app.HerrinUiSmokeTest):
+2026-11-22T01:10:42.5700173Z java.lang.AssertionError: Failed to inject touch input.
+2026-11-22T01:10:42.5701584Z Reason: Expected exactly '1' node but could not find any node that satisfies: (TestTag = 'source-node-menu')
+2026-11-22T01:10:42.5702585Z
+2026-11-22T01:10:42.5703568Z 	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+2026-11-22T01:10:42.5706189Z 	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+2026-11-22T01:10:42.5755523Z 	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+2026-11-22T01:10:42.5788104Z 	at androidx.compose.ui.test.ActionsKt.performTouchInput(Actions.kt:394)
+2026-11-22T01:10:42.5789659Z 	at androidx.compose.ui.test.Actions_androidKt.performClickImpl(Actions.android.kt:20)
+2026-11-22T01:10:42.5797625Z 	at androidx.compose.ui.test.ActionsKt.performClick(Actions.kt:54)
+2026-11-22T01:10:42.5803600Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:714)
+2026-11-22T01:10:42.5804893Z
+2026-11-22T01:10:42.5805702Z INSTRUMENTATION_STATUS: test=tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests
+2026-11-22T01:10:42.5807259Z INSTRUMENTATION_STATUS_CODE: -2
+2026-11-22T01:10:42.5875558Z INSTRUMENTATION_STATUS: class=tv.herrin.app.HerrinUiSmokeTest
+2026-11-22T01:10:42.5912204Z INSTRUMENTATION_STATUS: current=8
+2026-11-22T01:10:42.5937358Z INSTRUMENTATION_STATUS: id=AndroidJUnitRunner

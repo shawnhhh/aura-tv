@@ -1,0 +1,36 @@
+2026-11-21T15:48:05.6779392Z INSTRUMENTATION_STATUS: test=tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests
+2026-11-21T15:48:25.4060044Z INSTRUMENTATION_STATUS: stack=androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms
+2026-11-21T15:48:25.4151757Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse(AppliedWarehouseAssertions.kt:15)
+2026-11-21T15:48:25.4162165Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse$default(AppliedWarehouseAssertions.kt:10)
+2026-11-21T15:48:25.4164634Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:699)
+2026-11-21T15:48:25.4168109Z Error in tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(tv.herrin.app.HerrinUiSmokeTest):
+2026-11-21T15:48:25.4170298Z androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms
+2026-11-21T15:48:25.4176360Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse(AppliedWarehouseAssertions.kt:15)
+2026-11-21T15:48:25.4178495Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse$default(AppliedWarehouseAssertions.kt:10)
+2026-11-21T15:48:25.4180773Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:699)
+2026-11-21T15:48:25.4183831Z INSTRUMENTATION_STATUS: test=tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests
+2026-11-21T15:48:25.4288496Z 1) tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(tv.herrin.app.HerrinUiSmokeTest)
+2026-11-21T15:48:25.4290318Z androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms
+2026-11-21T15:48:25.4295782Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse(AppliedWarehouseAssertions.kt:15)
+2026-11-21T15:48:25.4297623Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse$default(AppliedWarehouseAssertions.kt:10)
+2026-11-21T15:48:25.4300079Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:699)
+2026-11-21T15:48:25.4302264Z Tests run: 1,  Failures: 1
+2026-11-21T15:48:26.3258517Z INSTRUMENTATION_STATUS: test=tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests
+2026-11-21T15:48:26.3263769Z INSTRUMENTATION_STATUS: stack=androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms
+2026-11-21T15:48:26.3269108Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse(AppliedWarehouseAssertions.kt:15)
+2026-11-21T15:48:26.3270813Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse$default(AppliedWarehouseAssertions.kt:10)
+2026-11-21T15:48:26.3272851Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:699)
+2026-11-21T15:48:26.3275583Z Error in tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(tv.herrin.app.HerrinUiSmokeTest):
+2026-11-21T15:48:26.3277229Z androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms
+2026-11-21T15:48:26.3282950Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse(AppliedWarehouseAssertions.kt:15)
+2026-11-21T15:48:26.3284561Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse$default(AppliedWarehouseAssertions.kt:10)
+2026-11-21T15:48:26.3285698Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:699)
+2026-11-21T15:48:26.3286787Z INSTRUMENTATION_STATUS: test=tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests
+2026-11-21T15:48:26.3289499Z 1) tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(tv.herrin.app.HerrinUiSmokeTest)
+2026-11-21T15:48:26.3290950Z androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms
+2026-11-21T15:48:26.3295483Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse(AppliedWarehouseAssertions.kt:15)
+2026-11-21T15:48:26.3296954Z 	at tv.herrin.app.AppliedWarehouseAssertionsKt.awaitAppliedWarehouse$default(AppliedWarehouseAssertions.kt:10)
+2026-11-21T15:48:26.3298920Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:699)
+2026-11-21T15:48:26.3300591Z Tests run: 1,  Failures: 1
+2026-11-21T15:48:33.5389694Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44919655632/artifacts/14712939012
+2026-11-21T15:48:34.6818155Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44919655632/artifacts/14713168549

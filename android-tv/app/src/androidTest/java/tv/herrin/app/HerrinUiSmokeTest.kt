@@ -9,7 +9,6 @@ import android.graphics.Bitmap
 import android.view.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -37,7 +36,7 @@ class HerrinUiSmokeTest {
                 .getSharedPreferences("herrin", 0).edit().clear().commit()
         }
     }
-    @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 1) val compose = mainActivityComposeRule()
     @get:Rule(order = 2) val evidence = object : TestWatcher() {
         override fun failed(e: Throwable?, d: Description) {
             runCatching { capture("FAIL-${d.methodName}") }
@@ -90,6 +89,7 @@ class HerrinUiSmokeTest {
         // entry explicit, then exercise actual D-pad focus/key delivery below.
         compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.waitForIdle()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitSearchImeView(shown = true)
         compose.onNodeWithTag("search-input").performTextReplacement(value)
     }
@@ -139,6 +139,13 @@ class HerrinUiSmokeTest {
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(code)
         compose.waitForIdle()
     }
+    private fun exitPlayer() {
+        val inst = InstrumentationRegistry.getInstrumentation()
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        android.os.SystemClock.sleep(40)
+        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitForIdle()
+    }
     private fun activate(text: String) {
         compose.onNodeWithText(text).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.waitForIdle()
@@ -162,24 +169,13 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings-list").assertExists()
     }
     private fun advancedSettings() {
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        // The route callback precedes attachment/focus of the settings tree.
-        // Query the collection while it is absent: fetchOne's diagnostic tree
-        // printer can otherwise read lazy semantics on the instrumentation
-        // thread during the layout transition (SnapshotStateObserver failure).
-        compose.waitUntil(5_000) {
-            compose.onAllNodesWithTag("settings-list").fetchSemanticsNodes().size == 1 &&
-                compose.onAllNodes(hasTestTag("screen-first") and isFocused())
-                    .fetchSemanticsNodes().size == 1
-        }
-        compose.waitForIdle()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("settings-advanced"))
-        compose.onNodeWithTag("settings-advanced").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("screen-first"))
-        compose.onNodeWithTag("screen-first").assertIsFocused()
+        compose.activityRule.openDiagnostics()
+        compose.waitUntil(12_000) { runCatching {
+            compose.onNodeWithTag("splash-curtain").assertDoesNotExist()
+            compose.onNodeWithText("高级设置").assertExists()
+        }.isSuccess }
     }
+
     private fun capture(label: String) {
         // PixelCopy synchronizes the rendered root before the device screenshot (not just semantics).
         compose.onAllNodes(isRoot()).onFirst().captureToImage()
@@ -215,8 +211,10 @@ class HerrinUiSmokeTest {
         compose.onNodeWithTag("settings").assertIsDisplayed()
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithText("设置 · 内容来源").assertIsDisplayed()
+        compose.onNodeWithText("设置中心").assertDoesNotExist()
+        compose.onNodeWithTag("phone-config-main").assertIsDisplayed()
         compose.onNodeWithTag("tvbox-warehouse-url").assertIsDisplayed()
+        compose.onNodeWithTag("settings-module-直播源").performClick()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-live-direct-url"))
         compose.onNodeWithTag("tvbox-live-direct-url").assertIsDisplayed()
         compose.onNodeWithTag("tvbox-http-consent").assertDoesNotExist()
@@ -247,45 +245,24 @@ class HerrinUiSmokeTest {
     }
 
     @Test fun compactSettingsDpadReachesTmdbInputThenLiveSourceAndReturns() {
-        focus("settings")
-        key(KeyEvent.KEYCODE_DPAD_CENTER)
-        compose.onNodeWithTag("screen-first").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-warehouse-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+        focus("tvbox-warehouse-nav"); key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-warehouse-load").assertIsFocused()
-        focus("settings-source-sites")
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsFocused()
-        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsDisplayed()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("compact-tmdb-split-toggle").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("compact-tmdb-token-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("settings-module-海报与资料").performClick()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("compact-tmdb-token-nav"))
+        focus("compact-tmdb-token-nav"); key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("compact-tmdb-save").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("compact-tmdb-save").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("tvbox-live-direct-nav").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
+        compose.onNodeWithTag("settings-module-直播源").performClick()
+        focus("tvbox-live-direct-nav"); key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("tvbox-live-direct-load").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("settings-home").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("settings-advanced").assertIsFocused()
-        key(KeyEvent.KEYCODE_DPAD_UP)
-        compose.onNodeWithTag("settings-home").assertIsFocused()
-        capture("settings-tmdb-source-vertical-focus")
+        key(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("settings").assertIsDisplayed()
     }
 
     @Test fun compactTmdbSplitTokenFieldsReceiveEachDpadStep() {
         focus("settings")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
+        compose.onNodeWithTag("settings-module-海报与资料").performClick()
         compose.onNodeWithTag("settings-list")
             .performScrollToNode(hasTestTag("compact-tmdb-split-toggle"))
         focus("compact-tmdb-split-toggle")
@@ -321,7 +298,8 @@ class HerrinUiSmokeTest {
     @Test fun homeDpadDownMovesFromNavigationToHeroThenFirstPoster() {
         focus("nav-首页")
         key(KeyEvent.KEYCODE_DPAD_DOWN)
-        compose.onNodeWithTag("play").assertIsFocused()
+        compose.onNodeWithTag("details").assertIsFocused()
+        compose.onNodeWithTag("play").assertDoesNotExist()
         key(KeyEvent.KEYCODE_DPAD_DOWN)
         compose.onNodeWithTag("card-orbit").assertIsFocused()
 
@@ -391,18 +369,16 @@ class HerrinUiSmokeTest {
         capture("m473-my-between-live-and-search")
     }
 
-    @Test fun myPersonalSourcesShortcutOpensRealNasAndCloudEditors() {
+    @Test fun myPersonalSourcesShortcutOpensStorageManager() {
         focus("nav-我的")
         key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("my-manage-personal-sources").performClick()
         compose.onNodeWithTag("settings-list").assertExists()
         compose.onNodeWithTag("settings-list")
-            .performScrollToNode(hasTestTag("nas-webdav-url"))
-        compose.onNodeWithTag("nas-webdav-url").assertIsDisplayed()
-        compose.onNodeWithTag("settings-list")
-            .performScrollToNode(hasTestTag("cloud-webdav-save"))
-        compose.onNodeWithTag("cloud-webdav-save").assertIsDisplayed()
-        capture("m473-my-nas-cloud-shortcut")
+            .performScrollToNode(hasTestTag("personal-field-address"))
+        compose.onNodeWithTag("personal-field-address").assertIsDisplayed()
+        compose.onNodeWithTag("cloud-webdav-save").assertDoesNotExist()
+        capture("personal-storage-shortcut")
     }
 
     @Test fun favoritedMovieAppearsInPersonalTabWithoutChangingOriginalPlayback() {
@@ -505,17 +481,16 @@ class HerrinUiSmokeTest {
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/box.json").toString())
+                .editRemoteText(server.url("/box.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(15000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
-            assertEquals(1, server.requestCount)
+            compose.awaitAppliedWarehouse(active = false)
+            compose.awaitSelectedWarehouse()
+            assertEquals("Import selects exactly one first CMS", 2, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             compose.waitUntil(15000) {
                 runCatching { compose.onAllNodesWithText("远端电影")
                     .onFirst().assertIsDisplayed() }.isSuccess
@@ -525,6 +500,7 @@ class HerrinUiSmokeTest {
             compose.onNodeWithTag("source-switch-site").assertDoesNotExist()
             compose.onAllNodesWithText("远端电影").onFirst().assertIsDisplayed()
             compose.onNodeWithText("蓝色边界").assertDoesNotExist()
+            compose.onAllNodesWithText("TVBox", substring = true).assertCountEquals(0)
             focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.onNodeWithTag("settings-list")
                 .performScrollToNode(hasTestTag("settings-source-sites"))
@@ -543,17 +519,16 @@ http://example.org/live/channel.m3u8
 """))
             focus("settings"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             val settings = compose.onNodeWithTag("settings-list")
+            compose.onNodeWithTag("settings-module-直播源").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-live-direct-url"))
             compose.onNodeWithTag("tvbox-live-direct-url")
-                .performTextReplacement(server.url("/live.m3u").toString())
+                .editRemoteText(server.url("/live.m3u").toString())
             settings.performScrollToNode(hasTestTag("tvbox-live-direct-load"))
             compose.onNodeWithTag("tvbox-live-direct-load").performClick()
             compose.waitUntil(15000) {
-                runCatching { compose.onNodeWithTag("live-apply-feedback")
-                    .assertTextEquals("成功") }.isSuccess
+                Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxLiveSourceUrl == server.url("/live.m3u").toString()
             }
-            settings.performScrollToNode(hasTestTag("settings-home"))
-            compose.onNodeWithTag("settings-home").performClick()
+            key(KeyEvent.KEYCODE_BACK)
             focus("nav-直播"); key(KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("live-fullscreen").assertIsDisplayed() }.isSuccess
@@ -576,20 +551,15 @@ http://example.org/live/channel.m3u8
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/spider-only.json").toString())
+                .editRemoteText(server.url("/spider-only.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(10000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
-            // A failed auto-import must show an actionable reason on the compact
-            // TV settings page, not only a status hidden in Advanced Settings.
-            settings.performScrollToNode(hasTestTag("compact-tvbox-status"))
-            compose.onNodeWithTag("compact-tvbox-status")
-                .assertTextContains("无需逐个检测", substring = true)
-            settings.performScrollToNode(hasTestTag("settings-home"))
-            compose.onNodeWithTag("settings-home").performClick()
+            compose.awaitAppliedWarehouse(active = false)
+            // Valid pending authorization stays saved without developer status text.
+            compose.onNodeWithTag("compact-tvbox-status").assertDoesNotExist()
+            assertEquals(server.url("/spider-only.json").toString(),
+                Preferences(InstrumentationRegistry.getInstrumentation().targetContext).tvBoxWarehouseUrl)
+            key(KeyEvent.KEYCODE_BACK)
             compose.onNodeWithTag("source-empty-title").assertIsDisplayed()
             compose.onNodeWithText("蓝色边界").assertDoesNotExist()
             compose.onNodeWithTag("source-open-sites").assertDoesNotExist()
@@ -660,9 +630,11 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithText("第 6 集").assertExists()
         compose.onNodeWithText("集数").assertIsDisplayed()
         capture("detail")
-        activate("▶ 播放演示")
+        compose.onNodeWithTag("detail-play-cta").performScrollTo()
+        focus("detail-play-cta")
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithText("播放演示").assertExists()
-        key(KeyEvent.KEYCODE_BACK)
+        exitPlayer()
         compose.onNodeWithText("集数").assertExists()
         key(KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("card-tide").assertIsFocused()
@@ -699,25 +671,38 @@ http://example.org/live/channel.m3u8
         compose.onNodeWithTag("episode-4").performClick()
         compose.onNodeWithText("播放演示").assertExists()
     }
-    @Test fun tmdbDetailStreamsBothCmsSourcesAndLoadsOnlyChosenProviderVod() {
+    @Test fun tmdbDetailPrefetchIsMediaFreeAndReadyNodesPlayWithoutSecondTap() {
         MockWebServer().use { server ->
+            val video = InstrumentationRegistry.getInstrumentation().context.assets
+                .open("playback-diagnostics/baseline-72.mp4").use { it.readBytes() }
             val details=java.util.concurrent.ConcurrentLinkedQueue<String>()
             val mediaCalls=java.util.concurrent.atomic.AtomicInteger()
+            val failChosenB=java.util.concurrent.atomic.AtomicBoolean(false)
             server.dispatcher=object:okhttp3.mockwebserver.Dispatcher() {
                 override fun dispatch(request:okhttp3.mockwebserver.RecordedRequest):MockResponse {
                     val url=request.requestUrl!!
                     if(url.encodedPath == "/box.json") return MockResponse().setBody(org.json.JSONObject().put("sites",
                         org.json.JSONArray().put(org.json.JSONObject().put("key","a").put("name","CMS A").put("type",1).put("api",server.url("/a")))
-                            .put(org.json.JSONObject().put("key","b").put("name","CMS B").put("type",1).put("api",server.url("/b")))).toString())
-                    if(url.encodedPath !in listOf("/a","/b")) {
-                        mediaCalls.incrementAndGet();return MockResponse().setResponseCode(503)
+                            .put(org.json.JSONObject().put("key","b").put("name","CMS B").put("type",1).put("api",server.url("/b")))
+                            .put(org.json.JSONObject().put("key","c").put("name","CMS C").put("type",1).put("api",server.url("/c")))).toString())
+                    if(url.encodedPath !in listOf("/a","/b","/c")) {
+                        mediaCalls.incrementAndGet()
+                        val range = request.getHeader("Range")?.let { Regex("bytes=(\\d+)-(\\d*)").matchEntire(it) }
+                        val first = range?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                        if (first >= video.size) return MockResponse().setResponseCode(416)
+                        val last = (range?.groupValues?.get(2)?.toIntOrNull() ?: video.lastIndex).coerceAtMost(video.lastIndex)
+                        return MockResponse().setResponseCode(if(range == null) 200 else 206)
+                            .setHeader("Content-Type","video/mp4").setHeader("Accept-Ranges","bytes")
+                            .apply { if(range != null) setHeader("Content-Range","bytes $first-$last/${video.size}") }
+                            .setBody(okio.Buffer().write(video,first,last-first+1))
                     }
                     val source=url.encodedPath.substringAfter('/')
-                    val row=org.json.JSONObject().put("vod_id","local-$source").put("vod_name","协议测试1（$source）")
-                        .put("type_name","电影").put("vod_year","2024")
+                    val row=org.json.JSONObject().put("vod_id","local-$source").put("vod_name","协议测试1")
+                        .put("type_name","电影").put("vod_year", if (source == "c") "2020" else "2025")
                     if(url.queryParameter("ids") != null) {
                         details.add(source+":"+url.queryParameter("ids"))
-                        row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/unavailable-$source.mp4"))
+                        if (source == "b" && failChosenB.get()) return MockResponse().setResponseCode(503)
+                        row.put("vod_play_from","line-$source").put("vod_play_url","正片$"+server.url("/controlled-$source.mp4"))
                     }
                     return MockResponse().setHeader("Content-Type","application/json")
                         .setBody(org.json.JSONObject().put("list",org.json.JSONArray().put(row)).toString())
@@ -728,37 +713,126 @@ http://example.org/live/channel.m3u8
             focus("settings");key(KeyEvent.KEYCODE_DPAD_CENTER)
             val settings=compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
-            compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(root)
+            compose.onNodeWithTag("tvbox-warehouse-url").editRemoteText(root)
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")}.isSuccess}
+            compose.awaitAppliedWarehouse(active = false)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
-            compose.waitUntil(15000){runCatching{compose.onAllNodesWithText("协议测试1（a）").onFirst().assertIsDisplayed()}.isSuccess}
+            compose.awaitSelectedWarehouse()
+            compose.waitUntil(15000){runCatching{compose.onAllNodesWithText("协议测试1").onFirst().assertIsDisplayed()}.isSuccess}
             protocolSearch("Protocol 1")
             focus("card-tmdb-movie-9001");key(KeyEvent.KEYCODE_DPAD_CENTER)
             val list=compose.onNodeWithTag("film-detail-list")
-            list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
-            compose.waitUntil(15000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status").assertTextContains("命中 2",substring=true)}.isSuccess}
-            assertEquals(0,details.size);assertEquals(0,mediaCalls.get())
-            fun tag(source:String):String {
-                val site=TvBoxSite("CMS "+source.uppercase(),false,server.url("/$source").toString(),key=source)
-                return "source-hit-"+HerrinDiscoveryNodes.id(root,site,null)+":local-$source"
+            list.performScrollToNode(hasTestTag("source-region"))
+            compose.waitUntil(15000) {
+                details.contains("a:local-a") && details.contains("b:local-b") && runCatching {
+                    // Request arrival precedes the response/layout publication.
+                    // Only ready, confirmed detail layouts are selectable.
+                    list.performScrollToNode(hasTestTag("source-region"))
+                    compose.onNodeWithTag("source-node-menu").assertIsDisplayed()
+                }.isSuccess
             }
-            for(source in listOf("a","b")) {
-                list.performScrollToNode(hasTestTag(tag(source)))
-                compose.onNodeWithTag(tag(source)).performClick()
-                list.performScrollToNode(hasTestTag("tmdb-source-lookup-status"))
-                compose.waitUntil(10000){runCatching{compose.onNodeWithTag("tmdb-source-lookup-status")
-                    .assertTextContains("CMS "+source.uppercase(),substring=true)
-                    .assertTextContains("选择集数后",substring=true)}.isSuccess}
+            assertEquals("Background trusted layout prefetch must never open media",0,mediaCalls.get())
+            fun frames() = HerrinPlaybackDiagnosticJournal.export().lineSequence().count { "CLICK_TO_FIRST_FRAME" in it }
+            fun playFirstEpisode() {
+                compose.onNodeWithTag("player-root-focus").assertDoesNotExist()
+                list.performScrollToNode(hasTestTag("episode-1"))
+                compose.onNodeWithTag("episode-1").performClick()
             }
-            assertEquals(listOf("a:local-a","b:local-b"),details.toList())
-            assertEquals(0,mediaCalls.get())
-            list.performScrollToNode(hasTestTag(tag("a")))
-            compose.onNodeWithTag(tag("a")).assertExists()
-            capture("p0-real-cms-protocol-source-groups-before-media")
+            fun awaitSelectedFrame(before: Int) {
+                compose.waitUntil(30000) { frames() > before }
+                compose.onNodeWithTag("player-root-focus").assertIsDisplayed()
+                exitPlayer()
+                compose.waitUntil(10000) { runCatching { compose.onNodeWithTag("film-detail-list").assertExists() }.isSuccess }
+                list.performScrollToNode(hasTestTag("source-region"))
+            }
+            for (source in listOf("a", "b")) {
+                val site = TvBoxSite("CMS " + source.uppercase(), false, server.url("/$source").toString(), key = source)
+                compose.onNodeWithTag("source-node-menu").performClick()
+                val nodeTag = "source-node-" + HerrinDiscoveryNodes.id(root, site, null)
+                compose.waitUntil(10000) { runCatching { compose.onNodeWithTag(nodeTag).assertExists() }.isSuccess }
+                val beforeFrame = frames()
+                compose.onNodeWithTag(nodeTag).performClick()
+                playFirstEpisode()
+                awaitSelectedFrame(beforeFrame)
+                assertTrue("Playback must use a previously confirmed detail", details.contains("$source:local-$source"))
+            }
+            assertTrue(details.all { it == "a:local-a" || it == "b:local-b" })
+            assertTrue("Prefetch and explicit selection must remain bounded", details.size <= 8)
+            assertTrue("An unconfirmed year must never be prefetched", details.none { it.startsWith("c:") })
+            assertTrue("Explicit ready-node choices must open real media",mediaCalls.get() > 0)
+            compose.onNodeWithTag("source-region").assertIsDisplayed()
+            compose.waitUntil(10000) { runCatching {
+                list.performScrollToNode(hasTestTag("detail-play-cta"))
+                compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+            }.isSuccess }
+            // Selecting an already loaded line reuses its sanitized layout.
+            // Switch A -> B to exercise a real fresh detail rebind failure,
+            // rather than expecting a no-op click to send another request.
+            list.performScrollToNode(hasTestTag("source-region"))
+            val aNode = HerrinDiscoveryNodes.id(root,
+                TvBoxSite("CMS A", false, server.url("/a").toString(), key = "a"), null)
+            val bNode = HerrinDiscoveryNodes.id(root,
+                TvBoxSite("CMS B", false, server.url("/b").toString(), key = "b"), null)
+            compose.onNodeWithTag("source-node-menu").performClick()
+            val beforeA = frames()
+            compose.onNodeWithTag("source-node-$aNode").performClick()
+            playFirstEpisode()
+            awaitSelectedFrame(beforeA)
+            compose.waitUntil(10000) { runCatching {
+                list.performScrollToNode(hasTestTag("detail-play-cta"))
+                compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+            }.isSuccess }
+            val aReadsBeforeRetry = details.count { it == "a:local-a" }
+            val bReadsBeforeFailure = details.count { it == "b:local-b" }
+            failChosenB.set(true)
+            list.performScrollToNode(hasTestTag("source-region"))
+            compose.onNodeWithTag("source-node-menu").performClick()
+            compose.onNodeWithTag("source-node-$bNode").performClick()
+            playFirstEpisode()
+            compose.waitUntil(10000) { details.count { it == "b:local-b" } > bReadsBeforeFailure }
+            compose.waitUntil(10000) { runCatching {
+                compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS A ▾")
+            }.isSuccess }
+            compose.onNodeWithText("暂无可用线路").assertDoesNotExist()
+            compose.onNodeWithText("请选择片源线路").assertDoesNotExist()
+            compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
+            failChosenB.set(false)
+            val mediaBeforeRetry = mediaCalls.get()
+            compose.onNodeWithTag("source-node-menu").performClick()
+            compose.onNodeWithTag("source-node-$bNode").assertDoesNotExist()
+            compose.onNodeWithTag("source-node-search-again").performClick()
+            compose.waitUntil(10000) { runCatching {
+                compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
+            }.isSuccess }
+            compose.waitUntil(10000) { runCatching {
+                list.performScrollToNode(hasText("线路 1"))
+                compose.onNodeWithText("线路 1").assertIsDisplayed()
+            }.isSuccess }
+            compose.onNodeWithTag("source-node-menu").assertTextEquals("CMS B ▾")
+            assertEquals("Retrying a layout must not resolve media",mediaBeforeRetry,mediaCalls.get())
+            val beforeRetryFrame = frames()
+            compose.onNodeWithText("线路 1").performClick()
+            playFirstEpisode()
+            awaitSelectedFrame(beforeRetryFrame)
+            try {
+                compose.waitUntil(10000) { runCatching {
+                    list.performScrollToNode(hasTestTag("detail-play-cta"))
+                    compose.onNodeWithTag("detail-play-cta").assertIsDisplayed()
+                }.isSuccess }
+            } catch (failure: Throwable) {
+                // Original loopback CMS fixture only. Keep the failing assertion
+                // and expose actual requests/state before diagnosing a rebind race.
+                throw AssertionError("DETAIL_RETRY_FAILURE requests=${details.joinToString()}\n" +
+                    DiscoveryProtocolTrace.summary() + "\n" + HerrinPlaybackDiagnosticJournal.export() + "\n" +
+                    compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 12), failure)
+            }
+            assertEquals("Targeted retry must preserve another provider's detail", aReadsBeforeRetry, details.count { it == "a:local-a" })
+            assertTrue("Explicit retry selection must decode after layout-only retry",mediaCalls.get() > mediaBeforeRetry)
+            list.performScrollToNode(hasTestTag("source-region"))
+            capture("p0-real-cms-ready-node-playback-return")
         }
     }
     @Test fun onlineSearchProtocolEmptyAndRemoteResult() {
@@ -771,10 +845,11 @@ http://example.org/live/channel.m3u8
         focus("card-tmdb-movie-9001"); key(KeyEvent.KEYCODE_DPAD_CENTER)
         compose.onNodeWithTag("film-detail-list").assertExists()
         compose.onNodeWithText("协议测试1").assertExists()
-        // Metadata-only TMDB results must expose unavailability instead of demo episodes.
-        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("tmdb-episodes-unavailable"))
-        compose.onNodeWithTag("tmdb-episodes-unavailable").assertExists()
-        compose.onNodeWithTag("tmdb-episodes-unavailable").assertIsDisplayed()
+        // Metadata-only TMDB results show the empty node control without demo media.
+        compose.onNodeWithTag("film-detail-list").performScrollToNode(hasTestTag("source-region"))
+        compose.onNodeWithTag("source-node-wait").assertIsDisplayed().assertTextEquals("节点 ▾")
+        compose.onNodeWithTag("episode-1").assertDoesNotExist()
+        compose.onNodeWithTag("detail-play-cta").assertDoesNotExist()
         compose.onNodeWithText("播放演示").assertDoesNotExist()
         key(KeyEvent.KEYCODE_BACK)
         compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("card-tmdb-movie-9001").assertIsFocused() }.isSuccess }
@@ -847,7 +922,7 @@ http://example.org/live/channel.m3u8
     @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
         advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
-        compose.onNodeWithTag("config-media-url").performTextReplacement("http://invalid.example/test.mp4")
+        compose.onNodeWithTag("config-media-url").editRemoteText("http://invalid.example/test.mp4")
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
         // Focus/keyboard handoff is asynchronous on the TV emulator.
@@ -862,7 +937,7 @@ http://example.org/live/channel.m3u8
         }
         compose.onNodeWithTag("config-media-url").let {
             compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
-            it.performTextReplacement("https://media.example.org/authorized.mp4")
+            it.editRemoteText("https://media.example.org/authorized.mp4")
         }
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
@@ -950,23 +1025,21 @@ http://example.org/live/channel.m3u8
             advancedSettings()
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
-            compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/multi.json").toString())
+            compose.onNodeWithTag("tvbox-warehouse-url").editRemoteText(server.url("/multi.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             // A TV IME can consume the first Center key after editing; execute the
             // button's accessible click directly for this keyboard handoff only.
             focus("tvbox-warehouse-load")
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            // HTTP is accepted by default; there is no extra enable switch.
-            settings.performScrollToNode(hasTestTag("tvbox-status"))
-            compose.waitUntil(8000) {
-                runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别 1 个仓库", substring = true) }.isSuccess
-            }
-            settings.performScrollToNode(hasTestTag("tvbox-entry-0"))
-            focus("tvbox-entry-0"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            // HTTP is accepted by default, and the first child is loaded automatically.
             settings.performScrollToNode(hasTestTag("tvbox-status"))
             compose.waitUntil(8000) {
                 runCatching { compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓", substring = true) }.isSuccess
             }
+            settings.performScrollToNode(hasTestTag("tvbox-entry-0"))
+            focus("tvbox-entry-0"); key(KeyEvent.KEYCODE_DPAD_CENTER)
+            settings.performScrollToNode(hasTestTag("tvbox-status"))
+            compose.onNodeWithTag("tvbox-status").assertTextContains("已识别单仓", substring = true)
             settings.performScrollToNode(hasTestTag("tvbox-site-preview"))
             compose.onNodeWithTag("tvbox-site-preview").assertTextContains("影视菜单演示", substring = true)
             settings.performScrollToNode(hasTestTag("tvbox-site-capabilities"))
@@ -990,6 +1063,8 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("tvbox-status").assertTextContains("Java Spider", substring = true)
             compose.onNodeWithTag("tvbox-spider-consent").assertDoesNotExist()
             assertEquals(2, server.requestCount)
+            assertEquals("/multi.json", server.takeRequest().path)
+            assertEquals("/single.json", server.takeRequest().path)
             capture("settings-tvbox-multiwarehouse")
         }
     }
@@ -1176,11 +1251,11 @@ http://example.org/live/channel.m3u8
             key(KeyEvent.KEYCODE_DPAD_LEFT)
             compose.onNodeWithTag("live-drawer-search-toggle").performClick()
             compose.onNodeWithTag("live-drawer-search-input").assertIsDisplayed()
-            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("SPORT")
+            compose.onNodeWithTag("live-drawer-search-input").editRemoteText("SPORT")
             compose.onNodeWithTag("live-drawer-channel-0").assertTextContains("体育台")
-            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("无结果")
+            compose.onNodeWithTag("live-drawer-search-input").editRemoteText("无结果")
             compose.onNodeWithTag("live-drawer-empty").assertExists()
-            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("sport")
+            compose.onNodeWithTag("live-drawer-search-input").editRemoteText("sport")
             compose.onNodeWithTag("live-drawer-channel-0").performClick()
             compose.onNodeWithTag("live-playing-name").assertTextEquals("体育台")
             assertTrue("Live search must not request another playlist", server.requestCount == 1)

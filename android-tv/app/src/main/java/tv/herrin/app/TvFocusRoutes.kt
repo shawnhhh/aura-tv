@@ -7,7 +7,6 @@ internal object TvFocusRoutes {
         category == "Top 250" -> "nav-Top 250"
         category == "我的" -> "my-manage-personal-sources"
         !heroActionsVisible -> "nav-$category"
-        index == 0 -> "play"
         else -> "details"
     }
 

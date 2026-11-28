@@ -1,0 +1,30 @@
+{
+  "source_sha": "11c3f731eac785d8434b5fb264d3b10db2e31161",
+  "run": 44919655632,
+  "job": 136892822151,
+  "job_result": "success",
+  "samba_protocol": {
+    "tests": 6,
+    "result": "PASS"
+  },
+  "jvm": {
+    "tests": 806,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": "PASS",
+  "debug": "PASS",
+  "diagnostic_apk": {
+    "source_sha": "11c3f731eac785d8434b5fb264d3b10db2e31161",
+    "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44919655632/artifacts/14713328766",
+    "apk_bytes": 27119346,
+    "apk_sha256_ci": "d5afa7669d9d3a6fbefc5eac940e8240eae4069ae5efbbf6736b9c3e98fbdf54",
+    "independently_downloaded": false,
+    "diagnostic_only": true
+  },
+  "reports_artifact": "https://github.com/shawnhhh/aura-tv/actions/runs/44919655632/artifacts/14713553065",
+  "tv": "PENDING",
+  "api31": "PENDING",
+  "physical_acceptance": false
+}

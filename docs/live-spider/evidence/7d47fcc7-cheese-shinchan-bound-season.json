@@ -1,0 +1,149 @@
+{
+  "node": "奶酪",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "蜡笔小新",
+  "authorized_year": null,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 5526
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 9889
+    },
+    {
+      "stage": "search",
+      "result": "PASS",
+      "elapsed_ms": 1517
+    },
+    {
+      "stage": "tv_candidate_details_0",
+      "result": "PASS",
+      "elapsed_ms": 1301
+    },
+    {
+      "stage": "first_frame_0",
+      "result": "FAILED",
+      "failure_code": "MEDIA3_ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+      "elapsed_ms": 10215
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": true,
+  "seek_verified": false,
+  "details_ui_verified": true,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "奶酪",
+  "spider_api": "csp_T4Guard",
+  "node_count": 49,
+  "config_saved": true,
+  "declared_jar_md5": "6d10a60af6c0976836933c5f3cf9e8a7",
+  "tv_candidates_inspected": [
+    {
+      "title": "蜡笔小新第九季",
+      "episode_count": 93,
+      "tv_title_verified": true,
+      "tv_category_verified": true
+    }
+  ],
+  "selected_source_title": "蜡笔小新第九季",
+  "tv_animation_title_verified": true,
+  "selected_source_season": 9,
+  "tv_animation_category_verified": true,
+  "film_identity_verified": true,
+  "episode_count": 93,
+  "alternate_line_available": false,
+  "episode_selection_attempt": 1,
+  "episode_driver_action": "ACTIVATE_EPISODE_BUTTON",
+  "episode_ui_kind": "SOURCE_EPISODE_BUTTON",
+  "episode_selections": [
+    {
+      "source_ordinal": 1,
+      "ui_label": "第 1 集 · 第001集"
+    }
+  ],
+  "failure_stage": "first_frame_0",
+  "failure_code": "MEDIA3_ERROR_CODE_IO_NETWORK_CONNECTION_FAILED",
+  "driver_failure_structure": "CAUSE tv.herrin.app.FanTaiYingRealMainUiTest$Stop\ntv.herrin.app.FanTaiYingRealMainUiTest.playerRead$lambda$19:162\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$rxJfOH-QMzNAFDa3_k6z4cWi3rs:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda55.invoke:0\nandroidx.compose.ui.test.AndroidSynchronization_androidKt.runOnUiThread$lambda$0:37\nandroidx.compose.ui.test.AndroidSynchronization_androidKt.$r8$lambda$opyMdTZ52jorqLaIG4SKpPr_Zno:0\nandroidx.compose.ui.test.AndroidSynchronization_androidKt$$ExternalSyntheticLambda0.call:0\njava.util.concurrent.FutureTask.run:266\njava.util.concurrent.Executors$RunnableAdapter.call:462\njava.util.concurrent.FutureTask.run:266\nandroid.app.Instrumentation$SyncRunnable.run:2223\nandroid.os.Handler.handleCallback:938\nandroid.os.Handler.dispatchMessage:99",
+  "worker_exit": "原生组件崩溃（JNI/so）",
+  "main_activity_lifecycle": "RESUMED",
+  "proxy_callback_shapes": [
+    {
+      "outcome": "HOST_PROXY_RESPONSE",
+      "status": 204,
+      "range": false
+    },
+    {
+      "outcome": "HOST_PROXY_RESPONSE",
+      "status": 204,
+      "range": false
+    },
+    {
+      "outcome": "CALLBACK_ENTERED"
+    },
+    {
+      "outcome": "CALLBACK_ARRAY",
+      "length": 3,
+      "mime_kind": "HLS",
+      "types": [
+        "java.lang.Integer",
+        "java.lang.String",
+        "java.io.ByteArrayInputStream"
+      ],
+      "status": 200,
+      "elapsed_ms": 4388
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_URL_REFERENCE"
+    },
+    {
+      "outcome": "HOST_PROXY_FAILURE",
+      "code": "HLS_REFERENCE_TARGET_HTTPS"
+    }
+  ],
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 520,
+    "init_extension_kind": "OTHER",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": false,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 217805
+      }
+    ],
+    "response_chars": 217805,
+    "shape": "JSON_LIST"
+  },
+  "sdk_network_scope": "PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+87902ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+89639ms SPIDER INITIALIZE_STARTED\nT+98002ms SPIDER INITIALIZE_RETURNED MS=8362\nT+101808ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+102172ms SPIDER SEARCH_STARTED\nT+103043ms SPIDER SEARCH_RETURNED MS=871\nT+105024ms SPIDER DETAILS_EPISODES_STARTED\nT+105330ms SPIDER DETAILS_EPISODES_RETURNED MS=305\nT+105333ms SPIDER DETAILS_RETURNED COUNT=93\nT+105333ms SPIDER DETAIL_LINES_RETURNED COUNT=1\nT+106500ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SOURCE SELECTION_STARTED\nT+106990ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESOLVE_STARTED\nT+107367ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESOLVE_RETURNED MS=377\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER PARSER_DIRECT\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESPONSE_URL_STRING\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESPONSE_PARSE VALUE=0\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESPONSE_JX VALUE=0\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER HEADER_FALLBACK\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER PARSER_DIRECT\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESPONSE_URL_STRING\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESPONSE_PARSE VALUE=0\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER RESPONSE_JX VALUE=0\nT+107368ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER HEADER_FALLBACK\nT+107370ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER PLAYER_CONTENT_RETURNED\nT+107371ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 PROXY HEALTH_STARTED\nT+107380ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 PROXY HEALTH_READY\nT+107393ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SOURCE SELECTED_PROXY_HEALTH_READY\nT+107393ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SOURCE SELECTED_PROXY_MEDIA_DEFERRED_TO_PLAYER\nT+107394ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 SPIDER MEDIA_ROUTE_READY\nT+107707ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 MEDIA3 PLAYBACK_INITIALIZING ATTEMPT=1\nT+107721ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 MEDIA3 PLAYBACK_STATE STATE=2\nT+115658ms MEDIA3 PLAYBACK_ERROR CODE=2001\nT+115659ms SID=f2a8d344-92b3-4476-bdf8-e60ca0662ed7 MEDIA3 PLAYBACK_STATE STATE=1",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 32952
+}

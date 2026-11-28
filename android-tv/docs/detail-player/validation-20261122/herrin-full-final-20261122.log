@@ -1,0 +1,113 @@
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :kernel-contract:compileJava UP-TO-DATE
+> Task :kernel-contract:processResources NO-SOURCE
+> Task :kernel-contract:classes UP-TO-DATE
+> Task :kernel-contract:compileTestJava UP-TO-DATE
+> Task :kernel-contract:processTestResources NO-SOURCE
+> Task :kernel-contract:testClasses UP-TO-DATE
+
+> Task :kernel-contract:checkCutoverContract
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace
+PASS: exclusivity, scheduler rejection, lifecycle races, terminal failures and explicit grants; no playback tested
+
+> Task :kernel-contract:checkDispatchContract
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace
+Kernel dispatch contract PASS (not media playback)
+
+> Task :kernel-contract:jar UP-TO-DATE
+> Task :kernel-contract:test UP-TO-DATE
+> Task :kernel-contract:check
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/CmsOneTapPlaybackEffect.kt:55:31 Condition is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/DeviceMediaCapabilitiesAndroid.kt:21:59 'val supportedHdrTypes: IntArray!' is deprecated. Deprecated in Java.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:5201:41 Check for instance is always 'true'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/MainActivity.kt:5202:41 Check for instance is always 'false'.
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/PersonalLibrary.kt:213:77 This declaration needs opt-in. Its usage should be marked with '@kotlinx.coroutines.ExperimentalCoroutinesApi' or '@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)'
+w: file:///workspace/aura-tv/android-tv/app/src/main/java/tv/herrin/app/TvBoxSpiderBridge.kt:609:91 Unchecked cast of 'kotlin.Any!' to 'kotlin.Array<kotlin.Any?>'.
+
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+
+> Task :app:compileDebugUnitTestKotlin
+w: file:///workspace/aura-tv/android-tv/app/src/test/java/tv/herrin/app/P0SourceHealthTest.kt:25:9 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'java.io.File?'.
+
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :app:processDebugJavaRes
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+
+> Task :app:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Duser.home=/workspace
+
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:generateDebugLintReportModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:lintAnalyzeDebug
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:lintAnalyzeDebugUnitTest
+
+> Task :app:lintReportDebug
+Wrote HTML report to file:///workspace/aura-tv/android-tv/app/build/reports/lint-results-debug.html
+
+> Task :app:lintDebug
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:l8DexDesugarLibDebug UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:mergeDebugJavaResource
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug
+> Task :app:checkDebugAndroidTestAarMetadata UP-TO-DATE
+> Task :app:mapDebugAndroidTestSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugAndroidTestResources UP-TO-DATE
+> Task :app:mergeDebugAndroidTestResources UP-TO-DATE
+> Task :app:processDebugAndroidTestManifest UP-TO-DATE
+> Task :app:processDebugAndroidTestResources UP-TO-DATE
+
+> Task :app:compileDebugAndroidTestKotlin
+w: file:///workspace/aura-tv/android-tv/app/src/androidTest/java/tv/herrin/app/DeviceMediaCapabilitiesAndroidTest.kt:22:81 'val supportedHdrTypes: IntArray!' is deprecated. Deprecated in Java.
+w: file:///workspace/aura-tv/android-tv/app/src/androidTest/java/tv/herrin/app/M467FongMiTrackRestoreTest.kt:26:51 'static field DEFAULT_WITHOUT_CONTEXT: TrackSelectionParameters' is deprecated. Deprecated in Java.
+
+BUILD SUCCESSFUL in 6m 55s
+67 actionable tasks: 23 executed, 44 up-to-date

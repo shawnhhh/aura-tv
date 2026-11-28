@@ -1,0 +1,135 @@
+{
+  "source_sha": "18cbc73aed4490755e54f1cdea98405cb413008e",
+  "run": 44966779706,
+  "diagnostic": {
+    "source_sha": "18cbc73aed4490755e54f1cdea98405cb413008e",
+    "mode": "recent-diagnostic",
+    "samples": 3,
+    "tests_per_sample": 4,
+    "full_suite_run": false,
+    "physical_TCL": false,
+    "note": "Diagnostic only. Does not replace the recorded full-suite failure."
+  },
+  "api31": {
+    "job": 137039073991,
+    "result": "SUCCESS",
+    "stages": [
+      {
+        "stage": "cold",
+        "interactive_ui": true,
+        "details_only_hero": true,
+        "actual_window_and_focus": true,
+        "metrics": {
+          "process_to_activity_ms": 1020,
+          "activity_to_first_draw_ms": 560,
+          "first_draw_to_wordmark_ms": 373,
+          "wordmark_complete_ms": 5287,
+          "activity_to_home_ms": 8035,
+          "home_init_ms": 1031,
+          "artwork_start_ms": 2353,
+          "network_start_ms": 2777,
+          "system_brand_exit_ms": -1
+        },
+        "physical_TCL": false,
+        "measurement": "app_uptime_cpu_events_not_panel_presentation",
+        "performance_source": true
+      },
+      {
+        "stage": "hot",
+        "interactive_ui": true,
+        "details_only_hero": true,
+        "actual_window_and_focus": true,
+        "metrics": {
+          "process_to_activity_ms": 1020,
+          "activity_to_first_draw_ms": 560,
+          "first_draw_to_wordmark_ms": 373,
+          "wordmark_complete_ms": 5287,
+          "activity_to_home_ms": 8035,
+          "home_init_ms": 1031,
+          "artwork_start_ms": 2353,
+          "network_start_ms": 2777,
+          "system_brand_exit_ms": -1
+        },
+        "physical_TCL": false,
+        "measurement": "app_uptime_cpu_events_not_panel_presentation",
+        "performance_source": false
+      },
+      {
+        "stage": "visual",
+        "interactive_ui": true,
+        "details_only_hero": true,
+        "actual_window_and_focus": true,
+        "metrics": {
+          "process_to_activity_ms": 1006,
+          "activity_to_first_draw_ms": 531,
+          "first_draw_to_wordmark_ms": 370,
+          "wordmark_complete_ms": 4387,
+          "activity_to_home_ms": 7012,
+          "home_init_ms": 1306,
+          "artwork_start_ms": 2051,
+          "network_start_ms": 2211,
+          "system_brand_exit_ms": -1
+        },
+        "physical_TCL": false,
+        "measurement": "app_uptime_cpu_events_not_panel_presentation",
+        "performance_source": false
+      }
+    ],
+    "visual": {
+      "sampled_frames": 51,
+      "samples_per_second": 4,
+      "recording_limit_seconds": 12,
+      "interactive_home_after_recording": true,
+      "performance_source": false,
+      "physical_TCL": false
+    },
+    "matrix": [
+      {
+        "scenario": "force-stop",
+        "metrics": {
+          "process_to_activity_ms": 625,
+          "activity_to_first_draw_ms": 246,
+          "first_draw_to_wordmark_ms": 204,
+          "wordmark_complete_ms": 4224,
+          "activity_to_home_ms": 6073,
+          "home_init_ms": 489,
+          "artwork_start_ms": 1258,
+          "network_start_ms": 1376,
+          "system_brand_exit_ms": -1
+        },
+        "physical_TCL": false,
+        "configured_provider_contacted": false
+      },
+      {
+        "scenario": "configured-offline",
+        "metrics": {
+          "process_to_activity_ms": 569,
+          "activity_to_first_draw_ms": 212,
+          "first_draw_to_wordmark_ms": 216,
+          "wordmark_complete_ms": 3437,
+          "activity_to_home_ms": 5032,
+          "home_init_ms": 642,
+          "artwork_start_ms": 1138,
+          "network_start_ms": 1117,
+          "system_brand_exit_ms": -1
+        },
+        "physical_TCL": false,
+        "configured_provider_contacted": false
+      }
+    ]
+  },
+  "diagnostic_apk": {
+    "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44966779706/artifacts/14731903697",
+    "source_sha": "18cbc73aed4490755e54f1cdea98405cb413008e",
+    "sha256_ci": "d536ce3d41b8951b6d0b92293cf81d81073c563a5a1cd9232267322cb8f0af79",
+    "independently_downloaded": false,
+    "diagnostic_only": true
+  },
+  "latest_full_tv": {
+    "source_sha": "7eff2495c75aa76daf4b59a3a520c146090f95d6",
+    "result": "FAILURE",
+    "passed": 291,
+    "total": 292
+  },
+  "formal_acceptance": false
+}

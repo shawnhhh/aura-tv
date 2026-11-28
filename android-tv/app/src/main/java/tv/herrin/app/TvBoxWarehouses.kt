@@ -45,7 +45,7 @@ internal object TvBoxSpiderPolicy {
     fun mayRun(userApplied: Boolean, source: String, jarSpec: String,
                trustedSource: String, trustedJarSpec: String): Boolean =
         userApplied || (source.isNotBlank() && jarSpec.isNotBlank() &&
-            source == trustedSource && jarSpec == trustedJarSpec)
+            TvBoxUrl.same(source, trustedSource) && jarSpec == trustedJarSpec)
 }
 
 /**
@@ -72,6 +72,12 @@ internal object TvBoxAutoSites {
                 identity(it, config.spiderJar) == preferredId
         })
     }
+
+    /** One declared/default node only, not a broad catalog or plugin probe. */
+    fun initialSelection(config: TvBoxConfig.Single, preferredId: String): TvBoxSite? =
+        resumeOnly(config, preferredId).firstOrNull() ?: config.sites.firstOrNull {
+            it.apiUrl != null || it.spiderApi != null || it.scriptApi != null
+        }
 
     fun candidates(config: TvBoxConfig.Single, preferredId: String): List<TvBoxSite> {
         val direct = config.sites.filter { it.apiUrl != null }.take(8)
@@ -123,6 +129,31 @@ internal sealed interface TvBoxConfig {
 }
 
 internal object TvBoxUrl {
+    fun same(left: String, right: String): Boolean =
+        left == right || normalize(left, true)?.let { it == normalize(right, true) } == true
+
+    /** Display fallback only for legacy data that did not retain the original input. */
+    fun display(value: String): String {
+        val canonical = normalize(value, true) ?: return value
+        val host = URI(canonical).host ?: return value
+        val unicode = IDN.toUnicode(host)
+        if (unicode == host) return value
+        return canonical.replaceFirst("://$host", "://$unicode").takeIf {
+            normalize(it, true) == canonical
+        } ?: value
+    }
+
+    fun resolve(raw: String, origin: String): String? = normalize(raw, true) ?: runCatching {
+        val reference = URI(raw.trim())
+        if (reference.isAbsolute || reference.rawUserInfo != null || reference.rawFragment != null || raw.isBlank()) null
+        else normalize(URI(origin).resolve(reference).toString(), true)
+    }.getOrNull()
+
+    fun resolveJar(raw: String, origin: String): String? {
+        if(raw.isBlank()) return null
+        val target = raw.substringBefore(';')
+        return resolve(target, origin)?.let { it + raw.removePrefix(target) }
+    }
     /** Normalize internationalized domain names (e.g. 饭太硬.net) for HTTP(S). */
     fun normalize(raw: String, allowHttp: Boolean = false): String? {
         return try {
@@ -172,7 +203,7 @@ internal object TvBoxConfigParser {
             for (i in 0 until minOf(urls.length(), MAX_ENTRIES)) {
                 val entry = urls.optJSONObject(i)
                 if (entry == null) { ignored++; continue }
-                val url = TvBoxUrl.normalize(entry.optString("url"), allowHttp = true)
+                val url = TvBoxUrl.resolve(entry.optString("url"), origin)
                 if (url == null || !seen.add(url)) { ignored++; continue }
                 val name = entry.optString("name").trim().take(48).ifBlank { "仓库 ${entries.size + 1}" }
                 entries.add(TvBoxWarehouse(name, url))
@@ -188,7 +219,7 @@ internal object TvBoxConfigParser {
                     val title = site.optString("name").trim().take(64)
                     if (title.isBlank()) null else {
                         val api = site.optString("api").trim()
-                        val direct = TvBoxUrl.normalize(api, allowHttp = true)
+                        val direct = if (api.startsWith("csp_") || api.startsWith("node:")) null else TvBoxUrl.resolve(api, origin)
                         // TVBox drpy/JS rules are script definitions, not JSON CMS endpoints.
                         // Fetching them with ac=detail mislabels a script as a playable catalog.
                         val script = if (api.startsWith("node:") &&
@@ -199,12 +230,14 @@ internal object TvBoxConfigParser {
                             } }.getOrDefault(false)
                         }
                         val cms = direct?.takeUnless { script != null }
-                        val extension = site.opt("ext")?.let { if (it is String) it else it.toString() }.orEmpty()
+                        val rawExtension = site.opt("ext")?.let { if (it is String) it else it.toString() }.orEmpty()
+                        val extension = if(rawExtension.startsWith("./") || rawExtension.startsWith("../") || rawExtension.startsWith('/'))
+                            TvBoxUrl.resolve(rawExtension, origin) ?: rawExtension else rawExtension
                         TvBoxSite(title, api.isNotBlank() && cms == null, cms,
                             key = site.optString("key").take(90).ifBlank { "site_$i" },
                             spiderApi = api.takeIf { it.startsWith("csp_") && it.matches(Regex("csp_[A-Za-z0-9_]{1,64}")) },
                             extension = extension.take(64_000),
-                            jar = site.optString("jar").takeIf { it.isNotBlank() },
+                            jar = TvBoxUrl.resolveJar(site.optString("jar"), origin),
                             scriptApi = script,
                             headers = TvBoxHeaderCodec.decode(site.optJSONObject("header")),
                             click = site.optString("click").take(4_096), apiType = site.optInt("type", 1),
@@ -217,7 +250,7 @@ internal object TvBoxConfigParser {
                 liveJson.optJSONObject(i)?.let { live ->
                     val title = live.optString("name").trim().take(64)
                     if (title.isBlank()) null else {
-                        val address = live.optString("url")
+                        val address = TvBoxUrl.resolve(live.optString("url"), origin).orEmpty()
                         val playlist = TvBoxUrl.normalize(address)?.takeIf {
                             URI(it).path.lowercase().endsWith(".m3u") || URI(it).path.lowercase().endsWith(".m3u8")
                         }
@@ -227,7 +260,7 @@ internal object TvBoxConfigParser {
                     }
                 }
             }
-            val spider = root.optString("spider").takeIf { it.isNotBlank() }
+            val spider = TvBoxUrl.resolveJar(root.optString("spider"), origin)
             val flagsJson = root.optJSONArray("flags") ?: JSONArray()
             val flags = (0 until minOf(flagsJson.length(), 128)).mapNotNull { index ->
                 flagsJson.optString(index).trim().take(80).takeIf { it.isNotBlank() }
@@ -238,7 +271,7 @@ internal object TvBoxConfigParser {
                 val type = item.optInt("type", 0)
                 if (type !in 0..4) return@mapNotNull null
                 // type 4 is an upstream supervisor with no individual URL.
-                val address = TvBoxUrl.normalize(item.optString("url"), allowHttp = true)
+                val address = TvBoxUrl.resolve(item.optString("url"), origin)
                 if (type in 0..1 && address == null) return@mapNotNull null
                 if (type in 2..3 && item.optString("url").isBlank()) return@mapNotNull null
                 val ext = item.optJSONObject("ext")
@@ -280,7 +313,8 @@ internal object TvBoxHeaderCodec {
     }
 }
 
-internal class TvBoxConfigRepository(private val context: Context? = null) {
+internal class TvBoxConfigRepository(private val context: Context? = null,
+    private val onImportHttpStatus: (Int) -> Unit = {}) {
     /** Search never spends the fast budget serially refreshing every warehouse. */
     suspend fun forSearch(input:String,allowHttp:Boolean,allowNetwork:Boolean,persistFetched:Boolean=true):TvBoxConfig?=withContext(Dispatchers.IO){
         val address=TvBoxUrl.normalize(input,allowHttp)?:return@withContext null
@@ -315,14 +349,16 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
     private fun cached(url: String): TvBoxConfig? = runCatching {
         val file = cacheFile(url) ?: return@runCatching null
         if (!file.isFile || file.length() !in 1..1_048_576) return@runCatching null
-        when (val parsed = TvBoxConfigParser.parse(file.readText(Charsets.UTF_8), url)) {
+        val origin = File(file.parentFile, file.name + ".origin").takeIf { it.isFile && it.length() <= 2048 }
+            ?.readText(Charsets.UTF_8)?.let { TvBoxUrl.normalize(it, true) } ?: url
+        when (val parsed = TvBoxConfigParser.parse(file.readText(Charsets.UTF_8), origin)) {
             is TvBoxConfig.Single -> parsed.copy(fromCache = true)
             is TvBoxConfig.Warehouses -> parsed.copy(fromCache = true)
             else -> null
         }
     }.getOrNull()
 
-    private fun save(url: String, text: String) {
+    private fun save(url: String, text: String, origin: String = url) {
         val file = cacheFile(url) ?: return
         file.parentFile?.mkdirs()
         val temp = File(file.parentFile, "${file.name}.tmp")
@@ -331,6 +367,7 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
             file.writeText(text, Charsets.UTF_8)
             temp.delete()
         }
+        File(file.parentFile, file.name + ".origin").writeText(origin, Charsets.UTF_8)
     }
 
     /** Explicit import from a user-controlled backup, useful when the original URL has expired. */
@@ -349,32 +386,42 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
     }
 
     /** Explicit TV/paired-phone warehouse entry; this grants metadata transport only. */
-    suspend fun loadUserWarehouse(input: String, preferCached: Boolean = false): TvBoxConfig =
-        load(input, allowHttp = true, preferCached = preferCached)
+    suspend fun loadUserWarehouse(input: String, preferCached: Boolean = false,
+                                  allowCachedFallback: Boolean = true): TvBoxConfig =
+        load(input, allowHttp = true, preferCached = preferCached, allowCachedFallback = allowCachedFallback)
 
     private val importClient by lazy { okhttp3.OkHttpClient.Builder()
-        .followRedirects(false).followSslRedirects(false)
+        .followRedirects(true).followSslRedirects(true)
         .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(16, java.util.concurrent.TimeUnit.SECONDS).build() }
 
     suspend fun load(input: String, allowHttp: Boolean = false,
-                     preferCached: Boolean = false): TvBoxConfig = withContext(Dispatchers.IO) {
+                     preferCached: Boolean = false, allowCachedFallback: Boolean = true): TvBoxConfig = withContext(Dispatchers.IO) {
         val valid = TvBoxUrl.normalize(input, allowHttp = true)
             ?: return@withContext TvBoxConfig.Error("WAREHOUSE_URL_INVALID：影视仓 URL 格式错误；需要 HTTP(S) 地址，不能含账号或片段")
         if (!allowHttp && valid.startsWith("http://")) return@withContext TvBoxConfig.Error(
             "WAREHOUSE_HTTP_NOT_ALLOWED：HTTP 访问未获用户许可")
         if (preferCached) cached(valid)?.let { return@withContext it }
+        fun fallback() = if (allowCachedFallback) cached(valid) else null
         try {
-            readSourceResponse(importClient, okhttp3.Request.Builder().url(valid)
+            val started = System.nanoTime()
+            readSourceResponse(importClient.newBuilder().followSslRedirects(allowHttp).build(), okhttp3.Request.Builder().url(valid)
                 .header("Accept", "application/json, text/plain").header("Accept-Encoding", "identity").build()) { response ->
-                if (response.code in 300..399) return@readSourceResponse cached(valid)
-                    ?: TvBoxConfig.Error("WAREHOUSE_REDIRECT：配置发生跳转；请检查最终地址后重新输入")
-                if (!response.isSuccessful) return@readSourceResponse cached(valid)
-                    ?: TvBoxConfig.Error("WAREHOUSE_HTTP_ERROR：配置读取 HTTP ${response.code}")
+                HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_RESPONSE",
+                    "HTTP=${response.code} MS=${((System.nanoTime()-started)/1_000_000).coerceAtMost(99999)}")
+                runCatching { onImportHttpStatus(response.code) }
+                if (response.code in 300..399) {
+                    return@readSourceResponse fallback()
+                        ?: TvBoxConfig.Error("WAREHOUSE_REDIRECT：配置发生跳转；请检查最终地址后重新输入")
+                }
+                if (!response.isSuccessful) {
+                    return@readSourceResponse fallback()
+                        ?: TvBoxConfig.Error("WAREHOUSE_HTTP_ERROR：配置读取 HTTP ${response.code}")
+                }
                 val contentType = response.header("Content-Type").orEmpty().lowercase()
                 if (contentType.startsWith("video/") || contentType.startsWith("text/html"))
-                    return@readSourceResponse cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：地址返回网页或视频")
+                    return@readSourceResponse fallback() ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：地址返回网页或视频")
                 val body = response.body ?: return@readSourceResponse TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：配置为空")
                 if (body.contentLength() > 1_048_576) return@readSourceResponse TvBoxConfig.Error("WAREHOUSE_SIZE_LIMIT：配置超过 1 MB")
                 val bytes = ByteArrayOutputStream()
@@ -388,22 +435,27 @@ internal class TvBoxConfigRepository(private val context: Context? = null) {
                     }
                 }
                 val wrapped = TvBoxWrappedConfig.extract(bytes.toByteArray())
-                if (wrapped == null && contentType.startsWith("image/")) return@readSourceResponse cached(valid)
+                if (wrapped == null && contentType.startsWith("image/")) return@readSourceResponse fallback()
                     ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：图片中没有有效的影视仓配置")
                 val json = TvBoxWrappedConfig.stripComments(wrapped ?: bytes.toString(Charsets.UTF_8.name()))
-                when (val parsed = TvBoxConfigParser.parse(json, valid)) {
+                val finalOrigin = response.request.url.toString()
+                when (val parsed = TvBoxConfigParser.parse(json, finalOrigin)) {
                     is TvBoxConfig.Single, is TvBoxConfig.Warehouses -> {
-                        runCatching { save(valid, json) }
+                        runCatching { save(valid, json, finalOrigin) }
+                        HerrinPlaybackDiagnosticJournal.record("CONFIG", "WAREHOUSE_PARSED",
+                            "MS=${((System.nanoTime()-started)/1_000_000).coerceAtMost(99999)}")
                         if (parsed is TvBoxConfig.Single && wrapped != null) parsed.copy(wrappedInImage = true) else parsed
                     }
-                    is TvBoxConfig.Error -> cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_FORMAT_INVALID：${parsed.reason}")
+                    is TvBoxConfig.Error -> fallback() ?: TvBoxConfig.Error(
+                        (if (runCatching { JSONObject(json).has("urls") }.getOrDefault(false))
+                            "WAREHOUSE_PARSE_FAILED" else "WAREHOUSE_FORMAT_INVALID") + "：${parsed.reason}")
                     else -> parsed
                 }
             }
         } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel }
-        catch (_: javax.net.ssl.SSLException) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_TLS_ERROR：TLS 验证或握手失败") }
-        catch (_: java.net.UnknownHostException) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_DNS_ERROR：域名解析失败") }
-        catch (_: java.io.InterruptedIOException) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_TIMEOUT：配置读取超时，可重试") }
-        catch (_: Exception) { cached(valid) ?: TvBoxConfig.Error("WAREHOUSE_NETWORK_ERROR：配置连接或读取失败") }
+        catch (_: javax.net.ssl.SSLException) { fallback() ?: TvBoxConfig.Error("WAREHOUSE_TLS_ERROR：TLS 验证或握手失败") }
+        catch (_: java.net.UnknownHostException) { fallback() ?: TvBoxConfig.Error("WAREHOUSE_DNS_ERROR：域名解析失败") }
+        catch (_: java.io.InterruptedIOException) { fallback() ?: TvBoxConfig.Error("WAREHOUSE_TIMEOUT：配置读取超时，可重试") }
+        catch (_: Exception) { fallback() ?: TvBoxConfig.Error("WAREHOUSE_NETWORK_ERROR：配置连接或读取失败") }
     }
 }

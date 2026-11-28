@@ -72,13 +72,13 @@ internal object SeasonEpisodes {
     private val episodeOnlyEnglish = Regex("^(?:E|EP|Episode)\\s*(\\d{1,3})$", RegexOption.IGNORE_CASE)
     private val episodeOnlyNumber = Regex("^(\\d{1,3})\\s*(?:集|话)?$")
 
-    internal fun explicitEpisode(text: String): Pair<Int, Int>? =
+    internal fun explicitEpisode(text: String, allowSpecials: Boolean = false): Pair<Int, Int>? =
         sequenceOf(chinesePair, latinPair, englishPair).mapNotNull { pattern ->
             pattern.matchEntire(text.trim())?.let {
                 it.groupValues[1].toIntOrNull() to it.groupValues[2].toIntOrNull()
             }
         }.firstOrNull()?.let { (season, number) ->
-            if (season != null && number != null && season in 1..99 && number in 1..999)
+            if (season != null && number != null && season in (if (allowSpecials) 0 else 1)..99 && number in 1..999)
                 season to number else null
         }
 
@@ -93,11 +93,11 @@ internal object SeasonEpisodes {
         }.firstOrNull()?.takeIf { it in 1..999 }
 
     /** A single reliable season is *not* a season selector; retain the existing UI. */
-    fun fromFilm(film: Film): SeasonLayout? {
+    fun fromFilm(film: Film, allowSingleSeason: Boolean = false): SeasonLayout? {
         if (film.playbackEpisodes.isEmpty()) return null
         data class Indexed(val season: Int, val number: Int, val source: PlaybackEpisode, val line: PlaybackLine)
         val indexed = film.playbackEpisodes.flatMap { episode ->
-            val episodePair = explicitEpisode(episode.title)
+            val episodePair = explicitEpisode(episode.title, allowSpecials = film.id.startsWith("personal-"))
             episode.lines.mapNotNull { line ->
                 val lineSeason = explicitSeason(line.title)
                 // Explicitly contradictory hints must not route the wrong season's stream.
@@ -109,7 +109,8 @@ internal object SeasonEpisodes {
                 Indexed(season, number, episode, line)
             }
         }
-        if (indexed.map { it.season }.distinct().size < 2) return null
+        val minimumSeasons = if (allowSingleSeason) 1 else 2
+        if (indexed.map { it.season }.distinct().size < minimumSeasons) return null
         val entries = indexed.groupBy { it.season to it.number }.mapNotNull { (coordinate, rows) ->
             // A duplicate season/episode pointing to two source indexes is ambiguous.
             if (rows.map { it.source.number }.distinct().size != 1) return null
@@ -120,6 +121,6 @@ internal object SeasonEpisodes {
         val sections = entries.groupBy { it.season }.toSortedMap().map { (number, episodes) ->
             SeasonSection(number, episodes.sortedBy { it.number })
         }
-        return SeasonLayout(sections).takeIf { it.sections.size >= 2 }
+        return SeasonLayout(sections).takeIf { it.sections.size >= minimumSeasons }
     }
 }

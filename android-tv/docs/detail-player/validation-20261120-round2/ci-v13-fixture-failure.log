@@ -1,0 +1,16 @@
+Run: https://github.com/shawnhhh/aura-tv/actions/runs/44689359211
+2026-11-20T06:53:28.1189290Z PASS: Android TV emulator launch, home, remote category switch, Back, no fatal crash
+2026-11-20T06:54:22.5247064Z INSTRUMENTATION_STATUS: stack=java.util.NoSuchElementException: Key 3600 is missing in the map.
+2026-11-20T06:54:22.5249606Z 	at tv.herrin.app.HerrinSplashTest.centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath(HerrinSplashTest.kt:174)
+2026-11-20T06:54:22.5251489Z java.util.NoSuchElementException: Key 3600 is missing in the map.
+2026-11-20T06:54:22.5253595Z 	at tv.herrin.app.HerrinSplashTest.centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath(HerrinSplashTest.kt:174)
+2026-11-20T06:54:22.5517355Z java.util.NoSuchElementException: Key 3600 is missing in the map.
+2026-11-20T06:54:22.5520070Z 	at tv.herrin.app.HerrinSplashTest.centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath(HerrinSplashTest.kt:174)
+2026-11-20T06:54:22.5521605Z Tests run: 19,  Failures: 1
+2026-11-20T06:54:23.3125582Z INSTRUMENTATION_STATUS: stack=java.util.NoSuchElementException: Key 3600 is missing in the map.
+2026-11-20T06:54:23.3128714Z 	at tv.herrin.app.HerrinSplashTest.centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath(HerrinSplashTest.kt:174)
+2026-11-20T06:54:23.3131443Z java.util.NoSuchElementException: Key 3600 is missing in the map.
+2026-11-20T06:54:23.3134161Z 	at tv.herrin.app.HerrinSplashTest.centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath(HerrinSplashTest.kt:174)
+2026-11-20T06:54:23.3138718Z java.util.NoSuchElementException: Key 3600 is missing in the map.
+2026-11-20T06:54:23.3141279Z 	at tv.herrin.app.HerrinSplashTest.centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath(HerrinSplashTest.kt:174)
+2026-11-20T06:54:23.3147747Z Tests run: 19,  Failures: 1

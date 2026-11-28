@@ -21,16 +21,12 @@ import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 import org.xml.sax.InputSource
 
-/**
- * Explicitly configured user-owned NAS or cloud WebDAV endpoint. The API itself
- * cannot discover arbitrary Aliyun/Quark/115 shares; these require the user's
- * authorized WebDAV-compatible gateway or their own supported connector.
- */
+/** Explicitly configured user-owned HTTP(S) WebDAV. No platform connectors or discovery. */
 internal data class HerrinWebDavAccount(
     val name: String, val rootUrl: String,
     val username: String = "", val password: String = "",
     val category: HerrinSourceType = HerrinSourceType.NAS,
-    val allowInsecureHttp: Boolean = false
+    val allowInsecureHttp: Boolean = true
 )
 
 internal class HerrinWebDavSource(
@@ -42,7 +38,7 @@ internal class HerrinWebDavSource(
         .callTimeout(6, TimeUnit.SECONDS).build()
 ) : HerrinPersonalSource {
     init {
-        require(account.category in listOf(HerrinSourceType.NAS, HerrinSourceType.CLOUD))
+        require(account.category in listOf(HerrinSourceType.NAS))
         val root = URI(account.rootUrl)
         require(root.host != null && root.rawUserInfo == null && root.fragment == null &&
             (root.scheme.equals("https", true) ||
@@ -61,14 +57,14 @@ internal class HerrinWebDavSource(
     private val extensions = setOf("mp4", "mkv", "mov", "m4v", "ts", "m2ts", "webm", "avi")
     private val seasonEp = Regex("""(?i)(?:^|[\s._-])S(\d{1,2})E(\d{1,3})(?=$|[\s._-])""")
 
-    private data class DavEntry(val address: String, val isCollection: Boolean)
+    internal data class DavEntry(val address: String, val isCollection: Boolean, val size: Long, val modified: String)
 
     suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
         runInterruptible {
             val xml = "<d:propfind xmlns:d=\"DAV:\"><d:prop><d:resourcetype/></d:prop></d:propfind>"
             val request = Request.Builder().url(root.toString()).header("Depth", "0")
                 .method("PROPFIND", xml.toRequestBody("application/xml".toMediaType()))
-                .apply { if (account.username.isNotBlank()) header("Authorization", Credentials.basic(account.username, account.password)) }
+                .apply { if ((account.username.isNotEmpty() || account.password.isNotEmpty())) header("Authorization", Credentials.basic(account.username, account.password)) }
                 .build()
             client.newCall(request).execute().use { it.code == 207 }
         }
@@ -138,13 +134,13 @@ internal class HerrinWebDavSource(
     /** A selected direct file remains under the original, explicitly permitted DAV root. */
     override fun playback(offer: HerrinSourceMovie): PlaybackResult {
         if (offer.sourceId != id || offer.sourceType != type)
-            return PlaybackResult.Unavailable("媒体不是此 NAS/云盘来源")
+            return PlaybackResult.Unavailable("媒体不是此 WebDAV 来源")
         val line = offer.film.playbackEpisodes.firstOrNull()?.lines?.firstOrNull()
             ?: return PlaybackResult.Unavailable("媒体缺少可播放文件")
         if (!sameOriginUnderRoot(line.uri)) return PlaybackResult.Unavailable("媒体路径超出授权目录")
         return PlaybackResult.Ready(PlaybackMedia(
             uri = line.uri,
-            headers = if (account.username.isBlank()) emptyMap() else
+            headers = if ((account.username.isEmpty() && account.password.isEmpty())) emptyMap() else
                 mapOf("Authorization" to Credentials.basic(account.username, account.password)),
             allowHttpRedirects = false
         ))
@@ -153,34 +149,34 @@ internal class HerrinWebDavSource(
     private fun sameOriginUnderRoot(url: String): Boolean = runCatching {
         val target = URI(url).normalize()
         val origin = root.normalize()
-        target.scheme.equals(origin.scheme, true) &&
-            target.host.equals(origin.host, true) && target.port == origin.port &&
-            target.rawUserInfo == null &&
+        PersonalStoragePolicy.sameOrigin(target, origin) &&
+            target.rawUserInfo == null && target.fragment == null &&
+            target.path.orEmpty().split('/').none { it == "." || it == ".." || it.contains('\\') } &&
             (target.path.orEmpty() + if (url.endsWith('/')) "/" else "")
                 .startsWith(rootPrefix)
     }.getOrDefault(false)
 
-    /** Depth:1 with strict 256 KiB response limit, same-origin hrefs and no redirects. */
-    private suspend fun list(directory: String): List<DavEntry> {
+    /** Depth:1 with strict 4 MiB / 10,000 entry response limit, same-origin hrefs and no redirects. */
+    internal suspend fun list(directory: String): List<DavEntry> {
         if (!sameOriginUnderRoot(directory) && directory != root.toString()) return emptyList()
-        val xml = """<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>"""
+        val xml = """<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/><d:getlastmodified/></d:prop></d:propfind>"""
         val request = Request.Builder().url(directory)
             .method("PROPFIND", xml.toRequestBody("application/xml".toMediaType()))
             .header("Depth", "1")
             .apply {
-                if (account.username.isNotBlank())
+                if ((account.username.isNotEmpty() || account.password.isNotEmpty()))
                     header("Authorization", Credentials.basic(account.username, account.password))
             }.build()
         return readSourceResponse(client,request) { response ->
             if (response.code != 207) throw SourceHttpFailure(response.code,SourceHealthIndex.retryAfter(response.header("Retry-After"),System.currentTimeMillis()))
-            val body = response.body ?: return@readSourceResponse emptyList()
+            val body = checkNotNull(response.body) { "DAV_EMPTY_RESPONSE" }
             val input = body.byteStream()
             val buffer = ByteArray(8192)
             val output = java.io.ByteArrayOutputStream()
             while (true) {
                 val n = input.read(buffer)
                 if (n < 0) break
-                if (output.size() + n > 262144) return@readSourceResponse emptyList()
+                check(output.size() + n <= 4 * 1024 * 1024) { "DAV_DIRECTORY_LIMIT" }
                 output.write(buffer, 0, n)
             }
             // Android's platform DOM parser does not implement every Xerces
@@ -189,7 +185,7 @@ internal class HerrinWebDavSource(
             // as desktop JVM without silently treating valid DAV as empty.
             val xmlText = output.toString(Charsets.UTF_8.name())
             if (Regex("""<!\s*(?:DOCTYPE|ENTITY)\b""", RegexOption.IGNORE_CASE)
-                    .containsMatchIn(xmlText)) return@readSourceResponse emptyList()
+                    .containsMatchIn(xmlText)) error("DAV_UNSAFE_XML")
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
             // Some Android API levels throw ParserConfigurationException for
@@ -208,15 +204,18 @@ internal class HerrinWebDavSource(
             factory.setExpandEntityReferences(false)
             val document = factory.newDocumentBuilder()
                 .parse(InputSource(StringReader(xmlText)))
+            check(document.documentElement.localName == "multistatus" && document.documentElement.namespaceURI == "DAV:") { "DAV_INVALID_RESPONSE" }
             val results = document.getElementsByTagNameNS("DAV:", "response")
-            (0 until minOf(250, results.length)).mapNotNull { index ->
+            check(results.length <= 10000) { "DAV_DIRECTORY_LIMIT" }
+            (0 until results.length).mapNotNull { index ->
                 val element = results.item(index) as? Element ?: return@mapNotNull null
                 val href = element.getElementsByTagNameNS("DAV:", "href").item(0)
                     ?.textContent?.trim() ?: return@mapNotNull null
                 val absolute = URI(directory).resolve(href).normalize().toString()
                 if (absolute == directory || !sameOriginUnderRoot(absolute)) return@mapNotNull null
                 val collection = element.getElementsByTagNameNS("DAV:", "collection").length > 0
-                DavEntry(absolute, collection)
+                DavEntry(absolute, collection, element.getElementsByTagNameNS("DAV:", "getcontentlength").item(0)?.textContent?.toLongOrNull() ?: 0L,
+                    element.getElementsByTagNameNS("DAV:", "getlastmodified").item(0)?.textContent.orEmpty())
             }
         }
     }

@@ -5,6 +5,10 @@ package tv.herrin.app
  * URLs, tokens, cookies, private hostnames or arbitrary exception text.
  */
 internal object PlayerStartupHints {
+    fun forPersonalFailure(reason: String): String = when {
+        "PERSONAL_AUTH" in reason -> "请检查当前个人媒体连接的账号及权限。"
+        else -> "当前个人媒体文件暂时无法读取，请检查连接后重试。"
+    }
     fun forSpiderFailure(reason: String): String = when {
         reason.contains("网页解析器") || reason.contains("网页解析") ->
             "当前线路只提供网页解析入口，没有可直接播放的媒体地址。请使用支持该来源解析方式的合法线路。"

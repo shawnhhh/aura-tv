@@ -26,7 +26,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
         val firstBySource = ranked.distinctBy { it.sourceId }
         val firstItems = firstBySource.toHashSet()
         return (firstBySource + ranked.filterNot { it in firstItems })
-            .take(budget.coerceIn(1, 16))
+            .take(budget.coerceIn(1, 80))
     }
 
     suspend fun find(
@@ -50,7 +50,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
             if (ranked.firstOrNull()?.tier == HerrinSourceTier.PERSONAL) {
                 // Use exactly the same source-specific permission check as
                 // actual playback. Never accept an unauthorized WebDAV file.
-                val prepared = ranked.take(80).mapNotNull { candidate ->
+                val prepared = fairRemoteCandidates(ranked, 80).mapNotNull { candidate ->
                     val result = try { personalPlayback(candidate) }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch (_: Exception) { null }
@@ -63,9 +63,11 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                 // downloading or probing every episode. Media3 will validate
                 // each chosen file during real playback.
                 val knownUnavailable = mutableSetOf<HerrinSourceMovie>()
+                val blockedPersonalSources = mutableSetOf<String>()
                 var verifiedOne = false
                 var verifiedMedia:PlaybackMedia?=null
                 for ((candidate, media) in prepared.take(8)) {
+                    if(candidate.sourceId in blockedPersonalSources) continue
                     var terminalHttp:SourceHttpFailure?=null
                     onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.CHECKING))
                     val began=System.nanoTime()
@@ -82,7 +84,11 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                         onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,outcome,retryAfterMs=error.retryAfterMs))
                         false
                     } catch (_: Exception) { false }
-                    if(terminalHttp?.code in setOf(401,403,429))break
+                    if(terminalHttp?.code in setOf(401,429)) {
+                        blockedPersonalSources += candidate.sourceId
+                        knownUnavailable += candidate
+                        continue
+                    }
                     if (valid) {
                         health?.record(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.VERIFIED,(System.nanoTime()-began)/1_000_000)
                         onEvent(SourceSearchEvent(candidate.sourceId,SourceSearchStage.MEDIA,SourceSearchOutcome.VERIFIED,(System.nanoTime()-began)/1_000_000))
@@ -95,7 +101,7 @@ internal class HerrinVerifiedSourceResolver(private val adapters: List<HerrinFil
                 }
                 if (!verifiedOne) emptyList()
                 else {
-                    val accepted = prepared.filterNot { it.first in knownUnavailable }
+                    val accepted = prepared.filterNot { it.first in knownUnavailable || it.first.sourceId in blockedPersonalSources }
                     val readyByOffer = accepted.toMap()
                     val built = HerrinPersonalPlaylistBuilder.create(
                         accepted.map { it.first }) { candidate ->

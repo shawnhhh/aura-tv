@@ -1,0 +1,32 @@
+{
+  "run_id": 43410792149,
+  "head": "2f02cf4dd5cb3b0c2b40b19148ec4399a5a04374",
+  "jvm": {
+    "tests": 730,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "validation_artifact_id": 14030310663,
+  "validation_zip_sha256": "97abab94f20c4e7cde33c63ea4aa20be26565bcd82b482ffdf5ce13060e33cd5",
+  "compile_lint": "success",
+  "diagnostic_build": "success",
+  "node": "FAIL_PLAYBACK",
+  "native_error": "SIGILL",
+  "first_frame": false,
+  "continuous_60_seconds": "NOT_REACHED",
+  "second_third_episode": "NOT_ATTEMPTED_AFTER_FIRST_EPISODE_FAILURE",
+  "tv_job": "failure",
+  "acceptance_job": "failure",
+  "tv_tests": 260,
+  "tv_failures": 1,
+  "tv_skipped": 0,
+  "tv_failure": "EmptySpiderHomeSelectionTest.selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken: episode-2 before detail publication",
+  "overall_workflow": "failure",
+  "tv_recheck_run": 43413805649,
+  "tv_recheck_head": "92eb718a52b3dff99e647f3ab5b0e0db79ec87f5",
+  "tv_recheck_tests": 260,
+  "tv_recheck_failures": 0,
+  "tv_recheck_skipped": 0,
+  "tv_recheck_result": "success"
+}

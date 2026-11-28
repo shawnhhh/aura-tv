@@ -1,0 +1,91 @@
+{
+  "node": "玩偶哥哥",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "小城良方",
+  "authorized_year": 2026,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 3851
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 5619
+    },
+    {
+      "stage": "search",
+      "result": "FAILED",
+      "failure_code": "SOURCE_EMPTY_RESPONSE",
+      "elapsed_ms": 423
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": false,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "aarch64",
+    "process_64bit": true,
+    "production_selected_abi": "arm64-v8a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "玩偶",
+  "spider_api": "csp_WoGGGuard",
+  "node_count": 48,
+  "config_saved": true,
+  "declared_jar_md5": "9d5f341aa5f3353b50cc3bc16b4f3e8a",
+  "failure_stage": "search",
+  "failure_code": "SOURCE_EMPTY_RESPONSE",
+  "worker_exit": "系统记录的其他退出原因",
+  "search_input_length": 4,
+  "search_input_matches_authorized_title": true,
+  "main_activity_lifecycle": "RESUMED",
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 40,
+    "init_extension_kind": "JSON",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": true,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 0
+      },
+      {
+        "quick": true,
+        "response_chars": 0
+      }
+    ],
+    "response_chars": 0,
+    "shape": "EMPTY_BODY"
+  },
+  "sdk_network_scope": "SDK_OKHTTP_ONLY",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+125103ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+125863ms SPIDER INITIALIZE_STARTED\nT+130834ms SPIDER INITIALIZE_RETURNED MS=4970\nT+132066ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+132371ms SPIDER SEARCH_STARTED\nT+132386ms SPIDER SEARCH_RETURNED MS=14\nT+132387ms SOURCE SOURCE_EMPTY_RESPONSE",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 11034,
+  "evidence_review": {
+    "source_commit": "578a0c0b44a185aafa5745da5379fca957a0233b",
+    "run_id": 42878654352,
+    "job_id": 130048672048,
+    "interpretation": "Clock correction verified: actual search calls return empty body, normal and declared quick both0chars. No actual QR/frames. Empty body is not valid empty resource list."
+  }
+}

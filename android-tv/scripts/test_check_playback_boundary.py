@@ -2,10 +2,23 @@
 from pathlib import Path
 import tempfile
 import unittest
-from check_playback_boundary import violations, without_comments
+from check_playback_boundary import violations, without_comments, verify_manager_route
 
 
 class PlaybackBoundaryTest(unittest.TestCase):
+    def test_session_wrapper_preserves_sole_adapter_and_exclusive_engine_ownership(self):
+        panel = 'val playback = HerrinPlayerSession(context, media, preferences)'
+        session = 'private val legacy = if (original == null) { HerrinPlaybackAdapter(context, media) } else null'
+        verify_manager_route(panel, session)
+        for wrong_panel, wrong_session in (
+            (panel + '; HerrinPlaybackAdapter(context, media)', session),
+            (panel + '; HerrinPlayerSession(context, other, preferences)', session),
+            (panel, 'private val legacy = HerrinPlaybackAdapter(context, media)'),
+            (panel, session + '; HerrinPlaybackAdapter(context, other)'),
+        ):
+            with self.assertRaises(AssertionError):
+                verify_manager_route(wrong_panel, wrong_session)
+
     def test_comments_do_not_mask_code_after_quoted_url(self):
         code = 'val url = "https://host/"; SpiderProxyPlayback.call() // WebView\n/* WebView */'
         clean = without_comments(code)

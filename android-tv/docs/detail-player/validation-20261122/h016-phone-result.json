@@ -1,0 +1,29 @@
+{
+  "test": "Chromium mobile frontend with mocked API",
+  "source_sha": "6003ef781cdbc28aa058cdc4818fda31c8e3a208",
+  "source_files_sha256": {
+    "android-tv/app/src/main/assets/config/center.html": "24efb3da8b487b79f5a5c150cdcef81f09f4ac33fdf722fe29bbcac6ef9809ba",
+    "android-tv/app/src/main/assets/config/center.js": "497718435a8908af1e644e8da98e634d4d8513d040f7b4746002bbf4b8fe72e9",
+    "android-tv/app/src/main/assets/config/center.css": "3666f6aae103b2a55eca24bac82a72105389f90457ee96da0538cb2308dd709d",
+    "android-tv/scripts/phone_center_browser_test.cjs": "9b974f73fe4c945422db680983f271aa108ab959ada3f5771d0ffd6f40e8b8d1"
+  },
+  "passed": true,
+  "pairings": 1,
+  "modules": 4,
+  "requests": 32,
+  "imports": [
+    "http",
+    "https",
+    "smb"
+  ],
+  "sourceResults": [
+    "ACTIVE",
+    "FAILED",
+    "cancelled background ACTIVE",
+    "processing deadline is not failure"
+  ],
+  "requestOwnership": true,
+  "reusedPasswordIsolation": true,
+  "real_android_server": false,
+  "real_mobile_safari": false
+}

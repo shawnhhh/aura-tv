@@ -67,18 +67,16 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/config.json").toString())
+                .editRemoteText(server.url("/config.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(12_000) {
-                runCatching {
-                    compose.onNodeWithTag("vod-apply-feedback").assertTextEquals("已导入配置")
-                }.isSuccess
-            }
-            assertEquals(1, server.requestCount)
+            compose.awaitAppliedWarehouse(active = false)
+            compose.awaitSelectedWarehouse()
+            assertEquals("Import initializes only its first CMS node", 2, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             val tag = "card-tvbox-0-" + "film-A".hashCode().toUInt().toString(16)
             compose.waitUntil(12_000) {
                 runCatching { compose.onNodeWithTag(tag).assertExists() }.isSuccess
@@ -151,16 +149,14 @@ class M454CmsOneTapRecoveryInstrumentedTest {
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/warehouse.json").toString())
+                .editRemoteText(server.url("/warehouse.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(12_000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
+            compose.awaitAppliedWarehouse(active = false)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             val tag = "card-tvbox-0-" + "film-A".hashCode().toUInt().toString(16)
             compose.waitUntil(12_000) {
                 runCatching { compose.onNodeWithTag(tag).assertExists() }.isSuccess

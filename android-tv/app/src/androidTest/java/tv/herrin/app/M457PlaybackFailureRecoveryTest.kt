@@ -37,7 +37,7 @@ class M457PlaybackFailureRecoveryTest {
             var episodeChoices = 0
             var freshSourceRequests = 0
             compose.setContent {
-                AuthorizedPlaybackPanel(
+                AuthorizedPlaybackPanel(testDiagnostics = true,
                     media = PlaybackMedia(failingMediaUrl),
                     onLineSelection = { lineChoices++ },
                     onEpisodeSelection = { episodeChoices++ },
@@ -79,7 +79,7 @@ class M457PlaybackFailureRecoveryTest {
     }
     @Test fun parserFailureBeforeMedia3DisplaysObservedHttpWithoutExposingPrivateUrl() {
         compose.setContent {
-            PlayerStartupSurface(
+            PlayerStartupSurface(diagnosticsForTest = true,
                 loading = false,
                 offlineDemonstration = false,
                 cmsFailed = false,
@@ -103,7 +103,7 @@ class M457PlaybackFailureRecoveryTest {
     @Test fun preDecoderCmsFailureCanSelectOtherAuthorizedProvider() {
         var fallbackCount = 0
         compose.setContent {
-            PlayerStartupSurface(
+            PlayerStartupSurface(diagnosticsForTest = true,
                 loading = false, offlineDemonstration = false,
                 cmsFailed = true, retryAvailable = true,
                 reducedMotion = true,
@@ -123,7 +123,7 @@ class M457PlaybackFailureRecoveryTest {
         HerrinPlaybackDiagnosticJournal.record("SPIDER", "PLAYER_CONTENT_REJECTED")
         HerrinPlaybackDiagnosticJournal.record("PROXY", "ROUTE_UNSUPPORTED_OPERATION")
         compose.setContent {
-            PlayerStartupSurface(
+            PlayerStartupSurface(diagnosticsForTest = true,
                 loading = false, offlineDemonstration = false,
                 cmsFailed = false, retryAvailable = true,
                 reducedMotion = true,
@@ -144,7 +144,7 @@ class M457PlaybackFailureRecoveryTest {
     @Test fun loadingAndOfflineDemoNeverExposeSourceSwitch() {
         val loading = androidx.compose.runtime.mutableStateOf(true)
         compose.setContent {
-            PlayerStartupSurface(loading = loading.value, offlineDemonstration = !loading.value,
+            PlayerStartupSurface(diagnosticsForTest = true, loading = loading.value, offlineDemonstration = !loading.value,
                 cmsFailed = false, retryAvailable = false,
                 reducedMotion = true, onRetry = {}, onBack = {},
                 onTryOtherSource = {})
@@ -154,4 +154,22 @@ class M457PlaybackFailureRecoveryTest {
         compose.onNodeWithTag("player-demo-status").assertIsDisplayed()
         compose.onNodeWithTag("player-startup-other-source").assertDoesNotExist()
     }
+    @Test fun consumerSourceFailureKeepsDiagnosticsOffscreenAndBackOnRemote() {
+        var backs = 0
+        compose.setContent {
+            PlayerStartupSurface(loading = false, offlineDemonstration = false,
+                cmsFailed = false, retryAvailable = true, reducedMotion = true,
+                failureDiagnostic = PlaybackErrorReport.source("JSON", "HTTP 403"),
+                onRetry = {}, onBack = { backs++ })
+        }
+        compose.onNodeWithTag("player-startup-error").assertIsDisplayed()
+        compose.onNodeWithTag("player-startup-retry").assertExists()
+        compose.onNodeWithTag("player-startup-diagnostic").assertDoesNotExist()
+        compose.onNodeWithTag("player-startup-back").assertDoesNotExist()
+        compose.onNodeWithTag("player-startup-copy-diagnostics").assertDoesNotExist()
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            .sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.runOnIdle { assertEquals(1, backs) }
+    }
+
 }

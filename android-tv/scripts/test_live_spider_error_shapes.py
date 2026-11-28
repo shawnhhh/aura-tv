@@ -1,9 +1,16 @@
 import json
 import unittest
-from live_spider_error_shapes import classify
+from unittest.mock import patch
+from live_spider_error_shapes import classify, collect
 
 
 class ErrorShapePrivacyTest(unittest.TestCase):
+    def test_physical_device_does_not_read_other_app_logcat(self):
+        with patch('live_spider_error_shapes.subprocess.run') as run:
+            result = collect(True)
+        run.assert_not_called()
+        self.assertEqual(result['coverage'], 'GLOBAL_LOGCAT_INTENTIONALLY_NOT_READ_ON_REAL_DEVICE')
+
     def test_only_fixed_error_kind_and_inventory_class_survive(self):
         raw = '\n'.join([
             '11-10 12:00:00.000 1 2 I ActivityManager: Start proc 456:tv.herrin.app:spider/u0a123',

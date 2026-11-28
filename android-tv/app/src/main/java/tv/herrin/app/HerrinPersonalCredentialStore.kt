@@ -64,7 +64,7 @@ internal class HerrinPersonalCredentialStore(context: Context, private val slot:
     }.getOrNull()
 
     fun clear() {
-        prefs.edit().remove(slot).putString("_revision",java.util.UUID.randomUUID().toString()).commit()
+        check(prefs.edit().remove(slot).putString("_revision",java.util.UUID.randomUUID().toString()).commit())
         runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias) }
     }
 }

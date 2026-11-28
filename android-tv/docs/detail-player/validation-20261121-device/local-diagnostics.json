@@ -1,0 +1,13 @@
+{
+  "application_sha_at_round1_start": "0b8fb3c3",
+  "round1_tests": 803,
+  "round1_failures": 1,
+  "round1_passed": 802,
+  "failure": "PersonalStoragePolicyTest.fullWebDavUrlsPreserveProtocolPortAndBaseDirectory",
+  "failure_fixture_missing": false,
+  "fix_commit": "72cefc35",
+  "targeted_status": "PASS",
+  "targeted_contract_status": "PASS",
+  "final_source_verification": "PENDING_CI",
+  "note": "Development workspace changed during some local diagnostics; these are not a final-source all-green claim. Final CI checks out an immutable SHA."
+}

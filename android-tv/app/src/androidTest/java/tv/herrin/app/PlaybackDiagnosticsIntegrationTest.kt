@@ -64,10 +64,24 @@ class PlaybackDiagnosticsIntegrationTest {
                     }
                     if (path.startsWith("/status/"))
                         return MockResponse().setResponseCode(path.substringAfterLast('/').toInt())
+                    if (path == "/baseline.m3u8") {
+                        // Reuse the original six-second TS as twelve proper HLS
+                        // discontinuities on ONE 72s timeline, not MediaItem repeat.
+                        val playlist = buildString {
+                            append("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+                            repeat(12) { index ->
+                                if (index > 0) append("#EXT-X-DISCONTINUITY\n")
+                                append("#EXTINF:6.000000,\nsynthetic-segment-00.ts?baseline_part=$index\n")
+                            }
+                            append("#EXT-X-ENDLIST\n")
+                        }
+                        return MockResponse().setHeader("Content-Type", "application/vnd.apple.mpegurl").setBody(playlist)
+                    }
                     val (asset, mime) = when (path) {
                         "/primary.m3u8" -> return MockResponse().setResponseCode(403)
                         "/transient.m3u8" -> return MockResponse().setResponseCode(503)
                         "/mp4" -> "synthetic.mp4" to "video/mp4"
+                        "/baseline.mp4" -> "playback-diagnostics/baseline-72.mp4" to "video/mp4"
                         "/remote" -> "synthetic-remote.mp4" to "video/mp4"
                         "/hls" -> "synthetic-hls.m3u8" to "application/vnd.apple.mpegurl"
                         "/synthetic-segment-00.ts" -> "synthetic-segment-00.ts" to "video/mp2t"
@@ -102,6 +116,151 @@ class PlaybackDiagnosticsIntegrationTest {
             var rendered = false
             scenario.onActivity { rendered = (it.player.videoDecoderCounters?.renderedOutputBufferCount ?: 0) > 3 }
             rendered
+        }
+    }
+
+    /** Capability baseline only: 72s timelines derived from original fixtures.
+     * This uses the production AuthorizedPlaybackPanel/HerrinPlayerSession and
+     * real HTTP/TLS, Media3, decoder and Surface. It never counts as a source PASS.
+     */
+    @Test fun productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease() {
+        val report = JSONObject().put("scope", "ORIGINAL_FIXTURE_PLAYER_CAPABILITY_ONLY")
+            .put("real_node_acceptance", false).put("whole_fongmi_kernel", false)
+            .put("sdk", android.os.Build.VERSION.SDK_INT)
+            .put("device_abis", org.json.JSONArray(android.os.Build.SUPPORTED_ABIS.toList()))
+        val results = org.json.JSONArray()
+        report.put("formats", results).put("verdict", "FAIL")
+        try {
+            fixtures { server, requests ->
+                for ((kind, path) in listOf("mp4" to "/baseline.mp4", "hls" to "/baseline.m3u8")) {
+                    val row = JSONObject().put("format", kind).put("original_fixture_timeline_seconds", 72)
+                        .put("media_item_repeat", false)
+                        .put("verdict", "FAIL")
+                    results.put(row)
+                    var decoder: androidx.media3.exoplayer.ExoPlayer? = null
+                    launch(server, path).use { scenario ->
+                        scenario.onActivity {
+                            decoder = it.player
+                            it.player.setPlaybackSpeed(1f)
+                        }
+                        try {
+                            compose.waitUntil(30_000) {
+                                var rendered = false
+                                scenario.onActivity { rendered = it.renderedVideoFrames() > 3 }
+                                rendered
+                            }
+                        } catch (failure: Throwable) {
+                            scenario.onActivity {
+                                row.put("first_frame_error_code", it.player.playerError?.errorCodeName ?: "NONE")
+                                    .put("first_frame_state", it.player.playbackState)
+                                    .put("first_frame_play_when_ready", it.player.playWhenReady)
+                                    .put("first_frame_rendered", it.renderedVideoFrames())
+                            }
+                            row.put("http_requests", requests.count { it == path })
+                            throw failure
+                        }
+                        scenario.onActivity {
+                            assertTrue("Real first-frame callback must be observed", it.firstFramePlayers.contains(it.player))
+                        }
+                        TvVisibleFrameEvidence.verify(inst, "p0-baseline-$kind-first-frame")
+                        row.put("first_frame", true).put("compositor_frame", true)
+                        val started = android.os.SystemClock.elapsedRealtime()
+                        var lastFrames = -1
+                        var lastProgress = started
+                        var samples = 0
+                        // Wall clock, never the accelerated Compose test clock.
+                        while (android.os.SystemClock.elapsedRealtime() - started < 60_000L) {
+                            scenario.onActivity {
+                                val player = it.player
+                                assertNull("Decoder must not report an error", player.playerError)
+                                assertTrue("Continuous baseline must remain playing", player.isPlaying)
+                                assertEquals(1f, player.playbackParameters.speed, 0f)
+                                val count = it.renderedVideoFrames()
+                                if (count > lastFrames) {
+                                    lastFrames = count
+                                    lastProgress = android.os.SystemClock.elapsedRealtime()
+                                }
+                                assertTrue("Decoded frames stalled for five seconds",
+                                    android.os.SystemClock.elapsedRealtime() - lastProgress < 5_000L)
+                            }
+                            samples++
+                            Thread.sleep(250)
+                        }
+                        row.put("continuous_wall_ms", android.os.SystemClock.elapsedRealtime() - started)
+                            .put("rendered_frames", lastFrames).put("playing_samples", samples)
+                        scenario.onActivity {
+                            assertTrue("At least sixty seconds of actual media time must advance", it.player.currentPosition >= 60_000L)
+                            row.put("continuous_media_position_ms", it.player.currentPosition)
+                        }
+                        assertTrue("Real media must have been requested", requests.contains(path))
+                        if (kind == "hls") assertTrue("Actual HLS segment bytes must be requested", requests.any { it.endsWith(".ts") })
+                        scenario.onActivity { it.player.pause() }
+                        Thread.sleep(350)
+                        var pausedAt = 0L
+                        scenario.onActivity { assertFalse(it.player.isPlaying); pausedAt = it.player.currentPosition }
+                        Thread.sleep(750)
+                        scenario.onActivity { assertTrue("Pause must hold actual position", kotlin.math.abs(it.player.currentPosition-pausedAt) < 150L) }
+                        var beforeResume = 0
+                        scenario.onActivity {
+                            beforeResume = it.renderedVideoFrames()
+                            it.player.play()
+                        }
+                        compose.waitUntil(10_000) {
+                            var resumed = false
+                            scenario.onActivity { resumed = it.player.isPlaying && it.renderedVideoFrames() > beforeResume+3 }
+                            resumed
+                        }
+                        row.put("pause_resume", true)
+                        var beforeSeek = 0
+                        var seekAcknowledgedAt = -1L
+                        scenario.onActivity {
+                            assertTrue("The original fixture must be seekable", it.player.isCurrentMediaItemSeekable)
+                            it.player.addListener(object : androidx.media3.common.Player.Listener {
+                                override fun onPositionDiscontinuity(oldPosition: androidx.media3.common.Player.PositionInfo,
+                                    newPosition: androidx.media3.common.Player.PositionInfo, reason: Int) {
+                                    if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK)
+                                        seekAcknowledgedAt = newPosition.positionMs
+                                }
+                            })
+                            beforeSeek = it.renderedVideoFrames()
+                            it.player.seekTo(3_000L)
+                        }
+                        compose.waitUntil(10_000) {
+                            var decoded = false
+                            scenario.onActivity { decoded = seekAcknowledgedAt == 3_000L && it.player.isPlaying && it.player.currentPosition >= 3_000L &&
+                                it.renderedVideoFrames() > beforeSeek+3 }
+                            decoded
+                        }
+                        row.put("seek_and_frames", true).put("seek_acknowledged_position_ms", seekAcknowledgedAt)
+                        inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                        compose.waitUntil(10_000) {
+                            var released = false
+                            scenario.onActivity { released = decoder?.isReleased == true }
+                            released
+                        }
+                        row.put("released_on_back", true).put("verdict", "PASS")
+                    }
+                    var released = false
+                    inst.runOnMainSync { released = decoder?.isReleased == true }
+                    assertTrue("Activity teardown must release the sole player", released)
+                }
+            }
+            report.put("verdict", "PLAYER_CAPABILITY_PASS_NOT_REAL_NODE_PASS")
+        } finally {
+            java.io.File(inst.targetContext.filesDir, "player-baseline.json").writeText(report.toString(2))
+            // AGP uninstalls the app after connected tests, including failures.
+            // Reuse shell-owned fixture evidence so this report survives.
+            val encoded = android.util.Base64.encodeToString(report.toString().toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+            inst.uiAutomation.executeShellCommand("mkdir -p /data/local/tmp/herrin-test-evidence").use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
+            // API30 UiAutomation uses Runtime.exec(String), not a shell. A
+            // single-word sh script expands quoted argv and redirects safely;
+            // the only data argument is whitespace-free Base64, never script.
+            inst.uiAutomation.executeShellCommand("sh -c \"${'$'}@\">/data/local/tmp/herrin-test-evidence/player-baseline.b64 -- echo $encoded").use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
+            android.util.Log.i("HerrinPlaybackBaseline", report.toString())
         }
     }
 

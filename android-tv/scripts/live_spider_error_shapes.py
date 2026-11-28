@@ -3,6 +3,7 @@
 import json
 import re
 import subprocess
+import os
 from pathlib import Path
 
 KINDS = ('NoSuchMethodError', 'NoSuchFieldError', 'NoClassDefFoundError',
@@ -35,11 +36,18 @@ def classify(raw, sdk_classes):
                        for (kind, classes), count in sorted(rows.items())]}
 
 
-if __name__ == '__main__':
+def collect(physical=False):
+    if physical:
+        return dict(scope='OWN_APPLICATION_REPORTS_ONLY_NO_GLOBAL_LOGCAT', errors=[],
+                    coverage='GLOBAL_LOGCAT_INTENTIONALLY_NOT_READ_ON_REAL_DEVICE')
     captured = subprocess.run(['adb', 'logcat', '-d', '-t', '6000', '-v', 'threadtime',
                                '-b', 'main', '-b', 'system'], capture_output=True,
                               text=True, timeout=15)
     sdk = Path('android-tv/app/src/main/java/com/github/catvod')
     names = {'com.github.catvod.' + '.'.join(p.relative_to(sdk).with_suffix('').parts)
              for p in sdk.rglob('*.java')}
-    print(json.dumps(classify(captured.stdout, names), indent=2))
+    return classify(captured.stdout, names)
+
+
+if __name__ == '__main__':
+    print(json.dumps(collect(os.environ.get('LIVE_PHYSICAL_DEVICE') == 'true'), indent=2))

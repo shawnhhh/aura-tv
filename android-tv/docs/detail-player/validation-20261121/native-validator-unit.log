@@ -1,0 +1,10 @@
+test_collector_rejects_duplicate_build_outputs (test_native_candidate.NativeCandidateTests.test_collector_rejects_duplicate_build_outputs) ... ok
+test_collects_from_shared_buildout_not_only_module_folder (test_native_candidate.NativeCandidateTests.test_collects_from_shared_buildout_not_only_module_folder) ... ok
+test_original_tv_missing_class_is_explicit_incompatibility (test_native_candidate.NativeCandidateTests.test_original_tv_missing_class_is_explicit_incompatibility) ... ok
+test_rejects_mislabeled_or_wrong_architecture (test_native_candidate.NativeCandidateTests.test_rejects_mislabeled_or_wrong_architecture) ... ok
+test_rejects_missing_ffmpeg (test_native_candidate.NativeCandidateTests.test_rejects_missing_ffmpeg) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.006s
+
+OK

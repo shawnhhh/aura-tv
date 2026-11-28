@@ -1,0 +1,65 @@
+2026-11-21T16:59:39.5862106Z ERROR: null root node returned by UiTestAutomationBridge.
+2026-11-21T16:59:40.9435827Z Traceback (most recent call last):
+2026-11-21T16:59:40.9464552Z   File "/home/runner/work/aura-tv/aura-tv/android-tv/scripts/check_startup_probe.py", line 91, in <module>
+2026-11-21T16:59:40.9554038Z     main()
+2026-11-21T16:59:40.9592197Z     ~~~~^^
+2026-11-21T16:59:40.9605368Z   File "/home/runner/work/aura-tv/aura-tv/android-tv/scripts/check_startup_probe.py", line 76, in main
+2026-11-21T16:59:40.9635562Z     check_ui(args.xml.read_text(), args.window.read_text(), "电影" if args.stage == "hot" else "首页")
+2026-11-21T16:59:40.9645229Z     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-11-21T16:59:40.9695566Z   File "/home/runner/work/aura-tv/aura-tv/android-tv/scripts/check_startup_probe.py", line 12, in check_ui
+2026-11-21T16:59:40.9696591Z     root = ET.fromstring(xml)
+2026-11-21T16:59:40.9725152Z   File "/usr/lib/python3.14/xml/etree/ElementTree.py", line 1352, in XML
+2026-11-21T16:59:40.9726136Z     parser.feed(text)
+2026-11-21T16:59:40.9726728Z     ~~~~~~~~~~~^^^^^^
+2026-11-21T16:59:40.9755057Z xml.etree.ElementTree.ParseError: syntax error: line 1, column 0
+2026-11-21T16:59:41.3213885Z --------- beginning of main
+2026-11-21T16:59:41.3215123Z 11-21 16:59:31.470  2445  2445 I HerrinStartupPhase: phase=first_cpu_draw activity_to_phase_ms=953
+2026-11-21T16:59:41.3226488Z 11-21 16:59:31.761  2445  2445 D HerrinRemote: WINDOW_FOCUS_READY browse_request_issued=false
+2026-11-21T16:59:41.3235468Z 11-21 16:59:31.854  2445  2445 I HerrinStartupPhase: phase=wordmark_visible activity_to_phase_ms=1337
+2026-11-21T16:59:41.3246040Z 11-21 16:59:32.097  2445  2445 I HerrinStartupPhase: phase=home_init activity_to_phase_ms=1579
+2026-11-21T16:59:41.3285066Z 11-21 16:59:33.045  2445  2445 D HerrinRemote: POSTER orbit focus=false
+2026-11-21T16:59:41.3302105Z 11-21 16:59:33.060  2445  2445 D HerrinRemote: POSTER tide focus=false
+2026-11-21T16:59:41.3311510Z 11-21 16:59:33.073  2445  2445 D HerrinRemote: POSTER dawn focus=false
+2026-11-21T16:59:41.3326041Z 11-21 16:59:33.084  2445  2445 D HerrinRemote: POSTER night focus=false
+2026-11-21T16:59:41.3327254Z 11-21 16:59:33.110  2445  2445 D HerrinRemote: POSTER return focus=false
+2026-11-21T16:59:41.3328474Z 11-21 16:59:33.129  2445  2445 D HerrinRemote: POSTER blue focus=false
+2026-11-21T16:59:41.3331976Z 11-21 16:59:33.325  2445  2445 D HerrinRemote: ROUTE screen=browse category=首页 focusId=nav-首页
+2026-11-21T16:59:41.3333127Z 11-21 16:59:33.566  2445  2445 D HerrinRemote: POSTER blue focus=false
+2026-11-21T16:59:41.3334037Z 11-21 16:59:33.606  2445  2445 D HerrinRemote: POSTER return focus=false
+2026-11-21T16:59:41.3335159Z 11-21 16:59:33.666  2445  2445 D HerrinRemote: POSTER night focus=false
+2026-11-21T16:59:41.3336037Z 11-21 16:59:33.689  2445  2445 D HerrinRemote: POSTER dawn focus=false
+2026-11-21T16:59:41.3336896Z 11-21 16:59:33.711  2445  2445 D HerrinRemote: POSTER tide focus=false
+2026-11-21T16:59:41.3337840Z 11-21 16:59:33.740  2445  2445 D HerrinRemote: POSTER orbit focus=false
+2026-11-21T16:59:41.3338914Z 11-21 16:59:33.864  2445  2445 I HerrinStartupPhase: phase=network activity_to_phase_ms=3346
+2026-11-21T16:59:41.3340076Z 11-21 16:59:33.864  2445  2445 I HerrinStartupPhase: phase=artwork activity_to_phase_ms=3347
+2026-11-21T16:59:41.3341293Z 11-21 16:59:36.513  2445  2445 I HerrinStartupPhase: phase=wordmark_complete activity_to_phase_ms=5996
+2026-11-21T16:59:41.3343096Z 11-21 16:59:36.536  2445  2564 I HerrinStartupFrames: count=74 p50_ms=51.279024 p95_ms=758.807794 p99_ms=1359.413298 over_budget=74
+2026-11-21T16:59:41.3345318Z 11-21 16:59:39.788  2445  2445 I HerrinDisplay: output=1080x1920@60.000004Hz uiCandidate=system windowRequest=0.0 requestedModeId=0 supported=UiDisplayMode(width=1080, height=1920, hz=60.000004)
+2026-11-21T16:59:41.3347377Z 11-21 16:59:39.788  2445  2445 D HerrinRemote: ROUTE screen=browse category=首页 focusId=nav-首页
+2026-11-21T16:59:41.3349718Z 11-21 16:59:39.872  2445  2445 I HerrinStartup: process_to_activity_ms=1039 activity_to_first_draw_ms=953 first_draw_to_wordmark_ms=384 wordmark_complete_ms=5996 activity_to_home_ms=9355 home_init_ms=1579 artwork_start_ms=3347 network_start_ms=3346 system_brand_exit_ms=-1
+2026-11-21T16:59:41.3352218Z 11-21 16:59:39.872  2445  2445 D HerrinRemote: RESTORE target=nav-首页 completed
+2026-11-21T16:59:41.3366380Z ##[error]The process '/usr/bin/sh' failed with exit code 1
+2026-11-21T16:59:41.3367910Z ##[group]Terminate Emulator
+2026-11-21T16:59:41.3368383Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 emu kill
+2026-11-21T16:59:41.3368857Z OK: killing emulator, bye bye
+2026-11-21T16:59:41.3369148Z OK
+2026-11-21T16:59:41.3369550Z ##[endgroup]
+2026-11-21T16:59:41.3370365Z INFO         | Wait for emulator (pid 4681) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+2026-11-21T16:59:41.3371115Z
+2026-11-21T16:59:41.3616087Z USER_INFO    | Snapshots have been disabled by the user, save request is ignored.
+2026-11-21T16:59:41.3623753Z INFO         | Saving snapshot 'default_boot' took 0 ms
+2026-11-21T16:59:42.2496098Z WARNING      | Emulator client has not yet been configured.. Call configure me first!
+2026-11-21T16:59:42.2619507Z INFO         | removeAll
+2026-11-21T16:59:42.2953464Z WARNING      | Netsim Wifi dns:///localhost:42129 is gone due to Stream removed (CANCELLED)
+2026-11-21T16:59:43.4022145Z ##[group]Run actions/upload-artifact@v4
+2026-11-21T16:59:43.4022713Z with:
+2026-11-21T16:59:43.4023201Z   name: HERRIN-API31-startup-evidence
+2026-11-21T16:59:43.4023576Z   path: android-tv/build/startup-api31/
+2026-11-21T16:59:43.4024030Z   if-no-files-found: warn
+2026-11-21T16:59:43.4024585Z   retention-days: 14
+2026-11-21T16:59:43.4024863Z   compression-level: 6
+2026-11-21T16:59:43.4025134Z   overwrite: false
+2026-11-21T16:59:43.4025399Z   include-hidden-files: false
+2026-11-21T16:59:43.4025683Z env:
+2026-11-21T16:59:43.4026041Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-21T16:59:43.4026725Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64

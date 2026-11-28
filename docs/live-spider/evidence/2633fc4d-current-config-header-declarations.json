@@ -1,0 +1,114 @@
+{
+  "run_id": 43417003939,
+  "report": {
+    "scope": "ROOT_CONFIG_REQUEST_SEMANTICS_ONLY_NOT_IMPORT_OR_PLAYBACK",
+    "status": "SCHEMA_READ",
+    "redirect_statuses": [],
+    "http_status": 200,
+    "body_sha256": "8fe97e6dde701deaa59a96c816d376bff0182b825028877ff680261b0b6d066b",
+    "body_bytes": 18843,
+    "declared_jar_md5": "6d10a60af6c0976836933c5f3cf9e8a7",
+    "node_count": 49,
+    "known_root_fields": [
+      "lives",
+      "rules",
+      "sites",
+      "spider",
+      "wallpaper"
+    ],
+    "root_headers": {
+      "kind": "NoneType",
+      "entries": 0,
+      "known_header_names": []
+    },
+    "root_header": {
+      "kind": "NoneType",
+      "entries": 0,
+      "known_header_names": []
+    },
+    "rules": {
+      "kind": "list",
+      "entries": 1,
+      "known_header_names": []
+    },
+    "rules_with_header_fields": 0,
+    "selected_site_declarations": [
+      {
+        "key": "玩偶",
+        "api": "csp_WoGGGuard",
+        "header": {
+          "kind": "NoneType",
+          "entries": 0,
+          "known_header_names": []
+        },
+        "headers": {
+          "kind": "NoneType",
+          "entries": 0,
+          "known_header_names": []
+        },
+        "extension": {
+          "kind": "dict",
+          "chars": null,
+          "header_shape": {
+            "kind": "dict",
+            "entries": 1,
+            "known_header_names": []
+          }
+        },
+        "searchable": 1,
+        "quickSearch": 1
+      },
+      {
+        "key": "光影",
+        "api": "csp_T4Guard",
+        "header": {
+          "kind": "NoneType",
+          "entries": 0,
+          "known_header_names": []
+        },
+        "headers": {
+          "kind": "NoneType",
+          "entries": 0,
+          "known_header_names": []
+        },
+        "extension": {
+          "kind": "str",
+          "chars": 648,
+          "header_shape": {
+            "kind": "NoneType",
+            "entries": 0,
+            "known_header_names": []
+          }
+        },
+        "searchable": 1,
+        "quickSearch": 1
+      },
+      {
+        "key": "奶酪",
+        "api": "csp_T4Guard",
+        "header": {
+          "kind": "NoneType",
+          "entries": 0,
+          "known_header_names": []
+        },
+        "headers": {
+          "kind": "NoneType",
+          "entries": 0,
+          "known_header_names": []
+        },
+        "extension": {
+          "kind": "str",
+          "chars": 520,
+          "header_shape": {
+            "kind": "NoneType",
+            "entries": 0,
+            "known_header_names": []
+          }
+        },
+        "searchable": 1,
+        "quickSearch": 1
+      }
+    ],
+    "elapsed_ms": 1702
+  }
+}

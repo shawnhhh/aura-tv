@@ -29,9 +29,21 @@
 - At least one build attempt (`./gradlew :app:assembleDebug` from `android-tv/`) with honest output; report exact blockers if build cannot be completed.
 - Prefer GitHub Actions Android debug compile workflow and upload the debug APK as a workflow artifact if permissible; no signing secrets for debug builds.
 - Document emulator / TCL remote D-pad test checklist and acceptance results; do not claim real-device validation if unavailable.
-- Make changes on a feature branch and create a PR for review. Do not merge without user review.
+- Continue on the assigned feature branch and existing PR. Keep its Draft state when specified. Do not create a new PR, merge the default branch, or force-push.
 
 ## Development discipline
-- First inspect the repository tree and the existing approved prototype. Implement actual working code rather than design-only prose.
-- Keep incremental commits, tests where practical, and a factual PR summary: implemented, tested, not yet implemented, known risks.
+- Use this sequence for all HERRIN work: concentrated development, batches of related commits, consolidated tests, targeted fixes and verification, final full regression, then APK delivery. Use `[skip ci]` on intermediate development commits. Run the final verification on the actual delivery commit.
+- Work serially. Do not use Superpowers or subagents. Keep developing independent items when a module completes or an external dependency is blocked.
+- Start with the Git diff, relevant symbols, actual call paths and existing failure evidence. Avoid repeated repository-wide scans, large log reads, and historical document review. Reuse existing implementation and suitable licensed open-source components. Avoid redundant implementations, artificial commits and retries of known incompatible dependencies.
+- Run full tests and builds after primary development. Diagnose a failing test, fix its cause and run its targeted verification before the final full regression. Keep effective assertions, acceptance criteria, security and provider authorization intact. Maintain the necessary quality and test coverage.
+- Reuse the TV-tested APK from the final successful CI when it matches the delivery commit, and verify its source and checksum. Report code completion, executed automated checks and physical device results separately.
+- Keep status records brief: issue ID, changes, commit, remaining blocker and next action. At a genuine resource, permission or environment limit, commit finished changes and leave a usable checkpoint.
 - Prefer native Android UI. Keep root GitHub Pages assets intact.
+
+## Playback and user-facing information
+
+- Keep a single playback session architecture. Prefer compatible, maintainable components with clear provenance and licenses. Full FongMi migration is optional. Keep actual Spider resolution, provider authorization, account restrictions and DRM intact.
+- Show only text needed to operate the app. Prefer a quiet loading indicator. Keep search, resolution, node and scan counts and diagnostic details in the background.
+- Present the instructions needed for the actual provider and authorization method. Do not forward arbitrary plugin toasts. Keep detailed failures in safe logs. Never log or disclose tokens, cookies, QR authorization payloads or sensitive request parameters.
+- Keep existing navigation and visual conventions. Avoid redundant controls, confirmations and technical explanations.
+- On TV, D-pad navigation focuses a text field without opening the keyboard. OK enters editing. Done or Back closes the editor while retaining its value and focus. Back outside editing follows the current screen's navigation. Keep standard touch editing on the phone.

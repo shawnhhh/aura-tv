@@ -95,11 +95,12 @@ internal class HerrinTmdbDiscovery(
     data class SearchPage(val films: List<Film>, val page: Int, val totalPages: Int)
 
     /** Always online; an empty response is never substituted with home/demo data. */
-    suspend fun search(query: String, token: String, page: Int = 1): SearchPage {
-        require(page in 1..500)
+    suspend fun search(query: String, token: String, page: Int = 1,
+                       searchLanguage: String = language): SearchPage {
+        require(page in 1..500 && searchLanguage.matches(Regex("[a-z]{2}-[A-Z]{2}")))
         if (query.isBlank()) return SearchPage(emptyList(), 1, 0)
         if (token.isBlank()) throw ArtworkAuthenticationFailure(401)
-        val url = base + "/search/multi?language=$language&include_adult=false&page=$page&query=" +
+        val url = base + "/search/multi?language=$searchLanguage&include_adult=false&page=$page&query=" +
             URLEncoder.encode(query.trim().take(200), "UTF-8")
         val raw = if (fetcher === NetworkArtworkFetcher) TmdbSearchTransport.load(url, token)
             else kotlinx.coroutines.runInterruptible(Dispatchers.IO) { fetcher.load(url, token) }
@@ -195,13 +196,45 @@ internal class HerrinTmdbDiscovery(
         val json = fetcher.load(url, token) ?: return@withContext film
         val obj = try { JSONObject(json) } catch (_: org.json.JSONException) { return@withContext film }
         if (obj.optInt("id") != id) return@withContext film
+        applyDetailed(film, type, obj, json)
+    }
+
+    suspend fun identified(type: String, id: Int, token: String): Film? = withContext(Dispatchers.IO) {
+        require(type in setOf("movie", "tv") && id > 0)
+        if(token.isBlank()) return@withContext null
+        val url = "$base/$type/$id?language=zh-CN&append_to_response=credits,external_ids"
+        val json = kotlinx.coroutines.runInterruptible { fetcher.load(url, token) } ?: return@withContext null
+        val obj = JSONObject(json)
+        if(obj.optInt("id") != id) return@withContext null
+        obj.put("genre_ids", JSONArray().apply { val genres = obj.optJSONArray("genres") ?: JSONArray()
+            for(i in 0 until genres.length()) put(genres.getJSONObject(i).getInt("id")) })
+        val film = parsePage(JSONObject().put("results", JSONArray().put(obj)).toString(), type).singleOrNull() ?: return@withContext null
+        applyDetailed(film, type, obj, json)
+    }
+
+    suspend fun findImdb(id: String, type: String?, token: String): Pair<String, Int>? = withContext(Dispatchers.IO) {
+        require(id.matches(Regex("""tt\d{7,10}""")) && (type == null || type in setOf("movie", "tv")))
+        if (token.isBlank()) return@withContext null
+        val raw = kotlinx.coroutines.runInterruptible {
+            fetcher.load("$base/find/$id?external_source=imdb_id&language=zh-CN", token)
+        } ?: return@withContext null
+        val response = JSONObject(raw)
+        (if (type == null) listOf("movie", "tv") else listOf(type)).flatMap { namespace ->
+            val choices = response.optJSONArray("${namespace}_results") ?: return@flatMap emptyList()
+            (0 until minOf(choices.length(), 20)).mapNotNull { index ->
+                choices.optJSONObject(index)?.optInt("id")?.takeIf { it > 0 }?.let { namespace to it }
+            }
+        }.distinct().singleOrNull()
+    }
+
+    private fun applyDetailed(film: Film, type: String, obj: JSONObject, json: String): Film {
         val credits = TmdbCreditsParser.parse(json, type)
         val imdbId = obj.optJSONObject("external_ids")?.optString("imdb_id")
             ?.takeIf { it.matches(Regex("""tt\d{7,10}""")) }
             ?: obj.optString("imdb_id").takeIf {
                 it.matches(Regex("""tt\d{7,10}"""))
             }
-        film.copy(
+        return film.copy(
             imdbId = imdbId ?: film.imdbId,
             synopsis = obj.optString("overview").take(2_000).ifBlank { film.synopsis },
             actors = credits.actors.ifEmpty { film.actors },

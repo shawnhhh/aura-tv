@@ -7,7 +7,11 @@ package tv.herrin.app
 internal object HerrinPlaybackEntry {
     fun firstPlayable(film: Film?): Pair<Int, String>? {
         if (film == null) return null
-        for (episode in film.playbackEpisodes) {
+        val seasons = SeasonEpisodes.fromFilm(film, allowSingleSeason = true)
+        val ordered = seasons?.sections?.sortedBy { it.number }?.flatMap { section ->
+            section.episodes.sortedBy { it.number }.map { it.source }
+        } ?: film.playbackEpisodes.sortedBy { SeasonEpisodes.explicitNumber(it.title) ?: it.number }
+        for (episode in ordered) {
             val line = episode.lines.firstOrNull { it.uri.isNotBlank() }
             if (line != null) return episode.number to line.id
         }

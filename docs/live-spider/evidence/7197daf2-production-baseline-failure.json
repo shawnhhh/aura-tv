@@ -1,0 +1,18 @@
+{
+  "run_id": 43440288111,
+  "head": "7197daf25ba5b3818de36a0673aadacba790264a",
+  "job_id": 131935823771,
+  "overall": "failure",
+  "tests": 261,
+  "failed": [
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 30000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.frames(PlaybackDiagnosticsIntegrationTest.kt:101)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease$lambda$19(PlaybackDiagnosticsIntegrationTest.kt:132)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.$r8$lambda$LdO_i2pmtdyIUdbKrb3S0bU0-ws(Unknown Source:0)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest$$ExternalSyntheticLambda41.invoke(D8$$SyntheticClass:0)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.fixtures(PlaybackDiagnosticsIntegrationTest.kt:86)\nat tv.herrin.app.PlaybackDiagnosticsIntegrationTest.productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease(PlaybackDiagnosticsIntegrationTest.kt:120)\n"
+    }
+  ],
+  "skipped": 0,
+  "synthetic_benchmark_pass": false,
+  "real_node_acceptance": false
+}

@@ -1,0 +1,74 @@
+{
+  "run": 43704718685,
+  "status": "REGRESSION_PASS_REAL_PLAYBACK_PENDING",
+  "real_nodes": "NOT_RERUN_NO_NEW_EVIDENCE",
+  "real_http_config_import": "BLOCKED_403_TEXT_PLAIN_ORIGIN_UNPROVEN",
+  "stable_release": false,
+  "jvm": {
+    "tests": 732,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": "PASS",
+  "debug": "PASS",
+  "diagnostic_artifact": 14157973111,
+  "diagnostic_manifest": "efc0ba97-diagnostic-manifest.json",
+  "tv": {
+    "tests": 262,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "api31": "PASS",
+  "tv_classes": 94,
+  "original_media": {
+    "scope": "ORIGINAL_FIXTURE_PLAYER_CAPABILITY_ONLY",
+    "real_node_acceptance": false,
+    "whole_fongmi_kernel": false,
+    "sdk": 30,
+    "device_abis": [
+      "x86"
+    ],
+    "formats": [
+      {
+        "format": "mp4",
+        "original_fixture_timeline_seconds": 72,
+        "media_item_repeat": false,
+        "verdict": "PASS",
+        "first_frame": true,
+        "compositor_frame": true,
+        "continuous_wall_ms": 60116,
+        "rendered_frames": 1458,
+        "playing_samples": 240,
+        "continuous_media_position_ms": 61028,
+        "pause_resume": true,
+        "seek_and_frames": true,
+        "seek_acknowledged_position_ms": 3000,
+        "released_on_back": true
+      },
+      {
+        "format": "hls",
+        "original_fixture_timeline_seconds": 72,
+        "media_item_repeat": false,
+        "verdict": "PASS",
+        "first_frame": true,
+        "compositor_frame": true,
+        "continuous_wall_ms": 60155,
+        "rendered_frames": 1444,
+        "playing_samples": 240,
+        "continuous_media_position_ms": 60838,
+        "pause_resume": true,
+        "seek_and_frames": true,
+        "seek_acknowledged_position_ms": 3000,
+        "released_on_back": true
+      }
+    ],
+    "verdict": "PLAYER_CAPABILITY_PASS_NOT_REAL_NODE_PASS"
+  },
+  "baseline_artifact": 14158034786,
+  "scope": "REGRESSION_AND_INTERNAL_DIAGNOSTICS_NOT_REAL_NODE_ACCEPTANCE",
+  "code_sha": "efc0ba974e7605be361565bddd48434fad018200",
+  "ci_url": "https://github.com/shawnhhh/aura-tv/actions/runs/43704718685",
+  "api31_ci_url": "https://github.com/shawnhhh/aura-tv/actions/runs/43704722411"
+}

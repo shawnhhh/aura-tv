@@ -1,0 +1,32 @@
+SOURCE_COMMIT=acb061511856a3784fc5246a4dcc13c51cc457cd
+RUN=45017024629 JOB=137193662993
+RESULT=35 preflight tests, 32 pass, 3 fail; unfiltered full suite NOT RUN
+SCOPE=Retained actual failures; not acceptance
+2026-11-22T11:37:48.1674822Z 	at tv.herrin.app.P0RecentPlaybackReturnTest.heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(P0RecentPlaybackReturnTest.kt:153)
+2026-11-22T11:37:48.1685167Z 	at tv.herrin.app.P0RecentPlaybackReturnTest.heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(P0RecentPlaybackReturnTest.kt:153)
+2026-11-22T11:38:29.5521897Z - [busy] ComposeIdlingResource is busy due to pending recompositions.
+2026-11-22T11:38:29.5566411Z - [busy] ComposeIdlingResource is busy due to pending recompositions.
+2026-11-22T11:39:07.5465438Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T11:39:07.5499845Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T11:39:34.4348220Z There were 3 failures:
+2026-11-22T11:39:34.4349434Z 1) heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(tv.herrin.app.P0RecentPlaybackReturnTest)
+2026-11-22T11:39:34.4387033Z 	at tv.herrin.app.P0RecentPlaybackReturnTest.heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(P0RecentPlaybackReturnTest.kt:153)
+2026-11-22T11:39:34.4389147Z 2) directionAndButtonHoldPreviewWithoutSeekThenCommitOnceAndResume(tv.herrin.app.PlayerHoldPreviewTest)
+2026-11-22T11:39:34.4393318Z - [busy] ComposeIdlingResource is busy due to pending recompositions.
+2026-11-22T11:39:34.4439630Z 3) importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials(tv.herrin.app.PersonalLibraryDirectPlaybackTest)
+2026-11-22T11:39:34.4448901Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T11:39:34.4466474Z Tests run: 35,  Failures: 3
+2026-11-22T11:39:35.2438472Z 	at tv.herrin.app.P0RecentPlaybackReturnTest.heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(P0RecentPlaybackReturnTest.kt:153)
+2026-11-22T11:39:35.2448357Z 	at tv.herrin.app.P0RecentPlaybackReturnTest.heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(P0RecentPlaybackReturnTest.kt:153)
+2026-11-22T11:39:35.2530159Z - [busy] ComposeIdlingResource is busy due to pending recompositions.
+2026-11-22T11:39:35.2586451Z - [busy] ComposeIdlingResource is busy due to pending recompositions.
+2026-11-22T11:39:35.2814067Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T11:39:35.2826252Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T11:39:35.3138617Z There were 3 failures:
+2026-11-22T11:39:35.3139545Z 1) heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(tv.herrin.app.P0RecentPlaybackReturnTest)
+2026-11-22T11:39:35.3143387Z 	at tv.herrin.app.P0RecentPlaybackReturnTest.heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus(P0RecentPlaybackReturnTest.kt:153)
+2026-11-22T11:39:35.3144753Z 2) directionAndButtonHoldPreviewWithoutSeekThenCommitOnceAndResume(tv.herrin.app.PlayerHoldPreviewTest)
+2026-11-22T11:39:35.3148510Z - [busy] ComposeIdlingResource is busy due to pending recompositions.
+2026-11-22T11:39:35.3203205Z 3) importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials(tv.herrin.app.PersonalLibraryDirectPlaybackTest)
+2026-11-22T11:39:35.3209778Z 	at tv.herrin.app.PersonalLibraryDirectPlaybackTest$importedFilePlaysFromMySurvivesScanSeeksAndReopensWithUpdatedCredentials$1.invokeSuspend(PersonalLibraryDirectPlaybackTest.kt:119)
+2026-11-22T11:39:35.3223201Z Tests run: 35,  Failures: 3

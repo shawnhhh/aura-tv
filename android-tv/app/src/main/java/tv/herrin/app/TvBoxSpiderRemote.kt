@@ -53,6 +53,9 @@ internal object SpiderIpc {
     const val AUTH_SHOW = 10
     const val AUTH_ACTION = 11
     const val AUTH_CLOSE = 12
+    const val ACTIVITY_REQUEST = 13
+    const val ACTIVITY_DENIED = 14
+    const val ACTIVITY_SELF_TEST = 23
     const val MAX_RESPONSE_CHARS = 450_000
     const val MAX_REQUEST_CHARS = 400_000
 
@@ -139,6 +142,7 @@ internal object SpiderIpc {
             val lines = JSONArray()
             ep.lines.take(12).forEach { line ->
                 lines.put(JSONObject().put("id", line.id).put("title", line.title).put("uri", line.uri)
+                    .put("episodeTitle", line.episodeTitle)
                     .put("proof", line.spiderProof?.value))
             }
             val encoded = JSONObject().put("number", ep.number).put("title", ep.title).put("lines", lines)
@@ -169,7 +173,8 @@ internal object SpiderIpc {
             val lines = (0 until minOf(linesArray.length(), 12)).mapNotNull { i ->
                 val line = linesArray.optJSONObject(i) ?: return@mapNotNull null
                 PlaybackLine(line.optString("id"), line.optString("title"), line.optString("uri"),
-                    spiderProof = line.optString("proof").takeIf { it.length == 64 }?.let(::SpiderRouteProof))
+                    spiderProof = line.optString("proof").takeIf { it.length == 64 }?.let(::SpiderRouteProof),
+                    episodeTitle = line.optString("episodeTitle").takeIf(String::isNotBlank))
             }
             PlaybackEpisode(ep.optInt("number", 1), ep.optString("title"), lines)
         }
@@ -278,7 +283,9 @@ class TvBoxSpiderService : Service() {
                 arg1 = operationId; arg2 = dialogId
                 replyTo = incoming
                 data = Bundle().apply { if (payload != null) putString("payload", payload) }
-            }) }
+            }) }.onSuccess {
+                SpiderNetworkTrace.event(if (payload == null) "AUTH_DIALOG_CLOSE_SENT" else "AUTH_DIALOG_SHOW_SENT")
+            }.onFailure { SpiderNetworkTrace.event("AUTH_DIALOG_SEND_FAILED") }
         }
     }
     private val incoming: Messenger = Messenger(Handler(Looper.getMainLooper()) { message ->
@@ -288,6 +295,7 @@ class TvBoxSpiderService : Service() {
                 retiring = true
                 SpiderStartupTrace.mark(applicationContext,SpiderStartupTrace.Stage.WATCHDOG)
                 authorization.cancel()
+                SpiderRuntimeActivityHost.end(message.arg1)
                 // A coroutine cannot interrupt arbitrary JNI. Retire ONLY this
                 // manifest-verified :spider process; the UI process is untouched.
                 watchdog.schedule({ android.os.Process.killProcess(android.os.Process.myPid()) },
@@ -299,8 +307,13 @@ class TvBoxSpiderService : Service() {
             }) }
             return@Handler true
         }
+        if (message.what == SpiderIpc.ACTIVITY_DENIED) {
+            if (authCaller?.second == message.arg1 && authCaller?.first == message.replyTo)
+                SpiderRuntimeActivityHost.denied(message.arg1, message.data.getString("ticket"))
+            return@Handler true
+        }
         if (message.what == SpiderIpc.AUTH_ACTION) {
-            if (authCaller?.second == message.arg1) authorization.action(message.arg2, message.data.getString("button"))
+            if (authCaller?.second == message.arg1 && authCaller?.first == message.replyTo) authorization.action(message.arg2, message.data.getString("button"))
             return@Handler true
         }
         val reply = message.replyTo
@@ -314,6 +327,26 @@ class TvBoxSpiderService : Service() {
                     if (retiring) return@withLock SpiderIpc.error("Spider 会话正在回收")
                     activeOperation = id
                     authCaller = reply to id
+                    SpiderRuntimeActivityHost.begin(id, { ticket ->
+                        reply.send(Message.obtain(null, SpiderIpc.ACTIVITY_REQUEST).apply {
+                            arg1 = id; replyTo = incoming
+                            data = Bundle().apply { putString("ticket", ticket) }
+                        })
+                    }, {
+                        if (activeOperation == id && operation != SpiderIpc.ACTIVITY_SELF_TEST) {
+                            retiring = true
+                            runCatching { reply.send(Message.obtain(null, operation).apply {
+                                arg1 = id
+                                data = Bundle().apply {
+                                    putString("payload", SpiderIpc.error("授权未完成，请重试。")
+                                        .put("authorizationEnded", true).toString())
+                                }
+                            }) }
+                            operations[id]?.cancel()
+                            watchdog.schedule({ android.os.Process.killProcess(android.os.Process.myPid()) },
+                                250, TimeUnit.MILLISECONDS)
+                        }
+                    })
                     // Cancellation cannot stop a JNI call that ignores interruption.
                     // This watchdog belongs solely to the manifest's :spider process.
                     val terminate = watchdog.schedule({
@@ -380,6 +413,16 @@ class TvBoxSpiderService : Service() {
                                 worker.releasePlayback()
                                 JSONObject().put("ok", true)
                             }
+                            SpiderIpc.ACTIVITY_SELF_TEST -> {
+                                check((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0)
+                                val host = CatVodRuntime.activity()
+                                val mainHost = withContext(Dispatchers.Main.immediate) { CatVodRuntime.activity() }
+                                JSONObject().put("ok", true).put("probe_only", true).put("host_ready", host is SpiderRuntimeActivity)
+                                    .put("pid", android.os.Process.myPid())
+                                    .put("main_has_same_window", host != null && mainHost === host)
+                                    .put("secure", host?.window?.attributes?.flags?.and(android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0 && host != null)
+                                    .put("window_attached", host?.window?.decorView?.windowToken != null)
+                            }
                             SpiderIpc.PROXY_SELF_TEST -> {
                                 check((applicationInfo.flags and
                                     android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
@@ -396,7 +439,8 @@ class TvBoxSpiderService : Service() {
                                 SpiderPlaybackEvidence.clear()
                                 val result = worker.play(SpiderIpc.readFilm(request.getJSONObject("film")),
                                     request.optInt("episode"), request.optString("line"),
-                                    request.optBoolean("allowHttp"))
+                                    request.optBoolean("allowHttp"),
+                                    foregroundPlayback = request.optBoolean("foregroundPlayback"))
                                 when (result) {
                                     is PlaybackResult.Ready -> SpiderIpc.playback(result.media)
                                     is PlaybackResult.Unavailable -> SpiderIpc.error(result.reason)
@@ -415,13 +459,15 @@ class TvBoxSpiderService : Service() {
                         Log.e("HerrinSpiderWorker", "Spider linkage failed: ${e.javaClass.simpleName}")
                         SpiderIpc.error(SpiderFailureDetails.message(e))
                     } finally {
+                        SpiderRuntimeActivityHost.end(id)
                         activeOperation = -1
                         authorization.cancel()
                         authCaller = null
                         terminate.cancel(false)
                     }
                 }
-                val bounded = if (response.toString().length <= SpiderIpc.MAX_RESPONSE_CHARS) response
+                val bounded = if (retiring) SpiderIpc.error("授权已取消，请重试。")
+                    else if (response.toString().length <= SpiderIpc.MAX_RESPONSE_CHARS) response
                     else SpiderIpc.error("Spider 返回内容超过进程通信限制")
                 val responseMessage = Message.obtain(null, operation).apply {
                     arg1 = id
@@ -453,20 +499,10 @@ class TvBoxSpiderService : Service() {
         val process = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
             .runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
         check(process == "$packageName:spider") { "Spider must run in its dedicated process" }
+        CatVodRuntime.setActivity(SpiderRuntimeActivityHost::activity)
         CatVodRuntime.setDialog { options, callback ->
-            if (authCaller == null) java.util.concurrent.CompletableFuture<String>().apply {
-                completeExceptionally(IllegalStateException("No active authorization operation"))
-            } else try {
-                authorization.show(options, callback).also { result ->
-                    val deadline = watchdog.schedule({ result.complete(null) },
-                        SpiderAuthorizationProtocol.TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                    result.whenComplete { _, _ -> deadline.cancel(false) }
-                }
-            } catch (_: Exception) {
-                java.util.concurrent.CompletableFuture<String>().apply {
-                    completeExceptionally(IllegalArgumentException("Unsupported authorization dialog"))
-                }
-            }
+            SpiderNetworkTrace.event("AUTH_ORIGINAL_DIALOG_REQUESTED")
+            SpiderRuntimeActivityHost.dialog(options, callback)
         }
     }
 
@@ -474,6 +510,8 @@ class TvBoxSpiderService : Service() {
 
     override fun onDestroy() {
         authorization.cancel()
+        SpiderRuntimeActivityHost.end()
+        CatVodRuntime.setActivity(null)
         CatVodRuntime.setDialog(null)
         proxySelfTest?.close()
         proxySelfTest = null
@@ -500,6 +538,16 @@ class TvBoxSpiderService : Service() {
  */
 internal class TvBoxSpiderBridge(context: Context) {
     private val app = context.applicationContext
+    private val foregroundActivity = java.lang.ref.WeakReference(run {
+        var candidate = context
+        while (candidate is android.content.ContextWrapper && candidate !is android.app.Activity && candidate.baseContext !== candidate)
+            candidate = candidate.baseContext
+        candidate as? android.app.Activity
+    })
+    private val kernelPages = HerrinKernelRuntime.find()?.pages
+    internal fun configureKernelWarehouse(root: String, allowHttp: Boolean) { kernelPages?.warehouse(root, allowHttp) }
+    internal fun kernelOwns(film: Film): Boolean = kernelPages?.owns(film) == true
+    internal fun kernelPlaybackLease(): String? = kernelPages?.playbackLease()
     private val pending = mutableMapOf<Int, CompletableDeferred<String>>()
     private val searchRequests=mutableSetOf<Int>()
     private val waitingForBind = mutableListOf<CompletableDeferred<Messenger>>()
@@ -525,7 +573,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     internal fun configurationTicket()=configurationEpoch.get()
     private val lastBrowse: String? get() = sourceSession.descriptor()
     /** A read-only hint, not execution authorization; worker verifies identity. */
-    fun approvedActiveSiteKey(): String? = lastBrowse?.let { payload ->
+    fun approvedActiveSiteKey(): String? = if (kernelPages != null) kernelPages.activeSite() else lastBrowse?.let { payload ->
         runCatching { JSONObject(payload).getJSONObject("site").optString("key")
             .takeIf(String::isNotBlank) }.getOrNull()
     }
@@ -535,9 +583,35 @@ internal class TvBoxSpiderBridge(context: Context) {
     private enum class TransportFault { PROCESS_EXITED, DISCONNECTED, TIMEOUT }
     @Volatile private var lastTransportFault: TransportFault? = null
 
-    private val responses = Messenger(Handler(Looper.getMainLooper()) { message ->
+    private val responses: Messenger = Messenger(Handler(Looper.getMainLooper()) { message ->
         if(message.what==SpiderIpc.CANCEL_REQUEST){
             if(message.arg1==retirementId)retirement?.complete(message.arg2==1)
+            return@Handler true
+        }
+        if (message.what == SpiderIpc.ACTIVITY_REQUEST) {
+            val operation = message.arg1
+            val ticket = message.data.getString("ticket")
+            val server = message.replyTo
+            val activity = foregroundActivity.get()
+            val current = pending.containsKey(operation) && operation !in searchRequests &&
+                server?.binder == remote?.binder &&
+                ticket?.matches(Regex("[a-f0-9-]{36}")) == true && activity != null &&
+                !activity.isFinishing && !activity.isDestroyed && activity.window.decorView.isShown &&
+                (activity !is androidx.lifecycle.LifecycleOwner || activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) &&
+                (activity !is MainActivity || activity.canPresentSourceWindow())
+            var launched = false
+            if (current) try {
+                requireNotNull(activity).startActivity(Intent(activity, SpiderRuntimeActivity::class.java)
+                    .putExtra(SpiderRuntimeActivity.EXTRA_TICKET, ticket))
+                launched = true
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "ACTIVITY_FOREGROUND_LAUNCH")
+            } catch (_: RuntimeException) {
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "ACTIVITY_LAUNCH_FAILED")
+            }
+            if (!launched) runCatching { server?.send(Message.obtain(null, SpiderIpc.ACTIVITY_DENIED).apply {
+                arg1 = operation; replyTo = responses
+                data = Bundle().apply { putString("ticket", ticket) }
+            }) }
             return@Handler true
         }
         if (message.what == SpiderIpc.AUTH_SHOW || message.what == SpiderIpc.AUTH_CLOSE) {
@@ -549,14 +623,20 @@ internal class TvBoxSpiderBridge(context: Context) {
             val respond: (String?) -> Unit = { button ->
                 runCatching { server?.send(Message.obtain(null, SpiderIpc.AUTH_ACTION).apply {
                     arg1 = operationId; arg2 = dialogId
+                    replyTo = responses
                     data = Bundle().apply { if (button != null) putString("button", button) }
                 }) }
                 Unit
             }
-            if (pending.containsKey(message.arg1)) SpiderAuthorizationUi.receive(this,
-                message.arg1, message.arg2,
-                if (message.what == SpiderIpc.AUTH_CLOSE) null else message.data.getString("payload"), respond)
-            else respond(null)
+            if (pending.containsKey(message.arg1)) {
+                HerrinPlaybackDiagnosticJournal.record("SPIDER",
+                    if (message.what == SpiderIpc.AUTH_CLOSE) "AUTH_DIALOG_CLOSE_RECEIVED" else "AUTH_DIALOG_SHOW_RECEIVED")
+                SpiderAuthorizationUi.receive(this, message.arg1, message.arg2,
+                    if (message.what == SpiderIpc.AUTH_CLOSE) null else message.data.getString("payload"), respond)
+            } else {
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "AUTH_DIALOG_EXPIRED_OPERATION")
+                respond(null)
+            }
             return@Handler true
         }
         val deferred = pending.remove(message.arg1)
@@ -619,6 +699,7 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     private suspend fun service(): Messenger {
+        check(kernelPages == null) { "Legacy Spider execution is disabled in whole-kernel mode" }
         check(!closed) { "Spider 执行服务已关闭" }
         val remaining = retiredUntil - android.os.SystemClock.uptimeMillis()
         if (remaining > 0) delay(remaining)
@@ -669,7 +750,27 @@ internal class TvBoxSpiderBridge(context: Context) {
             val authority=kotlinx.coroutines.currentCoroutineContext()[SpiderSearchAuthority]
             if(authority!=null &&authority.configuration!=configurationEpoch.get())
                 return@withLock SpiderResult.Failure("来源配置已改变，已取消旧检索")
+            // Process death is observable before onServiceDisconnected arrives.
+            // Retire its registration before taking the new operation's generation.
+            withContext(Dispatchers.Main.immediate) {
+                if (remote?.binder?.isBinderAlive == false)
+                    invalidate("Spider 子进程异常退出；正在恢复站点", TransportFault.PROCESS_EXITED)
+            }
             if (operation == SpiderIpc.BROWSE) {
+                if (payload.optBoolean("searchOnly") && sourceSession.isCurrent(invocation) &&
+                    withContext(Dispatchers.Main.immediate) {
+                        remote != null && hydratedGeneration == generation &&
+                            sourceSession.isCurrent(invocation) &&
+                            (authority == null || authority.configuration == configurationEpoch.get()) &&
+                            lastBrowse?.let { previous ->
+                                val applied = JSONObject(previous).apply { remove("searchOnly") }
+                                val requested = JSONObject(payload.toString()).apply { remove("searchOnly") }
+                                applied.toString() == requested.toString()
+                            } == true
+                    }) {
+                    HerrinPlaybackDiagnosticJournal.record("SPIDER", "INITIALIZE_REUSED")
+                    return@withLock SpiderResult.Ready(JSONObject().put("films", JSONArray()))
+                }
                 val started = withContext(Dispatchers.Main.immediate) {
                     if(authority!=null &&authority.configuration!=configurationEpoch.get())return@withContext null
                     sourceSession.beginBrowse(invocation)?.let { ticket ->
@@ -713,6 +814,9 @@ internal class TvBoxSpiderBridge(context: Context) {
                     }
                 }
                 val result = sendRequest(operation, payload, invocation)
+                // The worker may exit immediately after the denial. That
+                // transport change cannot reopen an explicitly ended dialog.
+                if (result is SpiderResult.Failure && result.authorizationEnded) return@withLock result
                 if (!sourceSession.isCurrent(invocation))
                     return@withLock SpiderResult.Failure("Spider 会话已结束或变化，已取消操作")
                 if (startedGeneration == generation) return@withLock result
@@ -784,7 +888,8 @@ internal class TvBoxSpiderBridge(context: Context) {
         val result = withContext(Dispatchers.Default){JSONObject(response)}
         if (operation == SpiderIpc.PLAY) SpiderPlaybackEvidence.replay(result.optJSONArray("playbackEvidence"))
         if (result.optBoolean("ok")) SpiderResult.Ready(result)
-        else SpiderResult.Failure(result.optString("message").ifBlank { "Spider 返回错误" })
+        else SpiderResult.Failure(result.optString("message").ifBlank { "Spider 返回错误" },
+            authorizationEnded = result.optBoolean("authorizationEnded"))
     } catch (timeout: TimeoutCancellationException) {
         kotlinx.coroutines.currentCoroutineContext().let { context -> context[Job]?.ensureActive() }
         SpiderResult.Failure("Spider 服务响应超时，请重新应用站点")
@@ -834,8 +939,8 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     suspend fun browse(site: TvBoxSite, config: TvBoxConfig.Single, searchOnly: Boolean = false): SpiderResult<List<Film>> {
+        kernelPages?.let { configurationEpoch.incrementAndGet(); return it.browse(site, config) }
         val invocation = sourceSession.snapshot()
-        withContext(Dispatchers.Main.immediate) { SpiderAuthorizationUi.clear(this@TvBoxSpiderBridge) }
         val payload = JSONObject().put("site", SpiderIpc.site(site))
             .put("searchOnly", searchOnly)
             .put("originSecret", sourceSession.filmSecret(invocation)
@@ -859,6 +964,7 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     /** Search ONLY the previously user-applied active Spider site. */
     suspend fun search(site: TvBoxSite, query: String): SpiderResult<List<Film>> {
+        kernelPages?.let { return it.search(site, query) }
         val invocation = sourceSession.snapshot()
         val keyword = query.trim().take(120)
         if (keyword.length < 2) return SpiderResult.Failure("搜索片名太短")
@@ -881,26 +987,34 @@ internal class TvBoxSpiderBridge(context: Context) {
     }
 
     suspend fun details(film: Film): SpiderResult<Film> {
+        kernelPages?.let { return it.details(film) }
         val invocation = sourceSession.snapshot()
         if (!ownsFilm(film, invocation)) return SpiderResult.Failure("Spider 影片来源已失效，请重新查找片源")
         return when (val response = request(SpiderIpc.DETAILS,
             JSONObject().put("film", SpiderIpc.film(film)), invocation)) {
             is SpiderResult.Failure -> response
             is SpiderResult.Ready -> try {
-                SpiderResult.Ready(SpiderIpc.readFilm(response.value.getJSONObject("film")))
+                val detail = SpiderIpc.readFilm(response.value.getJSONObject("film"))
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "DETAILS_RETURNED", "COUNT=${detail.playbackEpisodes.size.coerceAtMost(99999)}")
+                HerrinPlaybackDiagnosticJournal.record("SPIDER", "DETAIL_LINES_RETURNED", "COUNT=${detail.playbackEpisodes.firstOrNull()?.lines?.size?.coerceAtMost(99999) ?: 0}")
+                SpiderResult.Ready(detail)
             } catch (error: Exception) {
                 SpiderResult.Failure("Spider 详情无效：" + SpiderFailureDetails.message(error))
             }
         }
     }
 
-    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean): PlaybackResult {
+    suspend fun play(film: Film, episode: Int, line: String, allowHttp: Boolean,
+                     foregroundPlayback: Boolean = false): PlaybackResult {
+        kernelPages?.let { return it.media(film, episode, line) }
         playbackLease.incrementAndGet()
         val invocation = sourceSession.snapshot()
         if (!ownsFilm(film, invocation))
             return PlaybackResult.Unavailable("Spider 影片或选集来源已失效，请重新查找片源")
         val payload = JSONObject().put("film", SpiderIpc.film(film))
             .put("episode", episode).put("line", line).put("allowHttp", allowHttp)
+            .put("foregroundPlayback", foregroundPlayback &&
+                kotlinx.coroutines.currentCoroutineContext()[SpiderRequestBudget] == null)
         return when (val response = request(SpiderIpc.PLAY, payload, invocation)) {
             is SpiderResult.Failure -> PlaybackResult.Unavailable(response.message)
             is SpiderResult.Ready -> try {
@@ -973,7 +1087,7 @@ internal class TvBoxSpiderBridge(context: Context) {
         return health
     }
 
-    fun isApprovedSourceFilm(film: Film): Boolean = ownsFilm(film, sourceSession.snapshot())
+    fun isApprovedSourceFilm(film: Film): Boolean = kernelPages?.owns(film) ?: ownsFilm(film, sourceSession.snapshot())
 
     private fun ownsFilm(film: Film, invocation: Long): Boolean = runCatching {
         val secret = sourceSession.filmSecret(invocation) ?: return false
@@ -990,7 +1104,8 @@ internal class TvBoxSpiderBridge(context: Context) {
      */
     private val playbackLease = java.util.concurrent.atomic.AtomicLong()
 
-    fun releasePlayback() {
+    fun releasePlayback(expectedKernelSession: String? = null) {
+        kernelPages?.let { it.releasePlayback(expectedKernelSession); return }
         val selectedLease = playbackLease.get()
         val selectedSource = lastBrowse
         val selectedGeneration = generation
@@ -1019,6 +1134,9 @@ internal class TvBoxSpiderBridge(context: Context) {
 
     internal suspend fun awaitPlaybackReleaseForInstrumentation() { cleanupJob?.join() }
 
+    internal suspend fun probeRemoteActivityForInstrumentation(): SpiderResult<JSONObject> =
+        requests.withLock { sendRequest(SpiderIpc.ACTIVITY_SELF_TEST, JSONObject()) }
+
     internal suspend fun probeRemoteProxyForInstrumentation(): SpiderResult<String> =
         requests.withLock {
             when (val result = sendRequest(SpiderIpc.PROXY_SELF_TEST, JSONObject())) {
@@ -1028,6 +1146,7 @@ internal class TvBoxSpiderBridge(context: Context) {
         }
 
     fun close() {
+        kernelPages?.let { configurationEpoch.incrementAndGet(); it.close(); return }
         configurationEpoch.incrementAndGet()
         // Revoke immediately, even when main-thread cleanup is still queued.
         sourceSession.revoke()

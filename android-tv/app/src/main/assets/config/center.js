@@ -1,63 +1,230 @@
 'use strict';
-let pairing=location.hash.slice(1), session='', polling=false;
+let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0,formRevision=0,sourceFormRevision=0,browsedConnection=null,browsedPath="",browseParent=null;
 history.replaceState(null,'',location.pathname);
-const status=document.querySelector('#status');
-async function call(path,value={}){
- const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Herrin-Session':session},body:JSON.stringify(value),cache:'no-store',credentials:'omit'});
- if(!r.ok)throw Error(r.status===403?'会话已失效，请从电视重新开启':'配置无效或保存失败');return r.json();
+const $=s=>document.querySelector(s);
+const status=$('#status');
+const busyOwners=new Map(),inFlightRequests=new Set();
+function notice(message,owner){
+ // A background request must never display a result in a different module or ended session.
+ if(!session||$('#manager').hidden||owner!==tab)return;
+ const el=$('#module-toast');el.textContent=message;el.hidden=false;
+ clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true},2400);
 }
-document.querySelector('#pair').onclick=async()=>{
- if(!document.querySelector('#verified').checked){status.textContent='请先核对证书指纹';return;}
- if(polling)return;polling=true;
- try{while(!session){const r=await call('/pair',{pairing});session=r.session;if(!session){status.textContent='请在电视确认此配对';await new Promise(r=>setTimeout(r,1500));}}
- pairing='';document.querySelector('#trust').hidden=true;document.querySelector('#manager').hidden=false;
- const r=await call('/status');document.querySelector('#endpoint').textContent=r.endpoint+' · '+(r.tokenConfigured?'已配置':'未配置');
- document.querySelector('#sources [name=url]').value=r.tvbox;document.querySelector('#live [name=m3u]').value=r.m3u;document.querySelector('#live [name=epg]').value=r.epg;document.querySelector('#nas [name=url]').value=r.nas;document.querySelector('#cloud [name=url]').value=r.cloud||'';document.querySelector('#smb [name=url]').value=r.smb?.url||'';document.querySelector('#smb [name=encryption]').checked=!!r.smb?.encryption;
- status.textContent='已配对，各模块共用会话；最长 30 分钟，退出电视配置页立即结束';
- }catch(e){status.textContent=e.message;}finally{polling=false;}
+function toast(ok,owner){notice(ok?'成功':'失败',owner)}
+function releaseBusy(button){if(busyOwners.delete(button))button.disabled=false}
+function beginBusy(button){
+ const owner=Symbol(),epoch=moduleEpoch,authorizedSession=session;busyOwners.set(button,owner);button.disabled=true;
+ return ()=>{if(busyOwners.get(button)!==owner)return;busyOwners.delete(button);
+  if(epoch===moduleEpoch&&authorizedSession===session)button.disabled=false};
+}
+function advanceModuleScope(ending=false){
+ moduleEpoch++;sourcePoll++;
+ for(const button of [...busyOwners.keys()])releaseBusy(button);
+ for(const request of inFlightRequests){
+  if(request.path!=='/pair'&&request.path!=='/end'&&(ending||request.path!=='/personal/save'))request.controller.abort();
+ }
+}
+async function call(path,data={}){
+ const requestedSession=session,requestedModule=moduleEpoch;
+ const stale=()=>path!=='/pair'&&(requestedSession!==session||(path!=='/personal/save'&&requestedModule!==moduleEpoch));
+ const request={path,controller:new AbortController()};inFlightRequests.add(request);
+ const deadline=setTimeout(()=>request.controller.abort(),30000);
+ try{
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Herrin-Session':session},
+   body:JSON.stringify(data),cache:'no-store',credentials:'omit',signal:request.controller.signal});
+  const json=await r.json();
+  if(stale())throw Object.assign(Error('STALE_SESSION'),{stale:true});
+  if(!json||typeof json!=='object'||Array.isArray(json))throw Error('INVALID_JSON_RESPONSE');
+  if(!r.ok)throw Error(json.code||('HTTP_'+r.status));
+  return json;
+ }catch(error){
+  if(stale())error.stale=true;
+  if(!error.stale)console.warn('HERRIN request failed',path,error.name);
+  throw error;
+ }finally{clearTimeout(deadline);inFlightRequests.delete(request)}
+}
+function busy(button,enabled){button.disabled=enabled}
+function button(parent,label,action){
+ const b=document.createElement('button'),owner=parent.closest('#nas')?'nas':tab;b.type='button';b.textContent=label;
+ b.onclick=async()=>{if(b.disabled)return;const finish=beginBusy(b);try{await action()}catch(error){if(!error.stale)toast(false,owner)}finally{finish()}};
+ parent.append(b);return b;
+}
+function switchTab(target){
+ advanceModuleScope();closePersonalDirectory();tab=target;
+ document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===target));
+ for(const name of ['sources','nas','tmdb','live'])$('#'+name).hidden=name!==target;
+ clearTimeout(toastTimer);$('#module-toast').hidden=true;
+ if(target==='nas')refreshPersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
+}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+$('#pair').onclick=async()=>{
+ if(!$('#verified').checked){status.textContent='请核对电视证书指纹';return}
+ if($('#pair').disabled)return;
+ const b=$('#pair');busy(b,true);
+ try {
+  while(!session){
+   const p=await call('/pair',{pairing});session=p.session||'';
+   if(!session){status.textContent='请在电视确认配对';await new Promise(r=>setTimeout(r,1500))}
+  }
+  pairing='';status.textContent='';
+  const config=await call('/status');
+  $('#sources [name=url]').value=config.tvbox||'';
+  $('#live [name=m3u]').value=config.m3u||'';
+  $('#live [name=epg]').value=config.epg||'';
+  $('#trust').hidden=true;$('#manager').hidden=false;
+  switchTab('sources');
+ }catch(error){if(!error.stale)status.textContent=session?'连接失败，请重试':'配对失败，请在电视重新扫码'}finally{busy(b,false)}
 };
-let module='tmdb';
-async function refreshEntries(){
- document.querySelector('#cloud').hidden=module!=='nas';document.querySelector('#smb').hidden=module!=='nas';
- const additional=document.querySelector('#additional');additional.hidden=module==='tmdb';document.querySelector('#catalog-manager').hidden=module!=='sources';if(additional.hidden)return;
- document.querySelector('#entry-edit').hidden=false;
- document.querySelector('#extra-epg').hidden=module!=='live';document.querySelector('#extra-login').hidden=module!=='nas';document.querySelector('#batch').hidden=module!=='sources';await refreshCatalogs();
- const r=await call('/entries',{module});const list=document.querySelector('#entries');list.replaceChildren();
- r.entries.forEach(entry=>{const row=document.createElement('p');const name=document.createElement('span');name.textContent=entry.name+' · '+(entry.enabled?'启用':'停用');row.append(name);
- const button=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await action();}catch(e){status.textContent=e.message;}};row.append(b);};
- button('编辑',()=>{const f=document.querySelector('#entry-edit');for(const key of ['id','name','url','epg'])f.elements[key].value=entry[key]||'';f.elements.enabled.checked=entry.enabled;f.elements.password.value='';});
- button(entry.enabled?'停用':'启用',async()=>{await call('/entries/save',{...entry,module,enabled:!entry.enabled});await refreshEntries();});
- button('删除',async()=>{await call('/entries/delete',{module,id:entry.id});await refreshEntries();});
- if(module==='nas')button('测试',async()=>{status.textContent=(await call('/nas/test',{id:entry.id})).result;});list.append(row);});
+async function watchSource(id,ownerModule,ownerForm){
+ const ticket=++sourcePoll,started=Date.now();
+ const current=()=>session&&ticket===sourcePoll&&ownerModule===moduleEpoch&&ownerForm===sourceFormRevision&&tab==='sources';
+ while(current()){
+  if(Date.now()-started>50000){notice('仍在处理，请稍后查看','sources');return}
+  const r=await call('/sources/status',{importId:id});
+  if(!current())return;
+  if(r.state==='ACTIVE'){
+   const saved=await call('/status');
+   if(current()){$('#sources [name=url]').value=saved.tvbox||'';toast(true,'sources')}
+   return;
+  }
+  if(['FAILED','SUPERSEDED'].includes(r.state)){toast(false,'sources');return}
+  await new Promise(r=>setTimeout(r,1100));
+ }
 }
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=async()=>{module=b.dataset.tab;document.querySelectorAll('form').forEach(f=>f.hidden=f.id!==module);document.querySelector('#entry-edit').reset();try{await refreshEntries();if(module==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}});
-document.querySelectorAll('form:not(#entry-edit):not(#catalog-edit)').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const button=f.querySelector('button');button.disabled=true;try{const data=Object.fromEntries(new FormData(f));if(f.id==='smb')data.encryption=f.elements.encryption.checked;await call('/'+f.id,data);f.querySelectorAll('[type=password]').forEach(i=>i.value='');status.textContent='保存成功，电视正在应用';if(f.id==='tmdb')await refreshTmdbStatus();}catch(e){status.textContent=e.message;}finally{button.disabled=false;}});
-document.querySelector('#test').onclick=async()=>{try{status.textContent=(await call('/tmdb/test')).result;await refreshTmdbStatus();}catch(e){status.textContent=e.message;}};
-document.querySelector('#end').onclick=async()=>{try{await call('/end');}finally{session='';document.querySelector('#manager').hidden=true;status.textContent='会话已结束，请在电视重新开启';}};
-// Editing a long form is activity; refresh only while the user is actively editing.
-let lastActivity=Date.now();document.oninput=()=>{lastActivity=Date.now();};
-setInterval(()=>{if(session&&Date.now()-lastActivity<60000)call('/status').catch(()=>{});},45000);
-
-document.querySelector('#entry-edit').onsubmit=async e=>{e.preventDefault();const f=e.target;const data=Object.fromEntries(new FormData(f));data.module=module;data.enabled=f.elements.enabled.checked;if(data.id&&!data.password)delete data.password;try{await call('/entries/save',data);f.reset();await refreshEntries();status.textContent='已保存并通知电视';}catch(e){status.textContent=e.message;}};
-document.querySelector('#new-entry').onclick=()=>document.querySelector('#entry-edit').reset();
-document.querySelector('#batch-save').onclick=async()=>{try{await call('/entries/batch',{urls:document.querySelector('#batch-urls').value});await refreshEntries();status.textContent='批量地址已保存并去重';}catch(e){status.textContent=e.message;}};
-
-async function refreshCatalogs(){
- const section=document.querySelector('#catalog-manager');section.hidden=module!=='sources';if(section.hidden)return;
- document.querySelector('#catalog-edit').hidden=false;const data=await call('/catalogs');const list=document.querySelector('#catalog-list');list.replaceChildren();
- data.entries.forEach(entry=>{const row=document.createElement('p');row.textContent=entry.name+(data.active===entry.id?' · 已启用':'');
- const add=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await action();}catch(e){status.textContent=e.message;}};row.append(b);};
- add('编辑',()=>{const f=document.querySelector('#catalog-edit');for(const key of ['id','name','url'])f.elements[key].value=entry[key];});
- add('启用',async()=>{await call('/catalogs/activate',{id:entry.id});await refreshCatalogs();});
- add('删除',async()=>{await call('/catalogs/delete',{id:entry.id});await refreshCatalogs();});list.append(row);});
+$('#sources').addEventListener('input',()=>{
+ sourceFormRevision++;sourcePoll++;releaseBusy($('#sources button[type=submit]'));
+ for(const request of inFlightRequests)if(request.path==='/sources/status')request.controller.abort();
+ if(tab==='sources'){clearTimeout(toastTimer);$('#module-toast').hidden=true}
+});
+$('#sources').onsubmit=async e=>{
+ e.preventDefault();const b=e.target.querySelector('button[type=submit]');if(b.disabled)return;
+ const ownerModule=moduleEpoch,ownerForm=sourceFormRevision,finish=beginBusy(b);
+ try{const r=await call('/sources',{url:e.target.elements.url.value});if(!r.importId)throw Error('MISSING_IMPORT_ID');
+  if(ownerModule===moduleEpoch&&ownerForm===sourceFormRevision)await watchSource(r.importId,ownerModule,ownerForm)}
+ catch(error){if(!error.stale&&ownerModule===moduleEpoch&&ownerForm===sourceFormRevision)toast(false,'sources')}finally{finish()}
+};
+$('#tmdb').onsubmit=async e=>{
+ e.preventDefault();const b=e.target.querySelector('button[type=submit]');if(b.disabled)return;const finish=beginBusy(b);
+ const token=e.target.elements.token,submitted=token.value;
+ try{await call('/tmdb',{token:submitted});if(token.value===submitted)token.value='';toast(true,'tmdb')}
+ catch(error){if(!error.stale)toast(false,'tmdb')}finally{finish()}
+};
+$('#live').onsubmit=async e=>{
+ e.preventDefault();const b=e.target.querySelector('button[type=submit]');if(b.disabled)return;const finish=beginBusy(b);
+ try{await call('/live',{m3u:e.target.elements.m3u.value,epg:e.target.elements.epg.value});toast(true,'live')}
+ catch(error){if(!error.stale)toast(false,'live')}finally{finish()}
+};
+function switchProtocol(next){
+ advanceModuleScope();formRevision++;protocol=next;document.querySelectorAll('[data-personal-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.personalTab===next));
+ const f=$('#personal-edit');f.reset();f.elements.id.value='';f.elements.protocol.value=next==='SMB'?'smb':'https';
+ f.elements.address.placeholder=next==='SMB'?'IP 或域名':'http:// 或 https://';
+ $('#smb-port').hidden=false;f.elements.port.disabled=false;f.elements.port.value=next==='SMB'?'445':'';
+ $('#personal-cancel').hidden=true;f.querySelector('button[type=submit]').textContent='添加';
+ closePersonalDirectory();
 }
-document.querySelector('#catalog-edit').onsubmit=async e=>{e.preventDefault();try{await call('/catalogs/save',Object.fromEntries(new FormData(e.target)));e.target.reset();await refreshCatalogs();status.textContent='目录已保存';}catch(e){status.textContent=e.message;}};
-document.querySelector('#catalog-new').onclick=()=>document.querySelector('#catalog-edit').reset();
-document.querySelector('#catalog-disable').onclick=async()=>{try{await call('/catalogs/activate',{id:''});await refreshCatalogs();}catch(e){status.textContent=e.message;}};
-
-async function refreshTmdbStatus(){const r=await call('/status');document.querySelector('#endpoint').textContent=r.endpoint+' · '+(r.tokenConfigured?'已配置':'未配置');}
-document.querySelector('#nas-test').onclick=async()=>{try{status.textContent=(await call('/nas/test')).result;}catch(e){status.textContent=e.message;}};
-
-document.querySelector('#cloud-test').onclick=async()=>{try{status.textContent=(await call('/cloud/test')).result;}catch(e){status.textContent=e.message;}};
-
-document.querySelector('#smb-test').onclick=async()=>{try{status.textContent=(await call('/smb/test')).result;}catch(e){status.textContent=e.message;}};
+document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(error=>{if(!error.stale)toast(false,'nas')})});
+$('#personal-cancel').onclick=()=>switchProtocol(protocol);
+async function personal(path,data={}){
+ const r=await call('/personal'+path,data);if(r.ok===false)throw Error('PERSONAL_FAILED');return r;
+}
+async function refreshPersonal(){
+ const ticket=++personalRefreshToken,requestedProtocol=protocol;
+ const data=await personal('',{});
+ if(!session||ticket!==personalRefreshToken||requestedProtocol!==protocol||tab!=='nas')return;
+ const list=$('#personal-connections');
+ closePersonalDirectory();
+ list.replaceChildren();
+ for(const c of data.connections||[]){
+  if((c.protocol==='smb')!==(protocol==='SMB'))continue;
+  const row=document.createElement('div');row.className='connection';row.dataset.connection=c.id;
+  const name=document.createElement('span');name.className='name';name.textContent=c.name+(c.enabled?' · 启用':' · 停用');row.append(name);
+  const actions=document.createElement('div');actions.className='actions';row.append(actions);
+  button(actions,'编辑',()=>{const f=$('#personal-edit');switchProtocol(protocol);
+   for(const key of ['id','name','username','path','domain','encryption'])f.elements[key].value=c[key]||'';
+   f.elements.address.value=protocol==='SMB'?c.host:(c.address||'');
+   f.elements.port.value=c.port||'';
+   $('#personal-cancel').hidden=false;f.querySelector('button[type=submit]').textContent='保存';
+  });
+  if(c.enabled)button(actions,'浏览目录',()=>{
+   if(browsedConnection===c.id){closePersonalDirectory();return}
+   closePersonalDirectory();
+   browsedConnection=c.id;browsedPath=c.path||'';
+   row.append($('#personal-browser'));$('#personal-browser').hidden=false;
+   showPersonalDirectory();
+  });
+  button(actions,c.enabled?'停用':'启用',async()=>{await personal('/toggle',{id:c.id});await refreshPersonal();toast(true,'nas')});
+  button(actions,'删除',async()=>{if(!confirm('确定删除？'))return;await personal('/delete',{id:c.id,confirmed:true});await refreshPersonal();toast(true,'nas')});
+  list.append(row);
+ }
+}
+$('#personal-edit').addEventListener('input',()=>{formRevision++});
+function personalDraft(f, selectedProtocol){
+ const data=Object.fromEntries(new FormData(f));
+ if(selectedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
+ else {data.protocol='https';delete data.host;data.port=Number(data.port)||''}
+ if(data.id&&!data.password)delete data.password;
+ return data;
+}
+$('#personal-edit').onsubmit=async e=>{
+ e.preventDefault();const f=e.target,b=f.querySelector('button[type=submit]'),requestedProtocol=protocol,requestedModule=moduleEpoch,requestedForm=formRevision;if(b.disabled)return;const finish=beginBusy(b);
+ try{
+  const data=personalDraft(f,requestedProtocol);
+  const result=await personal('/save',data);
+  // Only the original form may clear its submitted secret, even when a new form reuses the same text.
+  if(requestedForm===formRevision&&requestedProtocol===protocol&&f.elements.password.value===data.password)f.elements.password.value='';
+  // Commit is complete, but a late response must not overwrite a newly selected form.
+  if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
+  f.reset();f.elements.id.value='';f.elements.protocol.value=protocol==='SMB'?'smb':'https';
+  f.elements.port.value=protocol==='SMB'?'445':'';
+  $('#personal-cancel').hidden=true;f.querySelector('button[type=submit]').textContent='添加';
+  await refreshPersonal();
+  if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
+  toast(true,'nas');
+ }catch(error){if(!error.stale&&requestedModule===moduleEpoch)toast(false,'nas')}finally{finish()}
+};
+function closePersonalDirectory(){
+ directoryBrowseToken++;browsedConnection=null;browsedPath='';directoryPage=0;browseParent=null;
+ const browser=$('#personal-browser');browser.hidden=true;$('#nas').append(browser);
+ $('#personal-directories').replaceChildren();
+}
+function renderDirectories(result){
+ $('#personal-current-path').textContent=result.displayPath||'/'+browsedPath;
+ browseParent=result.parent??null;
+ $('#personal-parent').hidden=browseParent===null;
+ const el=$('#personal-directories');el.replaceChildren();
+ for(const item of result.files||[]){
+  if(item.directory)button(el,item.name,()=>{browsedPath=item.path;directoryPage=0;showPersonalDirectory()});
+  else {const file=document.createElement('div');file.textContent=item.name;el.append(file)}
+ }
+ $('#personal-directory-previous').hidden=directoryPage===0;
+ $('#personal-directory-next').hidden=(directoryPage+1)*100>=(result.total||0);
+}
+function showPersonalDirectory(){
+ browsePersonal().catch(error=>{if(!error.stale && browsedConnection)toast(false,'nas')});
+}
+async function browsePersonal(){
+ if(!browsedConnection)return;
+ const ticket=++directoryBrowseToken,id=browsedConnection,path=browsedPath,page=directoryPage;
+ $('#personal-current-path').textContent='/'+path;
+ $('#personal-parent').hidden=true;
+ $('#personal-directory-previous').hidden=true;
+ $('#personal-directory-next').hidden=true;
+ $('#personal-directories').replaceChildren();
+ try{
+  const result=await personal('/browse',{id,path,offset:page*100});
+  if(ticket!==directoryBrowseToken||id!==browsedConnection||tab!=='nas')return;
+  renderDirectories(result);
+ }catch(error){if(ticket===directoryBrowseToken&&browsedConnection===id)throw error}
+}
+$('#personal-parent').onclick=()=>{if(browseParent===null)return;browsedPath=browseParent;directoryPage=0;showPersonalDirectory()};
+$('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);showPersonalDirectory()};
+$('#personal-directory-next').onclick=()=>{directoryPage++;showPersonalDirectory()};
+$('#end').onclick=async()=>{
+ directoryBrowseToken++;personalRefreshToken++;
+ const ending=call('/end');session='';advanceModuleScope(true);
+ clearTimeout(toastTimer);$('#module-toast').hidden=true;$('#manager').hidden=true;status.textContent='会话已结束';
+ // The old logout response has no authority to close a subsequently paired session.
+ try{await ending}catch(_){/* The local session is closed even if the TV is unreachable. */}
+};
+setInterval(()=>{if(session)call('/status').catch(()=>{})},45000);
+switchProtocol('WebDAV');

@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 /** Original HTTP protocol fixtures only; never real provider/playback evidence. */
 class SpiderManifestReferenceTest {
     private fun client() = OkHttpClient.Builder()
+        .proxy(java.net.Proxy.NO_PROXY) // Local DNS fixture must not use the host build proxy.
         .dns(object : Dns { override fun lookup(hostname: String) = listOf(InetAddress.getByName("127.0.0.1")) })
         .followRedirects(false).followSslRedirects(false)
         .callTimeout(2, TimeUnit.SECONDS).build()

@@ -1,0 +1,129 @@
+{
+  "source_sha": "f1abdd0f30c13f59f8cc8a5fdcbccf48c1a1364b",
+  "run": 44691313055,
+  "tests": 289,
+  "passed": 269,
+  "failed": 20,
+  "failures": [
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "advancedPreviewRetainsEmptyInitializedSource",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.EmptySpiderHomeSelectionTest.importOriginalFixture(EmptySpiderHomeSelectionTest.kt:81)\nat tv.herrin.app.EmptySpiderHomeSelectionTest.advancedPreviewRetainsEmptyInitializedSource(EmptySpiderHomeSelectionTest.kt:126)\n"
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.EmptySpiderHomeSelectionTest.importOriginalFixture(EmptySpiderHomeSelectionTest.kt:81)\nat tv.herrin.app.EmptySpiderHomeSelectionTest.selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken(EmptySpiderHomeSelectionTest.kt:143)\n"
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "sitePickerRetainsEmptyInitializedSourceAndRestoresItOnRecreate",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.EmptySpiderHomeSelectionTest.importOriginalFixture(EmptySpiderHomeSelectionTest.kt:81)\nat tv.herrin.app.EmptySpiderHomeSelectionTest.sitePickerRetainsEmptyInitializedSourceAndRestoresItOnRecreate(EmptySpiderHomeSelectionTest.kt:111)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "myPersonalSourcesShortcutOpensStorageManager",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: No node found that matches TestTag = 'personal-field-host' in scrollable container\nSemantics of the node:\nNode #2103 at (l=270.0, t=0.0, r=1920.0, b=1080.0)px, Tag: 'settings-list'\nIsTraversalGroup = 'true'\nVerticalScrollAxisRange = 'ScrollAxisRange(value=0.0, maxValue=0.0, reverseScrolling=false)'\nCollectionInfo = 'androidx.compose.ui.semantics.CollectionInfo@51cabae'\nActions = [ScrollBy, ScrollByOffset, IndexForKey, ScrollToIndex, GetScrollViewportLength]\nHas 11 children, 5 siblings\nSelector used: (TestTag = 'settings-list')\n\nat androidx.compose.ui.test.ActionsKt.performScrollToNode(Actions.kt:264)\nat tv.herrin.app.HerrinUiSmokeTest.myPersonalSourcesShortcutOpensStorageManager(HerrinUiSmokeTest.kt:368)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "sourceSiteExplanationIsConsumerFriendlyWithoutRuntimeWords",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 5000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.HerrinUiSmokeTest.sourceSiteExplanationIsConsumerFriendlyWithoutRuntimeWords(HerrinUiSmokeTest.kt:224)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:704)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "applyingLiveSourcePopulatesLiveTabWithoutHttpToggle",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.HerrinUiSmokeTest.applyingLiveSourcePopulatesLiveTabWithoutHttpToggle(HerrinUiSmokeTest.kt:518)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.HerrinUiSmokeTest.applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab(HerrinUiSmokeTest.kt:477)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "homeDpadDownMovesFromNavigationToHeroThenFirstPoster",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Failed to assert the following: (Focused = 'true')\nReason: Expected exactly '1' node but could not find any node that satisfies: (TestTag = 'play')\n\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)\nat androidx.compose.ui.test.AssertionsKt.assert(Assertions.kt:263)\nat androidx.compose.ui.test.AssertionsKt.assert$default(Assertions.kt:255)\nat androidx.compose.ui.test.AssertionsKt.assertIsFocused(Assertions.kt:116)\nat tv.herrin.app.HerrinUiSmokeTest.homeDpadDownMovesFromNavigationToHeroThenFirstPoster(HerrinUiSmokeTest.kt:292)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "spiderOnlySourceDoesNotSilentlyFallBackToDemoFilms",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.HerrinUiSmokeTest.spiderOnlySourceDoesNotSilentlyFallBackToDemoFilms(HerrinUiSmokeTest.kt:548)\n"
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "homeHeaderKeepsCompactSettingsAndExactlyTwoSourceInputs",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Assert failed: The component is not displayed!\nat androidx.compose.ui.test.AssertionsKt.assertIsDisplayed(Assertions.kt:34)\nat tv.herrin.app.HerrinUiSmokeTest.homeHeaderKeepsCompactSettingsAndExactlyTwoSourceInputs(HerrinUiSmokeTest.kt:206)\n"
+    },
+    {
+      "class": "tv.herrin.app.M438SingleWarehousePerformanceTest",
+      "test": "singleWarehouseLoadsAllSitesAndDpadHasNoSevereStall",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.M438SingleWarehousePerformanceTest.singleWarehouseLoadsAllSitesAndDpadHasNoSevereStall(M438SingleWarehousePerformanceTest.kt:80)\n"
+    },
+    {
+      "class": "tv.herrin.app.M449SettingsNoIdleBurstTest",
+      "test": "rapidSidebarKeysChangeDirectionWithoutOpeningIme",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 5000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.M449SettingsNoIdleBurstTest.rapidSidebarKeysChangeDirectionWithoutOpeningIme(M449SettingsNoIdleBurstTest.kt:44)\n"
+    },
+    {
+      "class": "tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest",
+      "test": "wrongSelectedMovieIsRejectedAndRetryUsesOnlyRealSelectedFilm",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 12000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest.wrongSelectedMovieIsRejectedAndRetryUsesOnlyRealSelectedFilm(M454CmsOneTapRecoveryInstrumentedTest.kt:73)\n"
+    },
+    {
+      "class": "tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest",
+      "test": "cmsListingWithHttpFirstAndHttpsSecondPlaysWithoutAnotherDetailRequest",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 12000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest.cmsListingWithHttpFirstAndHttpsSecondPlaysWithoutAnotherDetailRequest(M454CmsOneTapRecoveryInstrumentedTest.kt:157)\n"
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: No node found that matches TestTag = 'vod-apply-feedback' in scrollable container\nSemantics of the node:\nNode #25506 at (l=270.0, t=0.0, r=1920.0, b=1080.0)px, Tag: 'settings-list'\nIsTraversalGroup = 'true'\nVerticalScrollAxisRange = 'ScrollAxisRange(value=0.0, maxValue=0.0, reverseScrolling=false)'\nCollectionInfo = 'androidx.compose.ui.semantics.CollectionInfo@c747ff5'\nActions = [ScrollBy, ScrollByOffset, IndexForKey, ScrollToIndex, GetScrollViewportLength]\nHas 5 children, 5 siblings\nSelector used: (TestTag = 'settings-list')\n\nat androidx.compose.ui.test.ActionsKt.performScrollToNode(Actions.kt:264)\nat tv.herrin.app.P0ExitAndEntryTest.phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply(P0ExitAndEntryTest.kt:165)\n"
+    },
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "heroDetailsRemainsDetailsAndHeroPlayDirectlyDecodesThenRestoresButtonFocus",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Action performScrollTo() failed.\nReason: Expected exactly '1' node but could not find any node that satisfies: (TestTag = 'play')\n\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)\nat androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:76)\nat tv.herrin.app.P0RecentPlaybackReturnTest.playAndReturnTo(P0RecentPlaybackReturnTest.kt:96)\nat tv.herrin.app.P0RecentPlaybackReturnTest.heroDetailsRemainsDetailsAndHeroPlayDirectlyDecodesThenRestoresButtonFocus(P0RecentPlaybackReturnTest.kt:114)\n"
+    },
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan",
+      "status": "failed",
+      "failure": "java.lang.AssertionError: Failed to inject touch input.\nReason: Expected exactly '1' node but could not find any node that satisfies: (TestTag = 'play')\n\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)\nat androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)\nat androidx.compose.ui.test.ActionsKt.performTouchInput(Actions.kt:394)\nat androidx.compose.ui.test.Actions_androidKt.performClickImpl(Actions.android.kt:20)\nat androidx.compose.ui.test.ActionsKt.performClick(Actions.kt:54)\nat tv.herrin.app.P0RecentPlaybackReturnTest.failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan(P0RecentPlaybackReturnTest.kt:128)\n"
+    },
+    {
+      "class": "tv.herrin.app.StartupParallelPreparationTest",
+      "test": "networkStartsBehindCurtainAndSurvivesCurtainRemoval",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.junit4.android.ComposeNotIdleException: Idling resource timed out: possibly due to compose being busy.\nIdlingResourceRegistry has the following idling resources registered:\n- [busy] ComposeIdlingResource is busy due to pending recompositions.\n- Note: Timeout on pending recomposition means that there are most likely infinite re-compositions happening in the tested code.\n- Debug: hadRecomposerChanges = true, hadSnapshotChanges = false, hadAwaitersOnMainClock = false\nAll registered idling resources: Compose-Espresso link\nat androidx.compose.ui.test.EspressoLink_androidKt.rethrowWithMoreInfo(EspressoLink.android.kt:136)\nat androidx.compose.ui.test.EspressoLink_androidKt.runEspressoOnIdle(EspressoLink.android.kt:110)\nat androidx.compose.ui.test.EspressoLink.runUntilIdle(EspressoLink.android.kt:79)\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment.waitForIdle(ComposeUiTest.android.kt:346)\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment.access$waitForIdle(ComposeUiTest.android.kt:219)\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitForIdle(ComposeUiTest.android.kt:416)\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.setContent(ComposeUiTest.android.kt:499)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.setContent(AndroidComposeTestRule.android.kt:348)\nat tv.herrin.app.StartupParallelPreparationTest.networkStartsBehindCurtainAndSurvivesCurtainRemoval(StartupParallelPreparationTest.kt:14)\n... 52 trimmed\nCaused by: androidx.test.espresso.IdlingResourceTimeoutException: Wait for [Compose-Espresso link] to become idle timed out\nat androidx.test.espresso.IdlingPolicy.handleTimeout(IdlingPolicy.java:4)\nat androidx.test.espresso.base.UiControllerImpl$5.resourcesHaveTimedOut(UiControllerImpl.java:1)\nat androidx.test.espresso.base.IdlingResourceRegistry$Dispatcher.handleTimeout(IdlingResourceRegistry.java:4)\nat androidx.test.espresso.base.IdlingResourceRegistry$Dispatcher.handleMessage(IdlingResourceRegistry.java:6)\nat android.os.Handler.dispatchMessage(Handler.java:102)\nat androidx.test.espresso.base.Interrogator.loopAndInterrogate(Interrogator.java:14)\nat androidx.test.espresso.base.UiControllerImpl.loopUntil(UiControllerImpl.java:8)\nat androidx.test.espresso.base.UiControllerImpl.loopMainThreadUntilIdle(UiControllerImpl.java:16)\nat androidx.test.espresso.Espresso$1.run(Espresso.java:1)\nat java.util.concurrent.Executors$RunnableAdapter.c"
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowsePageTest",
+      "test": "nativeDpadTraversesIndependentRowsAndReturnsToTheSameColumn",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 5000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.TmdbBrowsePageTest.nativeDpadTraversesIndependentRowsAndReturnsToTheSameColumn(TmdbBrowsePageTest.kt:73)\n"
+    }
+  ]
+}

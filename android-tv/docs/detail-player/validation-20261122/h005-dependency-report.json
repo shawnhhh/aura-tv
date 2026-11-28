@@ -1,0 +1,18 @@
+{
+  "errors": [],
+  "media3_import_count": 150,
+  "missing_external": [
+    "lib-decoder-ffmpeg-release.aar",
+    "lib-mpvplayer-release.aar"
+  ],
+  "missing_media3_api_count": 150,
+  "missing_upstream": [],
+  "status": "DEPENDENCY_BLOCKED",
+  "upstream_commit": "305dff233cde512e2c83f71529b7c3ecfd61fefc",
+  "verified": [
+    "hook-release.aar",
+    "tvbus-release.aar"
+  ],
+  "verified_media3_modules": [],
+  "scope": "Dependency provenance only; no whole-kernel Java compilation, QR, auth or media frame proof"
+}

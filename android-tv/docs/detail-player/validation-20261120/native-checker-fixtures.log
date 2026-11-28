@@ -1,0 +1,26 @@
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 0.029s
+
+OK
+{
+  "status": "BLOCKED",
+  "errors": [
+    "Missing FongMi/media libraries source directory",
+    "jni/arm64-v8a/libmpv.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libplayer.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libc++_shared.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libffmpeg.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libffmpegJNI.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libmpv.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libplayer.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libc++_shared.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libffmpeg.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libffmpegJNI.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)"
+  ],
+  "scope": "Local inputs only; no runtime/decoder verification",
+  "required_abis": [
+    "arm64-v8a",
+    "armeabi-v7a"
+  ]
+}

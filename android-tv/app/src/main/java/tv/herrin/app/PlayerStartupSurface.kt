@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 /**
  * Full-screen playback-first loading, failure and recovery.
@@ -39,29 +42,46 @@ internal fun PlayerStartupSurface(
     reducedMotion: Boolean,
     failureHint: String? = null,
     failureDiagnostic: String? = null,
+    diagnosticsForTest: Boolean = false,
+    personal: Boolean = false,
     onRetry: () -> Unit,
     onBack: () -> Unit,
-    onTryOtherSource: (() -> Unit)? = null
+    onTryOtherSource: (() -> Unit)? = null,
+    onRemoteBack: ((Long) -> Unit)? = null
 ) {
+    BackHandler(onBack = onBack)
+    LaunchedEffect(loading, failureDiagnostic) {
+        if (!loading && !failureDiagnostic.isNullOrBlank()) {
+            // Callers supply PlaybackErrorReport's sanitized host fields only.
+            android.util.Log.w("HerrinPlaybackSource", failureDiagnostic)
+        }
+    }
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     var showJournal by remember { mutableStateOf(false) }
+    var personalNotice by remember { mutableStateOf(false) }
+    LaunchedEffect(loading, personal, failureHint) {
+        personalNotice = personal && !loading
+        if(personalNotice) { delay(2400); personalNotice = false }
+    }
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))
-        .testTag("player-startup-surface"), contentAlignment = Alignment.Center) {
+        .testTag("player-startup-surface")
+        .then(if (onRemoteBack != null) Modifier.onPlaybackPopupBack(onRemoteBack) else Modifier), contentAlignment = Alignment.Center) {
+        if(personalNotice) Text(failureHint ?: "个人媒体连接失败",
+            color = Color.White, modifier = Modifier.align(Alignment.TopEnd).padding(24.dp)
+                .testTag("personal-playback-result"))
         Column(horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
             if (loading) {
                 CircularProgressIndicator(
-                    color = Color.White, modifier = Modifier.size(40.dp))
-                Text("正在打开影片…", fontSize = 21.sp,
-                    modifier = Modifier.testTag("player-startup-label"))
+                    color = Color.White, modifier = Modifier.size(40.dp).testTag("player-startup-label"))
             } else {
-                Text(if (offlineDemonstration) "播放演示" else "暂时无法播放",
+                Text(if(personal) "个人媒体" else if (offlineDemonstration) "播放演示" else "暂时无法播放",
                     fontSize = 24.sp,
                     modifier = Modifier.testTag(
                         if (offlineDemonstration) "player-demo-status"
                         else "player-startup-error"))
-                Text(when {
+                if(!personal) Text(when {
                     offlineDemonstration ->
                         "当前是离线演示目录。添加你有权使用的影视源后，即可播放影片。"
                     cmsFailed ->
@@ -70,7 +90,7 @@ internal fun PlayerStartupSurface(
                     else -> "请重试，或返回选集切换播放线路。"
                 }, color = Color(0xFFBCCADB), fontSize = 16.sp,
                     modifier = Modifier.testTag("player-startup-failure-hint"))
-                if (!failureDiagnostic.isNullOrBlank() && !offlineDemonstration) {
+                if (diagnosticsForTest && !failureDiagnostic.isNullOrBlank() && !offlineDemonstration) {
                     Text(failureDiagnostic, color = Color(0xFFFFD0D0), fontSize = 15.sp,
                         modifier = Modifier.testTag("player-startup-diagnostic"))
                     TvButton(if (copied) "诊断已复制" else "复制详细诊断日志",
@@ -94,7 +114,7 @@ internal fun PlayerStartupSurface(
                     }
                 }
                 if (retryAvailable) {
-                    TvButton(if (failureHint != null) "重新向来源解析" else "重新播放",
+                    TvButton(if (!personal && failureHint != null) "重新向来源解析" else "重新播放",
                         modifier = Modifier.testTag("player-startup-retry"),
                         reduced = reducedMotion, onClick = onRetry)
                 }
@@ -107,7 +127,7 @@ internal fun PlayerStartupSurface(
                         reduced = reducedMotion, onClick = action)
                 }
             }
-            TvButton(if (cmsFailed) "返回片库" else "返回选集",
+            if (diagnosticsForTest) TvButton(if (cmsFailed) "返回片库" else "返回选集",
                 modifier = Modifier.testTag("player-startup-back"),
                 reduced = reducedMotion, onClick = onBack)
         }

@@ -1,0 +1,71 @@
+{
+  "source_sha": "4c7a907e870903547aa52cff114f668a4a8a99b9",
+  "run": 44924819337,
+  "tv": {
+    "job": 136908560668,
+    "total": 292,
+    "passed": 291,
+    "failed": [
+      {
+        "class": "tv.herrin.app.TvBoxWarehouseIntegrationTest",
+        "test": "refusesRedirectsHtmlAndOversizedPayloads",
+        "status": "failed",
+        "failure": "java.lang.AssertionError\nat org.junit.Assert.fail(Assert.java:87)\nat org.junit.Assert.assertTrue(Assert.java:42)\nat org.junit.Assert.assertTrue(Assert.java:53)\nat tv.herrin.app.TvBoxWarehouseIntegrationTest$refusesRedirectsHtmlAndOversizedPayloads$1.invokeSuspend(TvBoxWarehouseIntegrationTest.kt:136)\nat kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)\nat kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)\nat kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:280)\nat kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:85)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:59)\nat kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)\nat kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:38)\nat kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)\nat tv.herrin.app.TvBoxWarehouseIntegrationTest.refusesRedirectsHtmlAndOversizedPayloads(TvBoxWarehouseIntegrationTest.kt:126)\n"
+      }
+    ],
+    "preflights": [
+      1,
+      1,
+      20,
+      20
+    ],
+    "full_suite_gate_passed": false,
+    "fatal_exception_present": false
+  },
+  "api31": {
+    "job": 136915562178,
+    "result": "FAILURE",
+    "stage": "COLD_UI_XML_CAPTURE",
+    "error": "UiTestAutomationBridge null root; no valid XML. ParseError before UI acceptance.",
+    "home_completion_event_ms": 9355,
+    "network_start_ms": 3346,
+    "interactive_ui_verified": false
+  },
+  "abba": {
+    "job": 136916949597,
+    "result": "SUCCESS",
+    "source_sha": "4c7a907e870903547aa52cff114f668a4a8a99b9",
+    "tests_per_leg": 6,
+    "order": [
+      "A1",
+      "B1",
+      "B2",
+      "A2"
+    ],
+    "comparison_ms": {
+      "activity_to_first_draw_ms": {
+        "baseline_mean": 683.5,
+        "candidate_mean": 722.5,
+        "delta_ms": 39
+      },
+      "activity_to_home_ms": {
+        "baseline_mean": 2472.5,
+        "candidate_mean": 2392.5,
+        "delta_ms": -80
+      },
+      "cached_navigation_11_transitions_ms": {
+        "baseline_mean": 3619.5,
+        "candidate_mean": 4279.5,
+        "delta_ms": 660
+      }
+    }
+  },
+  "diagnostic_apk": {
+    "source_sha": "4c7a907e870903547aa52cff114f668a4a8a99b9",
+    "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44924819337/artifacts/14716218590",
+    "sha256_ci": "3b10727e2519fa8cc7adb1718183b25827552f46ff22560c9c0bf4041e234737",
+    "diagnostic_only": true,
+    "independently_downloaded": false
+  },
+  "physical_acceptance": false
+}

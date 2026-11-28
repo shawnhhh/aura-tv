@@ -1,0 +1,65 @@
+{
+  "source_sha": "81124cad",
+  "classes": [
+    {
+      "class": "tv.herrin.app.WordmarkFrameClockTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "tv.herrin.app.PersonalNfoIdentityTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "tv.herrin.app.PersonalProjectionSyncTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "tv.herrin.app.PersonalStoragePolicyTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "tv.herrin.app.WarehouseHttpEvidenceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "tv.herrin.app.PersonalRedirectPlaybackTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "tv.herrin.app.SpiderAuthorizationProtocolTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "tv.herrin.app.LanJsonBodyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "tests": 31,
+  "failures": 0,
+  "formal_acceptance": false,
+  "note": "Immutable app source at this local run; later relative-config references and phone Activity test still require CI."
+}

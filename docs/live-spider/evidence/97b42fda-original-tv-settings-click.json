@@ -1,0 +1,92 @@
+{
+  "run_id": 43440175319,
+  "head": "97b42fda",
+  "job_id": 131935433693,
+  "report": {
+    "scope": "OFFICIAL_REFERENCE_UI_AND_PLAYER_ERROR_OBSERVATION_NO_FRAME_ACCEPTANCE",
+    "herrin_acceptance": false,
+    "verdict": "REFERENCE_BLOCKED",
+    "release": "FongMi/Release 5.8.7",
+    "warehouse": "http://www.饭太硬.net/tv",
+    "targets": [],
+    "stages": [
+      {
+        "stage": "open_settings",
+        "at_ms": 10383
+      },
+      {
+        "stage": "real_warehouse_configuration",
+        "at_ms": 38036
+      },
+      {
+        "stage": "restrict_search_to_authorized_nodes",
+        "at_ms": 54513
+      }
+    ],
+    "apk_sha256": "cda5776ba2ee6f7dfdcd3d7c1a13095ba8672b9892d6fb9e1ba38f993ad66f3a",
+    "apk_modified_or_resigned": false,
+    "package_primary_abi": "arm64-v8a",
+    "device_abis": "x86_64,arm64-v8a",
+    "notification_permission_granted_for_startup": true,
+    "invalid_ui_snapshots": [
+      {
+        "attempt": 1,
+        "bytes": 65,
+        "code": 2,
+        "line": 1,
+        "column": 0
+      }
+    ],
+    "last_public_widget_ids": [
+      "android:id/content",
+      "com.fongmi.android.tv:id/action_bar_root",
+      "com.fongmi.android.tv:id/backup",
+      "com.fongmi.android.tv:id/cache",
+      "com.fongmi.android.tv:id/cacheText",
+      "com.fongmi.android.tv:id/danmaku",
+      "com.fongmi.android.tv:id/doh",
+      "com.fongmi.android.tv:id/dohText",
+      "com.fongmi.android.tv:id/image",
+      "com.fongmi.android.tv:id/incognito",
+      "com.fongmi.android.tv:id/incognitoText",
+      "com.fongmi.android.tv:id/live",
+      "com.fongmi.android.tv:id/liveHistory",
+      "com.fongmi.android.tv:id/liveHome",
+      "com.fongmi.android.tv:id/liveUrl",
+      "com.fongmi.android.tv:id/module",
+      "com.fongmi.android.tv:id/player",
+      "com.fongmi.android.tv:id/restore",
+      "com.fongmi.android.tv:id/size",
+      "com.fongmi.android.tv:id/sizeText",
+      "com.fongmi.android.tv:id/version",
+      "com.fongmi.android.tv:id/versionText",
+      "com.fongmi.android.tv:id/vod",
+      "com.fongmi.android.tv:id/vodHistory",
+      "com.fongmi.android.tv:id/vodHome",
+      "com.fongmi.android.tv:id/vodUrl",
+      "com.fongmi.android.tv:id/wall",
+      "com.fongmi.android.tv:id/wallDefault",
+      "com.fongmi.android.tv:id/wallRefresh",
+      "com.fongmi.android.tv:id/wallUrl"
+    ],
+    "last_ui_shape": {
+      "known_controls": [
+        "vod",
+        "vodHome",
+        "vodUrl"
+      ],
+      "known_labels": [],
+      "known_focused_controls": [
+        "vodHome"
+      ]
+    },
+    "system_immersive_hint_dismissed": true,
+    "failure_stage": "restrict_search_to_authorized_nodes",
+    "failure_code": "REFERENCE_SEARCH_MODE_MISSING",
+    "elapsed_ms": 71183,
+    "native_crash_metadata": {
+      "native_crashes": []
+    },
+    "official_app_process_alive": true
+  }
+}

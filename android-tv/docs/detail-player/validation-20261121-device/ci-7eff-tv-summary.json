@@ -1,0 +1,2122 @@
+{
+  "exit_code": 1,
+  "device": "Android TV API 30 x86 / tv_1080p",
+  "instrumentation": [
+    {
+      "class": "tv.herrin.app.AdditionalServiceConfigsTest",
+      "test": "batchDeduplicatesRejectsInvalidAtomicallyAndSupportsEditingAndRemoval",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedCatalogIntegrationTest",
+      "test": "largePosterUsesDownsampledRgb565TileButHeroRetainsDetail",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedCatalogIntegrationTest",
+      "test": "posterCacheHitOfflineIsolationCorruptionRecoveryAndResponseValidation",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedCatalogIntegrationTest",
+      "test": "catalogValidMalformedTimeoutOfflineIsolationRedirectSizeAndFallback",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedCatalogIntegrationTest",
+      "test": "cancelledPosterDoesNotContactRemoteServer",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedLivePlaylistTest",
+      "test": "onlyExplicitHttpsNamedChannelListsCanBeLoaded",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedPlaybackJourneyTest",
+      "test": "authorizedM3uGuideAndLiveLikeChannelSwitchDecodeRealFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedPlaybackJourneyTest",
+      "test": "remoteRetryAfterTls503ActuallyRestartsVideoDecoding",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.AuthorizedPlaybackJourneyTest",
+      "test": "inaccessiblePrimaryAutomaticallyUsesProviderSuppliedBackupAndRendersFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CatalogProfilesTest",
+      "test": "editingTheActiveSourceUpdatesItsUrlButRejectsDuplicateAndInvalidEdits",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CatalogProfilesTest",
+      "test": "deletingActiveSourceFallsBackToDemoWithoutTouchingOtherSourcesOrFavorites",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CatalogProfilesTest",
+      "test": "jsonExportImportMergesWithoutOverwritingAndRejectsInvalidBatchesAtomically",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CatalogProfilesTest",
+      "test": "duplicateInvalidAndMaximumEntriesDoNotCorruptActiveSelection",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CatalogProfilesTest",
+      "test": "favoritesStayWithinTheCurrentCatalogScope",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CatalogProfilesTest",
+      "test": "migratesExistingSingleCatalogAndSupportsSourceSwitching",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CredentialStorageTest",
+      "test": "unicodeNasCredentialRoundTripsWithoutPlaintextPersistence",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.CredentialStorageTest",
+      "test": "personalTmdbTokenIsEncryptedAndReadableAcrossPreferencesInstances",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.DanmakuControlsTest",
+      "test": "realTvCenterKeyOperatesToggleOpacitySpeedAndSize",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.DeviceMediaCapabilitiesAndroidTest",
+      "test": "decoderQueriesExcludeEncodersAndDoNotInventHardwareOrOutputSuccess",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.DeviceMediaCapabilitiesAndroidTest",
+      "test": "displayCapabilitiesMatchFrameworkAndAbsentDisplayIsUnknown",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "advancedPreviewRetainsEmptyInitializedSource",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "selectedEmptyHomeCanSearchAndOpenItsRealDetailsWithoutTmdbToken",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.EmptySpiderHomeSelectionTest",
+      "test": "sitePickerRetainsEmptyInitializedSourceAndRestoresItOnRecreate",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.FongMiPlayerManagerIntegrationTest",
+      "test": "productionAdapterOwnsMediaIdentityHeadersControlsAndRelease",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.FongMiPlayerManagerIntegrationTest",
+      "test": "mediaItemUsesExplicitSubtitleMimeAndSourceFlags",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.FongMiPlayerManagerIntegrationTest",
+      "test": "actualAudioChoiceAndSubtitleOffSurviveRetryButNotAnotherMediaIdentity",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HeroArtworkRetentionTest",
+      "test": "interruptedFrameworkCrossfadeAccumulatesButProductionHeroKeepsAtMostTwoLayers",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HeroArtworkRetentionTest",
+      "test": "reducedMotionKeepsOnlyTheCurrentArtworkOwner",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinReadySourceUiTest",
+      "test": "nodeAppearsOnlyWhenLineAndEpisodeLayoutsReadyAndSecondLineDownEntersEpisodes",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "normalMotionKeepsBreathingUntilHomeIsReadyAfterTheMinimumCycle",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "reducedMotionStillExitsWhenHomeBecomesReadyLater",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "reducedMotionCompletesWithoutWaitingForAnimation",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "exitCurtainOverlapsHomeBeforeCompleting",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "homePreparationRunsOnceConcurrentlyWithWordmarkReveal",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "completeHerrinWordmarkStaysWholeUntilFastFade",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "skipCompletesImmediately",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "firstInstallDoesNotConsumeLaunchOkAsAnAnimationSkip",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinSplashTest",
+      "test": "centerWaveStartsInvisibleAndAllSixLettersShareARealWhiteHaloBreath",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "onlineSearchProtocolEmptyAndRemoteResult",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "selectedEpisodeAndLineAreNotSecondWhiteFocusPills",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "myPersonalSourcesShortcutOpensStorageManager",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "compactSettingsDpadReachesTmdbInputThenLiveSourceAndReturns",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "advancedMetadataFiltersOpenInsideSearchAndWorkWithDpad",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "sourceSiteExplanationIsConsumerFriendlyWithoutRuntimeWords",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "diagnosticsNeverTreatRefreshHintAsMeasuredFps",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "posterArtworkFillsEntireCardWithTitleAndYearOverlay",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "settingsExposeNativeSourcePickerWithoutReplacingExistingControls",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "posterDetailBackRestoresFocus",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "liveGuideIsOptionalAndConfiguredViaRemoteSettings",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "cinematicNavigationKeepsSearchInsideGlassRailAndGearSeparate",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "filmDetailOmitsUnknownQualityAndKeepsSynopsisWithoutSeparateSpecPanel",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "centeredHeaderHasNineTabsIncludingMyBetweenLiveAndSearchWithRightOnlyGear",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "applyingLiveSourcePopulatesLiveTabWithoutHttpToggle",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "navigationChangesPillsWithoutReintroducingUnderline",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "compactSettingsOnlyOpenTextEditorAfterRemoteOk",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "compactTmdbSplitTokenFieldsReceiveEachDpadStep",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "settingsPersistReducedMotion",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "mediaSettingsRemoteSaveValidationSyncAndPersistence",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "settingsOfferExplicitSourceBackupImportAndSafeDeleteFlow",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "applyingTvBoxSourceReplacesDemoHomeAndPopulatesMovieTab",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "choosingLineDoesNotAutoplayUntilSpecificEpisodeIsConfirmed",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "top250WithoutTmdbTokenExplainsEmptyListAndProvidesRetry",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "homeDpadDownAndUpKeepTheSameColumnAcrossBothPosterShelves",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "homeDpadDownMovesFromNavigationToHeroThenFirstPoster",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "tvBoxMultiwarehouseAcceptsHttpByDefaultAndNavigatesWithRemote",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "navigationUsesOnlyPillFocusWithoutExtraUnderline",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "myTabAfterLiveOpensRealPersonalShelfWithEmptyState",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "searchCategoryAndSortAreOperableByRemoteWithProtocolFixture",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "top250TabAndUnframedGearKeepRemoteFocus",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "remoteAllDirectionsCategoriesAndVisibleFocus",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "spiderOnlySourceDoesNotSilentlyFallBackToDemoFilms",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "liveStartsFullscreenAndDrawerSupportsGroupsFavoritesAndChannelSwitch",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "searchFilterDpadDownReachesSuggestionsAndResultAndUpReturns",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "liveTabExplainsAuthorizedPlaylistAndSettingsProvideItsUrl",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "homeHeaderKeepsCompactSettingsAndExactlyTwoSourceInputs",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "liveChannelSearchRunsInsidePlaybackDrawerWithoutRefetchingPlaylist",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "favoritesRemainAvailableUnderSearchAfterRestartAndCanBeRemoved",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HerrinUiSmokeTest",
+      "test": "favoritedMovieAppearsInPersonalTabWithoutChangingOriginalPlayback",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HttpsPlaybackTest",
+      "test": "tlsMp4ActuallyRendersFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HttpsPlaybackTest",
+      "test": "tlsHlsActuallyRendersFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.HttpsPlaybackTest",
+      "test": "fragmentedTlsHlsPassesSourceGateAndActuallyRendersFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanConfigurationTest",
+      "test": "confirmedTrustedSessionCanSwitchModulesAndEnd",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanConfigurationTest",
+      "test": "untrustedEphemeralCertificateIsRejectedByDefaultClient",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanHttpConfigurationTest",
+      "test": "cleartextCannotSubmitSourcesOrSensitiveCredentialsAndSocketCloses",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanHttpConfigurationTest",
+      "test": "wildcardAndPublicListenersAreRejected",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanSourceImportTest",
+      "test": "failureStagesRemainDistinctAndNeverContainUserAddresses",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanSourceImportTest",
+      "test": "failedCandidatePreservesWorkingRootAndTrustAndSuccessfulActivationSurvivesRestart",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanTlsIdentityTest",
+      "test": "reopeningAndReconstructingStoreKeepsIdentityWithoutPlaintextPrivateKey",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LanTlsIdentityTest",
+      "test": "addressChangeExpiryAndTamperingRotateCertificateWithCorrectSan",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LiveEpgInstrumentationTest",
+      "test": "androidXmlParserIgnoresExternalDtdAndParsesOriginalGuide",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LiveEpgInstrumentationTest",
+      "test": "acceptsHttpsGzipGuideAndRejectsBadPayloadWithoutEscapingSource",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LiveEpgInstrumentationTest",
+      "test": "androidXmlParserRejectsInlineEntitiesAndNonstandardDoctypes",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.LiveFavoritesTest",
+      "test": "savedChannelsStayWithinOnePlaylistAndDoNotStoreRawStreamUrls",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M420CmsDetailsIntegrationTest",
+      "test": "listOnlyNodeLoadsItsOwnEpisodesFromIdsDetailRequest",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M420LiveDpadInstrumentedTest",
+      "test": "fullscreenUpDownCyclesUniqueProgramsWithoutOpeningLinePicker",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M424SeasonDpadInstrumentedTest",
+      "test": "downFromSeasonTabFocusesFirstLandscapeEpisodeAndOkRoutesSingleClick",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M425GroupDpadInstrumentedTest",
+      "test": "rawSourceFallbackOpensOriginalFilmSelectionWhenSeasonCannotBeMapped",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M425GroupDpadInstrumentedTest",
+      "test": "downFromSeasonTwoTabToLandscapeCardAndEnterRetainsOriginalFilmAndLine",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M438SingleWarehousePerformanceTest",
+      "test": "singleWarehouseLoadsAllSitesAndDpadHasNoSevereStall",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M439LaunchWordmarkTest",
+      "test": "singleWordmarkFadeRevealsUsableHomeWithoutMultiSecondHold",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M442RemoteBurstPerformanceTest",
+      "test": "fortyHorizontalReversalKeysRetainPosterAndMeasureFrameP95",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M442RemoteBurstPerformanceTest",
+      "test": "thirtyTwoVerticalKeyTransitionsKeepTheLatestShelfAndColumn",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M443RemoteBurstWithoutIdleTest",
+      "test": "rapidTwentyKeyReversalsRestoreLastRequestedPosterWithoutIdleWaits",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M445FrameBaselineTest",
+      "test": "forcedRedrawBaselineSeparatesSoftwareRendererFromDpadWork",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M449SettingsNoIdleBurstTest",
+      "test": "rapidSidebarKeysChangeDirectionWithoutOpeningIme",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M453BufferingRemoteFocusInstrumentedTest",
+      "test": "productionMinimalControlsMenusRetainTheSoleSession",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M453BufferingRemoteFocusInstrumentedTest",
+      "test": "remoteDownFocusesTransportEvenWhenNoMediaBytesHaveArrived",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest",
+      "test": "wrongSelectedMovieIsRejectedAndRetryUsesOnlyRealSelectedFilm",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M454CmsOneTapRecoveryInstrumentedTest",
+      "test": "cmsListingWithHttpFirstAndHttpsSecondPlaysWithoutAnotherDetailRequest",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M456NativeFullscreenPlayerTest",
+      "test": "wideFrameFillsWindowWithoutCropping",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M456NativeFullscreenPlayerTest",
+      "test": "cinemaFramePreservesAllEdgesWithLetterbox",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M456NativeFullscreenPlayerTest",
+      "test": "classicMkvPreservesAllEdgesWithPillarbox",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M457PlaybackFailureRecoveryTest",
+      "test": "consumerSourceFailureKeepsDiagnosticsOffscreenAndBackOnRemote",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M457PlaybackFailureRecoveryTest",
+      "test": "parserFailureBeforeMedia3DisplaysObservedHttpWithoutExposingPrivateUrl",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M457PlaybackFailureRecoveryTest",
+      "test": "failedNetworkMediaOffersEpisodeAndLineChoicesWithoutAutoPlayback",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M457PlaybackFailureRecoveryTest",
+      "test": "loadingAndOfflineDemoNeverExposeSourceSwitch",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M457PlaybackFailureRecoveryTest",
+      "test": "preDecoderCmsFailureCanSelectOtherAuthorizedProvider",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M457PlaybackFailureRecoveryTest",
+      "test": "proxyRouteFailureShowsActualSanitizedUiJournalInsteadOfNoEvents",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M458CmsHttpPlaybackTest",
+      "test": "selectedCmsHttpVideoRendersRealFramesWithoutNetdiskOrSpider",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M459JsonParserPlaybackTest",
+      "test": "configuredJsonParserToMedia3RendersActualVideoFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M461BrowserPlaybackTest",
+      "test": "browserType0SniffsRealMediaThenMedia3RendersFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M461BrowserPlaybackTest",
+      "test": "configuredClickScriptActuallyTriggersMediaRequest",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M464TvBoxCatalogSnapshotTest",
+      "test": "restoresPublicFilmDisplayButNeverPersistsSignedPlaybackUrls",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M466DetailCastDpadTest",
+      "test": "dpadDownScrollsOffscreenCastIntoViewAndFocusesFirstActor",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "mp4HttpRendersVideoAndAudio",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "ssaTextIsDecoded",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "srtIsDecodedAsSubrip",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "assTextIsDecoded",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "ttmlTextIsDecoded",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "dashManifestAndFragmentedMp4Render",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "matroskaHttpRendersVideoAndBothAudioTracks",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "hlsMasterChildAndSegmentsRender",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467EngineContainerTest",
+      "test": "vttIsDecoded",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467FongMiTrackRestoreTest",
+      "test": "missingLanguageStaysPendingAndDisabledTrackRestoresOffState",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467FongMiTrackRestoreTest",
+      "test": "languageAndLabelRestoreAfterTrackIdsAndOrdinalsChange",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467FongMiTrackRestoreTest",
+      "test": "selectionRoundTripPreservesFormatAndSecondaryRole",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467FongMiTrackRestoreTest",
+      "test": "audioLanguageRestoresAfterManifestIdsAndOrdinalsChange",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467HlsRecoveryEndToEndTest",
+      "test": "interruptedSegmentReloadsAndProducesFramesThroughProductionMediaSource",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467JarPlaybackEndToEndTest",
+      "test": "originalDexJarStaticAndInstanceRoutesRenderAndReopenWithNewSession",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467MediaItemCompatibilityTest",
+      "test": "missingRequestMetadataHeadersReturnEmptyMap",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467MediaItemCompatibilityTest",
+      "test": "perSessionHeadersRoundTripThroughActualMediaItem",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467ParseJobInstrumentedTest",
+      "test": "slowNonMediaProbeDoesNotStarveFollowingValidMediaRequest",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467ParseJobInstrumentedTest",
+      "test": "browserRecognizesExtensionlessHttpMediaAndRejectsFakeMp4Html",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467ParseJobInstrumentedTest",
+      "test": "jsonParseKeepsOriginalApprovedSubtitleMimeAndFlags",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467ParseJobInstrumentedTest",
+      "test": "aggregateJsonFailureFallsThroughToRealWebView",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467PlaybackRecoveryTest",
+      "test": "forbiddenMediaNeverRefreshesOrRequestsProviderBackup",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467PlaybackRecoveryTest",
+      "test": "goneResultRefreshesOnceAndBudgetSurvivesPlayerReplacement",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M467PlaybackRecoveryTest",
+      "test": "exitingPlaybackClosesOldProxyBeforeImmediateReopenReturnsMediaBytes",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M471ManualProviderFallbackTest",
+      "test": "failedSourceOffersRemoteSelectableOtherProviderWithoutSilentNetworkRequest",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M471WebDavRealPlaybackTest",
+      "test": "discoveredNasVideoSurvivesRangeProbeAndDecodesMedia3Frames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M476SpiderAuthenticatedRealFrameTest",
+      "test": "approvedJavaSpiderRendersActualVideoFramesThroughProxy",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M476SpiderHlsRealFrameTest",
+      "test": "hlsNestedSegmentsFromOldTvboxProxyDecodeRealFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M477NativeFongMiHlsRealFrameTest",
+      "test": "nativeFongMiProxyStreamsRealHlsTransportFramesWithBomGenericMime",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M477NativeFongMiRealFrameTest",
+      "test": "approvedSpiderProxyRendersRealMp4Frames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M478FongMiExoMediaSessionTest",
+      "test": "rejectsUnsafeUrisAndHeaderInjectionWithoutOpeningNetwork",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M478FongMiExoMediaSessionTest",
+      "test": "createsRealExoPlayerAndPreparesAuthorizedMediaItem",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M478FongMiExoMediaSessionTest",
+      "test": "closeIsIdempotentAndPreventsReuse",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M478FongMiExoMediaSessionTest",
+      "test": "remoteCommandsControlSameRealExoInstanceAndRejectInvalidSeek",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M479FongMiPlaybackAdapterTest",
+      "test": "selectedQualityVariantReachesSameExoMediaItem",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M479FongMiPlaybackAdapterTest",
+      "test": "isolatedWorkerResolvedMediaReachesMainProcessExo",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M479FongMiPlaybackAdapterTest",
+      "test": "sharedPlayerBoundaryRejectsUnresolvedSchemes",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M479FongMiPlaybackAdapterTest",
+      "test": "resolvedProxyRouteReachesExoWithoutLegacyProxy",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.M479FongMiPlaybackAdapterTest",
+      "test": "unresolvedParseAndForeignSiteNeverReachPlayer",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.MediaDecoderTest",
+      "test": "actualFramesRemotePauseBackgroundBackAndRepeatRelease",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.MediaDecoderTest",
+      "test": "invalidMediaShowsErrorAndBackReleases",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.MediaLoopbackProxyInstrumentedTest",
+      "test": "productionTransportRejectsLocalUpstreamRegardlessOfUserSuppliedSource",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.MediaLoopbackProxyInstrumentedTest",
+      "test": "authorizedHlsAndRangeStayInsideClosableLoopbackSession",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.MinimalPlayerGeometryTest",
+      "test": "openSubtitlePanelKeepsVideoRunningAndTransportHidesAfterClosing",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.MinimalPlayerGeometryTest",
+      "test": "transportIsCenteredSpeedIsVerticalAndMenusNeverReplacePlayer",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.MinimalPlayerGeometryTest",
+      "test": "seasonPanelSelectsTheOriginalEpisodeAndLineWithoutInventingCoordinates",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ArtworkMemoryTest",
+      "test": "optionalImageOomReleasesPermitsWithoutRecyclingDisplayedOriginalBitmap",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0CachedHomeHeroTest",
+      "test": "cachedOfflineHomeAndRapidCategoriesKeepTitleAndBackdropOnTheirOwnFirstFilm",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0CmsCandidateParserTest",
+      "test": "passiveConfiguredParserUsesParseJobThenRealMediaBytesAndDecoderFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0CmsCandidateParserTest",
+      "test": "parserAuthenticationAndRateLimitRemainTypedInsteadOfMissingFilm",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0DiscoveryProtocolTest",
+      "test": "httpSpiderOpaqueEpisodeGoesThroughFongmiAndRendersActualFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0DiscoveryProtocolTest",
+      "test": "expandedWarehouseCredentialsStayInMemoryAndContinuationDoesNotRefetch",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0DiscoveryProtocolTest",
+      "test": "twoSpiderSitesRetainHitsAndRestoreExactVodAfterWorkerDeath",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0DiscoveryProtocolTest",
+      "test": "xmlCmsUsesActualAndroidDomWithoutAllowingDtdOrExternalEntities",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "detailsReturnDoesNotConfirmAndNormalSettingsExposeOneSharedConfigCenter",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "identicalGrayButtonsNavigateBothWaysAndBackCancels",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "everyTopLevelCategoryConfirmsAndCancelRetainsItsActualFocus",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "rapidAndRepeatedBackNeverFinishesOrStacksDialogs",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExitAndEntryTest",
+      "test": "explicitExitFinishesActivityWithoutErasingSettings",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExperienceDpadTest",
+      "test": "focusedWhitePillOverridesSelectionAndOnlyOneNavCanBeFocused",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0ExperienceDpadTest",
+      "test": "allLineCountsMoveToCurrentOffscreenEpisodeAndBackToLastLine",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0MetadataPublicationPressureTest",
+      "test": "validProbePublishesHundredsThenTop250WhileCategoriesAndRemoteRemainUsable",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0MetadataPublicationPressureTest",
+      "test": "malformedDetailAndActivityRecreationRetainCachedHomeDuringNetworkLoss",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0PlayerDeadlineTest",
+      "test": "noResponseTimesOutOnceAndCloseCancelsNextDeadline",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0QrFailureTest",
+      "test": "noIpv4ShowsActionableRetryAndPreservesManualConfiguration",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0QrFailureTest",
+      "test": "qrFailureClosesServerAndRetryRendersRealQrInModal",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0QrFailureTest",
+      "test": "backgroundingOwnerClosesListener",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0QrFailureTest",
+      "test": "reopeningKeepsHttpsFingerprintWithFreshPairingAndDismissClosesListener",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0RecentIndexTest",
+      "test": "coldRecentIndexUsesOnlyPublicMetadataAndRejectsRetiredWriters",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "myContinueWatchingDirectlyDecodesAndReturnsToTheSameCard",
+      "status": "failed",
+      "failure": "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 30000 ms\nat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)\nat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)\nat tv.herrin.app.P0RecentPlaybackReturnTest.playAndReturnTo(P0RecentPlaybackReturnTest.kt:98)\nat tv.herrin.app.P0RecentPlaybackReturnTest.myContinueWatchingDirectlyDecodesAndReturnsToTheSameCard(P0RecentPlaybackReturnTest.kt:134)\n"
+    },
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "heroDetailsRemainsDetailsAndDetailPlayDecodesThenRestoresFocus",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "recentOutsideTmdbHomeDirectlyPlaysFreshAuthorizedSourceAndReturnsToCard",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0RecentPlaybackReturnTest",
+      "test": "failedInitialImportAndQuickLookupFallsBackWithoutAnImplicitRescan",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0SourceSearchLifecycleTest",
+      "test": "stopCancelsImmediatelyAndCoalescedResumeStartsOneFreshSearch",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0SpiderDeadlineRecoveryTest",
+      "test": "searchActivationNeverCallsHomeAndStillPublishesSignedSearchResults",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0SpiderDeadlineRecoveryTest",
+      "test": "blockedChildMessageLoopIsRetiredByHostBeforeItsOwnTenSecondWatchdog",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0SpiderDeadlineRecoveryTest",
+      "test": "revokedConfigurationCannotStartAnOldSearchUnderNewConsent",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0SpiderDeadlineRecoveryTest",
+      "test": "uninterruptibleSixthNodeIsReapedAndSeventhGetsFreshProofProxyAndDecodedFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0StartupFrameProbeTest",
+      "test": "actualWindowFramesSeparateRevealFromHomeHandoff",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.P0Top250NavigationTest",
+      "test": "rawRanksRemainUniqueAndFirstMiddleLastPostersNavigateUpAndDownSafely",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalConnectionsTest",
+      "test": "credentialsAreEncryptedIsolatedAndNeverReusedAfterAuthorityChanges",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalConnectionsTest",
+      "test": "cloudCleanupDoesNotRemoveExistingNasOrSmbSecrets",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalLibraryImportTest",
+      "test": "manualHttpImportIndexesVersionsRetainsOfflineHistoryAndRemovesOnlyAfterCompleteRefresh",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalMediaIndexTest",
+      "test": "automaticFolderRefreshDoesNotResetAnIdentifiedAnimeCategory",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalMediaIndexTest",
+      "test": "overlappingFoldersAreRejectedAndCredentialsStayOutOfIndex",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalMediaIndexTest",
+      "test": "scanPersistsUnchangedFilesManualCorrectionsOfflineAndSuccessfulDeletion",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalMigrationTest",
+      "test": "invalidLegacyConfigurationIsPreservedAndFlaggedWithoutCrashingLibraryStartup",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PersonalMigrationTest",
+      "test": "legacySmbAndDavKeepCredentialsAndFoldersAndMigrateOnlyOnce",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PhoneWarehouseActivationTest",
+      "test": "phoneConfigurationBecomesActiveWithoutRequestingTheCmsHome",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackButtonsTest",
+      "test": "dpadCenterActivatesNativeSeekAudioAndSubtitleControls",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "tvRemoteDownFocusesControlsWhileLeftRightSeekAndQualityUsesMedia3Size",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "productionPlayerMp4AndHlsDecodeForSixtySecondsPauseSeekAndRelease",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "extensionlessMp4HlsAndDashDecodeOriginalFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "spiderPlaybackJsonHeadersAndExtensionlessHlsDecodeRealVideoSegments",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "httpStatusesRemainDistinctAndDiagnosticsNeverExposeRequestCredentials",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "rateLimitNeverAutomaticallyRequestsAnAlternate",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "rejectedHlsSourceMustNotAutomaticallyTryIndependentlyAuthorizedBackup",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "realRemoteDownReachesLineAndEpisodeActions",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "firstFrameJourneyIsVisibleInVerificationWithoutExposingMediaAddress",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "transientHlsServerErrorFallsBackToExtensionlessMp4WithoutInheritingManifestMime",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackDiagnosticsIntegrationTest",
+      "test": "focusedControlsHideAfterIdleAndRealRemoteReopensThem",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackExperiencePersistenceTest",
+      "test": "historyRejectsLateWritersAndKeepsCompletionAcrossInstances",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackExperiencePersistenceTest",
+      "test": "trackPreferencesRetainLanguageAndOffWithoutSourceIds",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackExperiencePersistenceTest",
+      "test": "realEndedMediaNotifiesNextOnceAndConsumerBackReturnsDirectly",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackHistoryTest",
+      "test": "playbackOffsetsPersistAndAreIsolatedByCatalogAndLine",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackHistoryTest",
+      "test": "rejectsInvalidPositionsAndSupportsExplicitRestart",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackHistoryTest",
+      "test": "stablePersonalFileRestoresAfterPlaylistOrdinalChangesOnlyWithCurrentPersonalAuthority",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackSessionIsolationTest",
+      "test": "replacingMediaInPlaceKeepsDisposeProgressInTheOutgoingSession",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PlaybackTransportTest",
+      "test": "realRemoteSeekAndDecodedAudioSubtitleTracks",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PosterArtworkTest",
+      "test": "realPortraitAndLandscapeArtworkFillAllEdgesOfThumbnailFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.PosterArtworkTest",
+      "test": "unavailableRemotePosterDoesNotDisplayAnUnrelatedDemoImage",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.RemoteHoldReleaseTest",
+      "test": "moreThan100RepeatEventsStopMovingAfterRelease",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SettingsModulesTest",
+      "test": "protocolDownEntersNameAndSwitchingProtocolDiscardsOldForm",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SettingsModulesTest",
+      "test": "fourModulesAndTwoProtocolsRemainNativeRemoteTargets",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SmbConfigSecurityTest",
+      "test": "encryptedRecordRetainsSameServerCredentialsAndNeverCopiesThemToAnotherServer",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SmbRealPlaybackTest",
+      "test": "authenticatedNasSearchDecodesOriginalMp4AndSeeksWithTheExistingPlayer",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SmbRealPlaybackTest",
+      "test": "originalMkvTsAndM2tsDecodeThroughTheSameSmbAndFongMiChain",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderAuthorizationInstrumentedTest",
+      "test": "backCancelsPendingPluginAndClearsPrivateQr",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderAuthorizationInstrumentedTest",
+      "test": "independentProcessMockAuthorizationUsesActualDpadAndReturnsOnlyStatus",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderAuthorizationPlaybackTest",
+      "test": "grantedSessionContinuesParsingAndVideoReusesThenReauthorizesAfterExpiry",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLoaderLifecycleTest",
+      "test": "deliveredBrowseCannotReauthorizeAfterCloseAndFreshApplyStillWorks",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLoaderLifecycleTest",
+      "test": "browseQueuedBeforeItsFirstMainDispatchCannotLoadAfterRevocation",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "actualIsolatedSpiderProcessStreamsAuthenticatedProxyAcrossBinder",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "currentAndLegacyFongMiSpiderMethodsResolveAndShareSecureLoopbackPort",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "legacyFongMiNoSiteKeyCallsStaticProxyHandlerNotInstanceHandler",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "fongMiProxySchemeNormalizesToRealAuthenticatedPlaybackBeforeRouting",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "extensionlessSpiderProxyHlsRecoversFromProgressiveAndRendersSegments",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "fongMiProxySchemeRejectsOtherSitesAndInvalidRoutes",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "spiderGeneratedAuthenticatedProxyUrlProducesRealDecodedVideoFrames",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderLocalProxyPlaybackTest",
+      "test": "isolatedBinderProcessMustRemainBoundUntilMediaProxyHealthSucceeds",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderPasswordAuthorizationTest",
+      "test": "refreshWithBlankRequiredFieldSurvivesIpcAndEnablesTheLoginStep",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderPasswordAuthorizationTest",
+      "test": "tvCloudSharePasswordFormOpensAndReturnsInputWithoutRequiringQRCode",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderRemoteProcessTest",
+      "test": "actualIsolatedSpiderServiceProxySocketIsReachableFromMainProcess",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderRemoteProcessTest",
+      "test": "androidMainThreadProbeFailureIsNotADeadProxy",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderRemoteProcessTest",
+      "test": "invalidSpiderFailureReturnsFromRemoteServiceWithoutKillingUi",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderRemoteProcessTest",
+      "test": "isolatedSpiderServicePreservesNativeFongMiDoOperationsAcrossBinder",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderRuntimeCompatIpcTest",
+      "test": "staleCallbacksCannotInvalidateANewBinding",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderRuntimeCompatIpcTest",
+      "test": "serviceUsesAnotherProcessAndRebindsAfterItsDeath",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderRuntimeCompatIpcTest",
+      "test": "closingAnInFlightCallReleasesItAndRejectsItsDelayedResponse",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "closeDuringJarBootstrapCannotConstructOrPublishASpider",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "cancelledInitIgnoringInterruptionCannotSurviveClose",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "approvedJarSharesItsLoaderAcrossSitesButNeverTheirFilmAuthority",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "retiredInitCannotReplaceOrClearANewerAuthorizedSite",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.SpiderWorkerLifecycleTest",
+      "test": "closedWorkerRejectsLateSpiderInitAndFreshApplyGetsNewResources",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.StartupParallelPreparationTest",
+      "test": "networkStartsBehindCurtainAndSurvivesCurtainRemoval",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowseLoadingNavigationTest",
+      "test": "emptyThenLoadedHeroDownSurvivesRapidNavigationAndReplacement",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowseLoadingNavigationTest",
+      "test": "nextPageReturnAndReplacementKeepNavigationOnCurrentPosters",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowseLoadingNavigationTest",
+      "test": "coldFirstPagePreviewHasStableUniqueKeysWhileProofAndDpadOverlap",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowseLoadingNavigationTest",
+      "test": "delayedPageAllowsDpadAndIsCancelledOnCategoryChange",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowsePageTest",
+      "test": "homeKeepsRecentThenTrendingThenDomesticAndNoRegionSubtitle",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowsePageTest",
+      "test": "repeatedDpadAndRapidCategoryChangesKeepCachedPostersAndRestoreDetailsFocus",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowsePageTest",
+      "test": "nativeDpadTraversesIndependentRowsAndReturnsToTheSameColumn",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowsePageTest",
+      "test": "fivePagesHaveFourIndependentRowsAndSwitchHeroImmediatelyFromCache",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowsePaginationTest",
+      "test": "endPosterLoadsOneDuplicatePageWithoutSelfCancellationOrRequestCascade",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbBrowseRefreshTest",
+      "test": "changedNetworkOrderPublishesOnlyAfterTheFocusedRailIsLeft",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TmdbSpiderPlaybackClosureTest",
+      "test": "originalSignedSourceBehindTmdbDetailProducesVideoAndDecodedAudio",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxLiveIntegrationTest",
+      "test": "rejectsImageResponseEvenWithHttpPermission",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxLiveIntegrationTest",
+      "test": "importedChannelsPersistAcrossNewStoreAndRequireExplicitHttpConsent",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxLiveIntegrationTest",
+      "test": "httpPlaylistNeedsConsentAndParsesRealChannelEntries",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxVodIntegrationTest",
+      "test": "standardCmsJsonApiLoadsWithoutExecutingSpiderCode",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxWarehouseIntegrationTest",
+      "test": "coldStartReturnsPreviouslyValidatedWarehouseWithoutWaitingForNetwork",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxWarehouseIntegrationTest",
+      "test": "followsValidShortLinksButRefusesUnsafeRedirectsImagesHtmlAndOversizedPayloads",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxWarehouseIntegrationTest",
+      "test": "manualJsonImportUnlocksOfflineFallbackButNeverBypassesHttpConsent",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxWarehouseIntegrationTest",
+      "test": "fallsBackToPreviouslyValidatedJsonWhenSourceBecomesImage",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxWarehouseIntegrationTest",
+      "test": "explicitlyAuthorizedHttpNavigatesMultiwarehouseToSingle",
+      "status": "passed",
+      "failure": null
+    },
+    {
+      "class": "tv.herrin.app.TvBoxWarehouseIntegrationTest",
+      "test": "imageContentTypeActuallyContainsTvBoxJsonAfterJpegEndMarker",
+      "status": "passed",
+      "failure": null
+    }
+  ],
+  "fatal_exception_present": false,
+  "physical_TCL_tested": false,
+  "decoder_evidence": [
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoder: cycle=0 states=[2, 3] decoderInit=1 rendered=5",
+    "HerrinDecoder: pause cycle=0 first=1469 second=1469 third=1469 paused=true",
+    "HerrinDecoder: cycle=0 reached ENDED",
+    "HerrinDecoder: cycle=1 states=[2, 3, 2, 3] decoderInit=1 rendered=5",
+    "HerrinDecoder: pause cycle=1 first=1565 second=1565 third=1565 paused=true",
+    "HerrinDecoder: cycle=1 reached ENDED",
+    "HerrinDecoderEvidence: phase=MEDIA_PARSING_FAILED code=3003 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=ParserException",
+    "HerrinDecoderEvidence: phase=MEDIA_PARSING_FAILED code=3002 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=ParserException",
+    "HerrinDecoderEvidence: phase=MEDIA_PARSING_FAILED code=3002 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=ParserException",
+    "HerrinDecoderEvidence: phase=MEDIA_PARSING_FAILED code=3003 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=ParserException",
+    "HerrinDecoderEvidence: phase=MEDIA_PARSING_FAILED code=3003 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=ParserException",
+    "HerrinDecoderEvidence: phase=MEDIA_PARSING_FAILED code=3002 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=ParserException",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=OTHER_MEDIA3_FAILURE code=2004 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=UNCLASSIFIED",
+    "HerrinDecoderEvidence: phase=MEDIA_PARSING_FAILED code=3003 sdk=30 model=AOSP TV on x86",
+    "HerrinDecoderEvidence: container=unknown video=unknown codec_profile_level=unknown",
+    "HerrinDecoderEvidence: size=-1x-1 fps=-1.0",
+    "HerrinDecoderEvidence: audio=unknown audio_codec=unknown",
+    "HerrinDecoderEvidence: video_decoder=unknown audio_decoder=unknown",
+    "HerrinDecoderEvidence: cause=ParserException"
+  ],
+  "catalog_evidence": [
+    "HerrinCatalog: HTTPS: valid, malformed, timeout, redirect, oversized, HTML, 503, URL isolation and offline passed"
+  ],
+  "remote_HTTPS_stream_tested": false,
+  "remote_performance": {
+    "dense_catalog": {
+      "events": 16,
+      "focus_success": 16,
+      "frames_total": 42,
+      "key_to_focus_p50_ms": 7.179337,
+      "key_to_focus_p95_ms": 88.55,
+      "end_to_idle_p95_ms": 374,
+      "frame_p95_ms": 202
+    },
+    "horizontal": {
+      "events": 40,
+      "focus_success": 40,
+      "focus_draw_samples": 40,
+      "key_to_draw_p50_ms": 15.99,
+      "key_to_draw_p95_ms": 66.39,
+      "key_to_draw_p99_ms": 82.88,
+      "key_to_focus_p99_ms": 71.87,
+      "key_to_focus_p50_ms": 6.36,
+      "key_to_focus_p95_ms": 60.2,
+      "end_to_idle_p95_ms": 245,
+      "frame_p95_ms": 209.1,
+      "frames_total": 79,
+      "frames_over_16_67ms": 79,
+      "frames_over_33_33ms": 79,
+      "long_frame_pct": 100
+    },
+    "vertical": {
+      "events": 32,
+      "focus_success": 32,
+      "focus_draw_samples": 32,
+      "key_to_draw_p50_ms": 16.56,
+      "key_to_draw_p95_ms": 26.81,
+      "key_to_draw_p99_ms": 29.57,
+      "key_to_focus_p99_ms": 30.63,
+      "key_to_focus_p50_ms": 4.9,
+      "key_to_focus_p95_ms": 12.52,
+      "end_to_idle_p95_ms": 245
+    },
+    "burst": {
+      "events": 120,
+      "last_focus_correct": 1,
+      "burst_to_final_focus_ms": 5172
+    },
+    "frame_baseline": {
+      "redraw_frames": 24,
+      "navigation_frames": 47,
+      "redraw_p95_ms": 190.86,
+      "navigation_p95_ms": 194.1,
+      "navigation_to_redraw_ratio": 1.02
+    }
+  },
+  "startup_samples": [
+    {
+      "process_to_activity_ms": 1275,
+      "activity_to_first_draw_ms": 413,
+      "first_draw_to_wordmark_ms": 202,
+      "wordmark_complete_ms": 4837,
+      "activity_to_home_ms": 6759,
+      "home_init_ms": 940,
+      "artwork_start_ms": 1768,
+      "network_start_ms": 1767,
+      "system_brand_exit_ms": -1
+    },
+    {
+      "process_to_activity_ms": 29411,
+      "activity_to_first_draw_ms": 155,
+      "first_draw_to_wordmark_ms": 148,
+      "wordmark_complete_ms": 3209,
+      "activity_to_home_ms": 5210,
+      "home_init_ms": 341,
+      "artwork_start_ms": 1002,
+      "network_start_ms": 1121,
+      "system_brand_exit_ms": -1
+    }
+  ],
+  "startup_phases": [
+    {
+      "phase": "first_cpu_draw",
+      "activity_to_phase_ms": 413
+    },
+    {
+      "phase": "wordmark_visible",
+      "activity_to_phase_ms": 615
+    },
+    {
+      "phase": "home_init",
+      "activity_to_phase_ms": 940
+    },
+    {
+      "phase": "network",
+      "activity_to_phase_ms": 1767
+    },
+    {
+      "phase": "artwork",
+      "activity_to_phase_ms": 1768
+    },
+    {
+      "phase": "wordmark_complete",
+      "activity_to_phase_ms": 4837
+    },
+    {
+      "phase": "first_cpu_draw",
+      "activity_to_phase_ms": 155
+    },
+    {
+      "phase": "wordmark_visible",
+      "activity_to_phase_ms": 303
+    },
+    {
+      "phase": "home_init",
+      "activity_to_phase_ms": 341
+    },
+    {
+      "phase": "artwork",
+      "activity_to_phase_ms": 1002
+    },
+    {
+      "phase": "network",
+      "activity_to_phase_ms": 1121
+    },
+    {
+      "phase": "wordmark_complete",
+      "activity_to_phase_ms": 3209
+    }
+  ],
+  "startup_window_probes": [
+    {
+      "version": "0.4.68-alpha",
+      "refresh_hz": 60.000003814697266,
+      "warm_process_activity_start": true,
+      "physical_tcl": false,
+      "reveal": {
+        "count": 16,
+        "p50_ms": 104.406283,
+        "p95_ms": 251.561293,
+        "p99_ms": 251.561293,
+        "over_budget": 16
+      },
+      "breathing": {
+        "count": 39,
+        "p50_ms": 62.985522,
+        "p95_ms": 81.650641,
+        "p99_ms": 83.079,
+        "over_budget": 39
+      },
+      "handoff": {
+        "count": 76,
+        "p50_ms": 65.597913,
+        "p95_ms": 261.306217,
+        "p99_ms": 299.955186,
+        "over_budget": 76
+      }
+    }
+  ],
+  "source_recovery_evidence": [
+    "HerrinSourceRecovery: blocked_child_main_reaped_by_host=1 main_callback_alive=1 pending=0 cancel_to_exit_ms=669 physical_tcl=0",
+    "HerrinSourceRecovery: uninterruptible_fixture_reaped=1 fresh_media_verified=1 old_proof_rejected=1 main_process_preserved=1 pending=0 child_after_cancel=1 child_after_recovery=0 cancel_to_exit_ms=284 physical_tcl=0",
+    "HerrinSourceRecovery: blocked_child_main_reaped_by_host=1 main_callback_alive=1 pending=0 cancel_to_exit_ms=718 physical_tcl=0",
+    "HerrinSourceRecovery: uninterruptible_fixture_reaped=1 fresh_media_verified=1 old_proof_rejected=1 main_process_preserved=1 pending=0 child_after_cancel=1 child_after_recovery=0 cancel_to_exit_ms=259 physical_tcl=0"
+  ],
+  "smb_evidence": [
+    "HerrinSmbEvidence: real_smb3=1 encryption=1 decoded_frames=1 seek=1 physical_nas=0 physical_tcl=0"
+  ],
+  "wordmark_evidence": [
+    "HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0",
+    "HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0",
+    "HerrinWordmarkEvidence: frames=8 letters=6 reveal_ms=2250 brighten_after_full_reveal=1 whole_breath_ms=2400 physical_tcl=0"
+  ],
+  "source_feedback_evidence": [
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=102 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=9 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=53 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=83 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=65 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=53 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=51 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=27 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=5 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=35 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=24 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=11 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=58 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=35 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=38 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedbackTest: controlled_metadata_no_private_provider_first_status_cpu_draw_ms=38 physical_tcl=0",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=15 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=18 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=39 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=17 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=45 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=22 measurement=cpu_draw_not_screen_presentation",
+    "HerrinSourceFeedback: first_status_cpu_draw_ms=32 measurement=cpu_draw_not_screen_presentation"
+  ]
+}

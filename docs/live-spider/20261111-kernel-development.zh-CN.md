@@ -1,0 +1,143 @@
+# 整体内核连续开发检查点
+
+策略：先连续开发，后统一验证。起点 b37a4b9a；上游305dff2复用，不重下载/重审计。
+禁止Superpowers、节点重测、TV/ABBA循环、主分支合并和未出帧的P0成功声明。
+
+本批主要代码检查点：2157243a（本记录和小型边界检查随后提交，最新HEAD以git为准）。
+已连续提交独立构建、依赖输入、原版API委托、统一网关/单向切换、授权宿主、
+原版VOD状态机统一和主线程调度。源码仍在指定开发分支，尚未同步PR #84代码head；
+不以PR元数据更新冒充代码已集成。
+
+## 模块A：独立构建骨架
+
+新增 android-tv/fongmi-kernel 独立 Gradle 构建，直接引用完整原版 CatVod 模块及
+app/src/main、leanback Java/resources/assets/aidl/jniLibs。原版源码不拆解、不重写，
+SiteApi/VodConfig/Spider Loader/ParseJob/Proxy/PlayerManager/Exo/MPV均在源集内。
+保留完整上游版本表、Java21/AGP9.4/SDK37，Room/EventBus/Glide处理器与原依赖。
+
+电视flavor类是共享代码的编译依赖，保留源码而不注册其首页/设置/直播入口。
+库清单只声明必需runtime可见性、内部WebActivity及NodeService；宿主品牌与界面不变。
+应用ID构建常量为tv.herrin.app，不伪装原包名/签名。
+
+状态：模块构建配置已写，尚未完整编译。未与旧app混编，未切换执行路径。
+下一模块：B依赖来源/输入锁，随后C原版委托适配接口、D单所有者切换控制。
+未解决：定制Media3及MPV/FFmpeg AAR来源、版本与许可；旧app同包类冲突需迁移后才能接入。
+
+## 模块B：依赖边界和确定性输入
+
+已查找到实际公开来源 FongMi/media（release默认分支不是定制版本）、其
+release-1.11.0-fongmi@3c2cbe8ac742c2fe15eff52f03eeb3b1b648848d，及
+FongMi/mpv-android、mpv、FFmpeg。该Media树虽然有mpvplayer/decoder_ffmpeg模块，
+但缺少本TV提交需要的四组关键定制API，不能当作已匹配的依赖。官方5.8.7
+immutable release仅列四个APK，没有AAR或源码构建对应清单；未下载/测试原版APK。
+
+dependencies.json记录这些确定事实与未解决版本；verify_dependencies.py检查显式输入
+校验和、对应源码commit、许可材料、重复类、非空实现、双ARM JNI与原版Media3导入。
+只约束完整内核preBuild，不拦截独立contract开发。没有替代AAR/桩类或删除原功能。
+下一模块：C，原版SiteApi/PlayerManager直接委托与不携带媒体URL的UI接口。
+
+## 模块C：原版委托与宿主边界
+
+新增纯Java17 Kernel接口：仓库/明确站点执行授权、搜索、详情、原版选集引用、播放、
+暂停/恢复/Seek/停止和状态观察。界面仅得到不透明影片/选集handle，得不到playerContent、
+解析JSON、Proxy或媒体URL；适配层没有解析器、HLS处理或媒体探测。
+
+FongMiKernel直接调用Config.find→VodConfig.load、SiteApi.searchContent/detailContent/
+playerContent→原PlayerManager.parse，选集取自原Vod/Flag/Episode。独立IO串行执行、
+主线程管理播放器，session epoch取消旧结果；原版仍负责超时/引擎/解码/释放。
+原生PlayerView由原manager.bindPlayerView绑定。真实first-frame事件与READY分离。
+授权界面继续由原App/CatVod/SpiderDialog负责，不合成QR或授权成功状态。
+
+KernelApplication继承原App初始化Runtime/Startup，拒绝包名/签名Hook替换。
+唯一源码宿主补丁是构建时将原Nano监听super(port)改为super("127.0.0.1", port)，
+保留所有原process/Proxy响应/HLS字节语义；不暴露原版未认证的LAN管理面。
+修正完整资源导入为原main/leanback层级覆盖，保留原flavor生成Binding与R。
+
+状态：委托代码已写，Android编译尚未验证；当前app未接入，绝不说已替换。
+下一模块D/E：宿主统一网关、单所有者无回退切换边界、保持稳定app；之后统一检查。
+
+## 模块D/E：切换协议与稳定宿主
+
+KernelCutover只有单向状态机：NOT_INSTALLED→RETIRING_LEGACY→INSTALLED，失败为
+FAILED，关闭为CLOSED。旧会话退休future完成后才允许分配新kernel；没有旧工厂或
+隐式恢复入口。宿主新增HerrinKernelGateway和纯contract依赖，可供现有页面调用，
+没有修改UI/TMDB/源优先顺序/直播/遥控。snapshot直接读原manager位置与时长。
+
+**尚未实际切换或删除旧代码**：外部Media3定制API不匹配，完整kernel不能编译；
+按用户D“完整可编译路径前不要破坏当前稳定分支”，当前Application和页面继续原入口。
+最终接线仍需宿主工具链/同包类/stock Media3迁移，改继承KernelApplication、保留
+CrashJournal、绑定原PlayerView，将页面改接gateway后再删除旧实现。新增类不是已经接管。
+
+本批构建边界、API委托与宿主接口已连续提交；进入统一静态/最小编译检查。
+依赖输入问题只影响完整Android构建，不重跑环境审计、节点/模拟器/TV/ABBA。
+
+## 授权宿主、原版VOD状态机与尚未接线的部分
+
+进一步发现原版SpiderDialog要求FragmentActivity，而当前MainActivity为ComponentActivity。
+新增不导出的KernelAuthorizationActivity，用原SpiderDialog显示真实网盘对话框，原回调
+原样传递，Intent仅有随机ticket；options/回调只在内存中，取消/销毁均释放。
+没有QR夹具、伪造授权或重签包。原WebActivity配置原Theme.App，避免继承宿主Compose主题。
+
+新增OriginalVodSession，实际绑定原VideoViewModel→VodPlaybackController→
+VodPlaybackState及原LiveData详情/播放/预载/搜索回调，委托选线/选集/重播/切集/
+Seek通知/进度/历史/生命周期，不自行实现网盘展开选集算法。
+
+随后继续完成了句柄接口与这一绑定的统一：FongMiKernel实现原VodPlaybackHost，
+56个原抽象方法均有实现；play只调用OriginalVodSession的原版选线/选集入口，
+playerContent通过原VideoViewModel→VodPlaybackController→PlayerManager.parse。
+删除初步SiteApi.playerContent/playSelection快捷调度，不保留两条VOD执行路线。
+原控制器处理网盘展开选集，observeDetail发布新的不透明选集handle，过期句柄失效。
+预载、切集、错误、刷新、Seek通知、进度与退出历史保存均委托原控制器/播放器。
+原模型数据源外只增加授权过滤，避免原fallback搜索越过用户选定站点/外层源顺序。
+这属于业务授权边界，不实现解析、Proxy或HLS。
+
+**实际页面和Application尚未接线，Android类型/链接未验证。** 原版专用Web播放及
+其他非P0可选交互仍需集中编译/运行时核对，不能据源集完整或静态方法匹配声称全功能等价。
+
+## 本批统一验证结果
+
+- 本地无javac，使用Maven Central原版ECJ3.42.0（下载到/tmp，不入仓）最小编译
+  Java17 Kernel/KernelCutover和边界检查；通过。
+- 单次边界检查通过：旧会话退休前0个新分配，退休后唯一分配，close幂等，
+  退休失败不创建新引擎，不允许隐式重试，关闭未完成切换可终止等待，
+  缺类LinkageError为终态失败，HTTP及Spider执行必须显式授权。无任何媒体播放模拟。
+- ECJ解析4个Android适配Java源通过；**仅语法，未验证Android类型/链接**。
+- Python依赖验证器语法、两份AndroidManifest XML及git diff --check通过。
+- 依赖输入统一检查明确返回
+  `DEPENDENCY_BLOCKED: no source/version/license-locked external artifacts`，退出2。
+  不生成假AAR或绕过门槛。完整Android编译、JVM应用回归、TV、ABBA及真实节点均未运行。
+  当前不以模拟器或403作为开发阻塞；外部依赖映射和实际UI/controller整合仍未完成。
+- 原UI/TMDB/NAS/WebDAV/SMB/直播/遥控源码未修改；没有执行回归，不能保证不存在构建风险。
+- 旧实现已替换/删除清单：0。未提供验收APK、未合并主分支、未声明P0完成。
+
+## 准确续跑
+
+读取最新HEAD与此记录，不重新拉取TV源码、不跑1360文件审计、不测原版APK/旧403。
+复用android-tv/fongmi-kernel的4模块和已有源码；OriginalVodSession与句柄API/
+渲染Host的单路径整合已写入，不重做直接playerContent路径。取得TV305dff2所需定制Media3及MPV/
+FFmpeg真实源码/版本/构建对应关系后，填dependencies.json真实artifacts并完整编译；
+修复类型/链接问题，再接入当前Application/页面/PlayerView，移除旧同包类和stock Media3。
+完整可编译前不启用新入口；之后旧会话完全退休→新kernel唯一分配→删除旧链路。
+
+构建命令见android-tv/fongmi-kernel/README.md。统一编译完成再做应用JVM、TV和双节点
+真实首帧/60秒/Seek/重播/切集；真实QR仅表示授权流程，未出帧不得通过。
+Codex额度无可查询接口，余额未知；没有自动续跑机制，没有声称可自行唤醒。
+
+当前准确状态：A完整源集/独立模块已配置但未编译；B外部定制依赖版本/合法构建来源
+未齐；C接口和原版VOD委托已写、实际页面接线未完成；D单向退休/安装协议已写、实际
+切换及旧代码删除未执行；E既有UI/推荐/源排序/直播/遥控源文件未改，未做回归承诺。
+缺少匹配依赖时不强行把原版同包类、定制Media3与现有stock类混编或交付旧内核APK。
+
+## 2026-11-12 本批继续开发：内核交接可终止性与授权边界
+
+本批在原 P0 独立分支连续提交了以下真实代码（没有启用新内核、没有复测已知不兼容媒体库）：
+
+- `979eadd6`：KernelCutover 初次主线程 dispatch、退役完成后的第二次 dispatch 若被拒绝，转为明确终态 FAILED；退役阶段 LinkageError 也终态失败，禁止静默创建/重试另一个播放器。
+- `34048c0f`：OriginalVodSession 仍走原版 VideoViewModel；站点授权过滤后为空时拒绝执行，避免把空站点列表交给原版默认搜索入口而扩大授权范围。
+- `2fdb576a`：补充 JVM 生命周期测试，覆盖两次分发拒绝、退役依赖 LinkageError、取消后拒绝分配以及旧会话退役屏障。
+- `1c8b90f6`：HerrinKernelGateway 将 Android Handler.post(false) 明确反馈为失败，不让 UI Future 永久挂起。
+
+这批只加固原版核心切换和搜索权限的桥接边界。原版 FongMi Parser/Proxy/Media3 未被重写；旧播放器未删除、实际 Application 未切换、实机首帧未验证。完整内核的依赖仍须原版兼容 Media3 与 MPV/FFmpeg，不能用现有已证明不匹配候选冒充。
+
+统一检查由 `herrin-kernel-host-compile.yml` 在本批最后一次触发。其 JVM + Herrin 宿主编译不等于原版 Android core/adapter 编译，更不代表真实节目可播。
+

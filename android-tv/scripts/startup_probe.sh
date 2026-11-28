@@ -28,15 +28,17 @@ adb shell atrace --list_categories > "$evidence/atrace-categories.txt"
 tracing=0
 if adb shell atrace --async_start -b 16384 gfx view wm am sched freq dalvik binder_driver > "$evidence/atrace-start.txt" 2>&1; then tracing=1; fi
 adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/cold-launch.txt"
-sleep 5
+# Observe the real curtain-completion event, then take one fresh UI snapshot.
+# Five seconds alone can still be the reveal on a stalled first-data AVD.
+python3 android-tv/scripts/await_startup_home.py "$evidence/cold-before-snapshot.txt"
+python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-cold "$evidence/home.xml"
+adb shell dumpsys window > "$evidence/cold-window.txt"
+# Observe lifecycle completion with the same UI snapshot. The old log capture
+# preceded uiautomator's idle/dump work and could miss the handoff it observed.
 adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/cold-diagnostics.txt"
-adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
-adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/home.xml"
-python3 - "$evidence/home.xml" <<'PY'
-import pathlib,sys
-text=pathlib.Path(sys.argv[1]).read_text()
-assert 'HERRIN' in text and '影片详情' in text, 'Interactive offline home was not reached'
-PY
+python3 android-tv/scripts/check_startup_probe.py --stage cold \
+    --xml "$evidence/home.xml" --window "$evidence/cold-window.txt" \
+    --diagnostics "$evidence/cold-diagnostics.txt" --report "$evidence/interactive-home.json"
 if [[ "$tracing" == 1 ]]; then adb shell atrace --async_stop -z > "$evidence/startup.atrace"; fi
 adb shell input keyevent KEYCODE_HOME
 # The HOME key is asynchronous. Starting Herrin before the launcher actually
@@ -83,15 +85,21 @@ adb shell dumpsys input > "$evidence/hot-input-before.txt"
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 1
-adb shell uiautomator dump /sdcard/herrin-startup.xml >/dev/null
-adb exec-out cat /sdcard/herrin-startup.xml > "$evidence/hot-remote.xml"
-python3 - "$evidence/hot-remote.xml" <<'PY'
-import pathlib,sys
-assert '精选电影' in pathlib.Path(sys.argv[1]).read_text(), 'Remote lost after startup/hot resume'
-PY
+python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-hot "$evidence/hot-remote.xml"
+adb shell dumpsys window > "$evidence/hot-remote-window.txt"
+adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/hot-diagnostics.txt"
+python3 android-tv/scripts/check_startup_probe.py --stage hot \
+    --xml "$evidence/hot-remote.xml" --window "$evidence/hot-remote-window.txt" \
+    --diagnostics "$evidence/hot-diagnostics.txt" --cold-diagnostics "$evidence/cold-diagnostics.txt" \
+    --report "$evidence/hot-resume.json"
 if grep -q 'FATAL EXCEPTION' "$evidence/cold-diagnostics.txt"; then exit 1; fi
 # Separate visual pass: screen recording perturbs timing, so it is never the perf source.
 adb shell am force-stop tv.herrin.app
+# First-data offline visual pass: the old pass only recorded an already warmed
+# second launch, which could never catch the reported installation-only defect.
+adb shell svc wifi disable
+adb shell svc data disable
+adb shell pm clear tv.herrin.app
 # Include the entire 4.54s design plus cold AVD composition/decode overhead.
 adb shell screenrecord --time-limit 12 /sdcard/herrin-startup.mp4 > "$evidence/recording.log" 2>&1 &
 recording_pid=$!
@@ -103,19 +111,64 @@ test -s "$evidence/visual-only-startup.mp4"
 # A missing recording/decoder is a failed evidence check, never a silent pass.
 mkdir -p "$evidence/visual-frames"
 ffmpeg -v error -i "$evidence/visual-only-startup.mp4" -vf fps=4 "$evidence/visual-frames/frame-%03d.png"
-adb shell uiautomator dump /sdcard/herrin-visual-home.xml >/dev/null
-adb exec-out cat /sdcard/herrin-visual-home.xml > "$evidence/visual-home.xml"
+python3 android-tv/scripts/await_startup_home.py "$evidence/visual-before-snapshot.txt"
+python3 android-tv/scripts/capture_startup_ui.py /sdcard/herrin-visual "$evidence/visual-home.xml"
+adb shell dumpsys window > "$evidence/visual-window.txt"
+adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I HerrinStartupFrames:I HerrinDisplay:I AndroidRuntime:E > "$evidence/visual-diagnostics.txt"
+python3 android-tv/scripts/check_startup_probe.py --stage visual \
+    --xml "$evidence/visual-home.xml" --window "$evidence/visual-window.txt" \
+    --diagnostics "$evidence/visual-diagnostics.txt" --report "$evidence/visual-home.json"
 python3 - "$evidence" <<'PYVISUAL'
 from pathlib import Path
 import json,sys
 root=Path(sys.argv[1])
 frames=list((root/'visual-frames').glob('frame-*.png'))
 assert len(frames)>=24, 'Startup visual evidence must contain at least six seconds at four samples/sec'
-text=(root/'visual-home.xml').read_text()
-assert 'HERRIN' in text and '影片详情' in text, 'Visual startup did not finish on the interactive home'
+assert json.loads((root/'visual-home.json').read_text())['interactive_ui'], 'Visual startup did not finish on the interactive home'
 record={'sampled_frames':len(frames),'samples_per_second':4,'recording_limit_seconds':12,
         'interactive_home_after_recording':True,'performance_source':False,'physical_TCL':False}
 (root/'visual-evidence.json').write_text(json.dumps(record,indent=2))
 print('HERRIN_STARTUP_VISUAL='+json.dumps(record))
 PYVISUAL
 cat "$evidence/cold-launch.txt" "$evidence/hot-launch.txt" "$evidence/cold-diagnostics.txt"
+
+# Re-enter after force-stop with first-run completion persisted. Then repeat
+# with a configured but unreachable warehouse; configuration is not home data.
+for scenario in force-stop configured-offline; do
+    adb shell am force-stop tv.herrin.app
+    if [[ "$scenario" == configured-offline ]]; then
+        cat > "$evidence/configured-fixture.xml" <<'PREFS'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map><string name="tvbox_warehouse_url">http://127.0.0.1:1/authorized-config-fixture.json</string><boolean name="startup_v13_completed" value="true" /></map>
+PREFS
+        adb push "$evidence/configured-fixture.xml" /data/local/tmp/herrin-startup-prefs.xml
+        adb shell run-as tv.herrin.app mkdir -p shared_prefs
+        adb shell run-as tv.herrin.app cp /data/local/tmp/herrin-startup-prefs.xml shared_prefs/herrin.xml
+    fi
+    adb logcat -c
+    adb shell am start -W -n tv.herrin.app/.MainActivity > "$evidence/$scenario-launch.txt"
+    python3 android-tv/scripts/await_startup_home.py "$evidence/$scenario-before-snapshot.txt"
+    python3 android-tv/scripts/capture_startup_ui.py "/sdcard/herrin-$scenario" "$evidence/$scenario-home.xml"
+    adb shell dumpsys window > "$evidence/$scenario-window.txt"
+    adb logcat -d -s HerrinStartup:I HerrinStartupPhase:I AndroidRuntime:E > "$evidence/$scenario-diagnostics.txt"
+    python3 - "$evidence" "$scenario" <<'MATRIX'
+import json,sys,re,xml.etree.ElementTree as ET
+from pathlib import Path
+sys.path.insert(0,'android-tv/scripts')
+from check_startup_probe import check_lifecycle,check_ui
+root=Path(sys.argv[1]);name=sys.argv[2]
+metrics=check_lifecycle((root/f'{name}-diagnostics.txt').read_text())
+xml=(root/f'{name}-home.xml').read_text();window=(root/f'{name}-window.txt').read_text()
+if name=='force-stop': check_ui(xml,window)
+else:
+    # Empty configured catalogs legitimately have no Hero CTA. Require the
+    # real home navigation, input window and completed animation instead.
+    assert re.search(r'mCurrentFocus=.*tv[.]herrin[.]app/[^\n]*MainActivity',window)
+    nodes=list(ET.fromstring(xml).iter('node'))
+    assert any(n.get('text')=='首页' and n.get('enabled')=='true' for n in nodes)
+    assert any(n.get('focused')=='true' and n.get('package')=='tv.herrin.app' for n in nodes)
+result={'scenario':name,'metrics':metrics,'physical_TCL':False,'configured_provider_contacted':False}
+(root/f'{name}-result.json').write_text(json.dumps(result,indent=2))
+print('HERRIN_STARTUP_MATRIX='+json.dumps(result))
+MATRIX
+done

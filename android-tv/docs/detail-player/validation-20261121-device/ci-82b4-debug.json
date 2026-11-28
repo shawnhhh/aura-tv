@@ -1,0 +1,28 @@
+{
+  "source_sha": "82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e",
+  "run": 44921354185,
+  "job": 136897910643,
+  "job_result": "success",
+  "jvm": {
+    "tests": 807,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "samba": {
+    "tests": 6,
+    "result": "PASS"
+  },
+  "lint": "PASS",
+  "debug": "PASS",
+  "diagnostic_apk": {
+    "source_sha": "82b4fc7b5e519625710f7e5ca5b165b1d72f3f3e",
+    "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44921354185/artifacts/14714680455",
+    "apk_bytes": 27119346,
+    "sha256_ci": "22909f4752c0e598009318a065fa473d5c1deb5d152b3fb30b43b5ac73ff2844",
+    "diagnostic_only": true,
+    "independently_downloaded": false
+  },
+  "reuse_scope": "Only app/JVM/Lint/Debug results. New instrumentation/CI control changes must run full TV/API31/ABBA; not reused as their pass.",
+  "physical_acceptance": false
+}

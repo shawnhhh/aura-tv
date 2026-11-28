@@ -46,14 +46,34 @@ for label, classes in groups.items():
     skipped=sum(case.find('skipped') is not None for case in cases)
     lines.append(f'| {label} | {len(cases)} | {failed} | {skipped} |')
 lines += ['', 'SMB 正向用例连接受控、认证、签名的真实 Samba SMB2/SMB3 服务；稀疏 5GiB 文件只证明偏移读取，不能冒充真实 5GiB MKV 解码或 4K 吞吐。',
-          '启动 1800ms 显现 + 2400ms 同步呼吸 + 340ms 淡出是正常动画设计；减少动态/用户明确跳过例外。Compose 驱动的 ABBA 不能冒充冷启动实际动画时长。',
+          '启动 2250ms 羽化显影 + 850ms 增亮 + 2400ms 同步呼吸 + 340ms 淡出是正常动画设计；减少动态/用户明确跳过例外。Compose 驱动的 ABBA 不能冒充冷启动实际动画时长。',
           'TLS 自签名身份持久化不等于 Safari 自动信任。真实 TCL / iPhone / 家庭 NAS / 第三方私有节点仍待真机验收。']
 lines += ['', '当前作业未执行的测试组显示 0；完整结论须联合 Debug 和 Emulator 两个作业。', '',
           '## APK 工件', '',
-          ('本P0分支真实节点尚未通过，CI不上传APK；临时安装包仅用于本轮诊断，不是验收交付。'
+          ('本P0分支真实节点尚未通过；HERRIN-personal-library-debug-diagnostic APK 仅供诊断，须核对 SOURCE_COMMIT.txt 与 SHA256SUMS.txt，不代表验收交付。'
            if (os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')) in
                {'codex/herrin-global-search-20261107','codex/herrin-p0-live-playback-20261110'}
            else '在 Debug 工作流的 Artifacts 中下载 `HERRIN-debug-apk`，解压后通过 Android TV 安装或 `adb install -r app-debug.apk` 安装。')]
+# Only the fixed scheduler fixture line is exported; arbitrary test stdout stays private.
+layout_samples=[]
+layout_pattern=re.compile(r'^DETAIL_LAYOUT_CONTROLLED baseline_ms=\[([0-9, ]+)\] candidate_ms=\[([0-9, ]+)\] human_delay_ms=0 real_device=0$')
+for path in (root/'app/build/test-results/testDebugUnitTest').rglob('TEST-*.xml'):
+    for node in ET.parse(path).getroot().iter('system-out'):
+        for raw in (node.text or '').splitlines():
+            match=layout_pattern.fullmatch(raw)
+            if match:
+                baseline=[int(value.strip()) for value in match[1].split(',')]
+                candidate=[int(value.strip()) for value in match[2].split(',')]
+                if len(baseline)==len(candidate)==5:
+                    layout_samples.append({'baseline_ms':baseline,'candidate_ms':candidate})
+if layout_samples:
+    record={'source_commit':sha,'baseline_commit':'f8e8d76c37ec1a56696262b08c9acb0cba2b327f','scope':'controlled_scheduler_fixture_not_real_provider_or_TCL',
+            'human_delay_ms':0,'samples':layout_samples}
+    (out/'detail-layout-performance.json').write_text(json.dumps(record,indent=2))
+    print('HERRIN_DETAIL_LAYOUT_PERFORMANCE='+json.dumps(record))
+    lines += ['', '## 详情线路受控调度对比', '',
+              '基线直接执行冻结的 f8e8d76c 调度器，首选慢节点和快速候选使用相同受控延迟，首个命中后立即模拟选择详情，人工等待为0。候选使用增量预取。此处不是实机或真实影视点性能。',
+              json.dumps(record,ensure_ascii=False)]
 controlled=[]
 for path in (root / 'app/build/test-results/testDebugUnitTest').rglob('TEST-*.xml'):
     for node in ET.parse(path).getroot().iter('system-out'):

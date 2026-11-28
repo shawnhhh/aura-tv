@@ -1,0 +1,37 @@
+{
+  "source_sha": "ba5cc55faf074bd531d430c6ae63614f5083372f",
+  "run": 44708169912,
+  "debug": {
+    "tests": 788,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "tv_preflight": {
+    "tests": 1,
+    "failures": 1,
+    "line": 749,
+    "assertion": "Expected no-routes text to be displayed after a confirmed fresh B request",
+    "failure_excerpt": [
+      "2026-11-20T09:26:58.6258165Z INSTRUMENTATION_STATUS: stack=androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms",
+      "2026-11-20T09:26:58.6259553Z \tat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)",
+      "2026-11-20T09:26:58.6260471Z \tat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)",
+      "2026-11-20T09:26:58.6261592Z \tat tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:749)",
+      "2026-11-20T09:26:58.6262255Z ",
+      "2026-11-20T09:26:58.6262390Z INSTRUMENTATION_STATUS: stream=",
+      "2026-11-20T09:26:58.6263314Z Error in tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(tv.herrin.app.HerrinUiSmokeTest):",
+      "2026-11-20T09:26:58.6264373Z androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms",
+      "2026-11-20T09:26:58.6265196Z \tat androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)",
+      "2026-11-20T09:26:58.6266052Z \tat androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)",
+      "2026-11-20T09:26:58.6267047Z \tat tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:749)",
+      "2026-11-20T09:26:58.6267655Z ",
+      "2026-11-20T09:26:58.6268043Z INSTRUMENTATION_STATUS: test=tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests",
+      "2026-11-20T09:26:58.6268620Z INSTRUMENTATION_STATUS_CODE: -2",
+      "2026-11-20T09:26:58.6514988Z INSTRUMENTATION_RESULT: stream="
+    ]
+  },
+  "unfiltered_suite_started": false,
+  "api31": "skipped",
+  "abba": "skipped",
+  "diagnosis": "Request count guard passed; without semantics evidence this does not prove stale routes. Next check scrolls the actual error text and preserves the original visibility assertion."
+}

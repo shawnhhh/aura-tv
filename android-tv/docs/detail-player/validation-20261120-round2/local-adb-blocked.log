@@ -1,0 +1,28 @@
+--- adb starting (pid 3393) ---
+11-20 03:20:20.410  3393  3393 I adb     : main.cpp:65 Android Debug Bridge version 1.0.41
+11-20 03:20:20.410  3393  3393 I adb     : main.cpp:65 Version 37.0.3-16887417
+11-20 03:20:20.410  3393  3393 I adb     : main.cpp:65 Installed as /workspace/android-sdk/platform-tools/adb
+11-20 03:20:20.410  3393  3393 I adb     : main.cpp:65 Running on Linux 6.18.57 (x86_64)
+11-20 03:20:20.410  3393  3393 I adb     : main.cpp:65 
+11-20 03:20:20.411  3393  3393 F adb     : adb_utils.cpp:315 Cannot mkdir '/home/agent/.android': Read-only file system
+--- adb starting (pid 3410) ---
+11-20 03:20:48.197  3410  3410 I adb     : main.cpp:65 Android Debug Bridge version 1.0.41
+11-20 03:20:48.197  3410  3410 I adb     : main.cpp:65 Version 37.0.3-16887417
+11-20 03:20:48.197  3410  3410 I adb     : main.cpp:65 Installed as /workspace/android-sdk/platform-tools/adb
+11-20 03:20:48.197  3410  3410 I adb     : main.cpp:65 Running on Linux 6.18.57 (x86_64)
+11-20 03:20:48.197  3410  3410 I adb     : main.cpp:65 
+11-20 03:20:48.198  3410  3410 F adb     : adb_utils.cpp:315 Cannot mkdir '/home/agent/.android': Read-only file system
+--- adb starting (pid 16401) ---
+11-20 09:23:37.089 16401 16401 I adb     : main.cpp:65 Android Debug Bridge version 1.0.41
+11-20 09:23:37.089 16401 16401 I adb     : main.cpp:65 Version 37.0.3-16887417
+11-20 09:23:37.089 16401 16401 I adb     : main.cpp:65 Installed as /workspace/android-sdk/platform-tools/adb
+11-20 09:23:37.089 16401 16401 I adb     : main.cpp:65 Running on Linux 6.18.57 (x86_64)
+11-20 09:23:37.089 16401 16401 I adb     : main.cpp:65 
+11-20 09:23:37.090 16401 16401 F adb     : adb_utils.cpp:315 Cannot mkdir '/home/agent/.android': Read-only file system
+--- adb starting (pid 16423) ---
+11-20 09:23:58.356 16423 16423 I adb     : main.cpp:65 Android Debug Bridge version 1.0.41
+11-20 09:23:58.356 16423 16423 I adb     : main.cpp:65 Version 37.0.3-16887417
+11-20 09:23:58.356 16423 16423 I adb     : main.cpp:65 Installed as /workspace/android-sdk/platform-tools/adb
+11-20 09:23:58.356 16423 16423 I adb     : main.cpp:65 Running on Linux 6.18.57 (x86_64)
+11-20 09:23:58.356 16423 16423 I adb     : main.cpp:65 
+11-20 09:23:58.356 16423 16423 F adb     : adb_utils.cpp:315 Cannot mkdir '/home/agent/.android': Read-only file system

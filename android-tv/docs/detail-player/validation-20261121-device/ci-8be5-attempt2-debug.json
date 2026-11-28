@@ -1,0 +1,19 @@
+{
+  "source_sha": "8be5f820feba2a5ccde8ad35e58daa9297dd9377",
+  "run_id": 44971925041,
+  "attempt": 2,
+  "job_id": 137054579338,
+  "result": "success",
+  "jvm": {
+    "tests": 808,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "samba": "6/6",
+  "lint": "passed",
+  "debug": "passed",
+  "apk_sha256": "e0d0c8680bfe3a8a8a35db18eb82f8c212786426def030d4a3ead6a576d90d8b",
+  "artifact_url": "https://github.com/shawnhhh/aura-tv/actions/runs/44971925041/artifacts/14734885984",
+  "device_acceptance": false
+}

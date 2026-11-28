@@ -1,0 +1,22 @@
+{
+  "application_sha": "3e1da7241b7ec2645cb19450695fe0e23a33bdc2",
+  "verification_run": 44714558232,
+  "jvm": {
+    "tests": 790,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "samba": {
+    "tests": 6,
+    "failures": 0
+  },
+  "tv": {
+    "tests": 289,
+    "passed": 289,
+    "failed": 0,
+    "fatal_exception_present": false,
+    "physical_TCL_tested": false
+  },
+  "reuse_note": "Fetched latest completed GitHub jobs/logs on 2026-11-21. No unconditional rerun of unchanged app suites."
+}

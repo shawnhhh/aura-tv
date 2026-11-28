@@ -1,0 +1,85 @@
+{
+  "node": "玩偶哥哥",
+  "warehouse": "http://www.饭太硬.net/tv",
+  "authorized_title": "蜡笔小新",
+  "authorized_year": null,
+  "verdict": "FAIL_PLAYBACK",
+  "stages": [
+    {
+      "stage": "config",
+      "result": "PASS",
+      "elapsed_ms": 5264
+    },
+    {
+      "stage": "spider_initialization",
+      "result": "PASS",
+      "elapsed_ms": 7093
+    },
+    {
+      "stage": "search",
+      "result": "FAILED",
+      "failure_code": "SOURCE_EMPTY_RESPONSE",
+      "elapsed_ms": 428
+    }
+  ],
+  "playback_host_scope": "PRODUCTION_MAIN_ACTIVITY",
+  "first_frame": false,
+  "media3_created": false,
+  "seek_verified": false,
+  "details_ui_verified": false,
+  "plugin_initialized": true,
+  "device": {
+    "sdk": 30,
+    "supported_abis": [
+      "x86_64",
+      "x86",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "armeabi"
+    ],
+    "os_arch": "armv7l",
+    "process_64bit": false,
+    "production_selected_abi": "armeabi-v7a"
+  },
+  "warehouse_http_status": 200,
+  "site_key": "玩偶",
+  "spider_api": "csp_WoGGGuard",
+  "node_count": 49,
+  "config_saved": true,
+  "declared_jar_md5": "6d10a60af6c0976836933c5f3cf9e8a7",
+  "failure_stage": "search",
+  "failure_code": "SOURCE_EMPTY_RESPONSE",
+  "driver_failure_structure": "CAUSE tv.herrin.app.FanTaiYingRealMainUiTest$Stop\ntv.herrin.app.FanTaiYingRealMainUiTest.node$lambda$37:297\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$4itMAzLI1pP6sZSM90158g93WXc:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda43.invoke:0\ntv.herrin.app.FanTaiYingRealMainUiTest.step$lambda$16:128\ntv.herrin.app.FanTaiYingRealMainUiTest.$r8$lambda$msIkTIMixolEn-R5no_UfLbvqhE:0\ntv.herrin.app.FanTaiYingRealMainUiTest$$ExternalSyntheticLambda20.invoke:0\nandroidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil:434\nandroidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil:306\ntv.herrin.app.FanTaiYingRealMainUiTest.step:115\ntv.herrin.app.FanTaiYingRealMainUiTest.node:291\ntv.herrin.app.FanTaiYingRealMainUiTest.wanouGegeRealNode:237\njava.lang.reflect.Method.invoke:-1",
+  "search_input_length": 4,
+  "search_input_matches_authorized_title": true,
+  "main_activity_lifecycle": "RESUMED",
+  "search_response_shape": {
+    "overload": "TWO_ARGUMENT_FIRST_PAGE",
+    "declared_searchable": 1,
+    "declared_quick_search": 1,
+    "init_extension_chars": 40,
+    "init_extension_kind": "JSON",
+    "init_extension_known_fields": [],
+    "two_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "three_argument_owner": "com.github.catvod.spider.BaseSpiderGuard",
+    "query_length": 4,
+    "quick": true,
+    "attempts": [
+      {
+        "quick": false,
+        "response_chars": 0
+      },
+      {
+        "quick": true,
+        "response_chars": 0
+      }
+    ],
+    "response_chars": 0,
+    "shape": "EMPTY_BODY"
+  },
+  "sdk_network_scope": "PUBLIC_SDK_CALLS_ONLY_NATIVE_NOT_OBSERVED",
+  "sdk_network_evidence": [],
+  "safe_player_journal": "HERRIN PLAYBACK DIAGNOSTICS (SAFE / NO TOKENS)\nT+50323ms CONFIG WAREHOUSE_HTTP_RESPONSE STATUS=200\nT+51270ms SPIDER INITIALIZE_STARTED\nT+57641ms SPIDER INITIALIZE_RETURNED MS=6370\nT+60190ms SOURCE SEARCH_ROUTE_SELECTED_SPIDER COUNT=4\nT+60548ms SPIDER SEARCH_STARTED\nT+60578ms SPIDER SEARCH_RETURNED MS=30\nT+60579ms SOURCE SOURCE_EMPTY_RESPONSE",
+  "observed_network_media_bytes_after_listener": 0,
+  "elapsed_ms": 15335
+}

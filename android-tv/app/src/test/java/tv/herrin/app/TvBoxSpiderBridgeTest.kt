@@ -54,6 +54,11 @@ class TvBoxSpiderBridgeTest {
         assertEquals("第二集", detailed.playbackEpisodes[1].title)
         assertEquals("opaque-id", detailed.playbackEpisodes[0].lines[1].uri)
         assertEquals("B", detailed.playbackEpisodes[0].lines[1].title)
+        assertEquals(listOf("第一集", "第二集"), detailed.playbackEpisodes.episodesOnLine("spider-0").map { it.title })
+        val restored = SpiderIpc.readFilm(SpiderIpc.film(detailed))
+        val alternate = restored.playbackEpisodes.episodesOnLine("spider-1").single()
+        assertEquals("正片", alternate.title)
+        assertEquals("opaque-id", alternate.lines.single().uri)
     }
 
     @Test fun `spider detail enriches missing poster and metadata without changing opaque identifiers`() {
@@ -117,7 +122,7 @@ class TvBoxSpiderBridgeTest {
         assertEquals(media, (acrossProcess as PlaybackResult.Ready).media)
     }
 
-    @Test fun `player selects preferred URL object quality with safe fallback`() {
+    @Test fun `player upgrades the provider preview to a higher offered quality and preserves fallback`() {
         val chosen = SpiderVodCodec.player("""{
             "parse":0, "url":{"values":[
                 {"n":"低画质","v":"http://video.example/low.m3u8"},
@@ -131,11 +136,23 @@ class TvBoxSpiderBridgeTest {
                 {"n":"高清","v":"https://video.example/hd.m3u8"}
             ],"position":0}
         }""", true)
-        assertEquals("http://video.example/low.m3u8", (withHttp as PlaybackResult.Ready).media.uri)
-        assertEquals(listOf("https://video.example/hd.m3u8"), withHttp.media.alternateUris)
+        assertEquals("https://video.example/hd.m3u8", (withHttp as PlaybackResult.Ready).media.uri)
+        assertEquals(listOf("http://video.example/low.m3u8"), withHttp.media.alternateUris)
         assertTrue(withHttp.media.allowHttpRedirects)
         val decoded = SpiderIpc.readPlayback(SpiderIpc.playback(withHttp.media), true)
         assertEquals(withHttp.media, (decoded as PlaybackResult.Ready).media)
+    }
+
+    @Test fun `quality upgrades keep media credentials on the provider selected origin`() {
+        val media = (SpiderVodCodec.player("""{
+            "header":{"Cookie":"fixture"},
+            "url":["200p","https://media.example.org/preview.m3u8",
+                   "2160p","https://other.example.org/4k.m3u8",
+                   "1080p","https://media.example.org/full.m3u8"]
+        }""", false) as PlaybackResult.Ready).media
+        assertEquals("https://media.example.org/full.m3u8", media.uri)
+        assertEquals("fixture", media.headers["Cookie"])
+        assertFalse(media.safeNotFoundFallback)
     }
 
     @Test fun `source summaries remove literal HTML entities`() {

@@ -1,0 +1,35 @@
+2026-11-21T16:23:56.3668586Z OK (1 test)
+2026-11-21T16:24:03.1047054Z OK (1 test)
+2026-11-21T16:24:53.9473891Z OK (20 tests)
+2026-11-21T16:26:15.0336943Z Tests run: 20,  Failures: 2
+2026-11-21T16:26:15.8316083Z Tests run: 20,  Failures: 2
+2026-11-21T16:25:37.8725151Z INSTRUMENTATION_STATUS: stack=androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+2026-11-21T16:25:37.8726618Z 	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)
+2026-11-21T16:25:37.8727747Z 	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)
+2026-11-21T16:25:37.8729308Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:778)
+2026-11-21T16:25:37.8788366Z
+2026-11-21T16:25:37.8789949Z INSTRUMENTATION_STATUS: stream=
+2026-11-21T16:25:37.8807271Z Error in tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(tv.herrin.app.HerrinUiSmokeTest):
+2026-11-21T16:25:37.8809071Z androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+2026-11-21T16:25:37.8810597Z 	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:441)
+2026-11-21T16:25:37.8812214Z 	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:306)
+2026-11-21T16:25:37.8814016Z 	at tv.herrin.app.HerrinUiSmokeTest.tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests(HerrinUiSmokeTest.kt:778)
+2026-11-21T16:25:37.8815214Z
+2026-11-21T16:25:37.8815967Z INSTRUMENTATION_STATUS: test=tmdbDetailPrefetchesBothCmsLayoutsAndSelectsOriginalVodWithoutMediaRequests
+2026-11-21T16:25:37.8817105Z INSTRUMENTATION_STATUS_CODE: -2
+2026-11-21T16:25:37.8818098Z INSTRUMENTATION_STATUS: class=tv.herrin.app.HerrinUiSmokeTest
+2026-11-21T16:25:37.8818918Z INSTRUMENTATION_STATUS: current=8
+2026-11-21T16:25:37.8820027Z INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+2026-11-21T16:25:37.8820760Z INSTRUMENTATION_STATUS: numtests=20
+2026-11-21T16:26:13.1918537Z INSTRUMENTATION_STATUS: stack=org.junit.ComparisonFailure: expected:<SOURCE_[HTTP_403]> but was:<SOURCE_[BODY_INVALID]>
+2026-11-21T16:26:13.1922598Z 	at org.junit.Assert.assertEquals(Assert.java:117)
+2026-11-21T16:26:13.1923213Z 	at org.junit.Assert.assertEquals(Assert.java:146)
+2026-11-21T16:26:13.1924219Z 	at tv.herrin.app.P0ExitAndEntryTest.phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply(P0ExitAndEntryTest.kt:161)
+2026-11-21T16:26:13.1924890Z
+2026-11-21T16:26:13.1925029Z INSTRUMENTATION_STATUS: stream=
+2026-11-21T16:26:13.1925747Z Error in phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply(tv.herrin.app.P0ExitAndEntryTest):
+2026-11-21T16:26:13.1926666Z org.junit.ComparisonFailure: expected:<SOURCE_[HTTP_403]> but was:<SOURCE_[BODY_INVALID]>
+2026-11-21T16:26:13.1927276Z 	at org.junit.Assert.assertEquals(Assert.java:117)
+2026-11-21T16:26:13.1927752Z 	at org.junit.Assert.assertEquals(Assert.java:146)
+2026-11-21T16:26:13.1929066Z 	at tv.herrin.app.P0ExitAndEntryTest.phoneHttpsSaveOfHttpWarehouseRefreshesTvWithoutRemoteApply(P0ExitAndEntryTest.kt:161)
+2026-11-21T16:26:13.1929718Z

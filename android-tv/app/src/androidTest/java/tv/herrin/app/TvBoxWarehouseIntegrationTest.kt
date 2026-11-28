@@ -123,22 +123,32 @@ class TvBoxWarehouseIntegrationTest {
         }
     }
 
-    @Test fun refusesRedirectsHtmlAndOversizedPayloads() = runBlocking {
+    @Test fun followsValidShortLinksButRefusesUnsafeRedirectsImagesHtmlAndOversizedPayloads() = runBlocking {
         MockWebServer().use { server ->
             server.start()
-            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "http://evil.example.org"))
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/actual/config.json"))
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"sites":[{"key":"short","name":"合法短链接","api":"./cms"}]}"""))
+            // No third-party DNS or service. Non-HTTP redirects remain errors.
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "file:///not-a-config"))
             server.enqueue(MockResponse().setHeader("Content-Type", "image/x-ms-bmp").setBody("JPEG payload"))
             server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
                 .setBody("{" + " ".repeat(1024 * 1024) + "}"))
             val repo = TvBoxConfigRepository()
             val url = server.url("/config").toString()
+            val followed = repo.load(url, allowHttp = true) as TvBoxConfig.Single
+            assertEquals("合法短链接", followed.sites.single().name)
+            assertEquals(server.url("/actual/cms").toString(), followed.sites.single().apiUrl)
             val redirect = repo.load(url, allowHttp = true) as TvBoxConfig.Error
             assertTrue(redirect.reason.contains("跳转"))
             val image = repo.load(url, allowHttp = true) as TvBoxConfig.Error
             assertTrue(image.reason.contains("图片"))
+            server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html>not config</html>"))
             val overLimit = repo.load(url, allowHttp = true) as TvBoxConfig.Error
             assertTrue(overLimit.reason.contains("1 MB"))
-            assertEquals(3, server.requestCount)
+            val html = repo.load(url, allowHttp = true) as TvBoxConfig.Error
+            assertTrue(html.reason.contains("网页"))
+            assertEquals(6, server.requestCount)
         }
     }
 }

@@ -1,0 +1,16 @@
+{
+  "source_sha": "5f90fd41e4c225f35ee027717a99bfc1109c7b40",
+  "run": 44922549006,
+  "job": 136901604628,
+  "result": "FAILURE_BEFORE_FULL_SUITE",
+  "passed_preflights": {
+    "detail": 1,
+    "v13_pixels": 1,
+    "regression": 20
+  },
+  "reason": "emulator_ci.sh required literal OK (19 tests) after adding a new first-install splash test; actual output OK (20 tests)",
+  "full_tv_suite_executed": false,
+  "api31_executed": false,
+  "abba_executed": false,
+  "fix_commit": "dc2d623e3b3b9ef218b602e6b140acb095d92264"
+}

@@ -10,6 +10,26 @@ import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
 
 class TmdbBrowseRepositoryTest {
+    @Test fun freshCategoryCacheSurvivesReentryAndRecreationWithoutNetworkButRetryRefreshes(): Unit = runBlocking {
+        val directory = Files.createTempDirectory("tmdb-category-reentry").toFile()
+        val fixture = TmdbBrowseFixture()
+        val pages = listOf(TmdbBrowsePage.HOME, TmdbBrowsePage.MOVIE, TmdbBrowsePage.SERIES, TmdbBrowsePage.ANIME)
+        try {
+            val seed = TmdbBrowseState(TmdbBrowseRepository(fixture, directory), "fixture")
+            pages.forEach { seed.refresh(it) }
+            fixture.requests.clear()
+            val state = TmdbBrowseState(TmdbBrowseRepository(fixture, directory), "fixture")
+            repeat(2) { pages.forEach { state.hydrate(it); state.refresh(it) } }
+            assertTrue("Fresh cache must not restart list or release proof requests", fixture.requests.isEmpty())
+            val hot = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.HOT)
+            assertEquals("tmdb-movie-11", state.row(hot).entries.first().film.id)
+            fixture.variant = 1
+            state.retry(hot)
+            assertEquals("Explicit retry still replaces metadata", "tmdb-movie-12", state.row(hot).entries.first().film.id)
+            assertTrue(fixture.requests.any { it.contains("/discover/movie") })
+        } finally { directory.deleteRecursively() }
+    }
+
     private val day = LocalDate.of(2026, 11, 9)
     private fun movie(vararg types: Pair<Int, String>) = JSONObject().put("id", 1).put("release_dates",
         JSONObject().put("results", JSONArray().put(JSONObject().put("release_dates", JSONArray().apply {
@@ -32,10 +52,20 @@ class TmdbBrowseRepositoryTest {
             val first = withTimeout(2000) { previews.await() }
             assertTrue(first.entries.isNotEmpty())
             assertTrue(first.entries.all { it.availability.state == TmdbAvailability.UNKNOWN })
-            assertFalse(pending.isCompleted)
+            assertFalse("Hot lists must not request per-title proof", proofStarted.isCompleted)
             assertTrue(first.entries.none { repo.eligible(TmdbRailSpec(TmdbBrowsePage.MOVIE,TmdbRailKind.LATEST),it) })
         } finally { release.countDown() }
         assertTrue(pending.await().entries.isNotEmpty())
+    }
+
+    @Test fun concurrentListRequestsAreDeduplicatedWithoutDetailExpansion(): Unit = runBlocking {
+        val fixture=TmdbBrowseFixture().apply { dense=true }
+        val repo=TmdbBrowseRepository(fixture)
+        val spec=TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT)
+        val batches=List(3) { async { repo.load(spec,1,"fixture") } }.awaitAll()
+        assertTrue(batches.all { it.entries.size==20 })
+        assertEquals(1,fixture.requests.count { it.contains("/trending/all/week") })
+        assertFalse(fixture.requests.any { Regex("/(movie|tv)/[0-9]+").containsMatchIn(it) })
     }
 
     @Test fun replacementRefreshWaitsForCancelledOwnerAndStillUpdatesFocusedRailCache(): Unit = runBlocking {
@@ -74,6 +104,42 @@ class TmdbBrowseRepositoryTest {
         } finally { release.countDown();initial?.cancelAndJoin();directory.deleteRecursively() }
     }
 
+    @Test fun deferredRefreshCannotErasePagesLoadedWhileFocused(): Unit = runBlocking {
+        val fixture = TmdbBrowseFixture()
+        val state = TmdbBrowseState(TmdbBrowseRepository(fixture), "fixture")
+        val spec = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.LATEST)
+        state.refresh(TmdbBrowsePage.MOVIE)
+        state.focus(spec.key)
+        state.refresh(TmdbBrowsePage.MOVIE, true)
+        state.more(spec)
+        val paged = state.row(spec).entries.map { it.film.id }
+        assertEquals(2, state.row(spec).page)
+        assertTrue(paged.size > 1)
+        state.focus(null)
+        assertEquals(paged, state.row(spec).entries.map { it.film.id })
+        assertEquals(2, state.row(spec).page)
+        assertEquals(paged.size, paged.toSet().size)
+    }
+
+    @Test fun failedNextPageRetryRequestsFailedPageAndRetainsContent(): Unit = runBlocking {
+        val fixture = TmdbBrowseFixture()
+        val state = TmdbBrowseState(TmdbBrowseRepository(fixture), "fixture")
+        val spec = TmdbRailSpec(TmdbBrowsePage.MOVIE, TmdbRailKind.LATEST)
+        state.refresh(TmdbBrowsePage.MOVIE)
+        val initial = state.row(spec).entries
+        fixture.offline = true
+        state.more(spec)
+        assertTrue(state.row(spec).error)
+        assertEquals(initial, state.row(spec).entries)
+        assertEquals(1, state.row(spec).page)
+        fixture.offline = false
+        state.retry(spec)
+        assertFalse(state.row(spec).error)
+        assertEquals(2, state.row(spec).page)
+        assertTrue(state.row(spec).entries.containsAll(initial))
+        assertTrue(state.row(spec).entries.size > initial.size)
+    }
+
     @Test fun releaseProofDoesNotConfuseTheatricalFutureOrUnknownWithDigital() {
         assertEquals(TmdbAvailability.THEATRICAL_ONLY, TmdbReleaseEvidence.evaluate("movie", movie(3 to "2026-01-01"), day).state)
         assertEquals(TmdbAvailability.UPCOMING, TmdbReleaseEvidence.evaluate("movie", movie(4 to "2026-11-10"), day).state)
@@ -81,7 +147,7 @@ class TmdbBrowseRepositoryTest {
         assertEquals(TmdbAvailability.AVAILABLE, TmdbReleaseEvidence.evaluate("movie", movie(6 to "2020-01-01"), day).state)
         assertEquals(TmdbAvailability.UNKNOWN, TmdbReleaseEvidence.evaluate("movie", JSONObject().put("release_date","2020-01-01"), day).state)
         assertEquals(TmdbAvailability.UNKNOWN, TmdbReleaseEvidence.evaluate("movie", movie(4 to "invalid"), day).state)
-        assertEquals(TmdbAvailability.UNKNOWN, TmdbReleaseEvidence.evaluate("movie", movie(5 to "2020-01-01"), day).state)
+        assertEquals(TmdbAvailability.AVAILABLE, TmdbReleaseEvidence.evaluate("movie", movie(5 to "2020-01-01"), day).state)
     }
     @Test fun tvNeedsActualEpisodeAndStatusNotOnlyAFirstAirDate() {
         val detail = JSONObject().put("first_air_date","2026-01-01").put("status","Returning Series")
@@ -133,11 +199,11 @@ class TmdbBrowseRepositoryTest {
             for(spec in specs) for(type in spec.types) {
                 val urls=spec.endpoints(type,day,if(spec.kind==TmdbRailKind.DOMESTIC)"HK" else null)
                 assertTrue(urls.all{it.startsWith("/trending/")||it.startsWith("/discover/")})
-                if(spec.kind==TmdbRailKind.LATEST&&type=="movie")assertTrue(urls.single().contains("with_release_type=4%7C6"))
+                if(spec.kind==TmdbRailKind.LATEST&&type=="movie")assertTrue(urls.single().contains("with_release_type=4%7C5%7C6"))
                 if(spec.kind==TmdbRailKind.RATED)assertTrue(urls.single().contains("vote_count.gte="))
             }
         }
-        assertEquals(listOf("热门推荐","国内热门"),TmdbRailSpec.forPage(TmdbBrowsePage.HOME).map{it.title})
+        assertEquals(listOf("热门推荐","国内热门","最新上线"),TmdbRailSpec.forPage(TmdbBrowsePage.HOME).map{it.title})
     }
     @Test fun everyRailFetchesCachesAndPaginatesWithoutPrivateSourceCalls(): Unit = runBlocking {
         val fixture=TmdbBrowseFixture();val directory=Files.createTempDirectory("tmdb-browse").toFile()
@@ -146,8 +212,10 @@ class TmdbBrowseRepositoryTest {
             for(page in TmdbBrowsePage.entries)for(spec in TmdbRailSpec.forPage(page)) {
                 val first=repo.load(spec,1,"fixture")
                 assertTrue("Empty "+spec.key,first.entries.isNotEmpty())
-                assertTrue(first.entries.all{it.availability.state==TmdbAvailability.AVAILABLE})
-                assertTrue(first.entries.all{page==TmdbBrowsePage.HOME||it.film.category==page.label})
+                if(spec.kind==TmdbRailKind.LATEST) assertTrue(first.entries.all{it.availability.state==TmdbAvailability.AVAILABLE})
+                assertTrue(first.entries.all{page==TmdbBrowsePage.HOME || it.film.category==page.label ||
+                    (page==TmdbBrowsePage.ANIME && spec.kind==TmdbRailKind.LATEST && it.type=="movie" &&
+                        it.raw.optJSONArray("genre_ids")?.let { a -> (0 until a.length()).any { i -> a.optInt(i)==16 } }==true)})
                 assertEquals(first.entries.map{it.film.id},repo.cached(spec,1,"fixture")!!.entries.map{it.film.id})
                 val next=repo.load(spec,2,"fixture");assertEquals(2,next.page)
             }
@@ -191,29 +259,14 @@ class TmdbBrowseRepositoryTest {
         assertTrue(maximum.get() in 1..3)
     }
 
-    @Test fun backgroundVerifiedCollectionReclassifiesAndPersistsUnknownMovieWithoutChangingItsType(): Unit = runBlocking {
-        val directory=Files.createTempDirectory("anime-relations").toFile()
+    @Test fun listClassificationDoesNotFetchFullDetailsForUnreviewedAnimeMovies(): Unit = runBlocking {
         val fixture=TmdbBrowseFixture()
-        val fetcher=ArtworkJsonFetcher { url,token ->
-            val path=java.net.URI(url).path.removePrefix("/3")
-            if (path.matches(Regex("/(movie|tv)/[0-9]+"))) {
-                if(path=="/movie/999") JSONObject(fixture.load(url.replace("/movie/999","/movie/635302"),token)).put("id",999).toString()
-                else fixture.load(url,token)
-            } else JSONObject().put("page",1).put("total_pages",1).put("results",JSONArray().apply{
-                if(!path.contains("/tv"))put(JSONObject().put("id",999).put("title","Original unknown")
-                    .put("genre_ids",JSONArray().put(16)).put("vote_count",1000))
-            }).toString()
-        }
-        try {
-            val repo=TmdbBrowseRepository(fetcher,directory)
-            val spec=TmdbRailSpec(TmdbBrowsePage.ANIME,TmdbRailKind.HOT)
-            assertTrue(repo.load(spec,1,"fixture").entries.isEmpty())
-            repo.warmAnimeRelations("fixture")
-            val cached=repo.cached(spec,1,"fixture")!!.entries.single()
-            assertEquals("动漫",cached.film.category);assertEquals("movie",cached.type);assertNull(cached.film.tmdbTvId)
-            val offline=TmdbBrowseRepository(ArtworkJsonFetcher{_,_->error("Cache must not require network")},directory)
-            assertEquals("tmdb-movie-999",offline.cached(spec,1,"fixture")!!.entries.single().film.id)
-        }finally{directory.deleteRecursively()}
+        val repo=TmdbBrowseRepository(fixture)
+        val batch=repo.load(TmdbRailSpec(TmdbBrowsePage.ANIME,TmdbRailKind.HOT),1,"fixture")
+        assertTrue(batch.entries.isNotEmpty())
+        assertFalse(fixture.requests.any { Regex("/(movie|tv)/[0-9]+").containsMatchIn(it) })
+        assertEquals("动漫",repo.cachedClassification("movie",635302,setOf(16),"fixture"))
+        assertEquals("电影",repo.cachedClassification("movie",999,setOf(16),"fixture"))
     }
     @Test fun imageSizesAndUnknownStatusRemainExplicit() {
         val film=HerrinTmdbDiscovery().parsePage("""{"results":[{"id":129,"title":"Original","genre_ids":[16],"poster_path":"/poster.jpg","backdrop_path":"/hero.jpg"}]}""","movie").single()
@@ -270,13 +323,13 @@ class TmdbBrowseRepositoryTest {
         }
         val repo=TmdbBrowseRepository(fetcher)
         val hot=repo.load(TmdbRailSpec(TmdbBrowsePage.HOME,TmdbRailKind.HOT),1,"fixture")
-        assertEquals(listOf("tmdb-movie-4","tmdb-tv-6"),hot.entries.map{it.film.id})
-        assertEquals(2,hot.unknown) // Unknown movie and unconfirmed TV episode/status.
+        assertEquals(listOf("tmdb-movie-1","tmdb-movie-2","tmdb-movie-3","tmdb-movie-4","tmdb-tv-5","tmdb-tv-6"),hot.entries.map{it.film.id})
+        assertEquals(6,hot.unknown) // Unknown movie and unconfirmed TV episode/status.
         val rated=repo.load(TmdbRailSpec(TmdbBrowsePage.MOVIE,TmdbRailKind.RATED),1,"fixture")
         assertEquals(listOf("tmdb-movie-8"),rated.entries.map{it.film.id})
         assertTrue(requests.any{it.contains("/trending/all/week")})
         assertTrue(requests.any{it.contains("vote_count.gte=300")})
-        assertTrue(requests.filter{Regex("/movie/[0-9]+").containsMatchIn(it)}.all{it.contains("append_to_response=release_dates")})
+        assertFalse("List metadata must not trigger detail expansion",requests.any{Regex("/(movie|tv)/[0-9]+").containsMatchIn(it)})
     }
 
     @Test fun coldRestoreLoadsAllIndependentPagesOfflineWithoutLosingHundredsOfMetadataItems(): Unit = runBlocking {
@@ -290,7 +343,7 @@ class TmdbBrowseRepositoryTest {
             val state=TmdbBrowseState(TmdbBrowseRepository(fixture,directory),"fixture")
             state.hydrate()
             assertEquals(reads,fixture.requests.size)
-            assertEquals(22,state.rows.size)
+            assertEquals(23,state.rows.size)
             assertTrue(state.allFilms().size>=100)
             for(page in TmdbBrowsePage.entries) for(spec in TmdbRailSpec.forPage(page)) {
                 assertEquals(1,state.row(spec).page)

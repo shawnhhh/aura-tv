@@ -70,13 +70,14 @@ class PlaybackHistory(private val context: Context) {
         return WatchPosition(if (completed) duration else row.optLong("position"), duration, row.optLong("at"))
     }
 
-    @Synchronized fun resolveIndexed(film: Film, scope: String): Pair<PlaybackRequest, Long>? {
+    @Synchronized fun resolveIndexed(film: Film, scope: String, personalFileRoutes: Boolean = false): Pair<PlaybackRequest, Long>? {
         val rows = readIndex()
         val row = (0 until rows.length()).map { rows.getJSONObject(it) }.firstOrNull { it.optString("id") == film.id } ?: return null
         val hash = java.security.MessageDigest.getInstance("SHA-256").digest(scope.toByteArray()).joinToString("") { "%02x".format(it) }
         val choices = film.playbackEpisodes.flatMap { ep -> ep.lines.map { ep to it } }.filter { (ep, line) ->
             if (row.optBoolean("portable")) HerrinPlaybackCoordinate(row.optInt("season").takeIf { it > 0 }, row.optInt("logicalEpisode")).accepts(ep,line)
-            else row.optString("scope") == hash && ep.number == row.optInt("episode") && line.id == row.optString("line")
+            else row.optString("scope") == hash && line.id == row.optString("line") &&
+                (ep.number == row.optInt("episode") || personalFileRoutes && line.id.matches(Regex("personal-file-[a-f0-9]{32}")))
         }
         val selected = choices.firstOrNull { it.second.id == row.optString("line") } ?: choices.firstOrNull() ?: return null
         val watched = prefs.getBoolean(row.optString("key") + ":watched", false)

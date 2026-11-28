@@ -73,20 +73,19 @@ class M438SingleWarehousePerformanceTest {
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/warehouse.json").toString())
+                .editRemoteText(server.url("/warehouse.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             val started = SystemClock.elapsedRealtime()
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
-            compose.waitUntil(15_000) {
-                runCatching { compose.onNodeWithTag("vod-apply-feedback")
-                    .assertTextEquals("已导入配置") }.isSuccess
-            }
+            compose.awaitAppliedWarehouse(active = false)
+            compose.awaitSelectedWarehouse()
             val importMs = SystemClock.elapsedRealtime() - started
-            assertEquals("Import must not run eleven third-party Spider plugins", 1, server.requestCount)
+            assertEquals("Import loads only the first CMS, not all 12 nodes", 2, server.requestCount)
             settings.performScrollToNode(hasTestTag("settings-source-sites"))
             compose.onNodeWithTag("settings-source-sites").performClick()
             val catalogStart = SystemClock.elapsedRealtime()
             compose.onNodeWithTag("site-select-0").performClick()
+            compose.awaitSelectedWarehouse()
             val first = "card-tvbox-0-" + "performance-0".hashCode().toUInt().toString(16)
             try {
                 compose.waitUntil(15_000) {

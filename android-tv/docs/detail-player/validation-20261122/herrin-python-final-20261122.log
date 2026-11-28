@@ -1,0 +1,247 @@
+PASS: XML, TV manifest, official wrapper integrity, Gradle files, native-only source
+PASS: 43 exact pinned upstream FongMi files; not a playback test
+PASS: no legacy playback implementation/reference in production source sets
+PASS: one Exo builder, production adapter owns preparation and release
+PASS: Sardine v0.9 90 exact source files, license and upstream build contract
+test_crash_or_invalid_completion_is_never_retried (test_await_startup_home.SnapshotLifecycleTest.test_crash_or_invalid_completion_is_never_retried) ... ok
+test_early_valid_ui_cannot_substitute_for_completion (test_await_startup_home.SnapshotLifecycleTest.test_early_valid_ui_cannot_substitute_for_completion) ... ok
+test_missing_completion_has_a_fixed_deadline (test_await_startup_home.SnapshotLifecycleTest.test_missing_completion_has_a_fixed_deadline) ... ok
+test_exhausted_transport_cannot_reuse_an_old_success (test_capture_startup_ui.SnapshotTransportTest.test_exhausted_transport_cannot_reuse_an_old_success) ... ok
+test_null_root_retries_only_with_fresh_remote_files_and_keeps_failure (test_capture_startup_ui.SnapshotTransportTest.test_null_root_retries_only_with_fresh_remote_files_and_keeps_failure) ... ok
+test_valid_but_wrong_ui_is_not_retried_or_accepted (test_capture_startup_ui.SnapshotTransportTest.test_valid_but_wrong_ui_is_not_retried_or_accepted) ... ok
+test_comments_do_not_mask_code_after_quoted_url (test_check_playback_boundary.PlaybackBoundaryTest.test_comments_do_not_mask_code_after_quoted_url) ... ok
+test_debug_java_and_relocated_kotlin_cannot_reintroduce_legacy (test_check_playback_boundary.PlaybackBoundaryTest.test_debug_java_and_relocated_kotlin_cannot_reintroduce_legacy) ... ok
+test_session_wrapper_preserves_sole_adapter_and_exclusive_engine_ownership (test_check_playback_boundary.PlaybackBoundaryTest.test_session_wrapper_preserves_sole_adapter_and_exclusive_engine_ownership) ... ok
+test_test_only_legacy_and_provenance_comments_remain_allowed (test_check_playback_boundary.PlaybackBoundaryTest.test_test_only_legacy_and_provenance_comments_remain_allowed) ... ok
+test_confirmed_details_only_home_requires_real_focus_and_completion (test_check_startup_probe.StartupProbeTest.test_confirmed_details_only_home_requires_real_focus_and_completion) ... ok
+test_deferred_network_or_incomplete_reveal_is_rejected (test_check_startup_probe.StartupProbeTest.test_deferred_network_or_incomplete_reveal_is_rejected) ... ok
+test_disabled_or_unclickable_details_is_rejected (test_check_startup_probe.StartupProbeTest.test_disabled_or_unclickable_details_is_rejected) ... ok
+test_early_home_cannot_skip_the_full_v13_minimum (test_check_startup_probe.StartupProbeTest.test_early_home_cannot_skip_the_full_v13_minimum) ... ok
+test_fatal_error_cannot_be_hidden_by_home_markers (test_check_startup_probe.StartupProbeTest.test_fatal_error_cannot_be_hidden_by_home_markers) ... ok
+test_hot_resume_requires_real_movie_navigation_and_no_replay (test_check_startup_probe.StartupProbeTest.test_hot_resume_requires_real_movie_navigation_and_no_replay) ... ok
+test_launcher_or_wrong_navigation_focus_is_rejected (test_check_startup_probe.StartupProbeTest.test_launcher_or_wrong_navigation_focus_is_rejected) ... ok
+test_missing_brand_is_rejected (test_check_startup_probe.StartupProbeTest.test_missing_brand_is_rejected) ... ok
+test_nested_label_uses_its_actual_clickable_owner (test_check_startup_probe.StartupProbeTest.test_nested_label_uses_its_actual_clickable_owner) ... ok
+test_old_play_button_cannot_satisfy_the_home_contract (test_check_startup_probe.StartupProbeTest.test_old_play_button_cannot_satisfy_the_home_contract) ... ok
+test_visible_underlay_without_completion_is_rejected (test_check_startup_probe.StartupProbeTest.test_visible_underlay_without_completion_is_rejected) ... ok
+test_aggregate_missing_artifacts_persists_checkpoint_and_fails (test_live_ci_checkpoint.CheckpointTest.test_aggregate_missing_artifacts_persists_checkpoint_and_fails) ... ok
+test_each_requested_film_needs_its_own_correctly_identified_report (test_live_ci_checkpoint.CheckpointTest.test_each_requested_film_needs_its_own_correctly_identified_report) ... ok
+test_failed_instrumentation_cannot_be_promoted_by_a_passing_report (test_live_ci_checkpoint.CheckpointTest.test_failed_instrumentation_cannot_be_promoted_by_a_passing_report) ... ok
+test_installed_apk_and_junit_ok_do_not_promote_failed_provider (test_live_ci_checkpoint.CheckpointTest.test_installed_apk_and_junit_ok_do_not_promote_failed_provider) ... ok
+test_missing_device_report_is_infrastructure_failure_not_success (test_live_ci_checkpoint.CheckpointTest.test_missing_device_report_is_infrastructure_failure_not_success) ... ok
+test_exact_module_relative_pc_registers_without_private_paths_or_messages (test_live_native_crash.NativeCrashTest.test_exact_module_relative_pc_registers_without_private_paths_or_messages) ... ok
+test_missing_old_evidence_is_not_invented (test_live_native_crash.NativeCrashTest.test_missing_old_evidence_is_not_invented) ... ok
+test_other_packages_rejected_and_reference_scoped (test_live_native_crash.NativeCrashTest.test_other_packages_rejected_and_reference_scoped) ... ok
+test_physical_device_never_reads_global_or_other_app_logs (test_live_native_crash.NativeCrashTest.test_physical_device_never_reads_global_or_other_app_logs) ... ok
+test_abi_folder_does_not_substitute_for_real_elf_machine (test_live_native_device.NativeDeviceTest.test_abi_folder_does_not_substitute_for_real_elf_machine) ... ok
+test_exact_commit_and_apk_hash_required (test_live_native_device.NativeDeviceTest.test_exact_commit_and_apk_hash_required) ... ok
+test_read_only_preflight_never_installs_or_clears_data (test_live_native_device.NativeDeviceTest.test_read_only_preflight_never_installs_or_clears_data) ... ok
+test_missing_process_identity_never_claims_clean_provider_logs (test_live_spider_error_shapes.ErrorShapePrivacyTest.test_missing_process_identity_never_claims_clean_provider_logs) ... ok
+test_only_fixed_error_kind_and_inventory_class_survive (test_live_spider_error_shapes.ErrorShapePrivacyTest.test_only_fixed_error_kind_and_inventory_class_survive) ... ok
+test_physical_device_does_not_read_other_app_logcat (test_live_spider_error_shapes.ErrorShapePrivacyTest.test_physical_device_does_not_read_other_app_logcat) ... ok
+test_dense_film_rail_reports_real_focus_callback_latency (test_remote_perf_report.RemotePerfReportTest.test_dense_film_rail_reports_real_focus_callback_latency) ... ok
+test_empty_log_uses_explicit_unavailable_not_invented_values (test_remote_perf_report.RemotePerfReportTest.test_empty_log_uses_explicit_unavailable_not_invented_values) ... ok
+test_extracts_numbers_without_leaking_user_content (test_remote_perf_report.RemotePerfReportTest.test_extracts_numbers_without_leaking_user_content) ... ok
+test_missing_redraw_samples_are_explicitly_unavailable (test_remote_perf_report.RemotePerfReportTest.test_missing_redraw_samples_are_explicitly_unavailable) ... ok
+test_non_herrin_tag_and_unavailable_are_ignored (test_remote_perf_report.RemotePerfReportTest.test_non_herrin_tag_and_unavailable_are_ignored) ... ok
+test_same_emulator_render_baseline_is_reported_only_when_measured (test_remote_perf_report.RemotePerfReportTest.test_same_emulator_render_baseline_is_reported_only_when_measured) ... ok
+test_complete_run_requires_every_critical_class (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_complete_run_requires_every_critical_class) ... ok
+test_empty_results_are_rejected (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_empty_results_are_rejected) ... ok
+test_green_gradle_with_missing_feature_tests_must_fail (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_green_gradle_with_missing_feature_tests_must_fail) ... ok
+test_skip_and_failure_cannot_be_misreported_as_pass (test_verify_full_tv_suite.VerifyFullTvSuiteTest.test_skip_and_failure_cannot_be_misreported_as_pass) ... ok
+
+----------------------------------------------------------------------
+Ran 46 tests in 0.066s
+
+OK
+{
+  "head": null,
+  "run_id": null,
+  "event": null,
+  "jobs": {
+    "VALIDATION_RESULT": null,
+    "BUILD_RESULT": null,
+    "NODES_RESULT": null,
+    "TV_RESULT": null
+  },
+  "nodes": {
+    "cheese": {
+      "environment": {},
+      "real_playback_accepted": false,
+      "verdict": "TEST_INFRASTRUCTURE_FAILED",
+      "failure_stage": null,
+      "failure_code": null
+    },
+    "wanou": {
+      "environment": {},
+      "real_playback_accepted": false,
+      "verdict": "TEST_INFRASTRUCTURE_FAILED",
+      "failure_stage": null,
+      "failure_code": null
+    }
+  },
+  "android_toolchain_available": false,
+  "all_requested_nodes_accepted": false,
+  "p0_complete": false
+}
+{
+  "head": null,
+  "run_id": null,
+  "event": null,
+  "jobs": {
+    "VALIDATION_RESULT": null,
+    "BUILD_RESULT": null,
+    "NODES_RESULT": null,
+    "TV_RESULT": null
+  },
+  "nodes": {
+    "cheese/xiaocheng": {
+      "environment": {},
+      "real_playback_accepted": false,
+      "verdict": "TEST_INFRASTRUCTURE_FAILED",
+      "failure_stage": null,
+      "failure_code": null
+    },
+    "cheese/shinchan": {
+      "environment": {
+        "kvm_ready": true,
+        "emulator_booted": true,
+        "apks_installed": true,
+        "instrumentation_started": true,
+        "instrumentation_completed": true
+      },
+      "real_playback_accepted": false,
+      "verdict": "REAL_PLAYBACK_PASS",
+      "failure_stage": null,
+      "failure_code": null
+    }
+  },
+  "android_toolchain_available": false,
+  "all_requested_nodes_accepted": false,
+  "p0_complete": false
+}
+{
+  "head": null,
+  "run_id": null,
+  "event": null,
+  "jobs": {
+    "VALIDATION_RESULT": null,
+    "BUILD_RESULT": null,
+    "NODES_RESULT": null,
+    "TV_RESULT": null
+  },
+  "nodes": {
+    "cheese": {
+      "environment": {
+        "head": null,
+        "run_id": null,
+        "automatic_push_trigger": false,
+        "node": "cheese",
+        "kvm_ready": true,
+        "emulator_booted": true,
+        "apks_installed": true,
+        "instrumentation_started": true,
+        "instrumentation_completed": false,
+        "last_infrastructure_stage": "instrumentation-started",
+        "provider_report_present": true,
+        "provider_verdict": "REAL_PLAYBACK_PASS",
+        "provider_failure_stage": null,
+        "provider_failure_code": null,
+        "first_frame": false,
+        "seek_verified": false,
+        "next_condition": "Inspect the first failed provider stage and compare original behavior; change code, network or legitimate authorization before another request."
+      },
+      "real_playback_accepted": false,
+      "verdict": "REAL_PLAYBACK_PASS",
+      "failure_stage": null,
+      "failure_code": null
+    }
+  },
+  "android_toolchain_available": false,
+  "all_requested_nodes_accepted": false,
+  "p0_complete": false
+}
+test_abba_control_changes_reuse_only_the_verified_startup (test_p0_verification_scope.VerificationScopeTest.test_abba_control_changes_reuse_only_the_verified_startup) ... ok
+test_abba_reuse_rejects_app_build_remote_tests_and_performance_runner_changes (test_p0_verification_scope.VerificationScopeTest.test_abba_reuse_rejects_app_build_remote_tests_and_performance_runner_changes) ... ok
+test_any_app_jvm_fixture_or_build_change_forbids_debug_reuse (test_p0_verification_scope.VerificationScopeTest.test_any_app_jvm_fixture_or_build_change_forbids_debug_reuse) ... ok
+test_app_other_tests_and_performance_changes_cannot_enter_diagnostic_mode (test_p0_verification_scope.VerificationScopeTest.test_app_other_tests_and_performance_changes_cannot_enter_diagnostic_mode) ... ok
+test_docs_or_controls_alone_cannot_claim_instrumentation_reuse (test_p0_verification_scope.VerificationScopeTest.test_docs_or_controls_alone_cannot_claim_instrumentation_reuse) ... ok
+test_every_application_or_build_change_requires_full_verification (test_p0_verification_scope.VerificationScopeTest.test_every_application_or_build_change_requires_full_verification) ... ok
+test_explicit_recent_diagnostic_is_not_full_verification (test_p0_verification_scope.VerificationScopeTest.test_explicit_recent_diagnostic_is_not_full_verification) ... ok
+test_instrumentation_only_reuses_debug_but_not_tv_or_startup (test_p0_verification_scope.VerificationScopeTest.test_instrumentation_only_reuses_debug_but_not_tv_or_startup) ... ok
+test_no_probe_change_cannot_claim_startup_only (test_p0_verification_scope.VerificationScopeTest.test_no_probe_change_cannot_claim_startup_only) ... ok
+test_proven_abba_can_be_reused_after_only_the_warehouse_test_and_startup_probe_change (test_p0_verification_scope.VerificationScopeTest.test_proven_abba_can_be_reused_after_only_the_warehouse_test_and_startup_probe_change) ... ok
+test_startup_or_app_change_cannot_skip_api31 (test_p0_verification_scope.VerificationScopeTest.test_startup_or_app_change_cannot_skip_api31) ... ok
+test_startup_probe_and_ledger_changes_reuse_the_validated_app (test_p0_verification_scope.VerificationScopeTest.test_startup_probe_and_ledger_changes_reuse_the_validated_app) ... ok
+test_startup_reuse_requires_unchanged_app_and_probe_inputs (test_p0_verification_scope.VerificationScopeTest.test_startup_reuse_requires_unchanged_app_and_probe_inputs) ... ok
+test_unknown_paths_fail_closed (test_p0_verification_scope.VerificationScopeTest.test_unknown_paths_fail_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.001s
+
+OK
+test_correct_upstream_layout_is_accepted_structurally (test_verify_native_kit.NativeKitTests.test_correct_upstream_layout_is_accepted_structurally) ... ok
+test_corrupt_archive_rejected (test_verify_native_kit.NativeKitTests.test_corrupt_archive_rejected) ... ok
+test_declared_media_apis_present (test_verify_native_kit.NativeKitTests.test_declared_media_apis_present) ... ok
+test_dolby_vision_optional_native_jni_is_inspected (test_verify_native_kit.NativeKitTests.test_dolby_vision_optional_native_jni_is_inspected) ... ok
+test_dynamic_split_ffmpeg_is_rejected_even_with_complete_aars (test_verify_native_kit.NativeKitTests.test_dynamic_split_ffmpeg_is_rejected_even_with_complete_aars) ... ok
+test_ffmpeg_belongs_in_decoder_aar_not_mpv_aar (test_verify_native_kit.NativeKitTests.test_ffmpeg_belongs_in_decoder_aar_not_mpv_aar) ... ok
+test_missing_aars_are_blocked (test_verify_native_kit.NativeKitTests.test_missing_aars_are_blocked) ... ok
+test_missing_custom_media3_apis_fail_closed (test_verify_native_kit.NativeKitTests.test_missing_custom_media3_apis_fail_closed) ... ok
+test_missing_decoder_abi_cannot_pass (test_verify_native_kit.NativeKitTests.test_missing_decoder_abi_cannot_pass) ... ok
+test_missing_fongmi_sources_never_reports_success (test_verify_native_kit.NativeKitTests.test_missing_fongmi_sources_never_reports_success) ... ok
+test_mpv_player_requires_real_link_to_libmpv (test_verify_native_kit.NativeKitTests.test_mpv_player_requires_real_link_to_libmpv) ... ok
+test_packaged_split_ffmpeg_is_rejected (test_verify_native_kit.NativeKitTests.test_packaged_split_ffmpeg_is_rejected) ... ok
+test_unreadable_native_binary_is_rejected (test_verify_native_kit.NativeKitTests.test_unreadable_native_binary_is_rejected) ... ok
+test_wrong_elf_machine_rejected (test_verify_native_kit.NativeKitTests.test_wrong_elf_machine_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.045s
+
+OK
+{
+  "status": "BLOCKED",
+  "errors": [
+    "Missing FongMi/media libraries source directory",
+    "jni/arm64-v8a/libmpv.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libplayer.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libc++_shared.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libffmpeg.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/arm64-v8a/libffmpegJNI.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libmpv.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libplayer.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libc++_shared.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libffmpeg.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)",
+    "jni/armeabi-v7a/libffmpegJNI.so: cannot inspect ELF (Invalid ELF or unreadable header/dynamic section)"
+  ],
+  "scope": "Local inputs only; no runtime/decoder verification",
+  "required_abis": [
+    "arm64-v8a",
+    "armeabi-v7a"
+  ]
+}
+test_native_candidate (unittest.loader._FailedTest.test_native_candidate) ... ERROR
+test_exact_upstream_license_is_required (test_upstream_license.UpstreamLicenseTest.test_exact_upstream_license_is_required) ... ok
+test_external_archive_cannot_borrow_the_upstream_license (test_upstream_license.UpstreamLicenseTest.test_external_archive_cannot_borrow_the_upstream_license) ... ok
+test_license_path_must_remain_confined (test_upstream_license.UpstreamLicenseTest.test_license_path_must_remain_confined) ... ok
+test_unknown_license_origin_is_rejected (test_upstream_license.UpstreamLicenseTest.test_unknown_license_origin_is_rejected) ... ok
+
+======================================================================
+ERROR: test_native_candidate (unittest.loader._FailedTest.test_native_candidate)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_native_candidate
+Traceback (most recent call last):
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/loader.py", line 396, in _find_test_path
+    module = self._get_module_from_name(name)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/loader.py", line 339, in _get_module_from_name
+    __import__(name)
+  File "/workspace/aura-tv/android-tv/fongmi-kernel/tests/test_native_candidate.py", line 9, in <module>
+    from collect_native_candidate import collect, EXPECTED as NAMES
+ModuleNotFoundError: No module named 'collect_native_candidate'
+
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.001s
+
+FAILED (errors=1)

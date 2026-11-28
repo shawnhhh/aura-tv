@@ -1,0 +1,12 @@
+2026-11-20T09:08:45.0360440Z PASS: 43 exact pinned upstream FongMi files; not a playback test
+2026-11-20T09:08:45.0362458Z PASS: one Exo builder, production adapter owns preparation and release
+2026-11-20T09:08:45.0363085Z PASS: Sardine v0.9 90 exact source files, license and upstream build contract
+2026-11-20T09:11:25.2665002Z BUILD SUCCESSFUL in 2m 25s
+2026-11-20T09:11:25.6173606Z ##[group]Run gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx3g -Pkotlin.compiler.execution.strategy=in-process :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+2026-11-20T09:11:25.6175209Z [36;1mgradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx3g -Pkotlin.compiler.execution.strategy=in-process :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace[0m
+2026-11-20T09:17:20.9981949Z > Task :app:lintDebug
+2026-11-20T09:19:20.0682206Z BUILD SUCCESSFUL in 7m 54s
+2026-11-20T09:19:20.5321559Z | JVM | 788 | 0 | 0 | 0 |
+2026-11-20T09:19:20.5337769Z - `app-debug.apk`：27086538 字节；SHA-256 `d312e6360d03513ccded3c8fb1294b471bb1b22204ebb54891155afebfede055`
+2026-11-20T09:19:22.6691439Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44708169912/artifacts/14616028982
+2026-11-20T09:19:23.9709168Z Artifact download URL: https://github.com/shawnhhh/aura-tv/actions/runs/44708169912/artifacts/14616786430
