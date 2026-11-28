@@ -3899,7 +3899,8 @@ private fun Herrin(startup: StartupPresentation) {
                             color = Color(0xFFCDD8E6), modifier = Modifier.testTag("source-empty-status"))
                         Spacer(Modifier.height(24.dp))
                     } else {
-                        Spacer(Modifier.height(132.dp))
+                        val compactHero = LocalConfiguration.current.screenHeightDp < 620
+                        Spacer(Modifier.height(if (compactHero) 72.dp else 98.dp))
                         Row(verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                             Box(Modifier.width(13.dp).height(1.dp)
@@ -3914,11 +3915,18 @@ private fun Herrin(startup: StartupPresentation) {
                             Text(tmdbState.tmdbDiscoveryStatus.ifBlank { tmdbProbeMessage }, color = Color(0xFFBFC3CA))
                             TvButton("重试 TMDB 首页", Modifier.testTag("tmdb-home-retry").focusRequester(requester("tmdb-home-retry"))) { tmdbProbeEpoch++ }
                         }
-                        Text(displayFilm.title, modifier = Modifier.testTag("hero-title-${displayFilm.id}"), fontSize = 42.sp, fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.4.sp, color = Color(0xFFF5F7FA), lineHeight = 48.sp)
-                        Text(displayFilm.subtitle, fontSize = 12.sp, letterSpacing = 2.3.sp,
-                            color = Color(0xCADFE5EE))
-                        Spacer(Modifier.height(12.dp))
+                        Text(displayFilm.title, modifier = Modifier.widthIn(max = 560.dp)
+                            .testTag("hero-title-${displayFilm.id}"),
+                            fontSize = if (compactHero) 44.sp else 48.sp, fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.4.sp, color = Color(0xFFF5F7FA), lineHeight = 51.sp,
+                            maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        if (displayFilm.subtitle.isNotBlank()) {
+                            Spacer(Modifier.height(5.dp))
+                            Text(displayFilm.subtitle, Modifier.widthIn(max = 510.dp),
+                                fontSize = 13.sp, letterSpacing = 1.3.sp, color = Color(0xCADFE5EE),
+                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                        Spacer(Modifier.height(9.dp))
                         Text("${displayFilm.year}   ·   ${displayFilm.category}",
                             fontSize = 12.sp, color = Color(0xD3E6EBF2))
                         if (displayFilm.ratingValue != null || displayFilm.genres.isNotEmpty())
@@ -3926,9 +3934,9 @@ private fun Herrin(startup: StartupPresentation) {
                                 displayFilm.genres.take(3).joinToString(" · ").takeIf { it.isNotBlank() })
                                 .joinToString("   ·   "), fontSize = 13.sp,
                                 color = Color(0xFFE8CDA0), modifier = Modifier.testTag("hero-metadata"))
-                        Text(displayFilm.synopsis, Modifier.widthIn(max = 445.dp).padding(vertical = 7.dp),
+                        Text(displayFilm.synopsis, Modifier.widthIn(max = 495.dp).padding(top = 10.dp, bottom = 13.dp),
                             fontSize = 12.sp, lineHeight = 19.sp, maxLines = 2,
-                            color = Color(0xCCDCE5EE))
+                            color = Color(0xCCDCE5EE), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         // H-003: TMDB hero is presentation-only. A metadata hero
                         // must not offer direct play before source resolution.
                         // Keep the real details entry and preserve DOWN to the first
@@ -3939,7 +3947,7 @@ private fun Herrin(startup: StartupPresentation) {
                                 .then(if (firstPosterTarget != null)
                                     Modifier.focusProperties { down = firstPosterTarget } else Modifier)
                                 .focusRequester(requester("details"))) { details(displayFilm) }
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(22.dp))
                     }
                     if (independentPage != null) {
                         TmdbBrowseRails(tmdbBrowseState, independentPage,

@@ -75,15 +75,18 @@ internal fun PlayerControlIcon(symbol: PlayerSymbol, modifier: Modifier = Modifi
 
 /** Fixed layout slots: focus scaling changes drawing, never neighbours' bounds. */
 @Composable
-private fun PlayerControlButton(label: String, tag: String, size: androidx.compose.ui.unit.Dp,
+private fun PlayerControlButton(label: String, tag: String, slot: androidx.compose.ui.unit.Dp,
+    focusSize: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier, onClick: () -> Unit, content: @Composable () -> Unit) {
     var focused by remember { mutableStateOf(false) }
-    TextButton(onClick, modifier.size(size).onFocusChanged { focused = it.isFocused }
-        .graphicsLayer { scaleX = if (focused) 1.04f else 1f; scaleY = scaleX }
-        .semantics { contentDescription = label }.testTag(tag),
-        shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(6.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-        border = BorderStroke(1.5.dp, if (focused) Color.White else Color.Transparent)) { content() }
+    Box(Modifier.size(slot), contentAlignment = Alignment.Center) {
+        TextButton(onClick, modifier.size(focusSize).onFocusChanged { focused = it.isFocused }
+            .graphicsLayer { scaleX = if (focused) 1.04f else 1f; scaleY = scaleX }
+            .semantics { contentDescription = label }.testTag(tag),
+            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(6.dp),
+            colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+            border = BorderStroke(1.5.dp, if (focused) Color.White else Color.Transparent)) { content() }
+    }
 }
 
 /** Seven controls over the existing session. No media or source selection logic here. */
@@ -116,23 +119,23 @@ internal fun PlayerControlBar(playing: Boolean, speed: Float, whole: Boolean,
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).testTag("player-controls-left"),
                 horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
-                PlayerControlButton("选集", "transport-episodes", side,
+                PlayerControlButton("选集", "transport-episodes", side, side,
                     Modifier.focusRequester(episodesFocus).neighbours(FocusRequester.Cancel, speedFocus), onEpisodes) { icon(PlayerSymbol.Episodes, 25f) }
-                PlayerControlButton("倍速", "transport-speed", side,
+                PlayerControlButton("倍速", "transport-speed", side, side,
                     Modifier.focusRequester(speedFocus).focusProperties { left = episodesFocus; right = rewindFocus; up = FocusRequester.Cancel }, onSpeed) {
                     Text("${speed}×", color = Color.White, fontSize = (15 * factor).sp, maxLines = 1)
                 }
             }
             Row(Modifier.testTag("player-controls-center"), horizontalArrangement = Arrangement.spacedBy(gap),
                 verticalAlignment = Alignment.CenterVertically) {
-                PlayerControlButton("快退10秒", "transport-rewind", seek,
-                    Modifier.focusRequester(rewindFocus).neighbours(speedFocus, initialFocus).then(rewindModifier), onRewind) { icon(PlayerSymbol.Rewind, 31f) }
-                PlayerControlButton(if (playing) "暂停" else "播放", if (whole) "kernel-toggle" else "transport-toggle", primary,
+                PlayerControlButton("快退10秒", "transport-rewind", seek, side,
+                    Modifier.focusRequester(rewindFocus).neighbours(speedFocus, initialFocus).then(rewindModifier), onRewind) { icon(PlayerSymbol.Rewind, 27f) }
+                PlayerControlButton(if (playing) "暂停" else "播放", if (whole) "kernel-toggle" else "transport-toggle", primary, side,
                     Modifier.focusRequester(initialFocus).neighbours(rewindFocus, forwardFocus), onToggle) {
-                    icon(if (playing) PlayerSymbol.Pause else PlayerSymbol.Play, 38f)
+                    icon(if (playing) PlayerSymbol.Pause else PlayerSymbol.Play, 28f)
                 }
-                PlayerControlButton("快进10秒", "transport-forward", seek,
-                    Modifier.focusRequester(forwardFocus).neighbours(initialFocus, audioFocus).then(forwardModifier), onForward) { icon(PlayerSymbol.Forward, 31f) }
+                PlayerControlButton("快进10秒", "transport-forward", seek, side,
+                    Modifier.focusRequester(forwardFocus).neighbours(initialFocus, audioFocus).then(forwardModifier), onForward) { icon(PlayerSymbol.Forward, 27f) }
             }
             Row(Modifier.weight(1f).testTag("player-controls-right"), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically) {

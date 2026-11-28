@@ -2,6 +2,7 @@ package tv.herrin.app
 
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,9 +29,16 @@ class MinimalPlayerGeometryTest {
             assertEquals(root.center.x.toDouble(), ((left.left + right.right) / 2).toDouble(), 2.0)
             compose.onNodeWithTag("transport-episodes").assertIsDisplayed()
             compose.onNodeWithTag("player-back").assertDoesNotExist()
-            val primary = compose.onNodeWithTag("transport-toggle").fetchSemanticsNode().boundsInRoot
-            val side = compose.onNodeWithTag("transport-audio").fetchSemanticsNode().boundsInRoot
-            assertTrue(primary.height > left.height && left.height > side.height)
+            val controls = listOf("episodes", "speed", "rewind", "toggle", "forward", "audio", "subtitle")
+            val focusedBounds = controls.map { control ->
+                val node = compose.onNodeWithTag("transport-$control")
+                node.performSemanticsAction(SemanticsActions.RequestFocus) { it() }.assertIsFocused()
+                node.fetchSemanticsNode().boundsInRoot
+            }
+            focusedBounds.forEach { bounds ->
+                assertEquals(focusedBounds.first().width, bounds.width, 1f)
+                assertEquals(focusedBounds.first().height, bounds.height, 1f)
+            }
             compose.onNodeWithTag("kernel-settings").assertDoesNotExist()
             // The buffering position stays zero: state events alone must update
             // the chrome, with no progress tick needed to unskip this child.
