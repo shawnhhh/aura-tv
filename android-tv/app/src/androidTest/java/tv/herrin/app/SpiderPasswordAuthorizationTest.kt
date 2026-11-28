@@ -8,7 +8,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextReplacement
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
@@ -34,7 +33,7 @@ class SpiderPasswordAuthorizationTest {
         compose.onNodeWithTag("spider-authorization-qr").assertDoesNotExist()
         compose.onNodeWithTag("spider-authorization-action-0").performClick()
         compose.onNodeWithTag("spider-authorization-form-feedback").assertIsDisplayed()
-        compose.onNodeWithTag("spider-authorization-input-0").performTextReplacement("1234AB")
+        compose.onNodeWithTag("spider-authorization-input-0").editRemoteText("1234AB")
         compose.onNodeWithTag("spider-authorization-action-0").performClick()
         compose.waitForIdle()
         val actual = JSONObject(requireNotNull(returned))
@@ -64,7 +63,7 @@ class SpiderPasswordAuthorizationTest {
             compose.onNodeWithTag("spider-authorization-form-feedback").assertDoesNotExist()
             compose.onNodeWithTag("spider-authorization-action-0").assertIsNotEnabled()
             compose.onNodeWithTag("spider-authorization-action-1").assertIsEnabled()
-            compose.onNodeWithTag("spider-authorization-input-0").performTextReplacement("original-test-code")
+            compose.onNodeWithTag("spider-authorization-input-0").editRemoteText("original-test-code")
             compose.onNodeWithTag("spider-authorization-action-1").performClick()
             compose.waitForIdle()
             assertEquals("login", JSONObject(requireNotNull(completed)).getString("button"))

@@ -75,7 +75,7 @@ class EmptySpiderHomeSelectionTest {
         }.isSuccess }
         activate("settings")
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-warehouse-url"))
-        compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/original.json").toString())
+        compose.onNodeWithTag("tvbox-warehouse-url").editRemoteText(server.url("/original.json").toString())
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("tvbox-warehouse-load"))
         activate("tvbox-warehouse-load")
         compose.awaitAppliedWarehouse(active = false)
@@ -148,8 +148,9 @@ class EmptySpiderHomeSelectionTest {
         inputUsed = true
         compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitIme(true)
-        compose.onNodeWithTag("search-input").performTextReplacement("Original synthetic fixture")
+        compose.onNodeWithTag("search-input").editRemoteText("Original synthetic fixture")
         val resultCard = SemanticsMatcher("actual result card") {
             it.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { "" }.startsWith("card-")
         } and hasText("Original synthetic fixture") and hasClickAction()

@@ -89,6 +89,7 @@ class HerrinUiSmokeTest {
         // entry explicit, then exercise actual D-pad focus/key delivery below.
         compose.onNodeWithTag("search-input").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         compose.waitForIdle()
+        key(KeyEvent.KEYCODE_DPAD_CENTER)
         awaitSearchImeView(shown = true)
         compose.onNodeWithTag("search-input").performTextReplacement(value)
     }
@@ -480,7 +481,7 @@ class HerrinUiSmokeTest {
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/box.json").toString())
+                .editRemoteText(server.url("/box.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.awaitAppliedWarehouse(active = false)
@@ -521,7 +522,7 @@ http://example.org/live/channel.m3u8
             compose.onNodeWithTag("settings-module-直播源").performClick()
             settings.performScrollToNode(hasTestTag("tvbox-live-direct-url"))
             compose.onNodeWithTag("tvbox-live-direct-url")
-                .performTextReplacement(server.url("/live.m3u").toString())
+                .editRemoteText(server.url("/live.m3u").toString())
             settings.performScrollToNode(hasTestTag("tvbox-live-direct-load"))
             compose.onNodeWithTag("tvbox-live-direct-load").performClick()
             compose.waitUntil(15000) {
@@ -550,7 +551,7 @@ http://example.org/live/channel.m3u8
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/spider-only.json").toString())
+                .editRemoteText(server.url("/spider-only.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.awaitAppliedWarehouse(active = false)
@@ -712,7 +713,7 @@ http://example.org/live/channel.m3u8
             focus("settings");key(KeyEvent.KEYCODE_DPAD_CENTER)
             val settings=compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
-            compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(root)
+            compose.onNodeWithTag("tvbox-warehouse-url").editRemoteText(root)
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()
             compose.awaitAppliedWarehouse(active = false)
@@ -921,7 +922,7 @@ http://example.org/live/channel.m3u8
     @Test fun mediaSettingsRemoteSaveValidationSyncAndPersistence() {
         advancedSettings()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
-        compose.onNodeWithTag("config-media-url").performTextReplacement("http://invalid.example/test.mp4")
+        compose.onNodeWithTag("config-media-url").editRemoteText("http://invalid.example/test.mp4")
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
         // Focus/keyboard handoff is asynchronous on the TV emulator.
@@ -936,7 +937,7 @@ http://example.org/live/channel.m3u8
         }
         compose.onNodeWithTag("config-media-url").let {
             compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("config-media-url"))
-            it.performTextReplacement("https://media.example.org/authorized.mp4")
+            it.editRemoteText("https://media.example.org/authorized.mp4")
         }
         dismissEditorIme()
         compose.onNodeWithTag("settings-list").performScrollToNode(hasText("保存媒体配置"))
@@ -1024,7 +1025,7 @@ http://example.org/live/channel.m3u8
             advancedSettings()
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
-            compose.onNodeWithTag("tvbox-warehouse-url").performTextReplacement(server.url("/multi.json").toString())
+            compose.onNodeWithTag("tvbox-warehouse-url").editRemoteText(server.url("/multi.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             // A TV IME can consume the first Center key after editing; execute the
             // button's accessible click directly for this keyboard handoff only.
@@ -1250,11 +1251,11 @@ http://example.org/live/channel.m3u8
             key(KeyEvent.KEYCODE_DPAD_LEFT)
             compose.onNodeWithTag("live-drawer-search-toggle").performClick()
             compose.onNodeWithTag("live-drawer-search-input").assertIsDisplayed()
-            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("SPORT")
+            compose.onNodeWithTag("live-drawer-search-input").editRemoteText("SPORT")
             compose.onNodeWithTag("live-drawer-channel-0").assertTextContains("体育台")
-            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("无结果")
+            compose.onNodeWithTag("live-drawer-search-input").editRemoteText("无结果")
             compose.onNodeWithTag("live-drawer-empty").assertExists()
-            compose.onNodeWithTag("live-drawer-search-input").performTextReplacement("sport")
+            compose.onNodeWithTag("live-drawer-search-input").editRemoteText("sport")
             compose.onNodeWithTag("live-drawer-channel-0").performClick()
             compose.onNodeWithTag("live-playing-name").assertTextEquals("体育台")
             assertTrue("Live search must not request another playlist", server.requestCount == 1)

@@ -49,6 +49,11 @@ internal fun TvSourceInput(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val session = rememberTvEditSession { runCatching { navRequester.requestFocus() } }
+    fun finish() {
+        keyboard?.hide()
+        session.stop()
+        navRequester.requestFocus()
+    }
     var editorWasFocused by remember { mutableStateOf(false) }
     LaunchedEffect(session.editing) {
         if (session.editing) {
@@ -74,6 +79,7 @@ internal fun TvSourceInput(
         .focusRequester(navRequester).focusable()) {
         OutlinedTextField(value, onValueChange, Modifier.fillMaxWidth()
             .testTag(fieldTag)
+            .finishTvEditingOnBack(session, ::finish)
             .focusProperties { canFocus = session.editing }
             .focusRequester(editRequester)
             .onFocusChanged {
@@ -86,10 +92,6 @@ internal fun TvSourceInput(
             },
             label = { Text(label) }, singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = {
-                keyboard?.hide()
-                session.stop()
-                navRequester.requestFocus()
-            }))
+            keyboardActions = KeyboardActions(onDone = { finish() }))
     }
 }

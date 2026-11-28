@@ -73,7 +73,7 @@ class M438SingleWarehousePerformanceTest {
             val settings = compose.onNodeWithTag("settings-list")
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-url"))
             compose.onNodeWithTag("tvbox-warehouse-url")
-                .performTextReplacement(server.url("/warehouse.json").toString())
+                .editRemoteText(server.url("/warehouse.json").toString())
             settings.performScrollToNode(hasTestTag("tvbox-warehouse-load"))
             val started = SystemClock.elapsedRealtime()
             compose.onNodeWithTag("tvbox-warehouse-load").performClick()

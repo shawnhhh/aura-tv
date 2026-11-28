@@ -55,7 +55,7 @@ class SettingsModulesTest {
         compose.onNodeWithText("添加").assertExists()
         compose.onNodeWithText("导入当前媒体目录").assertDoesNotExist()
         compose.onNodeWithTag("personal-directory").assertDoesNotExist()
-        compose.onNodeWithTag("personal-field-name").performTextReplacement("Old WebDAV")
+        compose.onNodeWithTag("personal-field-name").editRemoteText("Old WebDAV")
         compose.onNodeWithTag("personal-protocol-WebDAV").performSemanticsAction(
             androidx.compose.ui.semantics.SemanticsActions.RequestFocus) { it() }
         compose.onNodeWithTag("personal-protocol-WebDAV").performKeyInput {
