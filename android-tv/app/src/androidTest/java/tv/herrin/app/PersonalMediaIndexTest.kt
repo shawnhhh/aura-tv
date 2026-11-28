@@ -6,6 +6,29 @@ import org.junit.Test
 import java.util.UUID
 
 class PersonalMediaIndexTest {
+    @Test fun existingOfflineFilesAreRegroupedAndRequeuedInPlace() {
+        val index = PersonalMediaIndex(InstrumentationRegistry.getInstrumentation().targetContext)
+        val connection = UUID.randomUUID().toString()
+        val folderId = index.folder(connection, "Movies", "auto")
+        try {
+            val folder = index.folders(connection).single()
+            for (name in listOf("2160p.REMUX.mkv", "1080p.WEB-DL.mkv"))
+                index.record(folder, PersonalRemoteFile("Movies/流浪地球2（2023）/$name", false, 100, "v1"), 1)
+            index.writableDatabase.execSQL(
+                "UPDATE media SET title=name,work_key=NULL,identity_revision=0,scrape_next=? WHERE folder=?",
+                arrayOf(Long.MAX_VALUE, folderId))
+            val ids = (0..1).map { index.media(folderId).getJSONObject(it).getString("id") }.toSet()
+            assertTrue(index.dueMetadata(folderId, "", 0L, false).isEmpty())
+            assertEquals(2, index.refreshWorkLayout(folder))
+            val refreshed = index.dueMetadata(folderId, "", 0L, false)
+            assertEquals(ids, refreshed.map { it.getString("id") }.toSet())
+            val film = PersonalMediaProjection.Accumulator().apply { add(refreshed) }.browseFilms().single()
+            assertEquals("流浪地球2", film.title)
+            assertEquals(2, film.playbackEpisodes.single().lines.size)
+            assertEquals(0, index.refreshWorkLayout(folder))
+        } finally { index.removeFolder(folderId); index.close() }
+    }
+
     @Test fun automaticFolderRefreshDoesNotResetAnIdentifiedAnimeCategory() {
         val index = PersonalMediaIndex(InstrumentationRegistry.getInstrumentation().targetContext)
         val connection = UUID.randomUUID().toString()

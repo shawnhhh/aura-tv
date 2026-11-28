@@ -212,6 +212,21 @@ internal class HerrinTmdbDiscovery(
         applyDetailed(film, type, obj, json)
     }
 
+    suspend fun findImdb(id: String, type: String?, token: String): Pair<String, Int>? = withContext(Dispatchers.IO) {
+        require(id.matches(Regex("""tt\d{7,10}""")) && (type == null || type in setOf("movie", "tv")))
+        if (token.isBlank()) return@withContext null
+        val raw = kotlinx.coroutines.runInterruptible {
+            fetcher.load("$base/find/$id?external_source=imdb_id&language=zh-CN", token)
+        } ?: return@withContext null
+        val response = JSONObject(raw)
+        (if (type == null) listOf("movie", "tv") else listOf(type)).flatMap { namespace ->
+            val choices = response.optJSONArray("${namespace}_results") ?: return@flatMap emptyList()
+            (0 until minOf(choices.length(), 20)).mapNotNull { index ->
+                choices.optJSONObject(index)?.optInt("id")?.takeIf { it > 0 }?.let { namespace to it }
+            }
+        }.distinct().singleOrNull()
+    }
+
     private fun applyDetailed(film: Film, type: String, obj: JSONObject, json: String): Film {
         val credits = TmdbCreditsParser.parse(json, type)
         val imdbId = obj.optJSONObject("external_ids")?.optString("imdb_id")

@@ -16,18 +16,21 @@ internal object PersonalFilename {
     private val disc = Regex("""(?i)(?:^|[ ._-])(?:CD|Disc|Disk)[ ._-]*(\d{1,2})$""")
     private val part = Regex("""(?i)(?:^|[ ._-])Part[ ._-]*(\d{1,2})$""")
     private val containers = Regex("""(?i)BDMV|STREAM|CERTIFICATE|VIDEO_TS|BD[ ._-]*\d+|Extras?|花絮|特典|SPs?|Specials?|OVA|OAD""")
-    private val generic = Regex("""(?i)Movies?|TV(?:[ ._-]*Shows?)?|Series|Anime|Videos?|Media|电影|影片|电视剧|剧集|動漫|动漫|动画|動畫""")
+    private val generic = Regex("""(?i)Movies?|TV(?:[ ._-]*Shows?)?|Series|Anime|Videos?|Media|4K|UHD|1080p|电影|影片|电视剧|剧集|美剧|英剧|日剧|韩剧|港剧|國劇|国产剧|動漫|动漫|动画|動畫""")
     private val releaseNoise = Regex("""(?i)(?<![a-z0-9])(?:blu[ ._-]?ray|remux|uhd|proper|repack|web[ ._-]?rip|dvd[ ._-]?rip|av1|10bit|8bit|ddp?[ .]?\d(?:\.\d)?|flac|truehd|multi)(?![a-z0-9])""")
     private val bracketNoise = Regex("""(?i)\[[^]]*(?:字幕|sub|rip|web|x26|hevc|4k|1080|2160|[a-f0-9]{8})[^]]*]""")
     private val numeric = Regex("""(?i)(\d{1,3})(?:v\d)?""")
+    private val idTag = Regex("""(?i)[\[{](tmdb|imdb)(?:id)?[=:-]((?:tt)?\d{1,10})[\]}]""")
+    private val releaseOnly = Regex("""(?i)(?:[ ._\[\]-]*(?:\d{3,4}p|4k|uhd|hdr10\+?|hdr|dv|remux|blu[ ._-]?ray|web[ ._-]?(?:dl|rip)|[hx][ ._-]?26[45]|hevc|av1|10bit|aac|truehd|flac))+[ ._\[\]-]*""")
 
     fun parse(name: String, parentPath: String): PersonalStoragePolicy.Name {
         val raw = normalized(name.substringBeforeLast('.'))
         val parents = parentPath.split('/').map(::normalized).filter(String::isNotBlank)
         val contextSeason = parents.asReversed().firstNotNullOfOrNull(::folderSeason)
-        val parent = parents.asReversed().firstOrNull {
-            folderSeason(it) == null && !containers.matches(it) && !generic.matches(it)
-        }.orEmpty()
+        val parentIndex = parents.indexOfLast {
+            folderSeason(it) == null && !containers.matches(it) && !generic.matches(it) && !releaseOnly.matches(it)
+        }
+        val parent = parents.getOrNull(parentIndex).orEmpty()
         val paired = pair.find(raw)
         val chinese = cnEpisode.find(raw)
         val english = ep.find(raw)
@@ -53,8 +56,11 @@ internal object PersonalFilename {
             ?: contextSeason ?: if (episode != null) 1 else null
         val parentTitle = clean(parent)
         val episodeOnly = marker?.let { raw.take(it.range.first).trim(' ', '.', '_', '-').isEmpty() } == true
-        val fileTitle = if (episode != null && (episodeOnly || cleaned.isBlank() || numeric.matches(cleaned)) ||
-            parents.any { it.equals("BDMV", true) } && raw.matches(Regex("""\d{5}"""))) parentTitle else cleaned
+        val directoryEvidence = parentTitle.isNotBlank() && (episodeOnly ||
+            episode != null && (contextSeason != null && numeric.matches(cleaned) || cleaned.isBlank()) ||
+            releaseOnly.matches(stripped) ||
+            parents.any { it.equals("BDMV", true) } && raw.matches(Regex("""\d{5}""")))
+        val fileTitle = if (directoryEvidence) parentTitle else cleaned
         val segment = disc.find(fileTitle)
         // “Part 2” can be a distinct movie. Only reinterpret it as a file
         // segment if the nearby work directory independently names the base.
@@ -66,9 +72,20 @@ internal object PersonalFilename {
         val variants = title.split(Regex("""\s*[|／/]\s*|\s+[-–—]\s+"""))
             .filter { it.length >= 2 && it.any(Char::isLetter) }
             .take(3)
-        val releaseYear = findYear(stripped) ?: findYear(parent)
+        val releaseYear = findYear(if (directoryEvidence) parent else stripped) ?: findYear(parent)
+        val sameWorkDirectory = directoryEvidence || parentTitle.isNotBlank() &&
+            ArtworkTitle.normalize(title) == ArtworkTitle.normalize(parentTitle) &&
+            (episode != null || releaseYear != null)
+        val tags = listOf(raw, parent).flatMap { idTag.findAll(it).toList() }
+        val tmdb = tags.filter { it.groupValues[1].equals("tmdb", true) }
+            .mapNotNull { it.groupValues[2].toIntOrNull()?.takeIf { id -> id > 0 } }.distinct().singleOrNull()
+        val imdb = tags.filter { it.groupValues[1].equals("imdb", true) }
+            .map { it.groupValues[2].lowercase() }.filter { it.matches(Regex("""tt\d{7,10}""")) }
+            .distinct().singleOrNull()
         return PersonalStoragePolicy.Name(title, releaseYear, season, episode?.takeIf { it in 1..999 },
-            variants.filter { it != title }, suffix?.groupValues?.get(1)?.toIntOrNull())
+            variants.filter { it != title }, suffix?.groupValues?.get(1)?.toIntOrNull(),
+            parents.take(parentIndex + 1).joinToString("/").takeIf { sameWorkDirectory },
+            tmdb, imdb)
     }
 
     private fun normalized(value: String): String =
@@ -79,7 +96,7 @@ internal object PersonalFilename {
             ?: cnSeason.matchEntire(value)?.groupValues?.get(1)?.let(::number)
 
     private fun clean(value: String): String {
-        val plain = value.replace(bracketNoise, " ").replace(releaseNoise, " ")
+        val plain = value.replace(idTag, " ").replace(bracketNoise, " ").replace(releaseNoise, " ")
         val release = year.findAll(plain).lastOrNull { it.range.first > 0 && plain.take(it.range.first).any(Char::isLetter) }
         // ArtworkTitle also handles isolated resolution/codec/language markers.
         return ArtworkTitle.searchQuery(release?.let { plain.replaceRange(it.range, " ") } ?: plain)

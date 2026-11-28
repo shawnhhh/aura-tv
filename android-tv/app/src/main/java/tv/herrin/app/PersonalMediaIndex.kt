@@ -9,7 +9,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 /** No credentials, request headers or authorized URLs enter this database. */
-internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.applicationContext, "personal-media.db", null, 4) {
+internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.applicationContext, "personal-media.db", null, 5) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE folders(id TEXT PRIMARY KEY, connection TEXT NOT NULL, path TEXT NOT NULL, type TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT 'pending', scanned INTEGER NOT NULL DEFAULT 0, UNIQUE(connection,path))")
         db.execSQL("CREATE TABLE media(id TEXT PRIMARY KEY, connection TEXT NOT NULL, folder TEXT NOT NULL, path TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, modified TEXT NOT NULL, extension TEXT NOT NULL, type TEXT NOT NULL, title TEXT NOT NULL, year INTEGER, season INTEGER, episode INTEGER, tmdb INTEGER, confidence REAL NOT NULL DEFAULT 0, manual INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'available', scanned INTEGER NOT NULL, synopsis TEXT, poster TEXT)")
@@ -18,6 +18,7 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         addMetadataColumns(db)
         addScrapeCursor(db)
         addMetadataQueue(db)
+        addWorkLayout(db)
     }
     private fun addMetadataColumns(db: SQLiteDatabase) {
         db.execSQL("ALTER TABLE media ADD COLUMN metadata TEXT")
@@ -31,10 +32,17 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         db.execSQL("ALTER TABLE folders ADD COLUMN nfo_after TEXT NOT NULL DEFAULT ''")
         db.execSQL("CREATE INDEX media_scrape_queue ON media(folder,status,id,scrape_next)")
     }
+    private fun addWorkLayout(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE media ADD COLUMN work_key TEXT")
+        db.execSQL("ALTER TABLE media ADD COLUMN identity_revision INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("CREATE INDEX media_work ON media(folder,work_key,tmdb,status)")
+        db.execSQL("UPDATE folders SET scrape_after=''")
+    }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) addMetadataColumns(db)
         if (oldVersion < 3) addScrapeCursor(db)
         if (oldVersion < 4) addMetadataQueue(db)
+        if (oldVersion < 5) addWorkLayout(db)
     }
     data class Folder(val id: String, val connection: String, val path: String, val type: String, val enabled: Boolean, val state: String, val scanned: Long)
     fun folders(connection: String? = null): List<Folder> = readableDatabase.query("folders", null,
@@ -78,24 +86,29 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
             it.bindLong(1, scan); it.bindString(2, id); it.bindLong(3, file.size); it.bindString(4, file.modified); it.executeUpdateDelete()
         }
         val parsed = PersonalStoragePolicy.parse(file.name, file.path.substringBeforeLast('/', ""))
+        val type = if(f.type == "auto") if(parsed.episode == null) "movie" else "tv" else f.type
         if(changed > 0) {
             // Old unmatched indexes need the improved parent/season parser
             // even when the remote file itself did not change. Proven matches
             // and manual corrections keep all of their existing metadata.
-            writableDatabase.execSQL("UPDATE media SET title=?,year=?,season=?,episode=?,type=? WHERE id=? AND tmdb IS NULL AND manual=0",
-                arrayOf(parsed.title,parsed.year,parsed.season,parsed.episode,
-                    if(f.type == "auto") if(parsed.episode == null) "movie" else "tv" else f.type,id))
+            writableDatabase.execSQL(
+                """UPDATE media SET title=?,year=?,season=?,episode=?,type=?,work_key=?,
+                    scrape_next=CASE WHEN identity_revision=0 THEN 0 ELSE scrape_next END,identity_revision=1
+                    WHERE id=? AND tmdb IS NULL AND manual=0""",
+                arrayOf(parsed.title, parsed.year, parsed.season, parsed.episode, type, parsed.workKey(type), id))
             return
         }
         val values = ContentValues().apply {
             put("id", id); put("connection", f.connection); put("folder", f.id); put("path", file.path); put("name", file.name)
             put("size", file.size); put("modified", file.modified); put("extension", file.name.substringAfterLast('.').lowercase())
-            put("type", if(f.type == "auto") if(parsed.episode == null) "movie" else "tv" else f.type)
+            put("type", type)
             put("title", parsed.title); put("year", parsed.year); put("season", parsed.season); put("episode", parsed.episode)
+            put("work_key", parsed.workKey(type)); put("identity_revision", 1)
             put("scanned", scan); put("status", "available")
         }
         if(rows("SELECT manual FROM media WHERE id=?", arrayOf(id)).firstOrNull()?.optInt("manual") == 1) {
             values.remove("title"); values.remove("year"); values.remove("type")
+            values.remove("season"); values.remove("episode"); values.remove("work_key")
         } else { values.putNull("tmdb"); values.put("confidence", 0); values.putNull("synopsis"); values.putNull("poster"); values.putNull("metadata"); values.putNull("scrape_code"); values.put("scrape_next", 0L) }
         if(writableDatabase.update("media", values, "id=?", arrayOf(id)) == 0) writableDatabase.insertOrThrow("media", null, values)
     }
@@ -139,6 +152,56 @@ internal class PersonalMediaIndex(context: Context) : SQLiteOpenHelper(context.a
         """SELECT * FROM media WHERE folder=? AND id>? AND status='available' AND scrape_next<=?
             AND ((tmdb IS NULL AND manual=0) OR scrape_code IN ('MANUAL_MATCH','DETAILS_PENDING'))
             AND (CAST(? AS INTEGER)=0 OR manual=1) ORDER BY id LIMIT 32""", arrayOf(folder, after, at.toString(), if (manualOnly) "1" else "0"))
+
+    /** Reparse indexed paths in bounded pages after upgrade, including when a share is offline. */
+    fun refreshWorkLayout(folder: Folder): Int {
+        val page = rows(
+            "SELECT id,name,path,tmdb,season,episode FROM media WHERE folder=? AND status='available' AND manual=0 AND identity_revision=0 ORDER BY id LIMIT 200",
+            arrayOf(folder.id))
+        if (page.isEmpty()) return 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (row in page) {
+                val parsed = PersonalStoragePolicy.parse(row.getString("name"), row.getString("path").substringBeforeLast('/', ""))
+                val type = if (folder.type == "auto") if (parsed.episode == null) "movie" else "tv" else folder.type
+                val values = ContentValues().apply {
+                    put("identity_revision", 1)
+                    put("work_key", parsed.workKey(type))
+                    if (row.optInt("tmdb") <= 0) {
+                        put("title", parsed.title); put("year", parsed.year); put("type", type)
+                        put("season", parsed.season); put("episode", parsed.episode)
+                        put("scrape_next", 0L)
+                    } else if (!row.has("episode") && parsed.episode != null) {
+                        put("season", parsed.season); put("episode", parsed.episode)
+                    }
+                }
+                db.update("media", values, "id=? AND manual=0 AND identity_revision=0", arrayOf(row.getString("id")))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return page.size
+    }
+
+    fun reuseWorkMetadata(row: JSONObject): Boolean {
+        val key = row.optString("work_key").takeIf(String::isNotBlank) ?: return false
+        val peers = rows(
+            """SELECT tmdb,type FROM media WHERE folder=? AND work_key=? AND tmdb>0 AND status='available'
+                GROUP BY tmdb,type LIMIT 2""", arrayOf(row.getString("folder"), key))
+        if (peers.size != 1) return false
+        val peer = rows(
+            """SELECT tmdb,type,title,year,synopsis,poster,metadata FROM media
+                WHERE folder=? AND work_key=? AND tmdb>0 AND status='available' AND scrape_code='MATCHED' LIMIT 1""",
+            arrayOf(row.getString("folder"), key)).singleOrNull() ?: return false
+        val values = ContentValues().apply {
+            for (name in listOf("tmdb", "type", "title", "year", "synopsis", "poster", "metadata"))
+                peer.optString(name).takeIf(String::isNotBlank)?.let { put(name, it) }
+            put("confidence", 0.95); put("scrape_code", "MATCHED"); put("scrape_next", 0L)
+        }
+        return writableDatabase.update("media", values,
+            "id=? AND size=? AND modified=? AND status='available' AND manual=0 AND tmdb IS NULL AND work_key=?",
+            arrayOf(row.getString("id"), row.getString("size"), row.getString("modified"), key)) > 0
+    }
 
     fun delayMetadata(row: JSONObject, code: String, retryAt: Long) {
         writableDatabase.execSQL(

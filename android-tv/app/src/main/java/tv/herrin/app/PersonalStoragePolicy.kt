@@ -49,6 +49,11 @@ internal object PersonalStoragePolicy {
     }
     fun contains(parent: String, child: String) = parent.isEmpty() || child == parent || child.startsWith("$parent/")
     data class Name(val title: String, val year: Int?, val season: Int?, val episode: Int?,
-                    val aliases: List<String> = emptyList(), val part: Int? = null)
+                    val aliases: List<String> = emptyList(), val part: Int? = null,
+                    val workPath: String? = null, val tmdb: Int? = null, val imdb: String? = null) {
+        fun workKey(type: String): String? = workPath?.let {
+            SourceHealthIndex.digest(listOf(it, ArtworkTitle.normalize(title), year, type).joinToString("\u0000"))
+        }
+    }
     fun parse(name: String, parentPath: String = ""): Name = PersonalFilename.parse(name, parentPath)
 }

@@ -88,4 +88,18 @@ class PersonalStoragePolicyTest {
         assertEquals(0, special.season)
         assertEquals(2, special.episode)
     }
+
+    @Test fun workDirectoryOwnsReleaseOnlyFilesAndDistinguishesSameNameYears() {
+        val directory = "电影/流浪地球2（2023） [imdbid-tt13539646]"
+        val remux = PersonalStoragePolicy.parse("2160p.REMUX.mkv", directory)
+        val hd = PersonalStoragePolicy.parse("1080p.WEB-DL.mkv", directory)
+        assertEquals("流浪地球2", remux.title)
+        assertEquals(2023, remux.year)
+        assertEquals("tt13539646", remux.imdb)
+        assertNotNull(remux.workKey("movie"))
+        assertEquals(remux.workKey("movie"), hd.workKey("movie"))
+        assertNotEquals(remux.workKey("movie"),
+            PersonalStoragePolicy.parse("1080p.WEB-DL.mkv", "电影/流浪地球2（2001）").workKey("movie"))
+        assertNull(PersonalStoragePolicy.parse("Unexpected.2024.mkv", "电影/4K").workKey("movie"))
+    }
 }

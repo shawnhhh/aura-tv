@@ -151,6 +151,14 @@ internal class PersonalLibrary(context: Context) {
                 val enabled = connections.list().filter { it.enabled }.map { it.id }.toSet()
                 val folders = index.folders().filter { it.enabled && it.connection in enabled }
                 try {
+                    StartupBackgroundWork.awaitReady()
+                    for (folder in folders) {
+                        do {
+                            ensureActive()
+                            val refreshed = index.refreshWorkLayout(folder)
+                            if (refreshed > 0) publishIndexChange()
+                        } while (refreshed == 200)
+                    }
                     if (token.isBlank()) {
                         folders.forEach { index.missingToken(it.id) }
                         HerrinPlaybackDiagnosticJournal.record("PERSONAL", "SCRAPE_TOKEN_MISSING")

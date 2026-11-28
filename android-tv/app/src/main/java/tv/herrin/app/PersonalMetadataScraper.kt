@@ -16,6 +16,7 @@ internal class PersonalMetadataScraper(
 ) {
     private val searches = LinkedHashMap<Pair<String, String>, List<Film>>()
     private val details = LinkedHashMap<Pair<String, Int>, Film>()
+    private val externalIds = LinkedHashMap<Pair<String, String?>, Pair<String, Int>?>()
     private val ticker = System::currentTimeMillis
     private var stopped = false
 
@@ -70,6 +71,12 @@ internal class PersonalMetadataScraper(
         val manual = row.optInt("manual") == 1
         val hint = runCatching { JSONObject(row.optString("metadata")) }.getOrDefault(JSONObject())
         val existingType = hint.optString("identityType").ifBlank { row.optString("type") }
+        val parsed = PersonalStoragePolicy.parse(row.getString("name"), row.getString("path").substringBeforeLast('/', ""))
+        val type = when (row.optString("type")) {
+            "anime", "tv" -> "tv"
+            "movie" -> "movie".takeIf { folder.type != "auto" }
+            else -> null
+        }
         val candidate: Film?
         val identity = when {
             existingId > 0 && existingType in setOf("movie", "tv") -> {
@@ -80,20 +87,35 @@ internal class PersonalMetadataScraper(
                 candidate = null
                 hint.getString("nfoType") to hint.getInt("nfoTmdb")
             }
+            parsed.tmdb != null && type != null -> {
+                candidate = null
+                type to parsed.tmdb
+            }
             else -> {
-                val parsed = PersonalStoragePolicy.parse(row.getString("name"), row.getString("path").substringBeforeLast('/', ""))
-                val names = (listOf(parsed.title) + parsed.aliases).map(PersonalMediaMatching::canonical)
-                    .filter(String::isNotBlank).distinct().take(3)
-                val year = row.optInt("year").takeIf { it > 0 }
-                val type = when (row.optString("type")) {
-                    "anime", "tv" -> "tv"
-                    "movie" -> "movie".takeIf { folder.type != "auto" }
-                    else -> null
+                val external = parsed.imdb?.let { id ->
+                    val key = id to type
+                    if (externalIds.containsKey(key)) externalIds[key]
+                    else paced { discovery.findImdb(id, type, token) }.also {
+                        if (externalIds.size >= 128) externalIds.remove(externalIds.keys.first())
+                        externalIds[key] = it
+                    }
                 }
-                val result = match(names, year, type)
-                if (result.ambiguous) return "SCRAPE_AMBIGUOUS"
-                candidate = result.film ?: return "SCRAPE_NO_MATCH"
-                discovery.identity(candidate) ?: return "SCRAPE_INVALID_ID"
+                if (external != null) {
+                    candidate = null
+                    external
+                } else {
+                    if (parsed.imdb == null && index.reuseWorkMetadata(row)) {
+                        publish()
+                        return null
+                    }
+                    val names = (listOf(parsed.title) + parsed.aliases).map(PersonalMediaMatching::canonical)
+                        .filter(String::isNotBlank).distinct().take(3)
+                    val year = row.optInt("year").takeIf { it > 0 }
+                    val result = match(names, year, type)
+                    if (result.ambiguous) return "SCRAPE_AMBIGUOUS"
+                    candidate = result.film ?: return "SCRAPE_NO_MATCH"
+                    discovery.identity(candidate) ?: return "SCRAPE_INVALID_ID"
+                }
             }
         }
         coroutineContext.ensureActive()

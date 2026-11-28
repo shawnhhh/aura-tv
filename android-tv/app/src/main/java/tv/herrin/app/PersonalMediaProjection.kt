@@ -17,8 +17,18 @@ internal object PersonalMediaProjection {
             .getOrNull()?.takeIf { it in setOf("movie", "tv") } ?: row.optString("type")
         if (identityType == "tv" && row.optInt("episode") <= 0 && row.optInt("season", -1) >= 0)
             return row.getString("id")
-        return if (row.optInt("tmdb") > 0) "$identityType:${row.optString("type")}:${row.optInt("tmdb")}:S${row.optInt("season")}"
-        else row.getString("id")
+        val work = workIdentity(row) ?: return row.getString("id")
+        return if (identityType in setOf("tv", "anime")) "$work:S${row.optInt("season", -1)}" else work
+    }
+
+    private fun workIdentity(row: JSONObject): String? {
+        val id = row.optInt("tmdb")
+        val type = runCatching { JSONObject(row.optString("metadata")).optString("identityType") }
+            .getOrNull()?.takeIf { it in setOf("movie", "tv") } ?: row.optString("type")
+        if (id > 0) return "$type:$id"
+        return row.optString("work_key").takeIf(String::isNotBlank)?.let {
+            "indexed:${row.optString("folder")}:$it"
+        }
     }
 
     fun films(rows: List<JSONObject>): List<Film> = rows.groupBy(::groupKey).values.map { versions ->
@@ -54,7 +64,7 @@ internal object PersonalMediaProjection {
     /** Bounded input pages: retain one display record per work and actual playback lines,
      * rather than every file's duplicated cast/metadata JSON until the entire walk ends. */
     class Accumulator {
-        private class Group(val base: Film, val season: Int?) {
+        private class Group(val base: Film, val season: Int?, val work: String?) {
             val episodes = sortedMapOf<Int, Pair<String, MutableList<PlaybackLine>>>()
             fun add(film: Film) {
                 for (episode in film.playbackEpisodes) {
@@ -70,23 +80,23 @@ internal object PersonalMediaProjection {
             for ((key, rows) in page.groupBy(::groupKey)) {
                 val film = PersonalMediaProjection.films(rows).single()
                 groups.getOrPut(key) {
-                    Group(film.copy(playbackEpisodes = emptyList()), rows.first().optInt("season", -1).takeIf { it in 0..99 && rows.first().optInt("episode") > 0 })
+                    val first = rows.first()
+                    Group(film.copy(playbackEpisodes = emptyList()),
+                        first.optInt("season", -1).takeIf { it in 0..99 && first.optInt("episode") > 0 },
+                        workIdentity(first))
                 }.add(film)
             }
         }
         fun films(): List<Film> = groups.values.map(Group::film)
 
         fun browseFilms(): List<Film> {
-            val seasons = groups.values.filter { it.season != null && it.base.tmdbTvId != null }
-                .groupBy { it.base.tmdbTvId }
-            val emitted = mutableSetOf<Int>()
+            val seasons = groups.values.filter { it.season != null && it.work != null }
+                .groupBy { it.work }
+            val emitted = mutableSetOf<String>()
             return groups.values.mapNotNull { group ->
-                val series = group.base.tmdbTvId ?: return@mapNotNull group.film()
+                val series = group.work ?: return@mapNotNull group.film()
                 if (group.season == null) return@mapNotNull group.film()
                 val parts = seasons[series].orEmpty().sortedBy { it.season }
-                if (parts.map { it.season }.distinct().size < 2) return@mapNotNull group.film()
-                // Different category labels from a partial metadata refresh
-                // can describe the same series and season. Merge only by TMDB ID.
                 if (!emitted.add(series)) return@mapNotNull null
                 val episodes = buildList {
                     parts.groupBy { requireNotNull(it.season) }.forEach { (season, rows) ->

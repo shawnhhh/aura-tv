@@ -25,6 +25,8 @@ internal fun PersonalLibraryStartupImport(enabled: Boolean = true) {
             if(!started) continue // An explicit user import/refresh already owns the scanner.
             if(!PersonalLibrary.awaitCurrentScan()) break // User cancellation also stops queued legacy imports.
         }
+        // Upgrade and retry the local index even when its remote scan is not due.
+        library.refreshMetadata()
         delay(PersonalSyncPolicy.INTERVAL_MS)
         }
     }

@@ -2679,7 +2679,8 @@ private fun Herrin(startup: StartupPresentation) {
         detailLine?.let { film.playbackEpisodes.episodesOnLine(it) } ?: film.playbackEpisodes
     }
     val seasonLayout = remember(film.id, detailEpisodes) {
-        SeasonEpisodes.fromFilm(film.copy(playbackEpisodes = detailEpisodes))
+        SeasonEpisodes.fromFilm(film.copy(playbackEpisodes = detailEpisodes),
+            allowSingleSeason = film.id.startsWith("personal-index:"))
     }
     val groupLayout = remember(showGroup) { showGroup?.let(GroupSeasonIndex::from) }
     val unmappedGroupMembers = showGroup?.members?.filter { member ->
