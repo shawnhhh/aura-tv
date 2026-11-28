@@ -69,7 +69,8 @@ adb shell am instrument -w -r -e class 'tv.herrin.app.PersonalLibraryImportTest,
 python3 - <<'PYINDEX'
 from pathlib import Path
 text=Path('build/emulator-evidence/index-recent-preflight.txt').read_text()
-assert 'OK (35 tests)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
+# Includes the work-index upgrade and physical TV edit/Back cases.
+assert 'OK (37 tests)' in text and 'INSTRUMENTATION_CODE: -1' in text,text
 assert 'FAILURES!!!' not in text and 'INSTRUMENTATION_FAILED' not in text,text
 PYINDEX
 # Explicit repair preflight: observe this real production decoder case before
