@@ -3239,31 +3239,6 @@ private fun Herrin(startup: StartupPresentation) {
         }
     }
     DisposableEffect(spiderBridge) { onDispose { siteActivationJob[0]?.cancel() } }
-    // Hiding an IME window alone does not release the TV IME's served input connection.
-    // Wait for Compose's text-focus cancellation, then rebuild the native connection without an editor.
-    LaunchedEffect(screen, focusId, searchInputFocused, configInputFocused) {
-        val leavingSearchEditor = screen == "search" && !searchInputFocused &&
-            (focusId.startsWith("card-") || (focusId.startsWith("search-") && focusId != "search-input"))
-        val leavingSettingsEditor = screen == "settings" && !configInputFocused
-        if (leavingSearchEditor || leavingSettingsEditor) {
-            val imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(view)
-                ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
-            // Read-only blur already ends the Compose session. Do not start an
-            // asynchronous IME hide/restart transaction for an already hidden,
-            // closed editor; retained CI traces show it swallowing DOWN only.
-            if(leavingSearchEditor && !inputMethod.isAcceptingText && !imeVisible) return@LaunchedEffect
-            keyboard?.hide()
-            withFrameNanos { }
-            inputMethod.hideSoftInputFromWindow(view.windowToken, 0)
-            // Restarting the input connection while a TV settings button has focus
-            // reopens some television IMEs and swallows its first D-pad CENTER key.
-            // Search is read-only after blur: Compose normally already ended the
-            // connection. CI traced a lost DOWN / orphan UP after restarting that
-            // closed session. Restart only if Android still serves an editor.
-            if (leavingSearchEditor && inputMethod.isAcceptingText) inputMethod.restartInput(view)
-            RemoteTrace.event { "IME handoff search=$leavingSearchEditor settings=$leavingSettingsEditor acceptingText=${inputMethod.isAcceptingText} nativeFocus=${view.hasFocus()}" }
-        }
-    }
     var lastNonPlayback by remember { mutableStateOf(PlaybackReturnContext("detail", category, focusId, filmId)) }
     val committedReturnContext = PlaybackReturnContext(screen, category, focusId, filmId)
     // The first player frame already needs the committed origin. An async
@@ -3710,13 +3685,13 @@ private fun Herrin(startup: StartupPresentation) {
                     Spacer(Modifier.height(20.dp))
                     if (isSearch) {
                         Text("搜索影片 · 类型与资料筛选", fontSize = 24.sp)
-                        OutlinedTextField(query, { query = it }, Modifier.testTag("search-input")
+                        TvInputField(query, { query = it }, Modifier.testTag("search-input")
                             .focusProperties { down = requester("search-filter-全部") }
                             .focusRequester(requester("search-input"))
-                            .onFocusChanged { searchInputFocused = it.isFocused; RemoteTrace.event { "INPUT focus=${it.isFocused}" } }
+                            .onFocusChanged { if (it.isFocused) focusId = "search-input" }
                             .fillMaxWidth().padding(vertical = 8.dp),
-                            label = { Text("输入片名 / 英文名（支持系统键盘）") }, singleLine = true,
-                            readOnly = !searchInputFocused)
+                            label = { Text("输入片名 / 英文名") }, singleLine = true,
+                            onEditingChanged = { searchInputFocused = it })
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SearchDiscovery.categories.forEachIndexed { index, option ->
                                 TvButton(option,
@@ -4057,20 +4032,17 @@ private fun Herrin(startup: StartupPresentation) {
                                 if (liveSearchExpanded) {
                                     Row(verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        OutlinedTextField(
+                                        TvInputField(
                                             liveSearchQuery, { liveSearchQuery = it.take(40) },
                                             modifier = Modifier.width(390.dp)
                                                 .testTag("live-search-input")
                                                 .onFocusChanged {
-                                                    liveSearchEditorFocused = it.isFocused
                                                     if (it.isFocused) focusId = "live-search-input"
                                                 },
                                             label = { Text("输入频道名称或 tvg-id") },
                                             singleLine = true,
                                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                            keyboardActions = KeyboardActions(onDone = {
-                                                finishLiveSearchInput()
-                                            })
+                                            onEditingChanged = { liveSearchEditorFocused = it }
                                         )
                                         TvButton("清空关键词", modifier = Modifier.testTag("live-search-clear")
                                             .focusRequester(requester("live-search-clear")),
@@ -4687,21 +4659,21 @@ private fun Herrin(startup: StartupPresentation) {
                                 }
                             }
                         }
-                        item { OutlinedTextField(sourceNameDraft, { sourceNameDraft = it },
-                            Modifier.fillMaxWidth().testTag("source-name").onFocusChanged { configInputFocused = it.isFocused },
+                        item { TvInputField(sourceNameDraft, { sourceNameDraft = it },
+                            Modifier.fillMaxWidth().testTag("source-name"),
                             label = { Text("新目录名称（可留空）") }, singleLine = true) }
-                        item { OutlinedTextField(configUrlDraft, { configUrlDraft = it },
-                            Modifier.fillMaxWidth().testTag("config-catalog-url").onFocusChanged { configInputFocused = it.isFocused },
+                        item { TvInputField(configUrlDraft, { configUrlDraft = it },
+                            Modifier.fillMaxWidth().testTag("config-catalog-url"),
                             label = { Text("新增／当前授权目录的 HTTPS JSON 地址（可留空）") },
                             singleLine = true) }
-                        item { OutlinedTextField(mediaUrlDraft, { mediaUrlDraft = it },
-                            Modifier.fillMaxWidth().testTag("config-media-url").onFocusChanged { configInputFocused = it.isFocused },
+                        item { TvInputField(mediaUrlDraft, { mediaUrlDraft = it },
+                            Modifier.fillMaxWidth().testTag("config-media-url"),
                             label = { Text("有权播放的 HTTPS 测试流（可留空）") },
                             singleLine = true) }
                         item { Text("授权 IPTV 直播", fontSize = 21.sp) }
-                        item { OutlinedTextField(liveUrlDraft, { liveUrlDraft = it },
+                        item { TvInputField(liveUrlDraft, { liveUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("config-live-url")
-                                .onFocusChanged { configInputFocused = it.isFocused },
+                                ,
                             label = { Text("自己的 HTTPS M3U 直播列表地址（可留空）") },
                             singleLine = true) }
                         item { TvButton("保存直播列表", modifier = Modifier.testTag("live-save"),
@@ -4723,9 +4695,9 @@ private fun Herrin(startup: StartupPresentation) {
                                 configStatus = "直播列表配置已保存；只读取你主动提供的频道"
                             }
                         } }
-                        item { OutlinedTextField(epgUrlDraft, { epgUrlDraft = it },
+                        item { TvInputField(epgUrlDraft, { epgUrlDraft = it },
                             Modifier.fillMaxWidth().testTag("config-epg-url")
-                                .onFocusChanged { configInputFocused = it.isFocused },
+                                ,
                             label = { Text("可选 HTTPS XMLTV（.xml / .xml.gz）节目单地址") }, singleLine = true) }
                         item { TvButton("保存 XMLTV 节目单", modifier = Modifier.testTag("epg-save"),
                             reduced = reduceMotion, onFocus = { focusId = "epg-save"; keyboard?.hide() }) {
@@ -4756,9 +4728,9 @@ private fun Herrin(startup: StartupPresentation) {
                                 onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-warehouse-editor" },
                                 onMoveUp = { moveCompactSettingsFocus("phone-config-main") },
                                 onMoveDown = { moveCompactSettingsFocus("tvbox-warehouse-load") }
-                            ) else OutlinedTextField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
+                            ) else TvInputField(tvBoxUrlDraft, { tvBoxUrlDraft = it },
                                 Modifier.fillMaxWidth().testTag("tvbox-warehouse-url")
-                                    .onFocusChanged { configInputFocused = it.isFocused },
+                                    ,
                                 label = { Text("影视源 · TVBox 单仓 / 多仓 HTTP(S) 地址") }, singleLine = true)
                         }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -4828,9 +4800,9 @@ private fun Herrin(startup: StartupPresentation) {
                             Spacer(Modifier.weight(1f))
                         } }
                         if (!settingsTvBoxOnly) {
-                        item { OutlinedTextField(tvBoxJsonDraft, { tvBoxJsonDraft = it },
+                        item { TvInputField(tvBoxJsonDraft, { tvBoxJsonDraft = it },
                             Modifier.fillMaxWidth().testTag("tvbox-import-json")
-                                .onFocusChanged { configInputFocused = it.isFocused },
+                                ,
                             label = { Text("可选：从旧 TVBox 复制完整单仓／多仓 JSON") },
                             minLines = 2, maxLines = 5) }
                         item { TvButton("导入并缓存 TVBox JSON", modifier = Modifier.testTag("tvbox-import-json-save"),
@@ -4906,21 +4878,10 @@ private fun Herrin(startup: StartupPresentation) {
                         }
                         if (settingsTvBoxOnly && settingsModule == "个人媒体库") {
                             item { PersonalProtocolTabs(personalProtocol, reduceMotion, requester("personal-name")) { personalProtocol = it } }
-                            item { PersonalLibrarySettings(personalProtocol, nameFocus = requester("personal-name"), onChanged = { personalSourceConfigEpoch++ }, onPlay = { mediaId ->
-                                uiScope.launch {
-                                    val result = withContext(Dispatchers.IO) { PersonalLibrary(context).play(mediaId, smbSessions) }
-                                    if(result is PlaybackResult.Ready) {
-                                        val target = "personal-$mediaId"
-                                        val entry = Film(target, result.media.displayTitle, "", "个人媒体", "", "", R.drawable.photofilm_orbit,
-                                            playbackEpisodes = listOf(PlaybackEpisode(1, "正片", listOf(PlaybackLine("personal-file", "个人媒体", result.media.uri)))))
-                                        tmdbState.tmdbResolved[target] = entry
-                                        tmdbState.tmdbPersonalPlayback[target] = mapOf("personal-file" to result.media)
-                                        tmdbState.tmdbPlaybackRoutes.personal(target)
-                                        activeCmsSite = null; spiderActive = false
-                                        filmId = target; episode = 1; line = "personal-file"; screen = "player"
-                                    }
-                                }
-                            }) }
+                            item {
+                                PersonalLibrarySettings(personalProtocol, nameFocus = requester("personal-name"),
+                                    onChanged = { personalSourceConfigEpoch++ })
+                            }
                         }
                         if (!settingsTvBoxOnly || settingsModule == "直播源") {
                         item { Text("直播源", fontSize = 22.sp) }
@@ -4935,9 +4896,9 @@ private fun Herrin(startup: StartupPresentation) {
                                 onEditingFocus = { configInputFocused = it; if (it) focusId = "tvbox-live-direct-editor" },
                                 onMoveUp = { moveCompactSettingsFocus("phone-config-main") },
                                 onMoveDown = { moveCompactSettingsFocus("tvbox-live-direct-load") }
-                            ) else OutlinedTextField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
+                            ) else TvInputField(tvBoxLiveUrlDraft, { tvBoxLiveUrlDraft = it },
                                 Modifier.fillMaxWidth().testTag("tvbox-live-direct-url")
-                                    .onFocusChanged { configInputFocused = it.isFocused },
+                                    ,
                                 label = { Text("直播源 · M3U / TXT / TVBox HTTP(S) 地址") }, singleLine = true)
                         }
                         item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -5170,8 +5131,8 @@ private fun Herrin(startup: StartupPresentation) {
                             manager.setPrimaryClip(ClipData.newPlainText("HERRIN 目录备份", profileStore.exportJson()))
                             configStatus = "目录 JSON 已复制到剪贴板；如地址包含访问令牌，请勿公开分享"
                         } }
-                        item { OutlinedTextField(importProfilesDraft, { importProfilesDraft = it },
-                            Modifier.fillMaxWidth().testTag("import-catalogs-json").onFocusChanged { configInputFocused = it.isFocused },
+                        item { TvInputField(importProfilesDraft, { importProfilesDraft = it },
+                            Modifier.fillMaxWidth().testTag("import-catalogs-json"),
                             label = { Text("粘贴 HERRIN 目录 JSON（仅合并，不覆盖）") }, minLines = 2, maxLines = 5) }
                         item { TvButton("导入目录列表 JSON", modifier = Modifier.testTag("source-import"),
                             reduced = reduceMotion, onFocus = { focusId = "source-import"; keyboard?.hide() }) {
@@ -6031,7 +5992,7 @@ private fun LiveTvSurface(
                         }
                     }
                     if (searchOpen && linePicker == null) {
-                        OutlinedTextField(searchText, { searchText = it.take(40) },
+                        TvInputField(searchText, { searchText = it.take(40) },
                             Modifier.fillMaxWidth().testTag("live-drawer-search-input")
                                 .focusProperties {
                                     up = searchToggleRequester

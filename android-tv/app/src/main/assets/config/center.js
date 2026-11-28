@@ -1,5 +1,5 @@
 'use strict';
-let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0,formRevision=0,sourceFormRevision=0;
+let pairing=location.hash.slice(1),session='',tab='sources',protocol='WebDAV',directoryPage=0,sourcePoll=0,toastTimer,personalRefreshToken=0,directoryBrowseToken=0,moduleEpoch=0,formRevision=0,sourceFormRevision=0,browsedConnection=null,browsedPath="",browseParent=null;
 history.replaceState(null,'',location.pathname);
 const $=s=>document.querySelector(s);
 const status=$('#status');
@@ -50,7 +50,7 @@ function button(parent,label,action){
  parent.append(b);return b;
 }
 function switchTab(target){
- advanceModuleScope();tab=target;
+ advanceModuleScope();closePersonalDirectory();tab=target;
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===target));
  for(const name of ['sources','nas','tmdb','live'])$('#'+name).hidden=name!==target;
  clearTimeout(toastTimer);$('#module-toast').hidden=true;
@@ -119,10 +119,11 @@ function switchProtocol(next){
  const f=$('#personal-edit');f.reset();f.elements.id.value='';f.elements.protocol.value=next==='SMB'?'smb':'https';
  f.elements.address.placeholder=next==='SMB'?'IP 或域名':'http:// 或 https://';
  $('#smb-port').hidden=false;f.elements.port.disabled=false;f.elements.port.value=next==='SMB'?'445':'';
- directoryBrowseToken++;$('#personal-directories').replaceChildren();$('#personal-browser').hidden=true;
+ $('#personal-cancel').hidden=true;f.querySelector('button[type=submit]').textContent='添加';
+ closePersonalDirectory();
 }
 document.querySelectorAll('[data-personal-tab]').forEach(b=>b.onclick=()=>{switchProtocol(b.dataset.personalTab);refreshPersonal().catch(error=>{if(!error.stale)toast(false,'nas')})});
-$('#personal-new').onclick=()=>switchProtocol(protocol);
+$('#personal-cancel').onclick=()=>switchProtocol(protocol);
 async function personal(path,data={}){
  const r=await call('/personal'+path,data);if(r.ok===false)throw Error('PERSONAL_FAILED');return r;
 }
@@ -130,32 +131,33 @@ async function refreshPersonal(){
  const ticket=++personalRefreshToken,requestedProtocol=protocol;
  const data=await personal('',{});
  if(!session||ticket!==personalRefreshToken||requestedProtocol!==protocol||tab!=='nas')return;
- const list=$('#personal-connections'),dirs=$('#personal-folders');
- list.replaceChildren();dirs.replaceChildren();
+ const list=$('#personal-connections');
+ closePersonalDirectory();
+ list.replaceChildren();
  for(const c of data.connections||[]){
   if((c.protocol==='smb')!==(protocol==='SMB'))continue;
-  const row=document.createElement('div');row.className='connection';
-  const name=document.createElement('span');name.className='name';name.textContent=c.name;row.append(name);
+  const row=document.createElement('div');row.className='connection';row.dataset.connection=c.id;
+  const name=document.createElement('span');name.className='name';name.textContent=c.name+(c.enabled?' · 启用':' · 停用');row.append(name);
   const actions=document.createElement('div');actions.className='actions';row.append(actions);
   button(actions,'编辑',()=>{const f=$('#personal-edit');switchProtocol(protocol);
    for(const key of ['id','name','username','path','domain','encryption'])f.elements[key].value=c[key]||'';
    f.elements.address.value=protocol==='SMB'?c.host:(c.address||'');
    f.elements.port.value=c.port||'';
+   $('#personal-cancel').hidden=false;f.querySelector('button[type=submit]').textContent='保存';
+  });
+  if(c.enabled)button(actions,'浏览目录',()=>{
+   if(browsedConnection===c.id){closePersonalDirectory();return}
+   closePersonalDirectory();
+   browsedConnection=c.id;browsedPath=c.path||'';
+   row.append($('#personal-browser'));$('#personal-browser').hidden=false;
+   showPersonalDirectory();
   });
   button(actions,c.enabled?'停用':'启用',async()=>{await personal('/toggle',{id:c.id});await refreshPersonal();toast(true,'nas')});
   button(actions,'删除',async()=>{if(!confirm('确定删除？'))return;await personal('/delete',{id:c.id,confirmed:true});await refreshPersonal();toast(true,'nas')});
   list.append(row);
  }
- for(const f of data.folders||[]){
-  const c=(data.connections||[]).find(c=>c.id===f.connection);
-  if(!c||(c.protocol==='smb')!==(protocol==='SMB'))continue;
-  const row=document.createElement('div');row.className='folder';
-  const name=document.createElement('span');name.textContent=f.path||c.basePath||c.name;row.append(name);
-  button(row,'移除',async()=>{if(!confirm('移除当前文件夹？'))return;await personal('/folder/delete',{id:f.id,confirmed:true});await refreshPersonal();toast(true,'nas')});
-  dirs.append(row);
- }
 }
-$('#personal-edit').addEventListener('input',()=>{formRevision++;directoryBrowseToken++;$('#personal-browser').hidden=true});
+$('#personal-edit').addEventListener('input',()=>{formRevision++});
 function personalDraft(f, selectedProtocol){
  const data=Object.fromEntries(new FormData(f));
  if(selectedProtocol==='SMB'){data.protocol='smb';data.host=data.address;delete data.address;data.port=Number(data.port)||445}
@@ -172,39 +174,51 @@ $('#personal-edit').onsubmit=async e=>{
   if(requestedForm===formRevision&&requestedProtocol===protocol&&f.elements.password.value===data.password)f.elements.password.value='';
   // Commit is complete, but a late response must not overwrite a newly selected form.
   if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
-  f.elements.id.value=result.id;
-  directoryBrowseToken++;directoryPage=0;
-  f.elements.path.value=result.path||'';$('#personal-browser').hidden=true;
+  f.reset();f.elements.id.value='';f.elements.protocol.value=protocol==='SMB'?'smb':'https';
+  f.elements.port.value=protocol==='SMB'?'445':'';
+  $('#personal-cancel').hidden=true;f.querySelector('button[type=submit]').textContent='添加';
   await refreshPersonal();
   if(!session||requestedModule!==moduleEpoch||requestedForm!==formRevision||requestedProtocol!==protocol||tab!=='nas')return;
   toast(true,'nas');
  }catch(error){if(!error.stale&&requestedModule===moduleEpoch)toast(false,'nas')}finally{finish()}
 };
-function renderDirectories(r){
+function closePersonalDirectory(){
+ directoryBrowseToken++;browsedConnection=null;browsedPath='';directoryPage=0;browseParent=null;
+ const browser=$('#personal-browser');browser.hidden=true;$('#nas').append(browser);
+ $('#personal-directories').replaceChildren();
+}
+function renderDirectories(result){
+ $('#personal-current-path').textContent=result.displayPath||'/'+browsedPath;
+ browseParent=result.parent??null;
+ $('#personal-parent').hidden=browseParent===null;
  const el=$('#personal-directories');el.replaceChildren();
- for(const f of r.files||[])button(el,f.name,()=>{
-  $('#personal-edit').elements.path.value=f.path;directoryPage=0;
-  browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
- });
- $('#personal-directory-previous').disabled=directoryPage===0;
- $('#personal-directory-next').disabled=(directoryPage+1)*100>=(r.total||0);
+ for(const item of result.files||[]){
+  if(item.directory)button(el,item.name,()=>{browsedPath=item.path;directoryPage=0;showPersonalDirectory()});
+  else {const file=document.createElement('div');file.textContent=item.name;el.append(file)}
+ }
+ $('#personal-directory-previous').hidden=directoryPage===0;
+ $('#personal-directory-next').hidden=(directoryPage+1)*100>=(result.total||0);
+}
+function showPersonalDirectory(){
+ browsePersonal().catch(error=>{if(!error.stale && browsedConnection)toast(false,'nas')});
 }
 async function browsePersonal(){
- const f=$('#personal-edit');
- if(!f.reportValidity())return;
- const ticket=++directoryBrowseToken,requestedForm=formRevision,path=f.elements.path.value;
- const r=await personal('/preview',{...personalDraft(f,protocol),offset:directoryPage*100});
- if(ticket!==directoryBrowseToken||formRevision!==requestedForm||path!==f.elements.path.value||tab!=='nas')return;
- $('#personal-browser').hidden=false;
- renderDirectories(r);
+ if(!browsedConnection)return;
+ const ticket=++directoryBrowseToken,id=browsedConnection,path=browsedPath,page=directoryPage;
+ $('#personal-current-path').textContent='/'+path;
+ $('#personal-parent').hidden=true;
+ $('#personal-directory-previous').hidden=true;
+ $('#personal-directory-next').hidden=true;
+ $('#personal-directories').replaceChildren();
+ try{
+  const result=await personal('/browse',{id,path,offset:page*100});
+  if(ticket!==directoryBrowseToken||id!==browsedConnection||tab!=='nas')return;
+  renderDirectories(result);
+ }catch(error){if(ticket===directoryBrowseToken&&browsedConnection===id)throw error}
 }
-$('#personal-browse').onclick=()=>{directoryPage=0;browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
-$('#personal-parent').onclick=()=>{
- const v=$('#personal-edit').elements.path;v.value=v.value.split('/').filter(Boolean).slice(0,-1).join('/');directoryPage=0;
- browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')});
-};
-$('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
-$('#personal-directory-next').onclick=()=>{directoryPage++;browsePersonal().catch(error=>{if(!error.stale)toast(false,'nas')})};
+$('#personal-parent').onclick=()=>{if(browseParent===null)return;browsedPath=browseParent;directoryPage=0;showPersonalDirectory()};
+$('#personal-directory-previous').onclick=()=>{directoryPage=Math.max(0,directoryPage-1);showPersonalDirectory()};
+$('#personal-directory-next').onclick=()=>{directoryPage++;showPersonalDirectory()};
 $('#end').onclick=async()=>{
  directoryBrowseToken++;personalRefreshToken++;
  const ending=call('/end');session='';advanceModuleScope(true);

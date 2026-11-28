@@ -35,7 +35,7 @@ internal fun PersonalMatchDialog(film: Film, onDismiss: () -> Unit) {
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if(failed) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text("失败") }
-                OutlinedTextField(query, { query = it.take(200) }, singleLine = true,
+                TvInputField(query, { query = it.take(200) }, singleLine = true,
                     label = { Text("片名") }, modifier = Modifier.testTag("personal-match-query"))
                 val matches = results.optJSONArray("matches")
                 if(matches != null) for(i in 0 until matches.length()) {

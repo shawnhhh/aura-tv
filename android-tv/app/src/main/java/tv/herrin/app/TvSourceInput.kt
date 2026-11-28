@@ -1,10 +1,11 @@
 package tv.herrin.app
 
 import android.view.KeyEvent as AndroidKeyEvent
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +25,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 
 /**
  * TV text entry has two distinct states: an arrow-key focus stop and an active
@@ -46,45 +48,48 @@ internal fun TvSourceInput(
     onMoveDown: () -> Unit
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
-    var editing by remember { mutableStateOf(false) }
+    val session = rememberTvEditSession { runCatching { navRequester.requestFocus() } }
     var editorWasFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(editing) {
-        if (editing) {
+    LaunchedEffect(session.editing) {
+        if (session.editing) {
             withFrameNanos { }
             runCatching { editRequester.requestFocus() }
             keyboard?.show()
         }
     }
-    BackHandler(editing) {
-        keyboard?.hide()
-        editing = false
-        runCatching { navRequester.requestFocus() }
-    }
     Box(Modifier.fillMaxWidth().testTag(navTag)
         .onFocusChanged { if (it.isFocused) onNavFocus() }
         .onPreviewKeyEvent { event ->
-            if (editing || event.type != KeyEventType.KeyDown) false else when (event.nativeKeyEvent.keyCode) {
+            val key = event.nativeKeyEvent
+            if (session.editing) false
+            else if (key.isTvEditorConfirm()) {
+                if (key.action == AndroidKeyEvent.ACTION_UP && !key.isCanceled) session.start()
+                true
+            } else if (event.type != KeyEventType.KeyDown) false else when (key.keyCode) {
                 AndroidKeyEvent.KEYCODE_DPAD_UP -> { onMoveUp(); true }
                 AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { onMoveDown(); true }
-                AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-                AndroidKeyEvent.KEYCODE_ENTER,
-                AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> { editing = true; true }
                 else -> false
             }
         }
         .focusRequester(navRequester).focusable()) {
         OutlinedTextField(value, onValueChange, Modifier.fillMaxWidth()
             .testTag(fieldTag)
-            .focusProperties { canFocus = editing }
+            .focusProperties { canFocus = session.editing }
             .focusRequester(editRequester)
             .onFocusChanged {
                 if (it.hasFocus) editorWasFocused = true
                 else if (editorWasFocused) {
                     editorWasFocused = false
-                    editing = false
+                    session.stop()
                 }
                 onEditingFocus(it.hasFocus)
             },
-            label = { Text(label) }, singleLine = true)
+            label = { Text(label) }, singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                keyboard?.hide()
+                session.stop()
+                navRequester.requestFocus()
+            }))
     }
 }

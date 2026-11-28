@@ -44,6 +44,25 @@ internal class PersonalLibraryApi(context: Context) {
                 dirs.drop(offset).take(100).forEach { put(JSONObject().put("name", it.name).put("path", it.path)) }
             })
     }
+    private fun browseSaved(connection: PersonalConnections.Connection, input: JSONObject): JSONObject {
+        val roots = library.index.folders(connection.id).filter { it.enabled }
+        require(connection.enabled && roots.isNotEmpty()) { "MEDIA_FOLDER_REQUIRED" }
+        val requested = PersonalStoragePolicy.path(input.optString("path", connection.rootPath))
+        val root = roots.firstOrNull { PersonalStoragePolicy.contains(it.path, requested) }
+            ?: throw IllegalArgumentException("DIRECTORY_OUTSIDE_IMPORTED_ROOT")
+        val offset = input.optInt("offset").coerceIn(0, 1_000_000)
+        val entries = runBlocking { PersonalRemoteFiles.Session(connection, root.path).use { it.list(requested) } }
+            .filter { PersonalStoragePolicy.contains(requested, it.path) }
+            .sortedWith(compareByDescending<PersonalRemoteFile> { it.directory }.thenBy { it.name })
+        return JSONObject().put("ok", true).put("total", entries.size).put("path", requested)
+            .put("displayPath", "/" + listOf(connection.basePath, requested).filter(String::isNotBlank).joinToString("/"))
+            .put("parent", if (requested == root.path) JSONObject.NULL else requested.substringBeforeLast('/', ""))
+            .put("files", JSONArray().apply {
+                entries.drop(offset).take(100).forEach {
+                    put(JSONObject().put("name", it.name).put("path", it.path).put("directory", it.directory))
+                }
+            })
+    }
     fun handle(path: String, input: JSONObject): JSONObject {
         val id = input.optString("id")
         when(path) {
@@ -60,6 +79,9 @@ internal class PersonalLibraryApi(context: Context) {
                     // The validated new authority cannot inherit file identities
                     // and metadata that belonged to a different remote root.
                     library.index.folders(saved.id).forEach { library.index.removeFolder(it.id) }
+                } else if (old != null && old.rootPath != folder) {
+                    library.index.folders(saved.id).filter { it.path == old.rootPath }
+                        .forEach { library.index.removeFolder(it.id) }
                 }
                 library.connections.status(saved.id, "connected")
                 // "Add" validates and imports precisely the chosen subtree.
@@ -88,7 +110,15 @@ internal class PersonalLibraryApi(context: Context) {
                     JSONObject().put("ok", false).put("error", PersonalRemoteFiles.message(error))
                 }
             }
-            "/personal/browse", "/personal/test" -> {
+            "/personal/browse" -> {
+                val connection = requireNotNull(library.connections.get(id))
+                return try { browseSaved(connection, input) }
+                catch (error: Exception) {
+                    android.util.Log.w("HerrinPersonal", "Directory read failed: ${error.javaClass.simpleName}")
+                    JSONObject().put("ok", false)
+                }
+            }
+            "/personal/test" -> {
                 val c = requireNotNull(library.connections.get(id))
                 val raw = if(input.has("path")) input.getString("path") else c.rootPath
                 try {

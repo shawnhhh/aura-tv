@@ -51,7 +51,10 @@ fs.mkdirSync(evidence,{recursive:true});
    }
    if(url.pathname==='/personal/browse'){
     if(holdBrowse){notifyBrowse();await new Promise(resolve=>{releaseBrowse=resolve});holdBrowse=false}
-    response={ok:true,files:[{name:'Movies',path:'Movies'}],total:1};
+    const root=connections.find(c=>c.id===body.id).path||'';
+    response={ok:true,path:body.path,displayPath:'/'+body.path,parent:body.path===root?null:root,
+     files:body.path===root?[{name:'Drama',path:root+'/Drama',directory:true},
+        {name:'Movie.mkv',path:root+'/Movie.mkv',directory:false}]:[],total:body.path===root?2:0};
    }
    if(url.pathname==='/personal/folder'){
     folders.push({id:'folder-'+folders.length,connection:body.connection,path:body.path,type:body.type,enabled:true});
@@ -103,20 +106,29 @@ fs.mkdirSync(evidence,{recursive:true});
   await f.locator('[name=address]').fill('http://nas.example:8080/dav');
   await f.locator('[name=username]').fill('test');
   await f.locator('[name=password]').fill('mock-only-password');
-  await f.locator('button[type=submit]').click();await page.locator('#personal-browser').waitFor({state:'visible'});
+  await f.locator('button[type=submit]').click();
+  const saved=page.locator('[data-connection=fixture-1]');
+  await saved.waitFor({state:'visible'});
+  assert(await page.locator('#personal-browser').isHidden(),'Directory browsing starts collapsed');
   assert.strictEqual(await f.locator('[name=password]').inputValue(),'');
-  assert.strictEqual(await f.locator('[name=id]').inputValue(),'fixture-1');
+  assert.strictEqual(await f.locator('[name=id]').inputValue(),'');
   assert(requests.some(r=>r.path==='/personal/save'&&r.body.address==='http://nas.example:8080/dav'));
-  await page.locator('#personal-folders .folder').first().waitFor({state:'visible'});
-  assert.strictEqual(await page.locator('#personal-folders .folder').count(),1);
-  assert.strictEqual(await page.locator('#personal-folders .folder').first().locator('span').innerText(),'Movies');
   assert(!requests.some(r=>r.path==='/personal/folder'),'Add must not require a second import request');
   assert(requests.some(r=>r.path==='/personal/save'&&r.body.name==='我的阿里云盘'&&r.body.port===8080&&r.body.path==='Movies'));
+  await saved.getByRole('button',{name:'浏览目录'}).click();
+  await saved.getByText('Movie.mkv',{exact:true}).waitFor();
+  await saved.getByRole('button',{name:'Drama'}).click();
+  await saved.getByRole('button',{name:'上级目录'}).click();
+  await saved.getByText('Movie.mkv',{exact:true}).waitFor();
+  assert.strictEqual(await f.locator('[name=path]').inputValue(),'','Browsing is independent of the editable import path');
+  assert(requests.some(r=>r.path==='/personal/browse'&&r.body.id==='fixture-1'&&r.body.path==='Movies/Drama'));
+  await saved.getByRole('button',{name:'浏览目录'}).click();
+  assert(await page.locator('#personal-browser').isHidden());
 
   // A delayed directory response must not repopulate the picker after a protocol switch.
   holdBrowse=true;
   const browseRequested=new Promise(resolve=>{notifyBrowse=resolve});
-  await page.locator('#personal-browse').click();await browseRequested;
+  await saved.getByRole('button',{name:'浏览目录'}).click();await browseRequested;
   const browseCancelled=page.waitForEvent('requestfailed',r=>new URL(r.url()).pathname==='/personal/browse');
   await page.locator('[data-personal-tab=SMB]').click();
   releaseBrowse();
@@ -126,11 +138,10 @@ fs.mkdirSync(evidence,{recursive:true});
   assert.strictEqual(await page.locator('#personal-directories button').count(),0);
   await page.locator('[data-personal-tab=WebDAV]').click();
 
-  await page.locator('#personal-new').click();
   await f.locator('[name=name]').fill('My HTTPS DAV');
   await f.locator('[name=address]').fill('https://nas.example/webdav');
   await f.locator('button[type=submit]').click();
-  await page.waitForFunction(()=>document.querySelector('#personal-edit [name=id]').value==='fixture-2');
+  await page.locator('[data-connection=fixture-2]').waitFor({state:'visible'});
   assert(requests.some(r=>r.path==='/personal/save'&&r.body.address==='https://nas.example/webdav'));
 
   await page.locator('[data-personal-tab=SMB]').click();
@@ -141,10 +152,10 @@ fs.mkdirSync(evidence,{recursive:true});
   await f.locator('[name=password]').fill('mock-smb-password');
   assert.strictEqual(await f.locator('[name=port]').inputValue(),'445');
   await f.locator('button[type=submit]').click();
-  await page.waitForFunction(()=>document.querySelector('#personal-edit [name=id]').value==='fixture-3');
+  await page.locator('[data-connection=fixture-3]').waitFor({state:'visible'});
   assert(requests.some(r=>r.path==='/personal/save'&&r.body.protocol==='smb'&&r.body.host==='192.168.1.15'&&r.body.port===445));
   assert(!requests.some(r=>r.path==='/cloud'||r.path==='/cloud/test'));
-  await page.locator('#personal-new').click();
+  await page.locator('[data-personal-tab=SMB]').click();
   await f.locator('[name=name]').fill('Pending new connection');
   await f.locator('[name=address]').fill('192.168.1.15');
   await f.locator('[name=path]').fill('Movies');
@@ -166,7 +177,7 @@ fs.mkdirSync(evidence,{recursive:true});
   const repeatedSecretSave=new Promise(resolve=>{notifySave=resolve});
   await f.locator('[name=password]').fill('reused-secret');
   await f.locator('button[type=submit]').click();await repeatedSecretSave;
-  await page.locator('#personal-new').click();
+  await page.locator('[data-personal-tab=SMB]').click();
   await f.locator('[name=name]').fill('New form with reused password');
   await f.locator('[name=password]').fill('reused-secret');
   const repeatedSaveResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/personal/save');

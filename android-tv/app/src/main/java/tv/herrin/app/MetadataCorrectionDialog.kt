@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,7 +41,7 @@ internal fun MetadataCorrectionDialog(
                         Text(if (type == "tv") "✓ 电视剧" else "电视剧")
                     }
                 }
-                OutlinedTextField(id, { id = it.filter(Char::isDigit).take(9) },
+                TvInputField(id, { id = it.filter(Char::isDigit).take(9) },
                     label = { Text("TMDB 数字 ID") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("metadata-correction-id"))
                 Button(onClick = { onConfirm(null) }, modifier = Modifier.testTag("metadata-correction-reset")) {

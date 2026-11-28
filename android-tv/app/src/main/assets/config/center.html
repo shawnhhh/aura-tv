@@ -32,7 +32,6 @@
     <button type="button" data-personal-tab="SMB">SMB</button>
    </div>
    <div id="personal-connections"></div>
-   <button id="personal-new" type="button" class="secondary">新建连接</button>
    <form id="personal-edit">
     <input name="id" type="hidden">
     <input name="protocol" type="hidden" value="https">
@@ -42,23 +41,21 @@
     <label>连接名称<input name="name" maxlength="64" autocomplete="off" required></label>
     <label>服务器地址<input name="address" maxlength="2048" placeholder="http:// 或 https://" autocomplete="url" required></label>
     <label id="smb-port">端口<input name="port" type="number" min="1" max="65535" placeholder="自动"></label>
-    <label>路径<input name="path" maxlength="2048" placeholder="选择要添加的媒体目录"></label>
+    <label>路径<input name="path" maxlength="2048" placeholder="输入媒体目录路径"></label>
     <label>用户名<input name="username" maxlength="256" autocomplete="off"></label>
     <label>密码<input name="password" type="password" maxlength="2048" autocomplete="off"></label>
-    <button id="personal-browse" type="button">浏览目录</button>
-    <div id="personal-browser" hidden>
-     <div class="actions">
-      <button id="personal-parent" type="button" class="secondary">上级</button>
-     </div>
-     <div id="personal-directories"></div>
-     <div class="actions">
-      <button type="button" id="personal-directory-previous" class="secondary">上一页</button>
-      <button type="button" id="personal-directory-next" class="secondary">下一页</button>
-     </div>
-    </div>
+    <button id="personal-cancel" type="button" class="secondary" hidden>取消编辑</button>
     <button type="submit">添加</button>
    </form>
-   <div id="personal-folders"></div>
+   <div id="personal-browser" hidden>
+    <div id="personal-current-path"></div>
+    <button id="personal-parent" type="button" class="secondary" hidden>上级目录</button>
+    <div id="personal-directories"></div>
+    <div class="actions">
+     <button type="button" id="personal-directory-previous" class="secondary" hidden>上一页</button>
+     <button type="button" id="personal-directory-next" class="secondary" hidden>下一页</button>
+    </div>
+   </div>
   </section>
   <form id="tmdb" hidden>
    <input name="token" type="password" autocomplete="off" maxlength="600" placeholder="TMDB Token">

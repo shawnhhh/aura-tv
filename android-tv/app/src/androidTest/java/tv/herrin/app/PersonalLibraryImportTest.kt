@@ -44,6 +44,17 @@ class PersonalLibraryImportTest {
                 assertEquals("media", automaticallyImported.path)
                 assertEquals("complete", automaticallyImported.state)
                 assertEquals("Add alone starts the selected subtree import", 2, library.index.media(automaticallyImported.id).length())
+                val browse = api.handle("/personal/browse", JSONObject().put("id", connection).put("path", "media"))
+                assertTrue(browse.getBoolean("ok"))
+                assertTrue(browse.isNull("parent"))
+                assertEquals("/media", browse.getString("displayPath"))
+                assertEquals("Example.2024.1080p.mp4", browse.getJSONArray("files").getJSONObject(0).getString("name"))
+                assertFalse(browse.getJSONArray("files").getJSONObject(0).getBoolean("directory"))
+                val requestsBeforeOutOfScope = server.requestCount
+                val denied = api.handle("/personal/browse", JSONObject().put("id", connection).put("path", "unimported"))
+                assertFalse(denied.getBoolean("ok"))
+                assertEquals(requestsBeforeOutOfScope, server.requestCount)
+                assertEquals(automaticallyImported, library.index.folders(connection).single())
                 val before = PersonalLibrary.revisions.value
                 assertTrue(api.handle("/personal/folder", JSONObject().put("connection", connection)
                     .put("path", "media").put("type", "movie")).getBoolean("ok"))

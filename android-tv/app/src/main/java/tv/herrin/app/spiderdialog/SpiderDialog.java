@@ -280,7 +280,8 @@ public final class SpiderDialog implements LifecycleEventObserver {
         layout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
         boolean multiple = type.equals("multiselect");
         EditText input = createInput(layout, type);
-        input.setOnKeyListener(this::onFocusKey);
+        if (input.getKeyListener() == null) input.setOnKeyListener(this::onFocusKey);
+        else bindRemoteEditor(input);
         layout.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.bottomMargin = ResUtil.dp2px(8);
@@ -297,6 +298,48 @@ public final class SpiderDialog implements LifecycleEventObserver {
         control.checkValue(value);
         control.setValue(value);
         inputs.put(name, control);
+    }
+
+    private void bindRemoteEditor(EditText input) {
+        input.setShowSoftInputOnFocus(false);
+        var keyboard = activity.getSystemService(android.view.inputmethod.InputMethodManager.class);
+        input.setOnFocusChangeListener((view, focused) -> {
+            if (!focused && input.getShowSoftInputOnFocus()) {
+                keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
+                input.setShowSoftInputOnFocus(false);
+            }
+        });
+        input.setOnKeyListener((view, code, event) -> {
+            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER ||
+                    code == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
+                    input.setShowSoftInputOnFocus(true);
+                    keyboard.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                }
+                return true;
+            }
+            if (!input.getShowSoftInputOnFocus() && event.getAction() == KeyEvent.ACTION_DOWN) {
+                int direction = switch (code) {
+                    case KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP;
+                    case KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN;
+                    case KeyEvent.KEYCODE_DPAD_LEFT -> View.FOCUS_LEFT;
+                    case KeyEvent.KEYCODE_DPAD_RIGHT -> View.FOCUS_RIGHT;
+                    default -> 0;
+                };
+                if (direction != 0) {
+                    View next = input.focusSearch(direction);
+                    return next != null && next.requestFocus(direction);
+                }
+            }
+            return onFocusKey(view, code, event);
+        });
+        if (input.getMaxLines() == 1) input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        input.setOnEditorActionListener((view, action, event) -> {
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_DONE) return false;
+            keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
+            input.setShowSoftInputOnFocus(false);
+            return true;
+        });
     }
 
     private EditText createInput(TextInputLayout layout, String type) {
