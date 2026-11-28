@@ -12,7 +12,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -189,12 +188,40 @@ class MainActivity : ComponentActivity() {
                 applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
         }
         presentation=startup
+        val startupRoot = android.widget.FrameLayout(this)
+        lateinit var nativeWordmark: StartupWordmarkView
+        nativeWordmark = StartupWordmarkView(this) {
+            if (isDestroyed || isFinishing) return@StartupWordmarkView
+            nativeWordmark.handOff()
+            startup.nativeElapsedMs = nativeWordmark.elapsedMs
+            startup.onComposeWordmarkDrawn = {
+                startup.onComposeWordmarkDrawn = null
+                startupRoot.post { startupRoot.removeView(nativeWordmark) }
+            }
+            val compose = androidx.compose.ui.platform.ComposeView(this).apply {
+                setViewCompositionStrategy(androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+                setContent {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        Surface(Modifier.fillMaxSize(), color = Color.Black, contentColor = MaterialTheme.colorScheme.onBackground) {
+                            StartupHost(startup) { state -> Herrin(state) }
+                        }
+                        SpiderAuthorizationHost()
+                    }
+                }
+            }
+            startupRoot.addView(compose, android.widget.FrameLayout.LayoutParams(-1, -1))
+            frameDiagnostics = UiFrameDiagnostics(window) {
+                @Suppress("DEPRECATION")
+                windowManager.defaultDisplay.refreshRate
+            }
+        }.apply { uncovered = android.os.Build.VERSION.SDK_INT < 31 }
         if(android.os.Build.VERSION.SDK_INT>=31) {
             splashScreen.setOnExitAnimationListener { native ->
                 // Do not leave an opaque native layer over an already-running
                 // Compose clock while waiting for another pre-draw callback.
                 native.remove()
                 StartupTiming.brandExit()
+                nativeWordmark.uncovered = true
                 startup.surfaceReady = true
             }
         }
@@ -219,17 +246,8 @@ class MainActivity : ComponentActivity() {
             }
         }
         enableEdgeToEdge()
-        // Display policy is applied by the home scene after the first branded frame.
-        frameDiagnostics = UiFrameDiagnostics(window) {
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.refreshRate
-        }
-        setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(Modifier.fillMaxSize(), color = Color.Black, contentColor = MaterialTheme.colorScheme.onBackground) { StartupHost(startup) { state -> Herrin(state) } }
-                SpiderAuthorizationHost()
-            }
-        }
+        startupRoot.addView(nativeWordmark, android.widget.FrameLayout.LayoutParams(-1, -1))
+        setContentView(startupRoot)
     }
 }
 

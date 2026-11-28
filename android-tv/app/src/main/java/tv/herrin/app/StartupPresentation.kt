@@ -14,6 +14,8 @@ import kotlinx.coroutines.withContext
 
 internal class StartupPresentation {
     var diagnostics = false
+    var nativeElapsedMs = 0f
+    var onComposeWordmarkDrawn: (() -> Unit)? = null
     // Activity owns this transient callback; no cache/network work on window focus.
     var restoreBrowseFocus:(()->Boolean)?=null
     var showing by mutableStateOf(true)
@@ -108,6 +110,8 @@ internal fun StartupHost(initial: StartupPresentation? = null, home: @Composable
                 context.getSharedPreferences("herrin", 0).edit().putBoolean("startup_v13_completed", true).apply()
             }, homeReady = state.homeReady,
             onVisible = { state.prepareHome = true },wordmarkWidthDp=state.wordmarkWidthDp,
-            surfaceReady = state.surfaceReady, allowSkip = state.allowSkip)
+            surfaceReady = state.surfaceReady, allowSkip = state.allowSkip,
+            initialElapsedMs = state.nativeElapsedMs,
+            firstDrawn = { state.onComposeWordmarkDrawn?.invoke() })
     }
 }

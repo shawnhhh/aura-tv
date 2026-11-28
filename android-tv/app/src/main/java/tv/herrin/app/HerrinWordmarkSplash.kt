@@ -51,11 +51,12 @@ internal object WordmarkMotion {
 /** VSync clock. Draw state stays in this small layer, never recomposes the home per frame. */
 @Composable
 internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible: () -> Unit = {}, widthDp: Float = 420f,
-                                  surfaceReady: Boolean = true, allowSkip: Boolean = true) {
+                                  surfaceReady: Boolean = true, allowSkip: Boolean = true,
+                                  initialElapsedMs: Float = 0f, firstDrawn: () -> Unit = {}) {
     val focus = remember { FocusRequester() }
     val onDone by rememberUpdatedState(done)
     val visible by rememberUpdatedState(onVisible)
-    val elapsed = remember { mutableFloatStateOf(0f) }
+    val elapsed = remember { mutableFloatStateOf(initialElapsedMs) }
     val exposed by rememberUpdatedState(surfaceReady)
     val drawn = remember { booleanArrayOf(false) }
     var skipped by remember { mutableStateOf(false) }
@@ -87,7 +88,7 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             completeOnce()
             return@LaunchedEffect
         }
-        val clock = WordmarkFrameClock()
+        val clock = WordmarkFrameClock(initialElapsedMs)
         var reportedVisible = false
         var reportedReady = false
         while (true) {
@@ -123,7 +124,10 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
             .testTag("splash-wordmark").semantics { contentDescription="HERRIN" }) {
             renderer.draw(drawContext.canvas.nativeCanvas,size.width,size.height,
                 if(reduced ||skipped)WordmarkMotion.REVEAL_MS else elapsed.floatValue)
-            drawn[0] = true
+            if (!drawn[0]) {
+                drawn[0] = true
+                firstDrawn()
+            }
         }
     }
 }
@@ -134,7 +138,8 @@ internal fun HerrinWordmarkSplash(reduced: Boolean, done: () -> Unit, onVisible:
 internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
                                onReady: () -> Unit, onFinished: () -> Unit,
                                homeReady: Boolean = true, onVisible: () -> Unit = {}, wordmarkWidthDp: Float = 420f,
-                               surfaceReady: Boolean = true, allowSkip: Boolean = true) {
+                               surfaceReady: Boolean = true, allowSkip: Boolean = true,
+                               initialElapsedMs: Float = 0f, firstDrawn: () -> Unit = {}) {
     val opacity = remember { Animatable(1f) }
     var revealed by remember { mutableStateOf(false) }
     LaunchedEffect(revealed, homeReady) {
@@ -150,7 +155,8 @@ internal fun SplashExitCurtain(reduced: Boolean, exiting: Boolean,
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = opacity.value }
         .testTag("splash-curtain")) {
         HerrinWordmarkSplash(reduced, done = { revealed = true }, onVisible = onVisible,widthDp=wordmarkWidthDp,
-            surfaceReady = surfaceReady, allowSkip = allowSkip)
+            surfaceReady = surfaceReady, allowSkip = allowSkip, initialElapsedMs = initialElapsedMs,
+            firstDrawn = firstDrawn)
     }
 }
 

@@ -1,9 +1,9 @@
 package tv.herrin.app
 
 /** First-install shader/class loading and a covered window are not animation time. */
-internal class WordmarkFrameClock {
+internal class WordmarkFrameClock(initialElapsedMs: Float = 0f) {
     private var previous: Long? = null
-    var elapsedMs = 0f
+    var elapsedMs = initialElapsedMs
         private set
 
     fun frame(now: Long, drawable: Boolean): Float {
